@@ -594,7 +594,7 @@ $$ LANGUAGE SQL SECURITY DEFINER STABLE;
 
 -- PROFILES
 CREATE POLICY "profiles_select_own" ON profiles FOR SELECT USING (id = auth.uid());
-CREATE POLICY "profiles_select_admin" ON profiles FOR SELECT USING (get_my_role() IN ('super_admin', 'admin', 'hr_manager'));
+CREATE POLICY "profiles_select_admin" ON profiles FOR SELECT USING (get_my_role() IN ('super_admin', 'admin'));
 CREATE POLICY "profiles_update_own" ON profiles FOR UPDATE USING (id = auth.uid());
 CREATE POLICY "profiles_admin_all" ON profiles FOR ALL USING (get_my_role() = 'super_admin');
 
