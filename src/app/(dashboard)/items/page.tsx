@@ -1,212 +1,277 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
-import { Plus, Search, MoreHorizontal, Upload, Download, AlertTriangle } from 'lucide-react'
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table'
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
+import { Plus, Search, MoreHorizontal, Package } from 'lucide-react'
 import { toast } from 'sonner'
 
-const mockItems = [
-  { id: '1', item_code: 'ITM-001', item_name: 'Bond Paper A4 (500 sheets)', category: 'Office Supplies', brand: 'Navigator', unit_of_measure: 'Ream', cost: 250, reorder_level: 50, quantity_on_hand: 120, status: 'active' },
-  { id: '2', item_code: 'ITM-002', item_name: 'Printer Toner HP 85A', category: 'IT Equipment', brand: 'HP', unit_of_measure: 'Piece', cost: 1800, reorder_level: 10, quantity_on_hand: 8, status: 'active' },
-  { id: '3', item_code: 'ITM-003', item_name: 'Ballpen Black', category: 'Office Supplies', brand: 'Pilot', unit_of_measure: 'Box', cost: 120, reorder_level: 20, quantity_on_hand: 3, status: 'active' },
-  { id: '4', item_code: 'ITM-004', item_name: 'USB Flash Drive 32GB', category: 'IT Equipment', brand: 'Kingston', unit_of_measure: 'Piece', cost: 250, reorder_level: 15, quantity_on_hand: 0, status: 'active' },
-  { id: '5', item_code: 'ITM-005', item_name: 'Office Chair', category: 'Furniture', brand: 'La-Z-Boy', unit_of_measure: 'Piece', cost: 8500, reorder_level: 2, quantity_on_hand: 5, status: 'active' },
-]
-
-function getStockStatus(qty: number, reorder: number) {
-  if (qty === 0) return { label: 'Out of Stock', variant: 'destructive' as const }
-  if (qty <= reorder * 0.5) return { label: 'Critical', variant: 'destructive' as const }
-  if (qty <= reorder) return { label: 'Low Stock', variant: 'default' as const }
-  return { label: 'In Stock', variant: 'outline' as const }
+interface Item {
+  id: string
+  item_code: string
+  description: string
+  category_id: string | null
+  unit_of_measure: string
+  unit_cost: number
+  reorder_point: number | null
+  is_active: boolean
+  category?: { name: string } | null
+  stock_levels?: { quantity_on_hand: number }[]
 }
 
+interface Category { id: string; name: string }
+
+const emptyForm = () => ({
+  item_code: '', description: '', category_id: '', unit_of_measure: 'PCS',
+  unit_cost: '', reorder_point: '10',
+})
+
+const UOM_OPTIONS = ['PCS', 'BOX', 'SET', 'UNIT', 'KG', 'LTR', 'MTR', 'ROLL', 'PACK', 'REAM', 'PAIR', 'DOZEN']
+
 export default function ItemsPage() {
+  const supabase = createClient()
+  const [items, setItems] = useState<Item[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
+  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
+  const [editing, setEditing] = useState<Item | null>(null)
+  const [form, setForm] = useState(emptyForm())
+  const [saving, setSaving] = useState(false)
+  const [deleteId, setDeleteId] = useState<string | null>(null)
 
-  const filtered = mockItems.filter(i =>
-    i.item_name.toLowerCase().includes(search.toLowerCase()) ||
-    i.item_code.toLowerCase().includes(search.toLowerCase())
-  )
+  async function load() {
+    setLoading(true)
+    const [{ data: itemData }, { data: catData }] = await Promise.all([
+      supabase.from('items').select('*, category:categories(name), stock_levels(quantity_on_hand)').order('item_code'),
+      supabase.from('categories').select('id, name').order('name'),
+    ])
+    setItems(itemData ?? [])
+    setCategories(catData ?? [])
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [])
+
+  const filtered = useMemo(() =>
+    items.filter(i =>
+      i.item_code.toLowerCase().includes(search.toLowerCase()) ||
+      i.description.toLowerCase().includes(search.toLowerCase())
+    ), [items, search])
+
+  function openAdd() {
+    setEditing(null)
+    setForm(emptyForm())
+    setOpen(true)
+  }
+
+  function openEdit(item: Item) {
+    setEditing(item)
+    setForm({
+      item_code: item.item_code,
+      description: item.description,
+      category_id: item.category_id ?? '',
+      unit_of_measure: item.unit_of_measure,
+      unit_cost: String(item.unit_cost),
+      reorder_point: String(item.reorder_point ?? 10),
+    })
+    setOpen(true)
+  }
+
+  async function save() {
+    if (!form.item_code.trim() || !form.description.trim()) {
+      toast.error('Item code and description are required')
+      return
+    }
+    setSaving(true)
+    const payload = {
+      item_code: form.item_code.trim().toUpperCase(),
+      description: form.description.trim(),
+      category_id: form.category_id || null,
+      unit_of_measure: form.unit_of_measure,
+      unit_cost: Number(form.unit_cost) || 0,
+      reorder_point: Number(form.reorder_point) || null,
+    }
+    const { error } = editing
+      ? await supabase.from('items').update(payload).eq('id', editing.id)
+      : await supabase.from('items').insert(payload)
+    if (error) { toast.error(error.message) } else {
+      toast.success(editing ? 'Item updated' : 'Item added')
+      setOpen(false)
+      load()
+    }
+    setSaving(false)
+  }
+
+  async function toggleActive(item: Item) {
+    const { error } = await supabase.from('items').update({ is_active: !item.is_active }).eq('id', item.id)
+    if (error) toast.error(error.message)
+    else { toast.success(item.is_active ? 'Item deactivated' : 'Item activated'); load() }
+  }
+
+  async function confirmDelete() {
+    if (!deleteId) return
+    const { error } = await supabase.from('items').delete().eq('id', deleteId)
+    if (error) toast.error(error.message)
+    else { toast.success('Item deleted'); load() }
+    setDeleteId(null)
+  }
+
+  function stockStatus(item: Item) {
+    const qty = item.stock_levels?.[0]?.quantity_on_hand ?? 0
+    const reorder = item.reorder_point ?? 0
+    if (qty === 0) return { label: 'Out of Stock', cls: 'bg-red-100 text-red-800' }
+    if (qty <= reorder) return { label: 'Low Stock', cls: 'bg-yellow-100 text-yellow-800' }
+    return { label: 'In Stock', cls: 'bg-green-100 text-green-800' }
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">Item Master List</h2>
-          <p className="text-muted-foreground text-sm">Manage inventory items, stock levels and reorder settings</p>
+          <h1 className="text-2xl font-semibold">Item Master</h1>
+          <p className="text-muted-foreground text-sm">{items.filter(i => i.is_active).length} active items</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm"><Upload className="h-4 w-4 mr-1" />Import</Button>
-          <Button variant="outline" size="sm"><Download className="h-4 w-4 mr-1" />Export</Button>
-          <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4 mr-2" />Add Item</Button>
-        </div>
+        <Button onClick={openAdd} className="bg-orange-500 hover:bg-orange-600">
+          <Plus className="h-4 w-4 mr-2" /> Add Item
+        </Button>
       </div>
 
-      {/* Stock Status Summary */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-        <Card><CardContent className="pt-5 pb-4"><div className="text-2xl font-bold">248</div><div className="text-sm text-muted-foreground">Total Items</div></CardContent></Card>
-        <Card><CardContent className="pt-5 pb-4"><div className="text-2xl font-bold text-green-600">210</div><div className="text-sm text-muted-foreground">In Stock</div></CardContent></Card>
-        <Card><CardContent className="pt-5 pb-4"><div className="text-2xl font-bold text-yellow-600">23</div><div className="text-sm text-muted-foreground"><AlertTriangle className="h-3.5 w-3.5 inline mr-1" />Low Stock</div></CardContent></Card>
-        <Card><CardContent className="pt-5 pb-4"><div className="text-2xl font-bold text-red-600">8</div><div className="text-sm text-muted-foreground">Critical</div></CardContent></Card>
-        <Card><CardContent className="pt-5 pb-4"><div className="text-2xl font-bold text-red-700">7</div><div className="text-sm text-muted-foreground">Out of Stock</div></CardContent></Card>
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input className="pl-9" placeholder="Search items…" value={search} onChange={e => setSearch(e.target.value)} />
       </div>
 
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-base">Item List</CardTitle>
-            <div className="flex gap-2">
-              <Select defaultValue="all">
-                <SelectTrigger className="w-36 h-8 text-sm"><SelectValue placeholder="Category" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Categories</SelectItem>
-                  <SelectItem value="office">Office Supplies</SelectItem>
-                  <SelectItem value="it">IT Equipment</SelectItem>
-                  <SelectItem value="consumables">Consumables</SelectItem>
-                </SelectContent>
-              </Select>
-              <div className="relative w-56">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Search items..." className="pl-9 h-8 text-sm" value={search} onChange={e => setSearch(e.target.value)} />
-              </div>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Item Code</TableHead>
-                <TableHead>Item Name</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Brand</TableHead>
-                <TableHead>UOM</TableHead>
-                <TableHead className="text-right">Cost</TableHead>
-                <TableHead className="text-right">On Hand</TableHead>
-                <TableHead className="text-right">Reorder</TableHead>
-                <TableHead>Stock Status</TableHead>
-                <TableHead className="w-10"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map(item => {
-                const stockStatus = getStockStatus(item.quantity_on_hand, item.reorder_level)
-                return (
-                  <TableRow key={item.id}>
-                    <TableCell className="font-mono text-xs font-medium text-primary">{item.item_code}</TableCell>
-                    <TableCell className="font-medium">{item.item_name}</TableCell>
-                    <TableCell><Badge variant="outline" className="text-xs">{item.category}</Badge></TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{item.brand}</TableCell>
-                    <TableCell className="text-sm">{item.unit_of_measure}</TableCell>
-                    <TableCell className="text-right font-medium">₱{item.cost.toLocaleString()}</TableCell>
-                    <TableCell className="text-right font-semibold">{item.quantity_on_hand.toLocaleString()}</TableCell>
-                    <TableCell className="text-right text-muted-foreground text-sm">{item.reorder_level}</TableCell>
-                    <TableCell>
-                      <Badge variant={stockStatus.variant} className="text-xs">{stockStatus.label}</Badge>
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger className="inline-flex items-center justify-center h-8 w-8 rounded-full hover:bg-accent">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem>Edit Item</DropdownMenuItem>
-                          <DropdownMenuItem>View Stock Card</DropdownMenuItem>
-                          <DropdownMenuItem>Stock Movement</DropdownMenuItem>
-                          <DropdownMenuItem>Generate Barcode</DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive">Archive</DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <div className="rounded-lg border bg-card">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Item Code</TableHead>
+              <TableHead>Description</TableHead>
+              <TableHead>Category</TableHead>
+              <TableHead>UOM</TableHead>
+              <TableHead className="text-right">Unit Cost</TableHead>
+              <TableHead className="text-right">On Hand</TableHead>
+              <TableHead>Stock Status</TableHead>
+              <TableHead className="w-12" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Loading…</TableCell></TableRow>
+            ) : filtered.length === 0 ? (
+              <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No items found</TableCell></TableRow>
+            ) : filtered.map(item => {
+              const stock = stockStatus(item)
+              const qty = item.stock_levels?.[0]?.quantity_on_hand ?? 0
+              return (
+                <TableRow key={item.id}>
+                  <TableCell className="font-mono text-sm font-medium">{item.item_code}</TableCell>
+                  <TableCell>{item.description}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{item.category?.name ?? '—'}</TableCell>
+                  <TableCell className="text-sm">{item.unit_of_measure}</TableCell>
+                  <TableCell className="text-right font-medium">
+                    ₱{item.unit_cost.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                  </TableCell>
+                  <TableCell className="text-right font-medium">{qty.toLocaleString()}</TableCell>
+                  <TableCell>
+                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${stock.cls}`}>{stock.label}</span>
+                  </TableCell>
+                  <TableCell>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger className="h-8 w-8 flex items-center justify-center rounded hover:bg-accent">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => openEdit(item)}>Edit</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => toggleActive(item)}>
+                          {item.is_active ? 'Deactivate' : 'Activate'}
+                        </DropdownMenuItem>
+                        <DropdownMenuItem className="text-destructive" onClick={() => setDeleteId(item.id)}>Delete</DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              )
+            })}
+          </TableBody>
+        </Table>
+      </div>
 
-      {/* Add Item Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Add New Item</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5 text-orange-500" />
+              {editing ? 'Edit Item' : 'Add Item'}
+            </DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-2">
-            <div className="space-y-1">
-              <Label>Item Code *</Label>
-              <Input placeholder="Auto-generated" disabled />
+            <div className="space-y-1.5">
+              <Label>Item Code <span className="text-destructive">*</span></Label>
+              <Input placeholder="e.g. BOLT-M10" value={form.item_code} onChange={e => setForm(p => ({ ...p, item_code: e.target.value }))} />
             </div>
-            <div className="space-y-1">
-              <Label>Barcode</Label>
-              <Input placeholder="Scan or enter barcode" />
+            <div className="space-y-1.5">
+              <Label>Unit of Measure</Label>
+              <Select value={form.unit_of_measure} onValueChange={v => setForm(p => ({ ...p, unit_of_measure: v ?? 'PCS' }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{UOM_OPTIONS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
+              </Select>
             </div>
-            <div className="col-span-2 space-y-1">
-              <Label>Item Name *</Label>
-              <Input placeholder="Bond Paper A4 (500 sheets)" />
+            <div className="col-span-2 space-y-1.5">
+              <Label>Description <span className="text-destructive">*</span></Label>
+              <Input placeholder="Item description" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} />
             </div>
-            <div className="space-y-1">
-              <Label>Category *</Label>
-              <Select><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+            <div className="space-y-1.5">
+              <Label>Category</Label>
+              <Select value={form.category_id} onValueChange={v => setForm(p => ({ ...p, category_id: v ?? '' }))}>
+                <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="off">Office Supplies</SelectItem>
-                  <SelectItem value="it">IT Equipment</SelectItem>
-                  <SelectItem value="cons">Consumables</SelectItem>
-                  <SelectItem value="uniform">Uniforms</SelectItem>
-                  <SelectItem value="fixed">Fixed Assets</SelectItem>
+                  <SelectItem value="">None</SelectItem>
+                  {categories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1">
-              <Label>Brand</Label>
-              <Input placeholder="Navigator, HP, Pilot..." />
+            <div className="space-y-1.5">
+              <Label>Unit Cost (₱)</Label>
+              <Input type="number" min={0} step="0.01" placeholder="0.00" value={form.unit_cost} onChange={e => setForm(p => ({ ...p, unit_cost: e.target.value }))} />
             </div>
-            <div className="space-y-1">
-              <Label>Unit of Measure *</Label>
-              <Select><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="piece">Piece</SelectItem>
-                  <SelectItem value="box">Box</SelectItem>
-                  <SelectItem value="ream">Ream</SelectItem>
-                  <SelectItem value="set">Set</SelectItem>
-                  <SelectItem value="unit">Unit</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
-              <Label>Cost *</Label>
-              <Input type="number" placeholder="0.00" />
-            </div>
-            <div className="space-y-1">
-              <Label>Reorder Level</Label>
-              <Input type="number" placeholder="10" />
-            </div>
-            <div className="space-y-1">
-              <Label>Minimum Stock</Label>
-              <Input type="number" placeholder="5" />
-            </div>
-            <div className="space-y-1">
-              <Label>Maximum Stock</Label>
-              <Input type="number" placeholder="100" />
-            </div>
-            <div className="col-span-2 space-y-1">
-              <Label>Description</Label>
-              <Textarea placeholder="Item description..." rows={3} />
+            <div className="space-y-1.5">
+              <Label>Reorder Point</Label>
+              <Input type="number" min={0} value={form.reorder_point} onChange={e => setForm(p => ({ ...p, reorder_point: e.target.value }))} />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={() => { toast.success('Item saved'); setOpen(false) }}>Save Item</Button>
+            <Button onClick={save} disabled={saving} className="bg-orange-500 hover:bg-orange-600">
+              {saving ? 'Saving…' : 'Save Item'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Delete Item?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">This will permanently delete this item.</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteId(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={confirmDelete}>Delete</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

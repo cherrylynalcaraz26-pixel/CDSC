@@ -1,10 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
@@ -16,266 +16,336 @@ import {
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Plus, Search, MoreHorizontal, Building2, Star, TrendingUp } from 'lucide-react'
+import { Plus, Search, MoreHorizontal, Building2 } from 'lucide-react'
 import { toast } from 'sonner'
 
-const mockSuppliers = [
-  { id: '1', supplier_code: 'SUP-001', company_name: 'ABC Trading Corporation', contact_person: 'Juan Reyes', mobile_number: '09171234567', email: 'abc@trading.com', tin: '123-456-789-000', vat_registered: true, supplier_category: 'Office Supplies', payment_terms: '30 days', lead_time_days: 7, status: 'active', rating: 4.8 },
-  { id: '2', supplier_code: 'SUP-002', company_name: 'XYZ Technology Inc.', contact_person: 'Maria Santos', mobile_number: '09189876543', email: 'xyz@tech.com', tin: '987-654-321-000', vat_registered: true, supplier_category: 'IT Equipment', payment_terms: '15 days', lead_time_days: 14, status: 'active', rating: 4.2 },
-  { id: '3', supplier_code: 'SUP-003', company_name: 'DEF General Supply', contact_person: 'Pedro Dela Cruz', mobile_number: '09201112222', email: 'def@supply.com', tin: '456-789-123-000', vat_registered: false, supplier_category: 'Consumables', payment_terms: 'COD', lead_time_days: 3, status: 'active', rating: 3.9 },
-]
-
-interface SupplierFormData {
+interface Supplier {
+  id: string
+  supplier_code: string
   company_name: string
-  contact_person: string
-  mobile_number: string
-  email: string
-  address: string
-  tin: string
-  vat_registered: string
-  supplier_category: string
-  payment_terms: string
-  lead_time_days: string
-  atc_code: string
-  ewt_rate: string
-  vat_classification: string
+  contact_person: string | null
+  mobile_number: string | null
+  email: string | null
+  address: string | null
+  tin: string | null
+  vat_registered: boolean
+  vat_classification: string | null
+  supplier_category: string | null
+  payment_terms: string | null
+  lead_time_days: number | null
+  atc_code: string | null
+  ewt_rate: number | null
+  is_active: boolean
+  rating: number | null
 }
 
+const emptyForm = () => ({
+  company_name: '', contact_person: '', mobile_number: '', email: '',
+  address: '', tin: '', vat_registered: 'true', supplier_category: '',
+  payment_terms: '30 days', lead_time_days: '7', atc_code: '', ewt_rate: '2',
+  vat_classification: 'vat_registered',
+})
+
 export default function SuppliersPage() {
+  const supabase = createClient()
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
-  const [form, setForm] = useState<SupplierFormData>({
-    company_name: '', contact_person: '', mobile_number: '', email: '',
-    address: '', tin: '', vat_registered: 'true', supplier_category: '',
-    payment_terms: '30 days', lead_time_days: '7', atc_code: '', ewt_rate: '2',
-    vat_classification: 'vatable',
-  })
+  const [editing, setEditing] = useState<Supplier | null>(null)
+  const [form, setForm] = useState(emptyForm())
+  const [saving, setSaving] = useState(false)
+  const [deleteId, setDeleteId] = useState<string | null>(null)
 
-  const filtered = mockSuppliers.filter(s =>
-    s.company_name.toLowerCase().includes(search.toLowerCase()) ||
-    s.supplier_code.toLowerCase().includes(search.toLowerCase())
-  )
-
-  function handleSave() {
-    toast.success('Supplier saved successfully')
-    setOpen(false)
+  async function load() {
+    setLoading(true)
+    const { data, error } = await supabase.from('suppliers').select('*').order('company_name')
+    if (error) toast.error(error.message)
+    else setSuppliers(data ?? [])
+    setLoading(false)
   }
+
+  useEffect(() => { load() }, [])
+
+  const filtered = useMemo(() =>
+    suppliers.filter(s =>
+      s.company_name.toLowerCase().includes(search.toLowerCase()) ||
+      (s.contact_person ?? '').toLowerCase().includes(search.toLowerCase()) ||
+      (s.supplier_code ?? '').toLowerCase().includes(search.toLowerCase())
+    ), [suppliers, search])
+
+  function openAdd() {
+    setEditing(null)
+    setForm(emptyForm())
+    setOpen(true)
+  }
+
+  function openEdit(s: Supplier) {
+    setEditing(s)
+    setForm({
+      company_name: s.company_name,
+      contact_person: s.contact_person ?? '',
+      mobile_number: s.mobile_number ?? '',
+      email: s.email ?? '',
+      address: s.address ?? '',
+      tin: s.tin ?? '',
+      vat_registered: s.vat_registered ? 'true' : 'false',
+      supplier_category: s.supplier_category ?? '',
+      payment_terms: s.payment_terms ?? '30 days',
+      lead_time_days: String(s.lead_time_days ?? 7),
+      atc_code: s.atc_code ?? '',
+      ewt_rate: String(s.ewt_rate ?? 2),
+      vat_classification: s.vat_classification ?? 'vat_registered',
+    })
+    setOpen(true)
+  }
+
+  async function save() {
+    if (!form.company_name.trim()) { toast.error('Company name is required'); return }
+    setSaving(true)
+    const payload = {
+      company_name: form.company_name.trim(),
+      contact_person: form.contact_person || null,
+      mobile_number: form.mobile_number || null,
+      email: form.email || null,
+      address: form.address || null,
+      tin: form.tin || null,
+      vat_registered: form.vat_registered === 'true',
+      vat_classification: form.vat_classification || null,
+      supplier_category: form.supplier_category || null,
+      payment_terms: form.payment_terms || null,
+      lead_time_days: Number(form.lead_time_days) || null,
+      atc_code: form.atc_code || null,
+      ewt_rate: Number(form.ewt_rate) || null,
+    }
+    const { error } = editing
+      ? await supabase.from('suppliers').update(payload).eq('id', editing.id)
+      : await supabase.from('suppliers').insert(payload)
+    if (error) { toast.error(error.message) } else {
+      toast.success(editing ? 'Supplier updated' : 'Supplier added')
+      setOpen(false)
+      load()
+    }
+    setSaving(false)
+  }
+
+  async function toggleActive(s: Supplier) {
+    const { error } = await supabase.from('suppliers').update({ is_active: !s.is_active }).eq('id', s.id)
+    if (error) toast.error(error.message)
+    else { toast.success(s.is_active ? 'Supplier deactivated' : 'Supplier activated'); load() }
+  }
+
+  async function confirmDelete() {
+    if (!deleteId) return
+    const { error } = await supabase.from('suppliers').delete().eq('id', deleteId)
+    if (error) toast.error(error.message)
+    else { toast.success('Supplier deleted'); load() }
+    setDeleteId(null)
+  }
+
+  const f = (field: string) => (v: string | null) => setForm(prev => ({ ...prev, [field]: v ?? prev[field as keyof typeof prev] }))
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">Supplier Management</h2>
-          <p className="text-muted-foreground text-sm">Manage supplier information, performance and tax details</p>
+          <h1 className="text-2xl font-semibold">Suppliers</h1>
+          <p className="text-muted-foreground text-sm">{suppliers.filter(s => s.is_active).length} active suppliers</p>
         </div>
-        <Button onClick={() => setOpen(true)}>
+        <Button onClick={openAdd} className="bg-orange-500 hover:bg-orange-600">
           <Plus className="h-4 w-4 mr-2" /> Add Supplier
         </Button>
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card><CardContent className="pt-5 pb-4"><div className="text-2xl font-bold">24</div><div className="text-sm text-muted-foreground">Total Suppliers</div></CardContent></Card>
-        <Card><CardContent className="pt-5 pb-4"><div className="text-2xl font-bold text-green-600">21</div><div className="text-sm text-muted-foreground">Active</div></CardContent></Card>
-        <Card><CardContent className="pt-5 pb-4"><div className="text-2xl font-bold text-blue-600">18</div><div className="text-sm text-muted-foreground">VAT Registered</div></CardContent></Card>
-        <Card><CardContent className="pt-5 pb-4"><div className="text-2xl font-bold">4.5<span className="text-sm text-yellow-500 ml-1">★</span></div><div className="text-sm text-muted-foreground">Avg Rating</div></CardContent></Card>
+      <div className="relative max-w-sm">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input className="pl-9" placeholder="Search suppliers…" value={search} onChange={e => setSearch(e.target.value)} />
       </div>
 
-      {/* Table */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between gap-4">
-            <CardTitle className="text-base">Supplier List</CardTitle>
-            <div className="relative w-64">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search suppliers..." className="pl-9 h-8 text-sm" value={search} onChange={e => setSearch(e.target.value)} />
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Code</TableHead>
-                <TableHead>Company Name</TableHead>
-                <TableHead>Contact</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>TIN</TableHead>
-                <TableHead>VAT</TableHead>
-                <TableHead>Terms</TableHead>
-                <TableHead>Rating</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="w-10"></TableHead>
+      <div className="rounded-lg border bg-card">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Code</TableHead>
+              <TableHead>Company</TableHead>
+              <TableHead>Contact</TableHead>
+              <TableHead>TIN</TableHead>
+              <TableHead>VAT</TableHead>
+              <TableHead>Category</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="w-12" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Loading…</TableCell></TableRow>
+            ) : filtered.length === 0 ? (
+              <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No suppliers found</TableCell></TableRow>
+            ) : filtered.map(s => (
+              <TableRow key={s.id}>
+                <TableCell className="font-mono text-sm">{s.supplier_code}</TableCell>
+                <TableCell>
+                  <div className="font-medium">{s.company_name}</div>
+                  {s.email && <div className="text-xs text-muted-foreground">{s.email}</div>}
+                </TableCell>
+                <TableCell>
+                  <div className="text-sm">{s.contact_person ?? '—'}</div>
+                  {s.mobile_number && <div className="text-xs text-muted-foreground">{s.mobile_number}</div>}
+                </TableCell>
+                <TableCell className="font-mono text-sm">{s.tin ?? '—'}</TableCell>
+                <TableCell>
+                  {s.vat_registered
+                    ? <Badge className="bg-blue-100 text-blue-800 text-xs">VAT</Badge>
+                    : <Badge variant="secondary" className="text-xs">Non-VAT</Badge>}
+                </TableCell>
+                <TableCell className="text-sm">{s.supplier_category ?? '—'}</TableCell>
+                <TableCell>
+                  {s.is_active
+                    ? <Badge className="bg-green-100 text-green-800 text-xs">Active</Badge>
+                    : <Badge variant="secondary" className="text-xs">Inactive</Badge>}
+                </TableCell>
+                <TableCell>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger className="h-8 w-8 flex items-center justify-center rounded hover:bg-accent">
+                      <MoreHorizontal className="h-4 w-4" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => openEdit(s)}>Edit</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => toggleActive(s)}>
+                        {s.is_active ? 'Deactivate' : 'Activate'}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem className="text-destructive" onClick={() => setDeleteId(s.id)}>Delete</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map(s => (
-                <TableRow key={s.id}>
-                  <TableCell className="font-mono text-xs font-medium text-primary">{s.supplier_code}</TableCell>
-                  <TableCell>
-                    <div className="font-medium">{s.company_name}</div>
-                    <div className="text-xs text-muted-foreground">{s.email}</div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-sm">{s.contact_person}</div>
-                    <div className="text-xs text-muted-foreground">{s.mobile_number}</div>
-                  </TableCell>
-                  <TableCell><Badge variant="outline" className="text-xs">{s.supplier_category}</Badge></TableCell>
-                  <TableCell className="text-xs font-mono">{s.tin}</TableCell>
-                  <TableCell>
-                    {s.vat_registered
-                      ? <Badge className="text-xs bg-blue-100 text-blue-700 border-blue-200">VAT Reg</Badge>
-                      : <Badge variant="outline" className="text-xs">Non-VAT</Badge>}
-                  </TableCell>
-                  <TableCell className="text-sm">{s.payment_terms}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
-                      <span className="text-sm font-medium">{s.rating}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant={s.status === 'active' ? 'default' : 'secondary'} className="text-xs">
-                      {s.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger className="inline-flex items-center justify-center h-8 w-8 rounded-full hover:bg-accent">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem>Edit</DropdownMenuItem>
-                        <DropdownMenuItem>View Purchase History</DropdownMenuItem>
-                        <DropdownMenuItem>Supplier Ledger</DropdownMenuItem>
-                        <DropdownMenuItem>Performance Report</DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive">Archive</DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
 
-      {/* Add Supplier Dialog */}
+      {/* Add/Edit Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><Building2 className="h-5 w-5" /> Add Supplier</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Building2 className="h-5 w-5 text-orange-500" />
+              {editing ? 'Edit Supplier' : 'Add Supplier'}
+            </DialogTitle>
           </DialogHeader>
-          <div className="space-y-6 py-2">
-            {/* Company Info */}
-            <div>
-              <h4 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide">Company Information</h4>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2 space-y-1">
-                  <Label>Company Name *</Label>
-                  <Input placeholder="ABC Trading Corporation" value={form.company_name} onChange={e => setForm(f => ({ ...f, company_name: e.target.value }))} />
-                </div>
-                <div className="space-y-1">
-                  <Label>Contact Person *</Label>
-                  <Input placeholder="Juan Reyes" value={form.contact_person} onChange={e => setForm(f => ({ ...f, contact_person: e.target.value }))} />
-                </div>
-                <div className="space-y-1">
-                  <Label>Mobile Number *</Label>
-                  <Input placeholder="09171234567" value={form.mobile_number} onChange={e => setForm(f => ({ ...f, mobile_number: e.target.value }))} />
-                </div>
-                <div className="space-y-1">
-                  <Label>Email *</Label>
-                  <Input type="email" placeholder="supplier@email.com" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
-                </div>
-                <div className="space-y-1">
-                  <Label>Category *</Label>
-                  <Select value={form.supplier_category} onValueChange={v => setForm(f => ({ ...f, supplier_category: v ?? f.supplier_category }))}>
-                    <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Office Supplies">Office Supplies</SelectItem>
-                      <SelectItem value="IT Equipment">IT Equipment</SelectItem>
-                      <SelectItem value="Consumables">Consumables</SelectItem>
-                      <SelectItem value="General Merchandise">General Merchandise</SelectItem>
-                      <SelectItem value="Services">Services</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="col-span-2 space-y-1">
-                  <Label>Address *</Label>
-                  <Input placeholder="123 Supplier St., Makati City" value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))} />
-                </div>
-                <div className="space-y-1">
-                  <Label>Payment Terms</Label>
-                  <Select value={form.payment_terms} onValueChange={v => setForm(f => ({ ...f, payment_terms: v ?? f.payment_terms }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="COD">COD</SelectItem>
-                      <SelectItem value="7 days">7 Days</SelectItem>
-                      <SelectItem value="15 days">15 Days</SelectItem>
-                      <SelectItem value="30 days">30 Days</SelectItem>
-                      <SelectItem value="60 days">60 Days</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label>Lead Time (Days)</Label>
-                  <Input type="number" placeholder="7" value={form.lead_time_days} onChange={e => setForm(f => ({ ...f, lead_time_days: e.target.value }))} />
-                </div>
-              </div>
+          <div className="grid grid-cols-2 gap-4 py-2">
+            <div className="col-span-2 space-y-1.5">
+              <Label>Company Name <span className="text-destructive">*</span></Label>
+              <Input value={form.company_name} onChange={e => setForm(p => ({ ...p, company_name: e.target.value }))} />
             </div>
-
-            {/* BIR Tax Info */}
-            <div>
-              <h4 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wide">BIR / Tax Information</h4>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <Label>TIN</Label>
-                  <Input placeholder="123-456-789-000" value={form.tin} onChange={e => setForm(f => ({ ...f, tin: e.target.value }))} />
-                </div>
-                <div className="space-y-1">
-                  <Label>VAT Registration</Label>
-                  <Select value={form.vat_registered} onValueChange={v => setForm(f => ({ ...f, vat_registered: v ?? f.vat_registered }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="true">VAT Registered</SelectItem>
-                      <SelectItem value="false">Non-VAT</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label>VAT Classification</Label>
-                  <Select value={form.vat_classification} onValueChange={v => setForm(f => ({ ...f, vat_classification: v ?? f.vat_classification }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="vatable">Vatable (12%)</SelectItem>
-                      <SelectItem value="vat_exempt">VAT Exempt</SelectItem>
-                      <SelectItem value="zero_rated">Zero Rated</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label>ATC Code</Label>
-                  <Input placeholder="WC010" value={form.atc_code} onChange={e => setForm(f => ({ ...f, atc_code: e.target.value }))} />
-                </div>
-                <div className="space-y-1">
-                  <Label>EWT Rate (%)</Label>
-                  <Select value={form.ewt_rate} onValueChange={v => setForm(f => ({ ...f, ewt_rate: v ?? f.ewt_rate }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="1">1% — Goods</SelectItem>
-                      <SelectItem value="2">2% — Services</SelectItem>
-                      <SelectItem value="5">5% — Professional Services</SelectItem>
-                      <SelectItem value="10">10% — Professional (Income ≥ 720K)</SelectItem>
-                      <SelectItem value="15">15% — Prof. (Income ≥ 720K alt)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+            <div className="space-y-1.5">
+              <Label>Contact Person</Label>
+              <Input value={form.contact_person} onChange={e => setForm(p => ({ ...p, contact_person: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Mobile Number</Label>
+              <Input value={form.mobile_number} onChange={e => setForm(p => ({ ...p, mobile_number: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Email</Label>
+              <Input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>TIN</Label>
+              <Input placeholder="000-000-000-000" value={form.tin} onChange={e => setForm(p => ({ ...p, tin: e.target.value }))} />
+            </div>
+            <div className="col-span-2 space-y-1.5">
+              <Label>Address</Label>
+              <Input value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>VAT Status</Label>
+              <Select value={form.vat_registered} onValueChange={f('vat_registered')}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="true">VAT Registered</SelectItem>
+                  <SelectItem value="false">Non-VAT</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>VAT Classification</Label>
+              <Select value={form.vat_classification} onValueChange={f('vat_classification')}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="vat_registered">VAT Registered</SelectItem>
+                  <SelectItem value="non_vat">Non-VAT</SelectItem>
+                  <SelectItem value="government">Government</SelectItem>
+                  <SelectItem value="exempt">VAT Exempt</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>ATC Code (BIR)</Label>
+              <Select value={form.atc_code} onValueChange={f('atc_code')}>
+                <SelectTrigger><SelectValue placeholder="Select ATC" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="WI010">WI010 – Goods (2%)</SelectItem>
+                  <SelectItem value="WI020">WI020 – Services (2%)</SelectItem>
+                  <SelectItem value="WI030">WI030 – Rent (5%)</SelectItem>
+                  <SelectItem value="WC160">WC160 – Professional (10%)</SelectItem>
+                  <SelectItem value="WC158">WC158 – Professional (15%)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>EWT Rate (%)</Label>
+              <Select value={form.ewt_rate} onValueChange={f('ewt_rate')}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">1%</SelectItem>
+                  <SelectItem value="2">2%</SelectItem>
+                  <SelectItem value="5">5%</SelectItem>
+                  <SelectItem value="10">10%</SelectItem>
+                  <SelectItem value="15">15%</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Category</Label>
+              <Input placeholder="e.g. Office Supplies" value={form.supplier_category} onChange={e => setForm(p => ({ ...p, supplier_category: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Payment Terms</Label>
+              <Select value={form.payment_terms} onValueChange={f('payment_terms')}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="COD">COD</SelectItem>
+                  <SelectItem value="7 days">7 days</SelectItem>
+                  <SelectItem value="15 days">15 days</SelectItem>
+                  <SelectItem value="30 days">30 days</SelectItem>
+                  <SelectItem value="45 days">45 days</SelectItem>
+                  <SelectItem value="60 days">60 days</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Lead Time (days)</Label>
+              <Input type="number" min={0} value={form.lead_time_days} onChange={e => setForm(p => ({ ...p, lead_time_days: e.target.value }))} />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave}>Save Supplier</Button>
+            <Button onClick={save} disabled={saving} className="bg-orange-500 hover:bg-orange-600">
+              {saving ? 'Saving…' : 'Save Supplier'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirm */}
+      <Dialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Delete Supplier?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">This will permanently delete this supplier and cannot be undone.</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteId(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={confirmDelete}>Delete</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

@@ -1,19 +1,19 @@
 import type { Metadata } from 'next'
-import { Geist } from 'next/font/google'
+import { Questrial } from 'next/font/google'
 import './globals.css'
 import { Toaster } from '@/components/ui/sonner'
 
-const geist = Geist({ subsets: ['latin'] })
+const questrial = Questrial({ subsets: ['latin'], weight: '400' })
 
 export const metadata: Metadata = {
-  title: 'CDSC ERP System',
+  title: 'CDSC Industrial Supply — ERP System',
   description: 'Enterprise Resource Planning — Inventory, Purchasing, Warehouse & BIR Compliance',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${geist.className} h-full antialiased`} suppressHydrationWarning>
-      <body className="min-h-full bg-background text-foreground">
+    <html lang="en" className="h-full antialiased" suppressHydrationWarning>
+      <body className={`${questrial.className} min-h-full bg-background text-foreground`}>
         {children}
         <Toaster position="top-right" richColors />
       </body>
