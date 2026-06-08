@@ -10,7 +10,7 @@ import {
   LayoutDashboard, Users, Package, ShoppingCart, FileText,
   Truck, Warehouse, RotateCcw, Cpu, UserCheck, Calculator,
   FileBarChart, Settings, ChevronDown, ChevronRight, Building2,
-  ClipboardList, SlidersHorizontal, ArrowRightLeft, LogOut, X,
+  ClipboardList, SlidersHorizontal, ArrowRightLeft, LogOut, X, Wrench,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -58,6 +58,7 @@ const navigation: NavItem[] = [
   },
   { label: 'Reports', href: '/reports', icon: FileBarChart },
   { label: 'Users', href: '/users', icon: Users },
+  { label: 'Setup', href: '/setup', icon: Wrench },
   { label: 'Settings', href: '/settings', icon: Settings },
 ]
 
@@ -133,16 +134,17 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="p-4 border-b flex items-center justify-center">
+      <div className="px-4 pt-5 pb-4 flex items-center justify-center">
         <Image
           src="/cdsc-logo.jpg"
           alt="CDSC Industrial Supply"
-          width={180}
-          height={60}
-          className="object-contain"
+          width={120}
+          height={40}
+          className="object-contain mix-blend-multiply dark:mix-blend-normal"
           priority
         />
       </div>
+      <div className="h-px bg-border mx-3 mb-1" />
 
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto p-3 space-y-0.5">
