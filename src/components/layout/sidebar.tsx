@@ -4,11 +4,13 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
+import { createClient } from '@/lib/supabase/client'
+import { useRouter } from 'next/navigation'
 import {
   LayoutDashboard, Users, Package, ShoppingCart, FileText,
   Truck, Warehouse, RotateCcw, Cpu, UserCheck, Calculator,
   FileBarChart, Settings, ChevronDown, ChevronRight, Building2,
-  BarChart3, ClipboardList, SlidersHorizontal, ArrowRightLeft,
+  ClipboardList, SlidersHorizontal, ArrowRightLeft, LogOut, X,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -59,7 +61,15 @@ const navigation: NavItem[] = [
   { label: 'Settings', href: '/settings', icon: Settings },
 ]
 
-function NavLink({ item, depth = 0 }: { item: NavItem; depth?: number }) {
+function NavLink({
+  item,
+  depth = 0,
+  onNavigate,
+}: {
+  item: NavItem
+  depth?: number
+  onNavigate?: () => void
+}) {
   const pathname = usePathname()
   const [open, setOpen] = useState(() =>
     item.children?.some(c => c.href && pathname.startsWith(c.href)) ?? false
@@ -84,9 +94,9 @@ function NavLink({ item, depth = 0 }: { item: NavItem; depth?: number }) {
           {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
         </button>
         {open && (
-          <div className="ml-4 mt-1 space-y-0.5 border-l border-border pl-3">
+          <div className="ml-4 mt-0.5 space-y-0.5 border-l border-border pl-3">
             {item.children.map(child => (
-              <NavLink key={child.label} item={child} depth={depth + 1} />
+              <NavLink key={child.label} item={child} depth={depth + 1} onNavigate={onNavigate} />
             ))}
           </div>
         )}
@@ -97,6 +107,7 @@ function NavLink({ item, depth = 0 }: { item: NavItem; depth?: number }) {
   return (
     <Link
       href={item.href!}
+      onClick={onNavigate}
       className={cn(
         'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
         isActive
@@ -110,13 +121,21 @@ function NavLink({ item, depth = 0 }: { item: NavItem; depth?: number }) {
   )
 }
 
-export function Sidebar() {
+function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
+  const router = useRouter()
+
+  async function handleSignOut() {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
+
   return (
-    <aside className="hidden lg:flex flex-col w-64 border-r bg-card h-screen sticky top-0">
+    <div className="flex flex-col h-full">
       {/* Logo */}
       <div className="p-4 border-b flex items-center justify-center">
         <Image
-          src="/logo.png"
+          src="/cdsc-logo.jpg"
           alt="CDSC Industrial Supply"
           width={180}
           height={60}
@@ -128,9 +147,62 @@ export function Sidebar() {
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto p-3 space-y-0.5">
         {navigation.map(item => (
-          <NavLink key={item.label} item={item} />
+          <NavLink key={item.label} item={item} onNavigate={onNavigate} />
         ))}
       </nav>
+
+      {/* Sign Out */}
+      <div className="p-3 border-t">
+        <button
+          onClick={handleSignOut}
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+        >
+          <LogOut className="h-4 w-4 shrink-0" />
+          <span>Sign Out</span>
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/* Desktop sidebar */
+export function Sidebar() {
+  return (
+    <aside className="hidden lg:flex flex-col w-64 border-r bg-card h-screen sticky top-0 shrink-0">
+      <SidebarContent />
     </aside>
+  )
+}
+
+/* Mobile drawer controlled externally */
+export function MobileSidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
+  return (
+    <>
+      {/* Backdrop */}
+      {open && (
+        <div
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          onClick={onClose}
+        />
+      )}
+
+      {/* Drawer */}
+      <aside
+        className={cn(
+          'fixed inset-y-0 left-0 z-50 w-72 bg-card border-r shadow-xl transition-transform duration-300 ease-in-out lg:hidden',
+          open ? 'translate-x-0' : '-translate-x-full',
+        )}
+      >
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          className="absolute top-3 right-3 h-8 w-8 flex items-center justify-center rounded-md hover:bg-accent"
+        >
+          <X className="h-4 w-4" />
+        </button>
+
+        <SidebarContent onNavigate={onClose} />
+      </aside>
+    </>
   )
 }
