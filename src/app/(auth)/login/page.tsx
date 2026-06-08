@@ -2,10 +2,10 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Button } from '@/components/ui/button'
+import Image from 'next/image'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { Eye, EyeOff, Loader2 } from 'lucide-react'
@@ -33,68 +33,113 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 p-4">
-      <div className="w-full max-w-md">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center h-16 w-16 rounded-2xl bg-primary mb-4">
-            <span className="text-3xl font-bold text-primary-foreground">C</span>
+    <div className="min-h-screen flex">
+      {/* Left panel — branding */}
+      <div className="hidden lg:flex flex-col justify-between w-[45%] bg-[#111111] p-12">
+        <div className="flex items-center gap-3">
+          <div className="relative h-10 w-10 shrink-0">
+            <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="rounded-lg object-contain" priority />
           </div>
-          <h1 className="text-2xl font-bold text-white">CDSC ERP System</h1>
-          <p className="text-slate-400 text-sm mt-1">Enterprise Resource Planning</p>
+          <div>
+            <div className="text-white font-bold text-base leading-tight">CDSC Industrial Supply</div>
+            <div className="text-white/40 text-xs">Enterprise Resource Planning</div>
+          </div>
         </div>
 
-        <Card className="border-slate-700 bg-slate-800/60 backdrop-blur">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-white text-lg">Sign In</CardTitle>
-            <CardDescription className="text-slate-400">Enter your credentials to access the system</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div className="space-y-1.5">
-                <Label className="text-slate-300">Email Address</Label>
-                <Input
-                  type="email"
-                  placeholder="you@cdsc.com"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  required
-                  className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-slate-300">Password</Label>
-                <div className="relative">
-                  <Input
-                    type={showPassword ? 'text' : 'password'}
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    required
-                    className="bg-slate-700/50 border-slate-600 text-white placeholder:text-slate-500 pr-10"
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-0 top-0 h-full px-3 text-slate-400 hover:text-white"
-                    onClick={() => setShowPassword(s => !s)}
-                  >
-                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                  </Button>
-                </div>
-              </div>
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                {loading ? 'Signing in...' : 'Sign In'}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+        <div className="space-y-6">
+          <div className="space-y-2">
+            <div className="text-red-500 text-sm font-semibold tracking-widest uppercase">Welcome back</div>
+            <h1 className="text-4xl font-bold text-white leading-snug">
+              Manage your business<br />with confidence.
+            </h1>
+            <p className="text-white/40 text-sm leading-relaxed max-w-sm">
+              Inventory, purchasing, warehouse, BIR compliance — all in one place built for Philippine SMEs.
+            </p>
+          </div>
 
-        <p className="text-center text-slate-500 text-xs mt-6">
-          CDSC ERP v1.0 — Authorized users only
-        </p>
+          <div className="flex gap-6">
+            {[['Modules', '13+'], ['Roles', '10'], ['BIR Forms', '6']].map(([label, value]) => (
+              <div key={label}>
+                <div className="text-2xl font-bold text-white">{value}</div>
+                <div className="text-white/40 text-xs">{label}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <p className="text-white/20 text-xs">© {new Date().getFullYear()} CDSC Industrial Supply. All rights reserved.</p>
+      </div>
+
+      {/* Right panel — form */}
+      <div className="flex-1 flex items-center justify-center bg-white p-6">
+        <div className="w-full max-w-sm space-y-8">
+          {/* Mobile logo */}
+          <div className="flex lg:hidden items-center gap-3 mb-2">
+            <div className="relative h-10 w-10 shrink-0">
+              <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="rounded-lg object-contain" priority />
+            </div>
+            <div>
+              <div className="font-bold text-base leading-tight">CDSC Industrial Supply</div>
+              <div className="text-muted-foreground text-xs">Enterprise Resource Planning</div>
+            </div>
+          </div>
+
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">Sign in</h2>
+            <p className="text-muted-foreground text-sm mt-1">Enter your credentials to access the system</p>
+          </div>
+
+          <form onSubmit={handleLogin} className="space-y-5">
+            <div className="space-y-1.5">
+              <Label htmlFor="email">Email address</Label>
+              <Input
+                id="email"
+                type="email"
+                placeholder="you@cdsc.com"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                required
+                autoComplete="email"
+                className="h-11"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="password">Password</Label>
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  required
+                  autoComplete="current-password"
+                  className="h-11 pr-10"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(s => !s)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+
+            <Button
+              type="submit"
+              className="w-full h-11 bg-red-600 hover:bg-red-700 text-white font-medium"
+              disabled={loading}
+            >
+              {loading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Signing in…</> : 'Sign In'}
+            </Button>
+          </form>
+
+          <p className="text-center text-muted-foreground text-xs">
+            Authorized users only · CDSC Industrial Supply
+          </p>
+        </div>
       </div>
     </div>
   )

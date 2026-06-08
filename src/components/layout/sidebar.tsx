@@ -62,24 +62,18 @@ const navigation: NavItem[] = [
   { label: 'Settings', href: '/settings', icon: Settings },
 ]
 
-function isActive(pathname: string, href: string) {
+function checkActive(pathname: string, href: string) {
   if (href === '/dashboard') return pathname === '/dashboard'
   return pathname === href || pathname.startsWith(href + '/')
 }
 
 function hasActiveChild(pathname: string, children: NavItem[]): boolean {
-  return children.some(c => c.href ? isActive(pathname, c.href) : false)
+  return children.some(c => c.href ? checkActive(pathname, c.href) : false)
 }
 
-function NavLink({
-  item,
-  onNavigate,
-}: {
-  item: NavItem
-  onNavigate?: () => void
-}) {
+function NavLink({ item, onNavigate }: { item: NavItem; onNavigate?: () => void }) {
   const pathname = usePathname()
-  const active = item.href ? isActive(pathname, item.href) : false
+  const active = item.href ? checkActive(pathname, item.href) : false
   const childActive = item.children ? hasActiveChild(pathname, item.children) : false
   const [open, setOpen] = useState(() => childActive)
 
@@ -89,20 +83,18 @@ function NavLink({
         <button
           onClick={() => setOpen(o => !o)}
           className={cn(
-            'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-            childActive
-              ? 'text-white bg-white/10'
-              : 'text-white/60 hover:text-white hover:bg-white/8',
+            'w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] font-medium transition-colors',
+            childActive ? 'text-white' : 'text-white/50 hover:text-white/80 hover:bg-white/5',
           )}
         >
-          <item.icon className="h-4 w-4 shrink-0" />
+          <item.icon className="h-[15px] w-[15px] shrink-0" />
           <span className="flex-1 text-left">{item.label}</span>
           {open
-            ? <ChevronDown className="h-3.5 w-3.5 opacity-60" />
-            : <ChevronRight className="h-3.5 w-3.5 opacity-60" />}
+            ? <ChevronDown className="h-3 w-3 opacity-40" />
+            : <ChevronRight className="h-3 w-3 opacity-40" />}
         </button>
         {open && (
-          <div className="ml-4 mt-0.5 space-y-0.5 border-l border-white/10 pl-3">
+          <div className="mt-0.5 ml-3 pl-3 border-l border-white/10 space-y-0.5">
             {item.children.map(child => (
               <NavLink key={child.label} item={child} onNavigate={onNavigate} />
             ))}
@@ -117,13 +109,13 @@ function NavLink({
       href={item.href!}
       onClick={onNavigate}
       className={cn(
-        'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all',
+        'flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] font-medium transition-colors',
         active
-          ? 'bg-red-600 text-white shadow-sm shadow-red-900/50'
-          : 'text-white/60 hover:text-white hover:bg-white/8',
+          ? 'bg-red-600/20 text-red-400 border-l-2 border-red-500'
+          : 'text-white/50 hover:text-white/80 hover:bg-white/5',
       )}
     >
-      <item.icon className={cn('h-4 w-4 shrink-0', active ? 'text-white' : '')} />
+      <item.icon className={cn('h-[15px] w-[15px] shrink-0', active ? 'text-red-400' : '')} />
       <span>{item.label}</span>
     </Link>
   )
@@ -131,7 +123,6 @@ function NavLink({
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const router = useRouter()
-
   async function handleSignOut() {
     const supabase = createClient()
     await supabase.auth.signOut()
@@ -139,38 +130,40 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   }
 
   return (
-    <div className="flex flex-col h-full bg-neutral-900">
-      {/* Logo */}
-      <div className="px-5 pt-5 pb-3 flex items-center justify-start gap-3">
-        <Image
-          src="/cdsc-logo.jpg"
-          alt="CDSC"
-          width={36}
-          height={36}
-          className="rounded object-contain"
-          priority
-        />
-        <div>
-          <div className="text-white font-semibold text-sm leading-tight">CDSC</div>
-          <div className="text-white/40 text-xs leading-tight">Industrial Supply</div>
+    <div className="flex flex-col h-full bg-[#111111]">
+      {/* Logo area */}
+      <div className="px-4 py-5 flex items-center gap-3">
+        <div className="relative h-8 w-8 shrink-0">
+          <Image
+            src="/cdsc-logo.jpg"
+            alt="CDSC"
+            fill
+            className="rounded object-contain"
+            priority
+          />
+        </div>
+        <div className="min-w-0">
+          <div className="text-white font-semibold text-sm leading-tight truncate">CDSC Industrial</div>
+          <div className="text-white/35 text-[11px] leading-tight">Supply ERP</div>
         </div>
       </div>
-      <div className="h-px bg-white/10 mx-3 mb-2" />
 
-      {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-3 pb-2 space-y-0.5">
+      <div className="h-px bg-white/8 mx-3 mb-2" />
+
+      {/* Nav */}
+      <nav className="flex-1 overflow-y-auto px-2 pb-2 space-y-0.5 scrollbar-thin">
         {navigation.map(item => (
           <NavLink key={item.label} item={item} onNavigate={onNavigate} />
         ))}
       </nav>
 
       {/* Sign Out */}
-      <div className="p-3 border-t border-white/10">
+      <div className="p-3 border-t border-white/8">
         <button
           onClick={handleSignOut}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-white/50 hover:text-red-400 hover:bg-white/5 transition-colors"
+          className="w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] font-medium text-white/40 hover:text-red-400 hover:bg-white/5 transition-colors"
         >
-          <LogOut className="h-4 w-4 shrink-0" />
+          <LogOut className="h-[15px] w-[15px] shrink-0" />
           <span>Sign Out</span>
         </button>
       </div>
@@ -180,7 +173,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
 export function Sidebar() {
   return (
-    <aside className="hidden lg:flex flex-col w-60 h-screen sticky top-0 shrink-0">
+    <aside className="hidden lg:flex flex-col w-56 h-screen sticky top-0 shrink-0">
       <SidebarContent />
     </aside>
   )
@@ -190,20 +183,15 @@ export function MobileSidebar({ open, onClose }: { open: boolean; onClose: () =>
   return (
     <>
       {open && (
-        <div
-          className="fixed inset-0 z-40 bg-black/60 lg:hidden"
-          onClick={onClose}
-        />
+        <div className="fixed inset-0 z-40 bg-black/60 lg:hidden" onClick={onClose} />
       )}
-      <aside
-        className={cn(
-          'fixed inset-y-0 left-0 z-50 w-64 transition-transform duration-300 ease-in-out lg:hidden',
-          open ? 'translate-x-0' : '-translate-x-full',
-        )}
-      >
+      <aside className={cn(
+        'fixed inset-y-0 left-0 z-50 w-60 transition-transform duration-300 ease-in-out lg:hidden',
+        open ? 'translate-x-0' : '-translate-x-full',
+      )}>
         <button
           onClick={onClose}
-          className="absolute top-3 right-3 h-8 w-8 flex items-center justify-center rounded-md text-white/50 hover:text-white hover:bg-white/10 z-10"
+          className="absolute top-3 right-3 h-7 w-7 flex items-center justify-center rounded text-white/40 hover:text-white hover:bg-white/10 z-10"
         >
           <X className="h-4 w-4" />
         </button>

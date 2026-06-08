@@ -1,110 +1,309 @@
 'use client'
 
-import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { useState, useEffect } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { Plus, Shield } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Badge } from '@/components/ui/badge'
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table'
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { Plus, Users, MoreHorizontal, UserPlus, Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
+import { format } from 'date-fns'
 
-const roles = [
-  { role: 'Super Admin', users: 1, description: 'Full system access, all modules', color: 'destructive' },
-  { role: 'Admin', users: 2, description: 'Manage all modules except system config', color: 'default' },
-  { role: 'Purchasing Officer', users: 3, description: 'PR, PO, supplier management', color: 'default' },
-  { role: 'Warehouse Manager', users: 2, description: 'Receiving, transfers, adjustments', color: 'default' },
-  { role: 'Warehouse Staff', users: 5, description: 'Receiving, issuance only', color: 'secondary' },
-  { role: 'Accounting Manager', users: 1, description: 'Full accounting, BIR filing', color: 'default' },
-  { role: 'Accounting Staff', users: 3, description: 'View accounting, generate reports', color: 'secondary' },
-  { role: 'Department Head', users: 8, description: 'Approve dept PRs, view reports', color: 'secondary' },
-  { role: 'Employee', users: 45, description: 'Create requests, view own data', color: 'outline' },
-  { role: 'Auditor', users: 2, description: 'Read-only access to all reports', color: 'outline' },
+const ROLES = [
+  { value: 'super_admin', label: 'Super Admin' },
+  { value: 'admin', label: 'Admin' },
+  { value: 'purchasing_officer', label: 'Purchasing Officer' },
+  { value: 'warehouse_manager', label: 'Warehouse Manager' },
+  { value: 'warehouse_staff', label: 'Warehouse Staff' },
+  { value: 'accounting_manager', label: 'Accounting Manager' },
+  { value: 'accounting_staff', label: 'Accounting Staff' },
+  { value: 'department_head', label: 'Department Head' },
+  { value: 'employee', label: 'Employee' },
+  { value: 'auditor', label: 'Auditor' },
 ]
 
-const permissionsMatrix = [
-  { module: 'Dashboard', super_admin: '✓', admin: '✓', purchasing: 'View', warehouse_mgr: 'View', warehouse_staff: 'Limited', acctg_mgr: 'View', acctg_staff: 'View', dept_head: 'Limited', employee: 'Limited', auditor: 'View' },
-  { module: 'Suppliers', super_admin: '✓', admin: '✓', purchasing: '✓', warehouse_mgr: 'View', warehouse_staff: '—', acctg_mgr: 'View', acctg_staff: 'View', dept_head: '—', employee: '—', auditor: 'View' },
-  { module: 'Item Master', super_admin: '✓', admin: '✓', purchasing: 'View', warehouse_mgr: '✓', warehouse_staff: 'View', acctg_mgr: 'View', acctg_staff: 'View', dept_head: 'View', employee: 'View', auditor: 'View' },
-  { module: 'Purchase Requests', super_admin: '✓', admin: '✓', purchasing: '✓', warehouse_mgr: 'View', warehouse_staff: '—', acctg_mgr: 'View', acctg_staff: '—', dept_head: 'Approve', employee: 'Create', auditor: 'View' },
-  { module: 'Purchase Orders', super_admin: '✓', admin: '✓', purchasing: '✓', warehouse_mgr: 'View', warehouse_staff: '—', acctg_mgr: 'View', acctg_staff: 'View', dept_head: '—', employee: '—', auditor: 'View' },
-  { module: 'Receiving', super_admin: '✓', admin: '✓', purchasing: 'View', warehouse_mgr: '✓', warehouse_staff: 'Create', acctg_mgr: 'View', acctg_staff: 'View', dept_head: '—', employee: '—', auditor: 'View' },
-  { module: 'Warehouse', super_admin: '✓', admin: '✓', purchasing: '—', warehouse_mgr: '✓', warehouse_staff: 'Limited', acctg_mgr: 'View', acctg_staff: '—', dept_head: '—', employee: '—', auditor: 'View' },
-  { module: 'Assets', super_admin: '✓', admin: '✓', purchasing: '—', warehouse_mgr: '✓', warehouse_staff: 'View', acctg_mgr: 'View', acctg_staff: 'View', dept_head: 'View', employee: 'View Own', auditor: 'View' },
-  { module: 'BIR Compliance', super_admin: '✓', admin: 'View', purchasing: '—', warehouse_mgr: '—', warehouse_staff: '—', acctg_mgr: '✓', acctg_staff: 'View', dept_head: '—', employee: '—', auditor: 'View' },
-  { module: 'Reports', super_admin: '✓', admin: '✓', purchasing: 'Purch', warehouse_mgr: 'WH', warehouse_staff: '—', acctg_mgr: 'All', acctg_staff: 'Acctg', dept_head: 'Dept', employee: '—', auditor: 'All' },
-  { module: 'User Management', super_admin: '✓', admin: 'View', purchasing: '—', warehouse_mgr: '—', warehouse_staff: '—', acctg_mgr: '—', acctg_staff: '—', dept_head: '—', employee: '—', auditor: '—' },
-]
+const ROLE_COLORS: Record<string, string> = {
+  super_admin: 'bg-red-100 text-red-800',
+  admin: 'bg-orange-100 text-orange-800',
+  purchasing_officer: 'bg-blue-100 text-blue-800',
+  warehouse_manager: 'bg-green-100 text-green-800',
+  warehouse_staff: 'bg-teal-100 text-teal-800',
+  accounting_manager: 'bg-purple-100 text-purple-800',
+  accounting_staff: 'bg-violet-100 text-violet-800',
+  department_head: 'bg-amber-100 text-amber-800',
+  employee: 'bg-gray-100 text-gray-700',
+  auditor: 'bg-slate-100 text-slate-700',
+}
 
-function PermCell({ value }: { value: string }) {
-  if (value === '✓') return <span className="text-green-600 font-bold">✓</span>
-  if (value === '—') return <span className="text-muted-foreground text-xs">—</span>
-  return <span className="text-xs text-blue-600">{value}</span>
+interface Profile {
+  id: string
+  full_name: string | null
+  email: string | null
+  role: string
+  department: string | null
+  created_at: string
 }
 
 export default function UsersPage() {
+  const supabase = createClient()
+  const [profiles, setProfiles] = useState<Profile[]>([])
+  const [loading, setLoading] = useState(true)
+  const [inviteOpen, setInviteOpen] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
+  const [editing, setEditing] = useState<Profile | null>(null)
+  const [inviting, setInviting] = useState(false)
+  const [inviteForm, setInviteForm] = useState({ email: '', full_name: '', role: 'employee', department: '' })
+  const [editForm, setEditForm] = useState({ role: 'employee', department: '', full_name: '' })
+
+  async function load() {
+    setLoading(true)
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, full_name, email, role, department, created_at')
+      .order('created_at', { ascending: false })
+    if (error) toast.error(error.message)
+    else setProfiles(data ?? [])
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [])
+
+  async function handleInvite() {
+    if (!inviteForm.email.trim()) { toast.error('Email is required'); return }
+    setInviting(true)
+    try {
+      // Use Supabase admin invite - calls the edge function / admin API via service role
+      // Since we're client-side, we'll use signUp flow which sends a confirmation email
+      const { data, error } = await supabase.auth.signUp({
+        email: inviteForm.email.trim().toLowerCase(),
+        password: Math.random().toString(36).slice(-12) + 'A1!', // temp password
+        options: {
+          data: {
+            full_name: inviteForm.full_name,
+            role: inviteForm.role,
+          },
+        },
+      })
+      if (error) throw error
+
+      // Upsert profile manually
+      if (data.user) {
+        await supabase.from('profiles').upsert({
+          id: data.user.id,
+          email: inviteForm.email.trim().toLowerCase(),
+          full_name: inviteForm.full_name || null,
+          role: inviteForm.role,
+          department: inviteForm.department || null,
+        })
+      }
+
+      toast.success(`Invite sent to ${inviteForm.email}`)
+      setInviteOpen(false)
+      setInviteForm({ email: '', full_name: '', role: 'employee', department: '' })
+      load()
+    } catch (err: any) {
+      toast.error(err.message ?? 'Failed to invite user')
+    }
+    setInviting(false)
+  }
+
+  function openEdit(p: Profile) {
+    setEditing(p)
+    setEditForm({ role: p.role, department: p.department ?? '', full_name: p.full_name ?? '' })
+    setEditOpen(true)
+  }
+
+  async function saveEdit() {
+    if (!editing) return
+    const { error } = await supabase.from('profiles').update({
+      role: editForm.role,
+      department: editForm.department || null,
+      full_name: editForm.full_name || null,
+    }).eq('id', editing.id)
+    if (error) toast.error(error.message)
+    else { toast.success('User updated'); setEditOpen(false); load() }
+  }
+
+  async function deactivate(p: Profile) {
+    const { error } = await supabase.from('profiles').update({ role: 'employee' }).eq('id', p.id)
+    if (error) toast.error(error.message)
+    else { toast.success('Role reset to Employee'); load() }
+  }
+
+  const roleName = (r: string) => ROLES.find(x => x.value === r)?.label ?? r
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">Users & Permissions</h2>
-          <p className="text-muted-foreground text-sm">Manage user accounts and role-based access control</p>
+          <h1 className="text-2xl font-semibold">Users</h1>
+          <p className="text-muted-foreground text-sm">{profiles.length} total users</p>
         </div>
-        <Button><Plus className="h-4 w-4 mr-2" />Invite User</Button>
+        <Button onClick={() => setInviteOpen(true)} className="bg-red-600 hover:bg-red-700">
+          <UserPlus className="h-4 w-4 mr-2" /> Invite User
+        </Button>
       </div>
 
-      {/* Role Summary */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-        {roles.slice(0, 5).map(r => (
-          <Card key={r.role}>
-            <CardContent className="pt-4 pb-3">
-              <Badge variant={r.color as 'default' | 'secondary' | 'destructive' | 'outline'} className="text-xs mb-2">{r.role}</Badge>
-              <div className="text-2xl font-bold">{r.users}</div>
-              <div className="text-xs text-muted-foreground">{r.description}</div>
-            </CardContent>
-          </Card>
-        ))}
+      {/* Role summary chips */}
+      <div className="flex flex-wrap gap-2">
+        {ROLES.map(r => {
+          const count = profiles.filter(p => p.role === r.value).length
+          if (count === 0) return null
+          return (
+            <span key={r.value} className={`text-xs px-2.5 py-1 rounded-full font-medium ${ROLE_COLORS[r.value]}`}>
+              {r.label}: {count}
+            </span>
+          )
+        })}
       </div>
 
-      {/* Permissions Matrix */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2"><Shield className="h-4 w-4" />Role Permissions Matrix</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0 overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="min-w-[140px]">Module</TableHead>
-                <TableHead className="text-center text-xs">Super Admin</TableHead>
-                <TableHead className="text-center text-xs">Admin</TableHead>
-                <TableHead className="text-center text-xs">Purchasing</TableHead>
-                <TableHead className="text-center text-xs">WH Mgr</TableHead>
-                <TableHead className="text-center text-xs">WH Staff</TableHead>
-                <TableHead className="text-center text-xs">Acctg Mgr</TableHead>
-                <TableHead className="text-center text-xs">Acctg Staff</TableHead>
-                <TableHead className="text-center text-xs">Dept Head</TableHead>
-                <TableHead className="text-center text-xs">Employee</TableHead>
-                <TableHead className="text-center text-xs">Auditor</TableHead>
+      <div className="rounded-lg border bg-card">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Email</TableHead>
+              <TableHead>Role</TableHead>
+              <TableHead>Department</TableHead>
+              <TableHead>Added</TableHead>
+              <TableHead className="w-12" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <TableRow><TableCell colSpan={6} className="text-center py-10 text-muted-foreground">Loading…</TableCell></TableRow>
+            ) : profiles.length === 0 ? (
+              <TableRow><TableCell colSpan={6} className="text-center py-10 text-muted-foreground">No users yet</TableCell></TableRow>
+            ) : profiles.map(p => (
+              <TableRow key={p.id}>
+                <TableCell className="font-medium">{p.full_name ?? '—'}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">{p.email ?? '—'}</TableCell>
+                <TableCell>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ROLE_COLORS[p.role] ?? 'bg-gray-100 text-gray-700'}`}>
+                    {roleName(p.role)}
+                  </span>
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground">{p.department ?? '—'}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">
+                  {format(new Date(p.created_at), 'MMM d, yyyy')}
+                </TableCell>
+                <TableCell>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger className="h-8 w-8 flex items-center justify-center rounded hover:bg-accent">
+                      <MoreHorizontal className="h-4 w-4" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => openEdit(p)}>Edit Role / Info</DropdownMenuItem>
+                      <DropdownMenuItem className="text-destructive" onClick={() => deactivate(p)}>Reset to Employee</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {permissionsMatrix.map(row => (
-                <TableRow key={row.module}>
-                  <TableCell className="font-medium text-sm">{row.module}</TableCell>
-                  <TableCell className="text-center"><PermCell value={row.super_admin} /></TableCell>
-                  <TableCell className="text-center"><PermCell value={row.admin} /></TableCell>
-                  <TableCell className="text-center"><PermCell value={row.purchasing} /></TableCell>
-                  <TableCell className="text-center"><PermCell value={row.warehouse_mgr} /></TableCell>
-                  <TableCell className="text-center"><PermCell value={row.warehouse_staff} /></TableCell>
-                  <TableCell className="text-center"><PermCell value={row.acctg_mgr} /></TableCell>
-                  <TableCell className="text-center"><PermCell value={row.acctg_staff} /></TableCell>
-                  <TableCell className="text-center"><PermCell value={row.dept_head} /></TableCell>
-                  <TableCell className="text-center"><PermCell value={row.employee} /></TableCell>
-                  <TableCell className="text-center"><PermCell value={row.auditor} /></TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* Invite Dialog */}
+      <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5 text-red-600" /> Invite User
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Email Address <span className="text-destructive">*</span></Label>
+              <Input
+                type="email"
+                placeholder="user@cdsc.com"
+                value={inviteForm.email}
+                onChange={e => setInviteForm(f => ({ ...f, email: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Full Name</Label>
+              <Input
+                placeholder="Juan dela Cruz"
+                value={inviteForm.full_name}
+                onChange={e => setInviteForm(f => ({ ...f, full_name: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Role</Label>
+              <Select value={inviteForm.role} onValueChange={v => setInviteForm(f => ({ ...f, role: v ?? 'employee' }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {ROLES.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Department</Label>
+              <Input
+                placeholder="e.g. Operations, Finance"
+                value={inviteForm.department}
+                onChange={e => setInviteForm(f => ({ ...f, department: e.target.value }))}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground bg-muted p-3 rounded-md">
+              A confirmation email will be sent to the user. They must confirm their email and set their own password before logging in.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setInviteOpen(false)}>Cancel</Button>
+            <Button onClick={handleInvite} disabled={inviting} className="bg-red-600 hover:bg-red-700">
+              {inviting ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Inviting…</> : 'Send Invite'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Dialog */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Edit User</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Full Name</Label>
+              <Input value={editForm.full_name} onChange={e => setEditForm(f => ({ ...f, full_name: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Role</Label>
+              <Select value={editForm.role} onValueChange={v => setEditForm(f => ({ ...f, role: v ?? 'employee' }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {ROLES.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Department</Label>
+              <Input value={editForm.department} onChange={e => setEditForm(f => ({ ...f, department: e.target.value }))} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
+            <Button onClick={saveEdit} className="bg-red-600 hover:bg-red-700">Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

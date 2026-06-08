@@ -6,8 +6,12 @@ import { Toaster } from '@/components/ui/sonner'
 const questrial = Questrial({ subsets: ['latin'], weight: '400' })
 
 export const metadata: Metadata = {
-  title: 'CDSC Industrial Supply — ERP System',
+  title: 'CDSC Industrial Supply — ERP',
   description: 'Enterprise Resource Planning — Inventory, Purchasing, Warehouse & BIR Compliance',
+  icons: {
+    icon: '/cdsc-logo.jpg',
+    apple: '/cdsc-logo.jpg',
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
