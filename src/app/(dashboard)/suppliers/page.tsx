@@ -43,7 +43,7 @@ const emptyForm = () => ({
   company_name: '', contact_person: '', mobile_number: '', email: '',
   address: '', tin: '', vat_registered: 'true', supplier_category: '',
   payment_terms: '30 days', lead_time_days: '7', atc_code: '', ewt_rate: '2',
-  vat_classification: 'vat_registered',
+  vat_classification: 'vatable',
 })
 
 export default function SuppliersPage() {
@@ -95,7 +95,7 @@ export default function SuppliersPage() {
       lead_time_days: String(s.lead_time_days ?? 7),
       atc_code: s.atc_code ?? '',
       ewt_rate: String(s.ewt_rate ?? 2),
-      vat_classification: s.vat_classification ?? 'vat_registered',
+      vat_classification: s.vat_classification ?? 'vatable',
     })
     setOpen(true)
   }
@@ -152,7 +152,7 @@ export default function SuppliersPage() {
           <h1 className="text-2xl font-semibold">Suppliers</h1>
           <p className="text-muted-foreground text-sm">{suppliers.filter(s => s.is_active).length} active suppliers</p>
         </div>
-        <Button onClick={openAdd} className="bg-orange-500 hover:bg-orange-600">
+        <Button onClick={openAdd} className="bg-red-600 hover:bg-red-700">
           <Plus className="h-4 w-4 mr-2" /> Add Supplier
         </Button>
       </div>
@@ -229,7 +229,7 @@ export default function SuppliersPage() {
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Building2 className="h-5 w-5 text-orange-500" />
+              <Building2 className="h-5 w-5 text-red-600" />
               {editing ? 'Edit Supplier' : 'Add Supplier'}
             </DialogTitle>
           </DialogHeader>
@@ -260,7 +260,7 @@ export default function SuppliersPage() {
             </div>
             <div className="space-y-1.5">
               <Label>VAT Status</Label>
-              <Select value={form.vat_registered} onValueChange={f('vat_registered')}>
+              <Select value={form.vat_registered} onValueChange={f('vatable')}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="true">VAT Registered</SelectItem>
@@ -273,10 +273,9 @@ export default function SuppliersPage() {
               <Select value={form.vat_classification} onValueChange={f('vat_classification')}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="vat_registered">VAT Registered</SelectItem>
-                  <SelectItem value="non_vat">Non-VAT</SelectItem>
-                  <SelectItem value="government">Government</SelectItem>
-                  <SelectItem value="exempt">VAT Exempt</SelectItem>
+                  <SelectItem value="vatable">VATable (12%)</SelectItem>
+                  <SelectItem value="vat_exempt">VAT Exempt</SelectItem>
+                  <SelectItem value="zero_rated">Zero-Rated</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -331,7 +330,7 @@ export default function SuppliersPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={save} disabled={saving} className="bg-orange-500 hover:bg-orange-600">
+            <Button onClick={save} disabled={saving} className="bg-red-600 hover:bg-red-700">
               {saving ? 'Saving…' : 'Save Supplier'}
             </Button>
           </DialogFooter>

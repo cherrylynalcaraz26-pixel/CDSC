@@ -92,7 +92,7 @@ export default function CategoriesPage() {
           <h1 className="text-2xl font-semibold">Categories</h1>
           <p className="text-muted-foreground text-sm">Manage item categories</p>
         </div>
-        <Button onClick={openAdd} className="bg-orange-500 hover:bg-orange-600">
+        <Button onClick={openAdd} className="bg-red-600 hover:bg-red-700">
           <Plus className="h-4 w-4 mr-2" /> Add Category
         </Button>
       </div>
@@ -141,7 +141,7 @@ export default function CategoriesPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Tag className="h-5 w-5 text-orange-500" />
+              <Tag className="h-5 w-5 text-red-600" />
               {editing ? 'Edit Category' : 'Add Category'}
             </DialogTitle>
           </DialogHeader>
@@ -157,7 +157,7 @@ export default function CategoriesPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={save} disabled={saving} className="bg-orange-500 hover:bg-orange-600">
+            <Button onClick={save} disabled={saving} className="bg-red-600 hover:bg-red-700">
               {saving ? 'Saving…' : 'Save'}
             </Button>
           </DialogFooter>

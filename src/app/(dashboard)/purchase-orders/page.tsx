@@ -71,7 +71,7 @@ export default function PurchaseOrdersPage() {
                   <TableCell className="text-sm">{po.delivery_date}</TableCell>
                   <TableCell className="text-right text-sm">₱{po.subtotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
                   <TableCell className="text-right text-sm text-blue-600">₱{po.vat_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                  <TableCell className="text-right text-sm text-orange-600">₱{po.ewt.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
+                  <TableCell className="text-right text-sm text-red-700">₱{po.ewt.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
                   <TableCell className="text-right font-semibold">₱{po.net_payable.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
                   <TableCell>
                     <Badge variant={STATUS_MAP[po.status as keyof typeof STATUS_MAP].variant} className="text-xs">
@@ -106,10 +106,10 @@ export default function PurchaseOrdersPage() {
             <div><span className="text-muted-foreground">Gross Amount:</span> <span className="font-medium">₱45,000.00</span></div>
             <div><span className="text-muted-foreground">÷ 1.12 (VAT Excl.):</span> <span className="font-medium">₱40,178.57</span></div>
             <div><span className="text-muted-foreground">Input VAT (12%):</span> <span className="font-medium text-blue-600">₱4,821.43</span></div>
-            <div><span className="text-muted-foreground">EWT (2% of excl.):</span> <span className="font-medium text-orange-600">₱803.57</span></div>
+            <div><span className="text-muted-foreground">EWT (2% of excl.):</span> <span className="font-medium text-red-700">₱803.57</span></div>
             <Separator className="col-span-4" />
             <div><span className="text-muted-foreground">Total Amount:</span> <span className="font-medium">₱45,000.00</span></div>
-            <div><span className="text-muted-foreground">Less: EWT:</span> <span className="font-medium text-orange-600">− ₱803.57</span></div>
+            <div><span className="text-muted-foreground">Less: EWT:</span> <span className="font-medium text-red-700">− ₱803.57</span></div>
             <div><span className="text-muted-foreground">Net Payable:</span> <span className="font-bold text-primary">₱44,196.43</span></div>
           </div>
         </CardContent>

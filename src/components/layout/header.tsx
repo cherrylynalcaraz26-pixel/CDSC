@@ -90,7 +90,7 @@ export function Header({ onMenuClick }: HeaderProps) {
           <DropdownMenu>
             <DropdownMenuTrigger className="h-9 w-9 rounded-full flex items-center justify-center hover:bg-accent outline-none">
               <Avatar className="h-8 w-8">
-                <AvatarFallback className="bg-orange-500 text-white text-xs font-semibold">
+                <AvatarFallback className="bg-red-600 text-white text-xs font-semibold">
                   {initials}
                 </AvatarFallback>
               </Avatar>

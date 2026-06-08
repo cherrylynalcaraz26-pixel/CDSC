@@ -62,23 +62,26 @@ const navigation: NavItem[] = [
   { label: 'Settings', href: '/settings', icon: Settings },
 ]
 
+function isActive(pathname: string, href: string) {
+  if (href === '/dashboard') return pathname === '/dashboard'
+  return pathname === href || pathname.startsWith(href + '/')
+}
+
+function hasActiveChild(pathname: string, children: NavItem[]): boolean {
+  return children.some(c => c.href ? isActive(pathname, c.href) : false)
+}
+
 function NavLink({
   item,
-  depth = 0,
   onNavigate,
 }: {
   item: NavItem
-  depth?: number
   onNavigate?: () => void
 }) {
   const pathname = usePathname()
-  const [open, setOpen] = useState(() =>
-    item.children?.some(c => c.href && pathname.startsWith(c.href)) ?? false
-  )
-
-  const isActive = item.href
-    ? pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href))
-    : false
+  const active = item.href ? isActive(pathname, item.href) : false
+  const childActive = item.children ? hasActiveChild(pathname, item.children) : false
+  const [open, setOpen] = useState(() => childActive)
 
   if (item.children) {
     return (
@@ -87,17 +90,21 @@ function NavLink({
           onClick={() => setOpen(o => !o)}
           className={cn(
             'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-            'text-muted-foreground hover:text-foreground hover:bg-accent',
+            childActive
+              ? 'text-white bg-white/10'
+              : 'text-white/60 hover:text-white hover:bg-white/8',
           )}
         >
           <item.icon className="h-4 w-4 shrink-0" />
           <span className="flex-1 text-left">{item.label}</span>
-          {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+          {open
+            ? <ChevronDown className="h-3.5 w-3.5 opacity-60" />
+            : <ChevronRight className="h-3.5 w-3.5 opacity-60" />}
         </button>
         {open && (
-          <div className="ml-4 mt-0.5 space-y-0.5 border-l border-border pl-3">
+          <div className="ml-4 mt-0.5 space-y-0.5 border-l border-white/10 pl-3">
             {item.children.map(child => (
-              <NavLink key={child.label} item={child} depth={depth + 1} onNavigate={onNavigate} />
+              <NavLink key={child.label} item={child} onNavigate={onNavigate} />
             ))}
           </div>
         )}
@@ -110,13 +117,13 @@ function NavLink({
       href={item.href!}
       onClick={onNavigate}
       className={cn(
-        'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors',
-        isActive
-          ? 'bg-orange-500 text-white'
-          : 'text-muted-foreground hover:text-foreground hover:bg-accent',
+        'flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all',
+        active
+          ? 'bg-red-600 text-white shadow-sm shadow-red-900/50'
+          : 'text-white/60 hover:text-white hover:bg-white/8',
       )}
     >
-      <item.icon className="h-4 w-4 shrink-0" />
+      <item.icon className={cn('h-4 w-4 shrink-0', active ? 'text-white' : '')} />
       <span>{item.label}</span>
     </Link>
   )
@@ -132,32 +139,36 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-neutral-900">
       {/* Logo */}
-      <div className="px-4 pt-5 pb-4 flex items-center justify-center">
+      <div className="px-5 pt-5 pb-3 flex items-center justify-start gap-3">
         <Image
           src="/cdsc-logo.jpg"
-          alt="CDSC Industrial Supply"
-          width={120}
-          height={40}
-          className="object-contain mix-blend-multiply dark:mix-blend-normal"
+          alt="CDSC"
+          width={36}
+          height={36}
+          className="rounded object-contain"
           priority
         />
+        <div>
+          <div className="text-white font-semibold text-sm leading-tight">CDSC</div>
+          <div className="text-white/40 text-xs leading-tight">Industrial Supply</div>
+        </div>
       </div>
-      <div className="h-px bg-border mx-3 mb-1" />
+      <div className="h-px bg-white/10 mx-3 mb-2" />
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto p-3 space-y-0.5">
+      <nav className="flex-1 overflow-y-auto px-3 pb-2 space-y-0.5">
         {navigation.map(item => (
           <NavLink key={item.label} item={item} onNavigate={onNavigate} />
         ))}
       </nav>
 
       {/* Sign Out */}
-      <div className="p-3 border-t">
+      <div className="p-3 border-t border-white/10">
         <button
           onClick={handleSignOut}
-          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+          className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium text-white/50 hover:text-red-400 hover:bg-white/5 transition-colors"
         >
           <LogOut className="h-4 w-4 shrink-0" />
           <span>Sign Out</span>
@@ -167,42 +178,35 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   )
 }
 
-/* Desktop sidebar */
 export function Sidebar() {
   return (
-    <aside className="hidden lg:flex flex-col w-64 border-r bg-card h-screen sticky top-0 shrink-0">
+    <aside className="hidden lg:flex flex-col w-60 h-screen sticky top-0 shrink-0">
       <SidebarContent />
     </aside>
   )
 }
 
-/* Mobile drawer controlled externally */
 export function MobileSidebar({ open, onClose }: { open: boolean; onClose: () => void }) {
   return (
     <>
-      {/* Backdrop */}
       {open && (
         <div
-          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
+          className="fixed inset-0 z-40 bg-black/60 lg:hidden"
           onClick={onClose}
         />
       )}
-
-      {/* Drawer */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-50 w-72 bg-card border-r shadow-xl transition-transform duration-300 ease-in-out lg:hidden',
+          'fixed inset-y-0 left-0 z-50 w-64 transition-transform duration-300 ease-in-out lg:hidden',
           open ? 'translate-x-0' : '-translate-x-full',
         )}
       >
-        {/* Close button */}
         <button
           onClick={onClose}
-          className="absolute top-3 right-3 h-8 w-8 flex items-center justify-center rounded-md hover:bg-accent"
+          className="absolute top-3 right-3 h-8 w-8 flex items-center justify-center rounded-md text-white/50 hover:text-white hover:bg-white/10 z-10"
         >
           <X className="h-4 w-4" />
         </button>
-
         <SidebarContent onNavigate={onClose} />
       </aside>
     </>

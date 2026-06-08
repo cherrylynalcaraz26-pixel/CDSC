@@ -91,7 +91,7 @@ export default function SettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <Building2 className="h-5 w-5 text-orange-500" /> Company Information
+            <Building2 className="h-5 w-5 text-red-600" /> Company Information
           </CardTitle>
           <CardDescription>Basic company details used across the system</CardDescription>
         </CardHeader>
@@ -120,7 +120,7 @@ export default function SettingsPage() {
               <Input type="email" value={settings.email} onChange={e => setSettings(s => ({ ...s, email: e.target.value }))} />
             </div>
           </div>
-          <Button onClick={saveCompany} disabled={saving} className="bg-orange-500 hover:bg-orange-600">
+          <Button onClick={saveCompany} disabled={saving} className="bg-red-600 hover:bg-red-700">
             {saving ? 'Saving…' : 'Save Company Info'}
           </Button>
         </CardContent>
@@ -130,7 +130,7 @@ export default function SettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <Receipt className="h-5 w-5 text-orange-500" /> Tax Settings
+            <Receipt className="h-5 w-5 text-red-600" /> Tax Settings
           </CardTitle>
           <CardDescription>Default tax rates for BIR compliance</CardDescription>
         </CardHeader>
@@ -149,7 +149,7 @@ export default function SettingsPage() {
               <Input placeholder="01-01" value={settings.fiscal_year_start} onChange={e => setSettings(s => ({ ...s, fiscal_year_start: e.target.value }))} />
             </div>
           </div>
-          <Button onClick={saveCompany} disabled={saving} className="bg-orange-500 hover:bg-orange-600">
+          <Button onClick={saveCompany} disabled={saving} className="bg-red-600 hover:bg-red-700">
             {saving ? 'Saving…' : 'Save Tax Settings'}
           </Button>
         </CardContent>
@@ -159,7 +159,7 @@ export default function SettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <Settings className="h-5 w-5 text-orange-500" /> Change Password
+            <Settings className="h-5 w-5 text-red-600" /> Change Password
           </CardTitle>
           <CardDescription>Update your account password</CardDescription>
         </CardHeader>

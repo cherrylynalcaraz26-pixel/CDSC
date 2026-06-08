@@ -221,7 +221,7 @@ export default function ItemsPage() {
           <h1 className="text-2xl font-semibold">Item Master</h1>
           <p className="text-muted-foreground text-sm">{items.filter(i => i.status === 'active').length} active items</p>
         </div>
-        <Button onClick={openAdd} className="bg-orange-500 hover:bg-orange-600">
+        <Button onClick={openAdd} className="bg-red-600 hover:bg-red-700">
           <Plus className="h-4 w-4 mr-2" /> Add Item
         </Button>
       </div>
@@ -304,7 +304,7 @@ export default function ItemsPage() {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Package className="h-5 w-5 text-orange-500" />
+              <Package className="h-5 w-5 text-red-600" />
               {editing ? 'Edit Item' : 'Add Item'}
             </DialogTitle>
           </DialogHeader>
@@ -427,7 +427,7 @@ export default function ItemsPage() {
 
           <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={save} disabled={saving} className="bg-orange-500 hover:bg-orange-600">
+            <Button onClick={save} disabled={saving} className="bg-red-600 hover:bg-red-700">
               {saving ? 'Saving…' : editing ? 'Update Item' : 'Add Item'}
             </Button>
           </DialogFooter>

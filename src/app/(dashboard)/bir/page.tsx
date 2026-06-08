@@ -187,7 +187,7 @@ export default function BIRPage() {
                       <TableCell className="text-right">₱{row.gross.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
                       <TableCell className="text-right">₱{row.vat_excl.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
                       <TableCell className="text-right">{row.ewt_rate}%</TableCell>
-                      <TableCell className="text-right font-semibold text-orange-600">₱{row.ewt.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
+                      <TableCell className="text-right font-semibold text-red-700">₱{row.ewt.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
                     </TableRow>
                   ))}
                   <TableRow className="bg-muted/50 font-bold">
@@ -195,7 +195,7 @@ export default function BIRPage() {
                     <TableCell className="text-right">₱{ewtSummary.reduce((s, r) => s + r.gross, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
                     <TableCell className="text-right">₱{ewtSummary.reduce((s, r) => s + r.vat_excl, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
                     <TableCell></TableCell>
-                    <TableCell className="text-right text-orange-600">₱{ewtSummary.reduce((s, r) => s + r.ewt, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
+                    <TableCell className="text-right text-red-700">₱{ewtSummary.reduce((s, r) => s + r.ewt, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
                   </TableRow>
                 </TableBody>
               </Table>
@@ -286,7 +286,7 @@ export default function BIRPage() {
                       <TableCell className="text-xs text-muted-foreground">Makati City, Metro Manila</TableCell>
                       <TableCell className="font-mono text-xs">{row.atc}</TableCell>
                       <TableCell className="text-right">₱{row.gross.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                      <TableCell className="text-right font-semibold text-orange-600">₱{row.ewt.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
+                      <TableCell className="text-right font-semibold text-red-700">₱{row.ewt.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

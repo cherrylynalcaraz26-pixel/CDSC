@@ -103,7 +103,7 @@ export default function StockAdjustmentPage() {
           <h1 className="text-2xl font-semibold">Stock Adjustment</h1>
           <p className="text-muted-foreground text-sm">Adjust inventory quantities to match physical count</p>
         </div>
-        <Button onClick={() => setOpen(true)} className="bg-orange-500 hover:bg-orange-600">
+        <Button onClick={() => setOpen(true)} className="bg-red-600 hover:bg-red-700">
           <Plus className="h-4 w-4 mr-2" /> New Adjustment
         </Button>
       </div>
@@ -147,7 +147,7 @@ export default function StockAdjustmentPage() {
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <SlidersHorizontal className="h-5 w-5 text-orange-500" /> New Stock Adjustment
+              <SlidersHorizontal className="h-5 w-5 text-red-600" /> New Stock Adjustment
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
@@ -187,7 +187,7 @@ export default function StockAdjustmentPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={save} disabled={saving} className="bg-orange-500 hover:bg-orange-600">
+            <Button onClick={save} disabled={saving} className="bg-red-600 hover:bg-red-700">
               {saving ? 'Saving…' : 'Create Adjustment'}
             </Button>
           </DialogFooter>

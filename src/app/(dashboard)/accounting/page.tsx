@@ -57,7 +57,7 @@ export default function AccountingPage() {
   const cards = [
     { title: 'PO Amount (This Month)', value: fmt(summary.totalPO), icon: FileText, color: 'text-blue-600' },
     { title: 'Total Received (This Month)', value: fmt(summary.totalReceived), icon: TrendingUp, color: 'text-green-600' },
-    { title: 'Pending Payables', value: fmt(summary.pendingPayables), icon: DollarSign, color: 'text-orange-600' },
+    { title: 'Pending Payables', value: fmt(summary.pendingPayables), icon: DollarSign, color: 'text-red-700' },
     { title: 'EWT Withheld', value: fmt(summary.totalEWT), icon: Receipt, color: 'text-purple-600' },
     { title: 'Input VAT', value: fmt(summary.totalVAT), icon: Calculator, color: 'text-red-600' },
   ]

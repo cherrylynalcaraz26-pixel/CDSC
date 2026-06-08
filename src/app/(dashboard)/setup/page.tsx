@@ -72,7 +72,7 @@ function UOMTab() {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <Button onClick={openAdd} size="sm" className="bg-orange-500 hover:bg-orange-600">
+        <Button onClick={openAdd} size="sm" className="bg-red-600 hover:bg-red-700">
           <Plus className="h-4 w-4 mr-1" /> Add UOM
         </Button>
       </div>
@@ -135,7 +135,7 @@ function UOMTab() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={save} disabled={saving} className="bg-orange-500 hover:bg-orange-600">{saving ? 'Saving…' : 'Save'}</Button>
+            <Button onClick={save} disabled={saving} className="bg-red-600 hover:bg-red-700">{saving ? 'Saving…' : 'Save'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -204,7 +204,7 @@ function BrandsTab() {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <Button onClick={openAdd} size="sm" className="bg-orange-500 hover:bg-orange-600">
+        <Button onClick={openAdd} size="sm" className="bg-red-600 hover:bg-red-700">
           <Plus className="h-4 w-4 mr-1" /> Add Brand
         </Button>
       </div>
@@ -261,7 +261,7 @@ function BrandsTab() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={save} disabled={saving} className="bg-orange-500 hover:bg-orange-600">{saving ? 'Saving…' : 'Save'}</Button>
+            <Button onClick={save} disabled={saving} className="bg-red-600 hover:bg-red-700">{saving ? 'Saving…' : 'Save'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -361,7 +361,7 @@ function AttributesTab() {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <Button onClick={openAdd} size="sm" className="bg-orange-500 hover:bg-orange-600">
+        <Button onClick={openAdd} size="sm" className="bg-red-600 hover:bg-red-700">
           <Plus className="h-4 w-4 mr-1" /> Add Attribute
         </Button>
       </div>
@@ -462,7 +462,7 @@ function AttributesTab() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={save} disabled={saving} className="bg-orange-500 hover:bg-orange-600">{saving ? 'Saving…' : 'Save'}</Button>
+            <Button onClick={save} disabled={saving} className="bg-red-600 hover:bg-red-700">{saving ? 'Saving…' : 'Save'}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

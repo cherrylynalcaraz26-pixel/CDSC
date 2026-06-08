@@ -41,7 +41,7 @@ export default function EmployeeRequestsPage() {
           { type: 'Office Supplies', count: 12, color: 'text-blue-600' },
           { type: 'IT Equipment', count: 5, color: 'text-purple-600' },
           { type: 'Uniforms', count: 3, color: 'text-green-600' },
-          { type: 'Consumables', count: 8, color: 'text-orange-600' },
+          { type: 'Consumables', count: 8, color: 'text-red-700' },
         ].map(c => (
           <Card key={c.type}><CardContent className="pt-4 pb-3">
             <div className={`text-2xl font-bold ${c.color}`}>{c.count}</div>

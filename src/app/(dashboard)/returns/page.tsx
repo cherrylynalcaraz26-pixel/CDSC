@@ -116,7 +116,7 @@ export default function ReturnsPage() {
           <h1 className="text-2xl font-semibold">Returns to Supplier</h1>
           <p className="text-muted-foreground text-sm">Manage items returned to suppliers</p>
         </div>
-        <Button onClick={() => setOpen(true)} className="bg-orange-500 hover:bg-orange-600">
+        <Button onClick={() => setOpen(true)} className="bg-red-600 hover:bg-red-700">
           <Plus className="h-4 w-4 mr-2" /> New Return
         </Button>
       </div>
@@ -160,7 +160,7 @@ export default function ReturnsPage() {
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <RotateCcw className="h-5 w-5 text-orange-500" /> New Return to Supplier
+              <RotateCcw className="h-5 w-5 text-red-600" /> New Return to Supplier
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
@@ -200,7 +200,7 @@ export default function ReturnsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={save} disabled={saving} className="bg-orange-500 hover:bg-orange-600">
+            <Button onClick={save} disabled={saving} className="bg-red-600 hover:bg-red-700">
               {saving ? 'Saving…' : 'Create Return'}
             </Button>
           </DialogFooter>
