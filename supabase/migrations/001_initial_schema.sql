@@ -596,58 +596,58 @@ $$ LANGUAGE SQL SECURITY DEFINER STABLE;
 CREATE POLICY "profiles_select_own" ON profiles FOR SELECT USING (id = auth.uid());
 CREATE POLICY "profiles_select_admin" ON profiles FOR SELECT USING (get_my_role() IN ('super_admin', 'admin'));
 CREATE POLICY "profiles_update_own" ON profiles FOR UPDATE USING (id = auth.uid());
-CREATE POLICY "profiles_admin_all" ON profiles FOR ALL USING (get_my_role() = 'super_admin');
+CREATE POLICY "profiles_admin_all" ON profiles FOR ALL USING (get_my_role() = 'super_admin') WITH CHECK (get_my_role() = 'super_admin');
 
 -- SUPPLIERS — purchasing + admin + accounting can manage
 CREATE POLICY "suppliers_read_all" ON suppliers FOR SELECT USING (auth.uid() IS NOT NULL);
-CREATE POLICY "suppliers_write" ON suppliers FOR INSERT USING (get_my_role() IN ('super_admin', 'admin', 'purchasing_officer'));
+CREATE POLICY "suppliers_write" ON suppliers FOR INSERT WITH CHECK (get_my_role() IN ('super_admin', 'admin', 'purchasing_officer'));
 CREATE POLICY "suppliers_update" ON suppliers FOR UPDATE USING (get_my_role() IN ('super_admin', 'admin', 'purchasing_officer'));
 CREATE POLICY "suppliers_delete" ON suppliers FOR DELETE USING (get_my_role() = 'super_admin');
 
 -- ITEMS — all authenticated can read
 CREATE POLICY "items_read_all" ON items FOR SELECT USING (auth.uid() IS NOT NULL);
-CREATE POLICY "items_write" ON items FOR INSERT USING (get_my_role() IN ('super_admin', 'admin', 'warehouse_manager'));
+CREATE POLICY "items_write" ON items FOR INSERT WITH CHECK (get_my_role() IN ('super_admin', 'admin', 'warehouse_manager'));
 CREATE POLICY "items_update" ON items FOR UPDATE USING (get_my_role() IN ('super_admin', 'admin', 'warehouse_manager'));
 CREATE POLICY "items_delete" ON items FOR DELETE USING (get_my_role() = 'super_admin');
 
 -- PURCHASE REQUESTS — employees can see their own; managers see all
 CREATE POLICY "pr_own" ON purchase_requests FOR SELECT USING (requestor_id = auth.uid() OR get_my_role() IN ('super_admin', 'admin', 'purchasing_officer', 'department_head', 'accounting_manager', 'auditor'));
-CREATE POLICY "pr_insert" ON purchase_requests FOR INSERT USING (auth.uid() IS NOT NULL);
+CREATE POLICY "pr_insert" ON purchase_requests FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 CREATE POLICY "pr_update" ON purchase_requests FOR UPDATE USING (requestor_id = auth.uid() OR get_my_role() IN ('super_admin', 'admin', 'purchasing_officer', 'department_head'));
 
 -- PURCHASE ORDERS
 CREATE POLICY "po_read" ON purchase_orders FOR SELECT USING (get_my_role() IN ('super_admin', 'admin', 'purchasing_officer', 'warehouse_manager', 'accounting_staff', 'accounting_manager', 'auditor') OR created_by = auth.uid());
-CREATE POLICY "po_write" ON purchase_orders FOR INSERT USING (get_my_role() IN ('super_admin', 'admin', 'purchasing_officer'));
+CREATE POLICY "po_write" ON purchase_orders FOR INSERT WITH CHECK (get_my_role() IN ('super_admin', 'admin', 'purchasing_officer'));
 CREATE POLICY "po_update" ON purchase_orders FOR UPDATE USING (get_my_role() IN ('super_admin', 'admin', 'purchasing_officer'));
 
 -- RECEIVING REPORTS
 CREATE POLICY "rr_read" ON receiving_reports FOR SELECT USING (get_my_role() IN ('super_admin', 'admin', 'purchasing_officer', 'warehouse_manager', 'warehouse_staff', 'accounting_staff', 'accounting_manager', 'auditor'));
-CREATE POLICY "rr_write" ON receiving_reports FOR INSERT USING (get_my_role() IN ('super_admin', 'admin', 'warehouse_manager', 'warehouse_staff'));
+CREATE POLICY "rr_write" ON receiving_reports FOR INSERT WITH CHECK (get_my_role() IN ('super_admin', 'admin', 'warehouse_manager', 'warehouse_staff'));
 CREATE POLICY "rr_update" ON receiving_reports FOR UPDATE USING (get_my_role() IN ('super_admin', 'admin', 'warehouse_manager', 'warehouse_staff'));
 
 -- INVENTORY TRANSACTIONS — read by warehouse and accounting
 CREATE POLICY "inv_trans_read" ON inventory_transactions FOR SELECT USING (get_my_role() IN ('super_admin', 'admin', 'warehouse_manager', 'warehouse_staff', 'accounting_staff', 'accounting_manager', 'auditor'));
-CREATE POLICY "inv_trans_write" ON inventory_transactions FOR INSERT USING (get_my_role() IN ('super_admin', 'admin', 'warehouse_manager', 'warehouse_staff'));
+CREATE POLICY "inv_trans_write" ON inventory_transactions FOR INSERT WITH CHECK (get_my_role() IN ('super_admin', 'admin', 'warehouse_manager', 'warehouse_staff'));
 
 -- ASSETS
 CREATE POLICY "assets_read" ON assets FOR SELECT USING (auth.uid() IS NOT NULL);
-CREATE POLICY "assets_write" ON assets FOR INSERT USING (get_my_role() IN ('super_admin', 'admin', 'warehouse_manager'));
+CREATE POLICY "assets_write" ON assets FOR INSERT WITH CHECK (get_my_role() IN ('super_admin', 'admin', 'warehouse_manager'));
 CREATE POLICY "assets_update" ON assets FOR UPDATE USING (get_my_role() IN ('super_admin', 'admin', 'warehouse_manager'));
 
 -- EMPLOYEE REQUESTS
 CREATE POLICY "er_own" ON employee_requests FOR SELECT USING (requestor_id = auth.uid() OR get_my_role() IN ('super_admin', 'admin', 'warehouse_manager', 'warehouse_staff', 'department_head'));
-CREATE POLICY "er_insert" ON employee_requests FOR INSERT USING (auth.uid() IS NOT NULL);
+CREATE POLICY "er_insert" ON employee_requests FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 CREATE POLICY "er_update" ON employee_requests FOR UPDATE USING (requestor_id = auth.uid() OR get_my_role() IN ('super_admin', 'admin', 'warehouse_manager', 'department_head'));
 
 -- TAX / BIR — accounting only
 CREATE POLICY "tax_read" ON tax_transactions FOR SELECT USING (get_my_role() IN ('super_admin', 'admin', 'accounting_staff', 'accounting_manager', 'auditor'));
-CREATE POLICY "tax_write" ON tax_transactions FOR INSERT USING (get_my_role() IN ('super_admin', 'accounting_staff', 'accounting_manager'));
+CREATE POLICY "tax_write" ON tax_transactions FOR INSERT WITH CHECK (get_my_role() IN ('super_admin', 'accounting_staff', 'accounting_manager'));
 CREATE POLICY "bir_read" ON bir_filings FOR SELECT USING (get_my_role() IN ('super_admin', 'admin', 'accounting_staff', 'accounting_manager', 'auditor'));
-CREATE POLICY "bir_write" ON bir_filings FOR ALL USING (get_my_role() IN ('super_admin', 'accounting_manager'));
+CREATE POLICY "bir_write" ON bir_filings FOR ALL USING (get_my_role() IN ('super_admin', 'accounting_manager')) WITH CHECK (get_my_role() IN ('super_admin', 'accounting_manager'));
 
 -- AUDIT LOGS — read only for admins/auditors
 CREATE POLICY "audit_read" ON audit_logs FOR SELECT USING (get_my_role() IN ('super_admin', 'admin', 'auditor'));
-CREATE POLICY "audit_insert" ON audit_logs FOR INSERT USING (auth.uid() IS NOT NULL);
+CREATE POLICY "audit_insert" ON audit_logs FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 
 -- ─── SEED DATA ────────────────────────────────────────────────
 INSERT INTO warehouses (warehouse_code, warehouse_name, address) VALUES
