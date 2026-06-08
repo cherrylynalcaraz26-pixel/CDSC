@@ -71,9 +71,7 @@ export default function AssetsPage() {
                   </TableCell>
                   <TableCell>
                     <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7"><MoreHorizontal className="h-4 w-4" /></Button>
-                      </DropdownMenuTrigger>
+                      <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-accent"><MoreHorizontal className="h-4 w-4" /></DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem>View Accountability Form</DropdownMenuItem>
                         <DropdownMenuItem><ArrowRightLeft className="mr-2 h-4 w-4" />Transfer Asset</DropdownMenuItem>

@@ -123,7 +123,7 @@ export default function EmployeeRequestsPage() {
                   <div key={i} className="flex gap-2 items-center">
                     <Input placeholder="Item name" value={it.item} onChange={e => setItems(p => p.map((x, idx) => idx === i ? { ...x, item: e.target.value } : x))} className="flex-1 h-8 text-sm" />
                     <Input type="number" placeholder="Qty" value={it.qty} className="w-20 h-8 text-sm" onChange={e => setItems(p => p.map((x, idx) => idx === i ? { ...x, qty: e.target.value } : x))} />
-                    <Select value={it.unit} onValueChange={v => setItems(p => p.map((x, idx) => idx === i ? { ...x, unit: v } : x))}>
+                    <Select value={it.unit} onValueChange={v => setItems(p => p.map((x, idx) => idx === i ? { ...x, unit: v ?? x.unit } : x))}>
                       <SelectTrigger className="w-24 h-8 text-sm"><SelectValue /></SelectTrigger>
                       <SelectContent>{['piece', 'box', 'set', 'pack'].map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
                     </Select>

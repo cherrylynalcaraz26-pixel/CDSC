@@ -141,11 +141,9 @@ export default function SuppliersPage() {
                   </TableCell>
                   <TableCell>
                     <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7">
+                      <DropdownMenuTrigger className="inline-flex items-center justify-center h-8 w-8 rounded-full hover:bg-accent">
                           <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
+                        </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem>Edit</DropdownMenuItem>
                         <DropdownMenuItem>View Purchase History</DropdownMenuItem>
@@ -191,7 +189,7 @@ export default function SuppliersPage() {
                 </div>
                 <div className="space-y-1">
                   <Label>Category *</Label>
-                  <Select value={form.supplier_category} onValueChange={v => setForm(f => ({ ...f, supplier_category: v }))}>
+                  <Select value={form.supplier_category} onValueChange={v => setForm(f => ({ ...f, supplier_category: v ?? f.supplier_category }))}>
                     <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="Office Supplies">Office Supplies</SelectItem>
@@ -208,7 +206,7 @@ export default function SuppliersPage() {
                 </div>
                 <div className="space-y-1">
                   <Label>Payment Terms</Label>
-                  <Select value={form.payment_terms} onValueChange={v => setForm(f => ({ ...f, payment_terms: v }))}>
+                  <Select value={form.payment_terms} onValueChange={v => setForm(f => ({ ...f, payment_terms: v ?? f.payment_terms }))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="COD">COD</SelectItem>
@@ -236,7 +234,7 @@ export default function SuppliersPage() {
                 </div>
                 <div className="space-y-1">
                   <Label>VAT Registration</Label>
-                  <Select value={form.vat_registered} onValueChange={v => setForm(f => ({ ...f, vat_registered: v }))}>
+                  <Select value={form.vat_registered} onValueChange={v => setForm(f => ({ ...f, vat_registered: v ?? f.vat_registered }))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="true">VAT Registered</SelectItem>
@@ -246,7 +244,7 @@ export default function SuppliersPage() {
                 </div>
                 <div className="space-y-1">
                   <Label>VAT Classification</Label>
-                  <Select value={form.vat_classification} onValueChange={v => setForm(f => ({ ...f, vat_classification: v }))}>
+                  <Select value={form.vat_classification} onValueChange={v => setForm(f => ({ ...f, vat_classification: v ?? f.vat_classification }))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="vatable">Vatable (12%)</SelectItem>
@@ -261,7 +259,7 @@ export default function SuppliersPage() {
                 </div>
                 <div className="space-y-1">
                   <Label>EWT Rate (%)</Label>
-                  <Select value={form.ewt_rate} onValueChange={v => setForm(f => ({ ...f, ewt_rate: v }))}>
+                  <Select value={form.ewt_rate} onValueChange={v => setForm(f => ({ ...f, ewt_rate: v ?? f.ewt_rate }))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="1">1% — Goods</SelectItem>

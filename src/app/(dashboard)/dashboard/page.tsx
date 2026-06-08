@@ -117,7 +117,7 @@ export default function DashboardPage() {
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                   <XAxis dataKey="month" className="text-xs" />
                   <YAxis tickFormatter={v => `₱${(v / 1000).toFixed(0)}K`} className="text-xs" />
-                  <Tooltip formatter={(v: number) => [`₱${v.toLocaleString()}`, 'Purchases']} />
+                  <Tooltip formatter={(v) => [`₱${Number(v).toLocaleString()}`, 'Purchases']} />
                   <Bar dataKey="amount" fill="#2563eb" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
@@ -134,7 +134,7 @@ export default function DashboardPage() {
             <CardContent className="flex items-center justify-center">
               <ResponsiveContainer width="100%" height={280}>
                 <PieChart>
-                  <Pie data={categoryStock} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
+                  <Pie data={categoryStock} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label={(props) => `${props.name ?? ''} ${(((props.percent as number) ?? 0) * 100).toFixed(0)}%`}>
                     {categoryStock.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                   </Pie>
                   <Tooltip />
@@ -156,7 +156,7 @@ export default function DashboardPage() {
                   <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
                   <XAxis type="number" domain={[0, 100]} tickFormatter={v => `${v}%`} className="text-xs" />
                   <YAxis dataKey="supplier" type="category" width={100} className="text-xs" />
-                  <Tooltip formatter={(v: number) => `${v}%`} />
+                  <Tooltip formatter={(v) => `${v}%`} />
                   <Legend />
                   <Bar dataKey="onTime" name="On-Time Delivery" fill="#2563eb" radius={[0, 4, 4, 0]} />
                   <Bar dataKey="quality" name="Quality Rating" fill="#059669" radius={[0, 4, 4, 0]} />

@@ -93,11 +93,9 @@ export default function ReportsPage() {
                       </div>
                     </div>
                     <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0">
+                      <DropdownMenuTrigger className="inline-flex items-center justify-center h-8 w-8 rounded-full hover:bg-accent">
                           <Download className="h-3.5 w-3.5" />
-                        </Button>
-                      </DropdownMenuTrigger>
+                        </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         {report.formats.map(fmt => (
                           <DropdownMenuItem key={fmt} onClick={() => toast.success(`${report.name} exported as ${fmt}`)}>

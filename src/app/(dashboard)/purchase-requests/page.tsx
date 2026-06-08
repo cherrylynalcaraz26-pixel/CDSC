@@ -144,9 +144,7 @@ export default function PurchaseRequestsPage() {
                   </TableCell>
                   <TableCell>
                     <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-7 w-7"><MoreHorizontal className="h-4 w-4" /></Button>
-                      </DropdownMenuTrigger>
+                      <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-accent"><MoreHorizontal className="h-4 w-4" /></DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem>View Details</DropdownMenuItem>
                         {pr.status === 'submitted' && <><DropdownMenuItem className="text-green-600"><CheckCircle2 className="mr-2 h-4 w-4" />Approve</DropdownMenuItem><DropdownMenuItem className="text-destructive"><XCircle className="mr-2 h-4 w-4" />Reject</DropdownMenuItem></>}
@@ -230,7 +228,7 @@ export default function PurchaseRequestsPage() {
                           <Input type="number" placeholder="1" className="h-8 text-sm" value={item.quantity} onChange={e => setItems(prev => prev.map((it, idx) => idx === i ? { ...it, quantity: e.target.value } : it))} />
                         </TableCell>
                         <TableCell className="p-1">
-                          <Select value={item.unit} onValueChange={v => setItems(prev => prev.map((it, idx) => idx === i ? { ...it, unit: v } : it))}>
+                          <Select value={item.unit} onValueChange={v => setItems(prev => prev.map((it, idx) => idx === i ? { ...it, unit: v ?? it.unit } : it))}>
                             <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               {['piece', 'box', 'ream', 'set', 'unit', 'pack'].map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
