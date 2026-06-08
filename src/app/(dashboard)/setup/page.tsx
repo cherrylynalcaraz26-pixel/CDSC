@@ -610,22 +610,520 @@ function CategoriesTab() {
   )
 }
 
+/* ─── Supplier Categories (dropdown options) ──────────── */
+const SUPPLIER_CATEGORIES = [
+  'Electrical Supplies', 'Plumbing Supplies', 'Hardware & Fasteners',
+  'Safety Equipment', 'Office Supplies', 'Construction Materials',
+  'Industrial Equipment', 'Tools & Machinery', 'Chemical Supplies',
+  'Consumables', 'Packaging Materials', 'IT & Electronics',
+  'Janitorial Supplies', 'General Merchandise',
+]
+
+/* ─── Suppliers ───────────────────────────────────────── */
+interface Supplier {
+  id: string; supplier_code: string; company_name: string
+  contact_person: string | null; mobile_number: string | null; email: string | null
+  address: string | null; tin: string | null; vat_registered: boolean
+  vat_classification: string | null; supplier_category: string | null
+  payment_terms: string | null; lead_time_days: number | null
+  atc_code: string | null; ewt_rate: number | null; is_active: boolean
+}
+const emptySupplierForm = () => ({
+  company_name: '', contact_person: '', mobile_number: '', email: '',
+  address: '', tin: '', vat_registered: 'true', supplier_category: '',
+  payment_terms: '30 days', lead_time_days: '7', atc_code: '', ewt_rate: '2',
+  vat_classification: 'vatable',
+})
+
+function SuppliersTab() {
+  const supabase = createClient()
+  const [rows, setRows] = useState<Supplier[]>([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [open, setOpen] = useState(false)
+  const [editing, setEditing] = useState<Supplier | null>(null)
+  const [form, setForm] = useState(emptySupplierForm())
+  const [saving, setSaving] = useState(false)
+  const [deleteId, setDeleteId] = useState<string | null>(null)
+
+  async function load() {
+    setLoading(true)
+    const { data } = await supabase.from('suppliers').select('*').order('company_name')
+    setRows(data ?? [])
+    setLoading(false)
+  }
+  useEffect(() => { load() }, [])
+
+  const filtered = rows.filter(s =>
+    s.company_name.toLowerCase().includes(search.toLowerCase()) ||
+    (s.supplier_code ?? '').toLowerCase().includes(search.toLowerCase())
+  )
+
+  function openAdd() { setEditing(null); setForm(emptySupplierForm()); setOpen(true) }
+  function openEdit(s: Supplier) {
+    setEditing(s)
+    setForm({
+      company_name: s.company_name, contact_person: s.contact_person ?? '',
+      mobile_number: s.mobile_number ?? '', email: s.email ?? '',
+      address: s.address ?? '', tin: s.tin ?? '',
+      vat_registered: s.vat_registered ? 'true' : 'false',
+      supplier_category: s.supplier_category ?? '',
+      payment_terms: s.payment_terms ?? '30 days',
+      lead_time_days: String(s.lead_time_days ?? 7),
+      atc_code: s.atc_code ?? '', ewt_rate: String(s.ewt_rate ?? 2),
+      vat_classification: s.vat_classification ?? 'vatable',
+    })
+    setOpen(true)
+  }
+
+  const sf = (field: string) => (v: string | null) => setForm(p => ({ ...p, [field]: v ?? p[field as keyof typeof p] }))
+
+  async function save() {
+    if (!form.company_name.trim()) { toast.error('Company name required'); return }
+    setSaving(true)
+    const payload = {
+      company_name: form.company_name.trim(),
+      contact_person: form.contact_person || null,
+      mobile_number: form.mobile_number || null,
+      email: form.email || null,
+      address: form.address || null,
+      tin: form.tin || null,
+      vat_registered: form.vat_registered === 'true',
+      vat_classification: form.vat_classification || null,
+      supplier_category: form.supplier_category || null,
+      payment_terms: form.payment_terms || null,
+      lead_time_days: Number(form.lead_time_days) || null,
+      atc_code: form.atc_code || null,
+      ewt_rate: Number(form.ewt_rate) || null,
+    }
+    const { error } = editing
+      ? await supabase.from('suppliers').update(payload).eq('id', editing.id)
+      : await supabase.from('suppliers').insert(payload)
+    if (error) toast.error(error.message)
+    else { toast.success(editing ? 'Supplier updated' : 'Supplier added'); setOpen(false); load() }
+    setSaving(false)
+  }
+
+  async function toggleActive(s: Supplier) {
+    await supabase.from('suppliers').update({ is_active: !s.is_active }).eq('id', s.id)
+    load()
+  }
+
+  async function del() {
+    if (!deleteId) return
+    const { error } = await supabase.from('suppliers').delete().eq('id', deleteId)
+    if (error) toast.error(error.message)
+    else { toast.success('Deleted'); load() }
+    setDeleteId(null)
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1 max-w-sm">
+          <Input placeholder="Search suppliers…" value={search} onChange={e => setSearch(e.target.value)} className="pl-3" />
+        </div>
+        <Button onClick={openAdd} size="sm" className="bg-red-600 hover:bg-red-700">
+          <Plus className="h-4 w-4 mr-1" />Add Supplier
+        </Button>
+      </div>
+      <div className="rounded-lg border bg-card overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Code</TableHead>
+              <TableHead>Company</TableHead>
+              <TableHead>Contact</TableHead>
+              <TableHead>TIN</TableHead>
+              <TableHead>Category</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="w-12" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <TableRow><TableCell colSpan={7} className="text-center py-6 text-muted-foreground">Loading…</TableCell></TableRow>
+            ) : filtered.length === 0 ? (
+              <TableRow><TableCell colSpan={7} className="text-center py-6 text-muted-foreground">No suppliers found</TableCell></TableRow>
+            ) : filtered.map(s => (
+              <TableRow key={s.id}>
+                <TableCell className="font-mono text-sm">{s.supplier_code}</TableCell>
+                <TableCell>
+                  <div className="font-medium text-sm">{s.company_name}</div>
+                  {s.email && <div className="text-xs text-muted-foreground">{s.email}</div>}
+                </TableCell>
+                <TableCell className="text-sm">{s.contact_person ?? '—'}</TableCell>
+                <TableCell className="font-mono text-sm">{s.tin ?? '—'}</TableCell>
+                <TableCell className="text-sm">{s.supplier_category ?? '—'}</TableCell>
+                <TableCell>
+                  <button onClick={() => toggleActive(s)}>
+                    <Badge className={s.is_active ? 'bg-green-100 text-green-800 cursor-pointer' : 'bg-gray-100 text-gray-600 cursor-pointer'}>
+                      {s.is_active ? 'Active' : 'Inactive'}
+                    </Badge>
+                  </button>
+                </TableCell>
+                <TableCell>
+                  <div className="flex gap-1">
+                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(s)}><Pencil className="h-3.5 w-3.5" /></Button>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => setDeleteId(s.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editing ? 'Edit Supplier' : 'Add Supplier'}</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4 py-2">
+            <div className="col-span-2 space-y-1.5">
+              <Label>Company Name <span className="text-destructive">*</span></Label>
+              <Input value={form.company_name} onChange={e => setForm(p => ({ ...p, company_name: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5"><Label>Contact Person</Label>
+              <Input value={form.contact_person} onChange={e => setForm(p => ({ ...p, contact_person: e.target.value }))} /></div>
+            <div className="space-y-1.5"><Label>Mobile Number</Label>
+              <Input value={form.mobile_number} onChange={e => setForm(p => ({ ...p, mobile_number: e.target.value }))} /></div>
+            <div className="space-y-1.5"><Label>Email</Label>
+              <Input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} /></div>
+            <div className="space-y-1.5"><Label>TIN</Label>
+              <Input placeholder="000-000-000-000" value={form.tin} onChange={e => setForm(p => ({ ...p, tin: e.target.value }))} /></div>
+            <div className="col-span-2 space-y-1.5"><Label>Address</Label>
+              <Input value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} /></div>
+            <div className="space-y-1.5">
+              <Label>Category</Label>
+              <Select value={form.supplier_category} onValueChange={sf('supplier_category')}>
+                <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">— None —</SelectItem>
+                  {SUPPLIER_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>VAT Status</Label>
+              <Select value={form.vat_registered} onValueChange={sf('vat_registered')}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="true">VAT Registered</SelectItem>
+                  <SelectItem value="false">Non-VAT</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>VAT Classification</Label>
+              <Select value={form.vat_classification} onValueChange={sf('vat_classification')}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="vatable">VATable (12%)</SelectItem>
+                  <SelectItem value="vat_exempt">VAT Exempt</SelectItem>
+                  <SelectItem value="zero_rated">Zero-Rated</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Payment Terms</Label>
+              <Select value={form.payment_terms} onValueChange={sf('payment_terms')}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {['COD','7 days','15 days','30 days','45 days','60 days'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>ATC Code (BIR)</Label>
+              <Select value={form.atc_code} onValueChange={sf('atc_code')}>
+                <SelectTrigger><SelectValue placeholder="Select ATC" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="WI010">WI010 – Goods (2%)</SelectItem>
+                  <SelectItem value="WI020">WI020 – Services (2%)</SelectItem>
+                  <SelectItem value="WI030">WI030 – Rent (5%)</SelectItem>
+                  <SelectItem value="WC160">WC160 – Professional (10%)</SelectItem>
+                  <SelectItem value="WC158">WC158 – Professional (15%)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>EWT Rate (%)</Label>
+              <Select value={form.ewt_rate} onValueChange={sf('ewt_rate')}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {['1','2','5','10','15'].map(r => <SelectItem key={r} value={r}>{r}%</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Lead Time (days)</Label>
+              <Input type="number" min={0} value={form.lead_time_days} onChange={e => setForm(p => ({ ...p, lead_time_days: e.target.value }))} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button onClick={save} disabled={saving} className="bg-red-600 hover:bg-red-700">
+              {saving ? 'Saving…' : 'Save Supplier'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Delete Supplier?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">This will permanently delete this supplier.</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteId(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={del}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
+/* ─── Clients ─────────────────────────────────────────── */
+interface Client {
+  id: string; client_code: string | null; company_name: string
+  contact_person: string | null; mobile_number: string | null; email: string | null
+  address: string | null; tin: string | null; client_type: string
+  credit_limit: number | null; payment_terms: string | null
+  discount_rate: number | null; status: string
+}
+const emptyClientForm = () => ({
+  company_name: '', contact_person: '', mobile_number: '', email: '',
+  address: '', tin: '', client_type: 'corporate',
+  credit_limit: '0', payment_terms: '30 days', discount_rate: '0',
+})
+
+function ClientsTab() {
+  const supabase = createClient()
+  const [rows, setRows] = useState<Client[]>([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [open, setOpen] = useState(false)
+  const [editing, setEditing] = useState<Client | null>(null)
+  const [form, setForm] = useState(emptyClientForm())
+  const [saving, setSaving] = useState(false)
+  const [deleteId, setDeleteId] = useState<string | null>(null)
+
+  async function load() {
+    setLoading(true)
+    const { data } = await supabase.from('clients').select('*').order('company_name')
+    setRows(data ?? [])
+    setLoading(false)
+  }
+  useEffect(() => { load() }, [])
+
+  const filtered = rows.filter(c =>
+    c.company_name.toLowerCase().includes(search.toLowerCase()) ||
+    (c.client_code ?? '').toLowerCase().includes(search.toLowerCase())
+  )
+
+  function openAdd() { setEditing(null); setForm(emptyClientForm()); setOpen(true) }
+  function openEdit(c: Client) {
+    setEditing(c)
+    setForm({
+      company_name: c.company_name, contact_person: c.contact_person ?? '',
+      mobile_number: c.mobile_number ?? '', email: c.email ?? '',
+      address: c.address ?? '', tin: c.tin ?? '',
+      client_type: c.client_type ?? 'corporate',
+      credit_limit: String(c.credit_limit ?? 0),
+      payment_terms: c.payment_terms ?? '30 days',
+      discount_rate: String(c.discount_rate ?? 0),
+    })
+    setOpen(true)
+  }
+
+  const cf = (field: string) => (v: string | null) => setForm(p => ({ ...p, [field]: v ?? p[field as keyof typeof p] }))
+
+  async function save() {
+    if (!form.company_name.trim()) { toast.error('Company name required'); return }
+    setSaving(true)
+    const payload = {
+      company_name: form.company_name.trim(),
+      contact_person: form.contact_person || null,
+      mobile_number: form.mobile_number || null,
+      email: form.email || null,
+      address: form.address || null,
+      tin: form.tin || null,
+      client_type: form.client_type,
+      credit_limit: Number(form.credit_limit) || 0,
+      payment_terms: form.payment_terms || null,
+      discount_rate: Number(form.discount_rate) || 0,
+    }
+    const { error } = editing
+      ? await supabase.from('clients').update(payload).eq('id', editing.id)
+      : await supabase.from('clients').insert(payload)
+    if (error) toast.error(error.message)
+    else { toast.success(editing ? 'Client updated' : 'Client added'); setOpen(false); load() }
+    setSaving(false)
+  }
+
+  async function toggleStatus(c: Client) {
+    const newStatus = c.status === 'active' ? 'inactive' : 'active'
+    await supabase.from('clients').update({ status: newStatus }).eq('id', c.id)
+    load()
+  }
+
+  async function del() {
+    if (!deleteId) return
+    const { error } = await supabase.from('clients').delete().eq('id', deleteId)
+    if (error) toast.error(error.message)
+    else { toast.success('Deleted'); load() }
+    setDeleteId(null)
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <Input placeholder="Search clients…" value={search} onChange={e => setSearch(e.target.value)} className="max-w-sm" />
+        <Button onClick={openAdd} size="sm" className="bg-red-600 hover:bg-red-700">
+          <Plus className="h-4 w-4 mr-1" />Add Client
+        </Button>
+      </div>
+      <div className="rounded-lg border bg-card overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Code</TableHead>
+              <TableHead>Company</TableHead>
+              <TableHead>Contact</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Discount %</TableHead>
+              <TableHead>Credit Limit</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="w-12" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <TableRow><TableCell colSpan={8} className="text-center py-6 text-muted-foreground">Loading…</TableCell></TableRow>
+            ) : filtered.length === 0 ? (
+              <TableRow><TableCell colSpan={8} className="text-center py-6 text-muted-foreground">No clients yet</TableCell></TableRow>
+            ) : filtered.map(c => (
+              <TableRow key={c.id}>
+                <TableCell className="font-mono text-sm">{c.client_code ?? '—'}</TableCell>
+                <TableCell>
+                  <div className="font-medium text-sm">{c.company_name}</div>
+                  {c.email && <div className="text-xs text-muted-foreground">{c.email}</div>}
+                </TableCell>
+                <TableCell className="text-sm">{c.contact_person ?? '—'}</TableCell>
+                <TableCell>
+                  <span className="text-xs bg-muted px-2 py-0.5 rounded-full capitalize">{c.client_type}</span>
+                </TableCell>
+                <TableCell className="text-sm font-medium">{c.discount_rate ?? 0}%</TableCell>
+                <TableCell className="text-sm">₱{(c.credit_limit ?? 0).toLocaleString('en-PH')}</TableCell>
+                <TableCell>
+                  <button onClick={() => toggleStatus(c)}>
+                    <Badge className={c.status === 'active' ? 'bg-green-100 text-green-800 cursor-pointer' : 'bg-gray-100 text-gray-600 cursor-pointer'}>
+                      {c.status}
+                    </Badge>
+                  </button>
+                </TableCell>
+                <TableCell>
+                  <div className="flex gap-1">
+                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(c)}><Pencil className="h-3.5 w-3.5" /></Button>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => setDeleteId(c.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>{editing ? 'Edit Client' : 'Add Client'}</DialogTitle></DialogHeader>
+          <div className="grid grid-cols-2 gap-4 py-2">
+            <div className="col-span-2 space-y-1.5">
+              <Label>Company Name <span className="text-destructive">*</span></Label>
+              <Input value={form.company_name} onChange={e => setForm(p => ({ ...p, company_name: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5"><Label>Contact Person</Label>
+              <Input value={form.contact_person} onChange={e => setForm(p => ({ ...p, contact_person: e.target.value }))} /></div>
+            <div className="space-y-1.5"><Label>Mobile</Label>
+              <Input value={form.mobile_number} onChange={e => setForm(p => ({ ...p, mobile_number: e.target.value }))} /></div>
+            <div className="space-y-1.5"><Label>Email</Label>
+              <Input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} /></div>
+            <div className="space-y-1.5"><Label>TIN</Label>
+              <Input placeholder="000-000-000-000" value={form.tin} onChange={e => setForm(p => ({ ...p, tin: e.target.value }))} /></div>
+            <div className="col-span-2 space-y-1.5"><Label>Address</Label>
+              <Input value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} /></div>
+            <div className="space-y-1.5">
+              <Label>Client Type</Label>
+              <Select value={form.client_type} onValueChange={cf('client_type')}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="corporate">Corporate</SelectItem>
+                  <SelectItem value="government">Government</SelectItem>
+                  <SelectItem value="individual">Individual</SelectItem>
+                  <SelectItem value="walk_in">Walk-in</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Payment Terms</Label>
+              <Select value={form.payment_terms} onValueChange={cf('payment_terms')}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {['COD','7 days','15 days','30 days','45 days','60 days'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Discount Rate (%)</Label>
+              <Input type="number" min={0} max={100} step="0.1" value={form.discount_rate} onChange={e => setForm(p => ({ ...p, discount_rate: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Credit Limit (₱)</Label>
+              <Input type="number" min={0} value={form.credit_limit} onChange={e => setForm(p => ({ ...p, credit_limit: e.target.value }))} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button onClick={save} disabled={saving} className="bg-red-600 hover:bg-red-700">
+              {saving ? 'Saving…' : 'Save Client'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Delete Client?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">This will permanently delete this client.</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteId(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={del}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
 /* ─── Page ────────────────────────────────────────────── */
 export default function SetupPage() {
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Setup</h1>
-        <p className="text-muted-foreground text-sm">Manage categories, units of measure, brands, and item attributes</p>
+        <p className="text-muted-foreground text-sm">Manage suppliers, clients, categories, UOM, brands, and attributes</p>
       </div>
 
-      <Tabs defaultValue="categories">
-        <TabsList>
+      <Tabs defaultValue="suppliers">
+        <TabsList className="flex-wrap h-auto gap-1">
+          <TabsTrigger value="suppliers">Suppliers</TabsTrigger>
+          <TabsTrigger value="clients">Clients</TabsTrigger>
           <TabsTrigger value="categories">Categories</TabsTrigger>
           <TabsTrigger value="uom">Units of Measure</TabsTrigger>
           <TabsTrigger value="brands">Brands</TabsTrigger>
           <TabsTrigger value="attributes">Attributes</TabsTrigger>
         </TabsList>
+        <TabsContent value="suppliers" className="mt-4"><SuppliersTab /></TabsContent>
+        <TabsContent value="clients" className="mt-4"><ClientsTab /></TabsContent>
         <TabsContent value="categories" className="mt-4"><CategoriesTab /></TabsContent>
         <TabsContent value="uom" className="mt-4"><UOMTab /></TabsContent>
         <TabsContent value="brands" className="mt-4"><BrandsTab /></TabsContent>

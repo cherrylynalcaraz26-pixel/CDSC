@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
-import { Eye, EyeOff, Loader2 } from 'lucide-react'
+import { Eye, EyeOff, Loader2, Lock, Mail } from 'lucide-react'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -33,113 +33,67 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex">
-      {/* Left panel — branding */}
-      <div className="hidden lg:flex flex-col justify-between w-[45%] bg-[#111111] p-12">
-        <div className="flex items-center gap-3">
-          <div className="relative h-10 w-10 shrink-0">
-            <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="rounded-lg object-contain" priority />
+    <div className="min-h-screen bg-[#0d0d0d] flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Background glow */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(220,38,38,0.12)_0%,_transparent_60%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(220,38,38,0.06)_0%,_transparent_50%)]" />
+
+      <div className="relative w-full max-w-md">
+        {/* Brand */}
+        <div className="flex flex-col items-center mb-8">
+          <div className="relative h-16 w-16 mb-4">
+            <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="rounded-xl object-contain shadow-2xl" priority />
           </div>
-          <div>
-            <div className="text-white font-bold text-base leading-tight">CDSC Industrial Supply</div>
-            <div className="text-white/40 text-xs">Enterprise Resource Planning</div>
-          </div>
+          <h1 className="text-white font-bold text-xl tracking-tight">CDSC Industrial Supply</h1>
+          <p className="text-white/40 text-sm mt-0.5">Enterprise Resource Planning System</p>
         </div>
 
-        <div className="space-y-6">
-          <div className="space-y-2">
-            <div className="text-red-500 text-sm font-semibold tracking-widest uppercase">Welcome back</div>
-            <h1 className="text-4xl font-bold text-white leading-snug">
-              Manage your business<br />with confidence.
-            </h1>
-            <p className="text-white/40 text-sm leading-relaxed max-w-sm">
-              Inventory, purchasing, warehouse, BIR compliance — all in one place built for Philippine SMEs.
-            </p>
+        {/* Form card */}
+        <div className="bg-white/5 backdrop-blur border border-white/10 rounded-2xl p-8 shadow-2xl">
+          <div className="mb-6">
+            <h2 className="text-white font-semibold text-lg">Welcome back</h2>
+            <p className="text-white/40 text-sm mt-0.5">Sign in to your account to continue</p>
           </div>
 
-          <div className="flex gap-6">
-            {[['Modules', '13+'], ['Roles', '10'], ['BIR Forms', '6']].map(([label, value]) => (
-              <div key={label}>
-                <div className="text-2xl font-bold text-white">{value}</div>
-                <div className="text-white/40 text-xs">{label}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <p className="text-white/20 text-xs">© {new Date().getFullYear()} CDSC Industrial Supply. All rights reserved.</p>
-      </div>
-
-      {/* Right panel — form */}
-      <div className="flex-1 flex items-center justify-center bg-white p-6">
-        <div className="w-full max-w-sm space-y-8">
-          {/* Mobile logo */}
-          <div className="flex lg:hidden items-center gap-3 mb-2">
-            <div className="relative h-10 w-10 shrink-0">
-              <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="rounded-lg object-contain" priority />
-            </div>
-            <div>
-              <div className="font-bold text-base leading-tight">CDSC Industrial Supply</div>
-              <div className="text-muted-foreground text-xs">Enterprise Resource Planning</div>
-            </div>
-          </div>
-
-          <div>
-            <h2 className="text-2xl font-bold text-gray-900">Sign in</h2>
-            <p className="text-muted-foreground text-sm mt-1">Enter your credentials to access the system</p>
-          </div>
-
-          <form onSubmit={handleLogin} className="space-y-5">
+          <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="email">Email address</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="you@cdsc.com"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                required
-                autoComplete="email"
-                className="h-11"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <Label htmlFor="password">Password</Label>
+              <Label className="text-white/70 text-sm">Email address</Label>
               <div className="relative">
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
                 <Input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  required
-                  autoComplete="current-password"
-                  className="h-11 pr-10"
+                  type="email" placeholder="you@cdsc.com" value={email}
+                  onChange={e => setEmail(e.target.value)} required autoComplete="email"
+                  className="pl-9 h-11 bg-white/8 border-white/15 text-white placeholder:text-white/25 focus:border-red-500"
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(s => !s)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-white/70 text-sm">Password</Label>
+              <div className="relative">
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
+                <Input
+                  type={showPassword ? 'text' : 'password'} placeholder="••••••••" value={password}
+                  onChange={e => setPassword(e.target.value)} required autoComplete="current-password"
+                  className="pl-9 pr-10 h-11 bg-white/8 border-white/15 text-white placeholder:text-white/25 focus:border-red-500"
+                />
+                <button type="button" onClick={() => setShowPassword(s => !s)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60">
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
             </div>
 
-            <Button
-              type="submit"
-              className="w-full h-11 bg-red-600 hover:bg-red-700 text-white font-medium"
-              disabled={loading}
-            >
+            <Button type="submit" disabled={loading}
+              className="w-full h-11 bg-red-600 hover:bg-red-700 text-white font-semibold mt-2 shadow-lg shadow-red-900/30">
               {loading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Signing in…</> : 'Sign In'}
             </Button>
           </form>
-
-          <p className="text-center text-muted-foreground text-xs">
-            Authorized users only · CDSC Industrial Supply
-          </p>
         </div>
+
+        <p className="text-center text-white/20 text-xs mt-6">
+          Authorized users only · © {new Date().getFullYear()} CDSC Industrial Supply
+        </p>
       </div>
     </div>
   )
