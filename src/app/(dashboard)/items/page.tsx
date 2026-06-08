@@ -19,8 +19,7 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Plus, Search, MoreHorizontal, Package, X } from 'lucide-react'
+import { Plus, Search, MoreHorizontal, Package } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface Category { id: string; category_name: string }
@@ -309,15 +308,10 @@ export default function ItemsPage() {
             </DialogTitle>
           </DialogHeader>
 
-          <Tabs defaultValue="basic">
-            <TabsList className="w-full">
-              <TabsTrigger value="basic" className="flex-1">Basic Info</TabsTrigger>
-              <TabsTrigger value="pricing" className="flex-1">Pricing & Stock</TabsTrigger>
-              <TabsTrigger value="attributes" className="flex-1">Attributes</TabsTrigger>
-            </TabsList>
-
-            {/* Basic Info Tab */}
-            <TabsContent value="basic" className="space-y-4 pt-4">
+          <div className="space-y-6 py-2">
+            {/* ── Basic Info ── */}
+            <div className="space-y-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">Basic Info</p>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label>Item Code <span className="text-destructive">*</span></Label>
@@ -328,17 +322,14 @@ export default function ItemsPage() {
                   <Input placeholder="Scan or enter barcode" value={form.barcode} onChange={e => setForm(p => ({ ...p, barcode: e.target.value }))} />
                 </div>
               </div>
-
               <div className="space-y-1.5">
                 <Label>Item Name <span className="text-destructive">*</span></Label>
                 <Input placeholder="Full item name" value={form.item_name} onChange={e => setForm(p => ({ ...p, item_name: e.target.value }))} />
               </div>
-
               <div className="space-y-1.5">
                 <Label>Description</Label>
                 <Textarea rows={2} placeholder="Optional detailed description" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} />
               </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label>Brand</Label>
@@ -361,7 +352,6 @@ export default function ItemsPage() {
                   </Select>
                 </div>
               </div>
-
               <div className="space-y-1.5">
                 <Label>Unit of Measure</Label>
                 <Select value={form.unit_of_measure} onValueChange={v => setForm(p => ({ ...p, unit_of_measure: v ?? 'PCS' }))}>
@@ -374,10 +364,11 @@ export default function ItemsPage() {
                   </SelectContent>
                 </Select>
               </div>
-            </TabsContent>
+            </div>
 
-            {/* Pricing & Stock Tab */}
-            <TabsContent value="pricing" className="space-y-4 pt-4">
+            {/* ── Pricing & Stock ── */}
+            <div className="space-y-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">Pricing & Stock</p>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label>Cost Price (₱)</Label>
@@ -391,41 +382,42 @@ export default function ItemsPage() {
               <div className="space-y-1.5">
                 <Label>Reorder Level</Label>
                 <Input type="number" min={0} value={form.reorder_level} onChange={e => setForm(p => ({ ...p, reorder_level: e.target.value }))} />
-                <p className="text-xs text-muted-foreground">Trigger low-stock alert when on-hand qty falls to or below this number</p>
+                <p className="text-xs text-muted-foreground">Alert triggers when on-hand qty falls to or below this number</p>
               </div>
-            </TabsContent>
+            </div>
 
-            {/* Attributes Tab */}
-            <TabsContent value="attributes" className="space-y-3 pt-4">
-              {attributes.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-6">
-                  No attributes defined yet. Go to <strong>Setup → Attributes</strong> to add some.
-                </p>
-              ) : attributes.map(attr => (
-                <div key={attr.id} className="space-y-1.5">
-                  <Label>{attr.name}</Label>
-                  {attr.data_type === 'select' && attr.options ? (
-                    <Select value={getAttrValue(attr.id)} onValueChange={v => setAttrValue(attr.id, v ?? '')}>
-                      <SelectTrigger><SelectValue placeholder={`Select ${attr.name}`} /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="">— None —</SelectItem>
-                        {attr.options.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <Input
-                      type={attr.data_type === 'number' ? 'number' : 'text'}
-                      placeholder={`Enter ${attr.name}`}
-                      value={getAttrValue(attr.id)}
-                      onChange={e => setAttrValue(attr.id, e.target.value)}
-                    />
-                  )}
+            {/* ── Attributes ── */}
+            {attributes.length > 0 && (
+              <div className="space-y-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">Attributes</p>
+                <div className="grid grid-cols-2 gap-4">
+                  {attributes.map(attr => (
+                    <div key={attr.id} className="space-y-1.5">
+                      <Label>{attr.name}</Label>
+                      {attr.data_type === 'select' && attr.options ? (
+                        <Select value={getAttrValue(attr.id)} onValueChange={v => setAttrValue(attr.id, v ?? '')}>
+                          <SelectTrigger><SelectValue placeholder={`Select ${attr.name}`} /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="">— None —</SelectItem>
+                            {attr.options.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input
+                          type={attr.data_type === 'number' ? 'number' : 'text'}
+                          placeholder={`Enter ${attr.name}`}
+                          value={getAttrValue(attr.id)}
+                          onChange={e => setAttrValue(attr.id, e.target.value)}
+                        />
+                      )}
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </TabsContent>
-          </Tabs>
+              </div>
+            )}
+          </div>
 
-          <DialogFooter className="mt-4">
+          <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
             <Button onClick={save} disabled={saving} className="bg-red-600 hover:bg-red-700">
               {saving ? 'Saving…' : editing ? 'Update Item' : 'Add Item'}
