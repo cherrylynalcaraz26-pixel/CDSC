@@ -11,7 +11,7 @@ import {
   Truck, Warehouse, RotateCcw, Cpu, UserCheck, Calculator,
   FileBarChart, Settings, ChevronDown, ChevronRight, Building2,
   SlidersHorizontal, ArrowRightLeft, LogOut, X, Wrench,
-  Monitor, Receipt, PanelLeftClose, PanelLeftOpen,
+  Receipt, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
@@ -46,7 +46,6 @@ const navigation: NavItem[] = [
       { label: 'Returns', href: '/returns', icon: RotateCcw },
     ],
   },
-  { label: 'CSI Monitoring', href: '/csi-monitoring', icon: Monitor },
   { label: 'Assets', href: '/assets', icon: Cpu },
   { label: 'My Requests', href: '/employee-requests', icon: UserCheck },
   {
