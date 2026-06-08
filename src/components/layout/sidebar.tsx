@@ -28,7 +28,6 @@ const navigation: NavItem[] = [
     label: 'Item Master', icon: Package,
     children: [
       { label: 'Item List', href: '/items', icon: Package },
-      { label: 'Categories', href: '/items/categories', icon: ClipboardList },
     ],
   },
   {

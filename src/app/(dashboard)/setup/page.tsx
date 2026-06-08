@@ -480,21 +480,153 @@ function AttributesTab() {
   )
 }
 
+/* ─── Categories ──────────────────────────────────────── */
+interface Category { id: string; category_code: string | null; category_name: string; status: string }
+
+function CategoriesTab() {
+  const supabase = createClient()
+  const [rows, setRows] = useState<Category[]>([])
+  const [loading, setLoading] = useState(true)
+  const [open, setOpen] = useState(false)
+  const [editing, setEditing] = useState<Category | null>(null)
+  const [form, setForm] = useState({ category_name: '', category_code: '' })
+  const [saving, setSaving] = useState(false)
+  const [deleteId, setDeleteId] = useState<string | null>(null)
+
+  async function load() {
+    setLoading(true)
+    const { data } = await supabase.from('categories').select('*').order('category_name')
+    setRows(data ?? [])
+    setLoading(false)
+  }
+  useEffect(() => { load() }, [])
+
+  function openAdd() { setEditing(null); setForm({ category_name: '', category_code: '' }); setOpen(true) }
+  function openEdit(r: Category) { setEditing(r); setForm({ category_name: r.category_name, category_code: r.category_code ?? '' }); setOpen(true) }
+
+  async function save() {
+    if (!form.category_name.trim()) { toast.error('Name required'); return }
+    setSaving(true)
+    const payload = { category_name: form.category_name.trim(), category_code: form.category_code || null }
+    const { error } = editing
+      ? await supabase.from('categories').update(payload).eq('id', editing.id)
+      : await supabase.from('categories').insert({ ...payload, status: 'active' })
+    if (error) toast.error(error.message)
+    else { toast.success(editing ? 'Category updated' : 'Category added'); setOpen(false); load() }
+    setSaving(false)
+  }
+
+  async function toggleStatus(r: Category) {
+    const newStatus = r.status === 'active' ? 'inactive' : 'active'
+    await supabase.from('categories').update({ status: newStatus }).eq('id', r.id)
+    load()
+  }
+
+  async function del() {
+    if (!deleteId) return
+    const { error } = await supabase.from('categories').delete().eq('id', deleteId)
+    if (error) toast.error(error.message)
+    else { toast.success('Deleted'); load() }
+    setDeleteId(null)
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <Button onClick={openAdd} size="sm" className="bg-red-600 hover:bg-red-700">
+          <Plus className="h-4 w-4 mr-1" /> Add Category
+        </Button>
+      </div>
+      <div className="rounded-lg border bg-card">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Code</TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="w-24" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <TableRow><TableCell colSpan={4} className="text-center py-6 text-muted-foreground">Loading…</TableCell></TableRow>
+            ) : rows.length === 0 ? (
+              <TableRow><TableCell colSpan={4} className="text-center py-6 text-muted-foreground">No categories yet</TableCell></TableRow>
+            ) : rows.map(r => (
+              <TableRow key={r.id}>
+                <TableCell className="font-mono text-sm">{r.category_code ?? '—'}</TableCell>
+                <TableCell className="font-medium">{r.category_name}</TableCell>
+                <TableCell>
+                  <button onClick={() => toggleStatus(r)}>
+                    <Badge className={r.status === 'active' ? 'bg-green-100 text-green-800 cursor-pointer' : 'bg-gray-100 text-gray-600 cursor-pointer'}>
+                      {r.status}
+                    </Badge>
+                  </button>
+                </TableCell>
+                <TableCell>
+                  <div className="flex gap-1">
+                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(r)}><Pencil className="h-3.5 w-3.5" /></Button>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => setDeleteId(r.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>{editing ? 'Edit Category' : 'Add Category'}</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Code</Label>
+                <Input placeholder="e.g. ELEC" value={form.category_code} onChange={e => setForm(p => ({ ...p, category_code: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Name <span className="text-destructive">*</span></Label>
+                <Input placeholder="e.g. Electronics" value={form.category_name} onChange={e => setForm(p => ({ ...p, category_name: e.target.value }))} />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button onClick={save} disabled={saving} className="bg-red-600 hover:bg-red-700">{saving ? 'Saving…' : 'Save'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Delete Category?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">Items in this category will become uncategorized.</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteId(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={del}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
 /* ─── Page ────────────────────────────────────────────── */
 export default function SetupPage() {
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold">Setup</h1>
-        <p className="text-muted-foreground text-sm">Manage units of measure, brands, and item attributes</p>
+        <p className="text-muted-foreground text-sm">Manage categories, units of measure, brands, and item attributes</p>
       </div>
 
-      <Tabs defaultValue="uom">
+      <Tabs defaultValue="categories">
         <TabsList>
+          <TabsTrigger value="categories">Categories</TabsTrigger>
           <TabsTrigger value="uom">Units of Measure</TabsTrigger>
           <TabsTrigger value="brands">Brands</TabsTrigger>
           <TabsTrigger value="attributes">Attributes</TabsTrigger>
         </TabsList>
+        <TabsContent value="categories" className="mt-4"><CategoriesTab /></TabsContent>
         <TabsContent value="uom" className="mt-4"><UOMTab /></TabsContent>
         <TabsContent value="brands" className="mt-4"><BrandsTab /></TabsContent>
         <TabsContent value="attributes" className="mt-4"><AttributesTab /></TabsContent>
