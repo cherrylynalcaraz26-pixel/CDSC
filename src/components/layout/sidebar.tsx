@@ -11,7 +11,7 @@ import {
   Truck, Warehouse, RotateCcw, Cpu, UserCheck, Calculator,
   FileBarChart, Settings, ChevronDown, ChevronRight, Building2,
   SlidersHorizontal, ArrowRightLeft, LogOut, X, Wrench,
-  Receipt, PanelLeftClose, PanelLeftOpen,
+  Receipt, PanelLeftClose, PanelLeftOpen, ClipboardList,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
@@ -41,6 +41,7 @@ const navigation: NavItem[] = [
     label: 'Warehouse', icon: Warehouse,
     children: [
       { label: 'Receiving', href: '/receiving', icon: Truck },
+      { label: 'DR Logs', href: '/dr-logs', icon: ClipboardList },
       { label: 'Stock Transfer', href: '/warehouse/transfer', icon: ArrowRightLeft },
       { label: 'Stock Adjustment', href: '/warehouse/adjustment', icon: SlidersHorizontal },
       { label: 'Returns', href: '/returns', icon: RotateCcw },
@@ -57,8 +58,13 @@ const navigation: NavItem[] = [
     ],
   },
   { label: 'Reports', href: '/reports', icon: FileBarChart },
-  { label: 'Users', href: '/users', icon: Users },
-  { label: 'Setup', href: '/setup', icon: Wrench },
+  {
+    label: 'Setup', icon: Wrench,
+    children: [
+      { label: 'Configuration', href: '/setup', icon: SlidersHorizontal },
+      { label: 'Users', href: '/users', icon: Users },
+    ],
+  },
   { label: 'Settings', href: '/settings', icon: Settings },
 ]
 
@@ -85,7 +91,6 @@ function NavLink({
 
   if (item.children) {
     if (collapsed) {
-      // In collapsed mode, show parent icon only — clicking expands temporarily
       return (
         <div className="relative group">
           <button
@@ -97,7 +102,6 @@ function NavLink({
           >
             <item.icon className="h-[16px] w-[16px] shrink-0" />
           </button>
-          {/* Flyout on hover */}
           <div className="absolute left-full top-0 ml-1 hidden group-hover:block z-50 min-w-[180px] bg-[#1a1a1a] border border-white/10 rounded-lg py-1 shadow-xl">
             <p className="text-[11px] font-semibold text-white/30 px-3 py-1.5 uppercase tracking-wider">{item.label}</p>
             {item.children.map(child => {
@@ -199,7 +203,6 @@ function SidebarContent({
 
   return (
     <div className="flex flex-col h-full bg-[#111111]">
-      {/* Logo */}
       <div className={cn('py-4 flex items-center gap-3 transition-all', collapsed ? 'px-3 justify-center' : 'px-4')}>
         <div className="relative h-8 w-8 shrink-0">
           <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="rounded object-contain" priority />
@@ -214,16 +217,13 @@ function SidebarContent({
 
       <div className="h-px bg-white/8 mx-3 mb-2" />
 
-      {/* Nav */}
       <nav className={cn('flex-1 overflow-y-auto pb-2 space-y-0.5 scrollbar-thin', collapsed ? 'px-1.5' : 'px-2')}>
         {navigation.map(item => (
           <NavLink key={item.label} item={item} collapsed={collapsed} onNavigate={onNavigate} />
         ))}
       </nav>
 
-      {/* Bottom: collapse toggle + sign out */}
       <div className={cn('p-3 border-t border-white/8 space-y-1', collapsed && 'flex flex-col items-center')}>
-        {/* Collapse toggle */}
         <button
           onClick={onToggleCollapse}
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -237,7 +237,6 @@ function SidebarContent({
             : <><PanelLeftClose className="h-[15px] w-[15px] shrink-0" /><span>Collapse</span></>}
         </button>
 
-        {/* Sign out */}
         <button
           onClick={handleSignOut}
           title="Sign Out"
@@ -255,12 +254,12 @@ function SidebarContent({
 }
 
 export function Sidebar() {
-  const [collapsed, setCollapsed] = useState(false)
+  
 
-  useEffect(() => {
-    const saved = localStorage.getItem('sidebar-collapsed')
-    if (saved === 'true') setCollapsed(true)
-  }, [])
+    const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return localStorage.getItem('sidebar-collapsed') === 'true'
+  })
 
   function toggle() {
     setCollapsed(c => {
