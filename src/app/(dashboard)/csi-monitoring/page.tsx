@@ -18,7 +18,7 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Plus, Search, MoreHorizontal, Loader2, FileText } from 'lucide-react'
+import { Plus, Search, MoreHorizontal, Loader2, FileText, LayoutGrid, List, ChevronDown, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
 
@@ -81,6 +81,8 @@ export default function CSIMonitoringPage() {
   const [form, setForm] = useState<CSIForm>(emptyForm())
   const [saving, setSaving] = useState(false)
   const [deleteId, setDeleteId] = useState<number | null>(null)
+  const [viewMode, setViewMode] = useState<'by-si' | 'all-items'>('by-si')
+  const [expandedSIs, setExpandedSIs] = useState<Set<string>>(new Set())
 
   async function load() {
     setLoading(true)
@@ -107,6 +109,34 @@ export default function CSIMonitoringPage() {
 
   const totalAmount = filtered.reduce((s, r) => s + (Number(r.amount) || 0), 0)
   const uniqueSIs = new Set(filtered.map(r => r.si_number)).size
+
+  // Group by SI number for "By SI" view
+  const siGroups: { si_number: string; date: string; client: string; po: string | null; dr: string | null; items: CSIRecord[]; total: number }[] = []
+  const siSeen = new Set<string>()
+  for (const rec of filtered) {
+    if (!siSeen.has(rec.si_number)) {
+      siSeen.add(rec.si_number)
+      const items = filtered.filter(r => r.si_number === rec.si_number)
+      siGroups.push({
+        si_number: rec.si_number,
+        date: rec.si_date,
+        client: rec.client_name ?? '—',
+        po: rec.po_number,
+        dr: rec.dr_number,
+        items,
+        total: items.reduce((s, r) => s + (Number(r.amount) || 0), 0),
+      })
+    }
+  }
+
+  function toggleSI(si: string) {
+    setExpandedSIs(prev => {
+      const next = new Set(prev)
+      if (next.has(si)) next.delete(si)
+      else next.add(si)
+      return next
+    })
+  }
 
   function openAdd() {
     setEditing(null)
@@ -202,10 +232,24 @@ export default function CSIMonitoringPage() {
         </Card>
       </div>
 
-      <div className="flex gap-3">
+      <div className="flex gap-3 items-center">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input className="pl-9" placeholder="Search SI#, client, item, DR#…" value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
+        <div className="flex border rounded-md overflow-hidden">
+          <button
+            onClick={() => setViewMode('by-si')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm ${viewMode === 'by-si' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
+          >
+            <LayoutGrid className="h-3.5 w-3.5" /> By SI
+          </button>
+          <button
+            onClick={() => setViewMode('all-items')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm border-l ${viewMode === 'all-items' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
+          >
+            <List className="h-3.5 w-3.5" /> All Items
+          </button>
         </div>
       </div>
 
@@ -217,60 +261,157 @@ export default function CSIMonitoringPage() {
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Date</TableHead>
-                  <TableHead>SI Number</TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Item/s</TableHead>
-                  <TableHead>Unit</TableHead>
-                  <TableHead className="text-right">QTY</TableHead>
-                  <TableHead className="text-right">Unit Price</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                  <TableHead className="w-10" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
+            {viewMode === 'by-si' ? (
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-10">
-                      <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
-                    </TableCell>
+                    <TableHead className="w-8" />
+                    <TableHead>Date</TableHead>
+                    <TableHead>SI Number</TableHead>
+                    <TableHead>PO Number</TableHead>
+                    <TableHead>Client</TableHead>
+                    <TableHead>DR Number</TableHead>
+                    <TableHead className="text-right">Items</TableHead>
+                    <TableHead className="text-right">Total Amount</TableHead>
                   </TableRow>
-                ) : filtered.length === 0 ? (
+                </TableHeader>
+                <TableBody>
+                  {loading ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center py-10">
+                        <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
+                      </TableCell>
+                    </TableRow>
+                  ) : siGroups.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
+                        No records found. Click <strong>New Record</strong> to add one.
+                      </TableCell>
+                    </TableRow>
+                  ) : siGroups.map(group => (
+                    <>
+                      <TableRow
+                        key={group.si_number}
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => toggleSI(group.si_number)}
+                      >
+                        <TableCell className="text-muted-foreground">
+                          {expandedSIs.has(group.si_number)
+                            ? <ChevronDown className="h-4 w-4" />
+                            : <ChevronRight className="h-4 w-4" />}
+                        </TableCell>
+                        <TableCell className="text-sm whitespace-nowrap">
+                          {format(parseISO(group.date), 'MMM d, yyyy')}
+                        </TableCell>
+                        <TableCell className="font-mono text-sm font-semibold text-red-600">{group.si_number}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{group.po ?? '—'}</TableCell>
+                        <TableCell className="text-sm">{group.client}</TableCell>
+                        <TableCell className="text-sm font-mono">{group.dr ?? '—'}</TableCell>
+                        <TableCell className="text-right text-sm">{group.items.length}</TableCell>
+                        <TableCell className="text-right text-sm font-medium">{formatPeso(group.total)}</TableCell>
+                      </TableRow>
+                      {expandedSIs.has(group.si_number) && (
+                        <TableRow key={`${group.si_number}-items`}>
+                          <TableCell colSpan={8} className="p-0 bg-muted/20">
+                            <div className="px-8 py-2">
+                              <Table>
+                                <TableHeader>
+                                  <TableRow className="border-0">
+                                    <TableHead className="text-xs h-8">Item/s</TableHead>
+                                    <TableHead className="text-xs h-8 text-right">QTY</TableHead>
+                                    <TableHead className="text-xs h-8">Unit</TableHead>
+                                    <TableHead className="text-xs h-8 text-right">Unit Price</TableHead>
+                                    <TableHead className="text-xs h-8 text-right">Amount</TableHead>
+                                    <TableHead className="w-10 h-8" />
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {group.items.map(item => (
+                                    <TableRow key={item.id} className="border-0">
+                                      <TableCell className="text-sm py-1.5">{item.item_name}</TableCell>
+                                      <TableCell className="text-right text-sm py-1.5 font-medium">{Number(item.quantity)}</TableCell>
+                                      <TableCell className="text-sm py-1.5 text-muted-foreground">{item.unit ?? '—'}</TableCell>
+                                      <TableCell className="text-right text-sm py-1.5">{item.unit_price ? formatPeso(Number(item.unit_price)) : '—'}</TableCell>
+                                      <TableCell className="text-right text-sm py-1.5 font-medium">{item.amount ? formatPeso(Number(item.amount)) : '—'}</TableCell>
+                                      <TableCell className="py-1.5">
+                                        <DropdownMenu>
+                                          <DropdownMenuTrigger className="h-7 w-7 flex items-center justify-center rounded hover:bg-accent">
+                                            <MoreHorizontal className="h-4 w-4" />
+                                          </DropdownMenuTrigger>
+                                          <DropdownMenuContent align="end">
+                                            <DropdownMenuItem onClick={() => openEdit(item)}>Edit</DropdownMenuItem>
+                                            <DropdownMenuItem className="text-destructive" onClick={() => setDeleteId(item.id)}>Delete</DropdownMenuItem>
+                                          </DropdownMenuContent>
+                                        </DropdownMenu>
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
-                      No records found. Click <strong>New Record</strong> to add one.
-                    </TableCell>
+                    <TableHead>Date</TableHead>
+                    <TableHead>SI Number</TableHead>
+                    <TableHead>Client</TableHead>
+                    <TableHead>Item/s</TableHead>
+                    <TableHead className="text-right">QTY</TableHead>
+                    <TableHead>Unit</TableHead>
+                    <TableHead className="text-right">Unit Price</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead className="w-10" />
                   </TableRow>
-                ) : filtered.map(rec => (
-                  <TableRow key={rec.id}>
-                    <TableCell className="text-sm whitespace-nowrap">
-                      {format(parseISO(rec.si_date), 'MMM d, yyyy')}
-                    </TableCell>
-                    <TableCell className="font-mono text-sm font-semibold text-red-600">{rec.si_number}</TableCell>
-                    <TableCell className="text-sm">{rec.client_name ?? '—'}</TableCell>
-                    <TableCell className="text-sm">{rec.item_name}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{rec.unit ?? '—'}</TableCell>
-                    <TableCell className="text-right text-sm font-medium">{Number(rec.quantity)}</TableCell>
-                    <TableCell className="text-right text-sm">{rec.unit_price ? formatPeso(Number(rec.unit_price)) : '—'}</TableCell>
-                    <TableCell className="text-right text-sm font-medium">{rec.amount ? formatPeso(Number(rec.amount)) : '—'}</TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger className="h-8 w-8 flex items-center justify-center rounded hover:bg-accent">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => openEdit(rec)}>Edit</DropdownMenuItem>
-                          <DropdownMenuItem className="text-destructive" onClick={() => setDeleteId(rec.id)}>Delete</DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {loading ? (
+                    <TableRow>
+                      <TableCell colSpan={9} className="text-center py-10">
+                        <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
+                      </TableCell>
+                    </TableRow>
+                  ) : filtered.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
+                        No records found. Click <strong>New Record</strong> to add one.
+                      </TableCell>
+                    </TableRow>
+                  ) : filtered.map(rec => (
+                    <TableRow key={rec.id}>
+                      <TableCell className="text-sm whitespace-nowrap">
+                        {format(parseISO(rec.si_date), 'MMM d, yyyy')}
+                      </TableCell>
+                      <TableCell className="font-mono text-sm font-semibold text-red-600">{rec.si_number}</TableCell>
+                      <TableCell className="text-sm">{rec.client_name ?? '—'}</TableCell>
+                      <TableCell className="text-sm">{rec.item_name}</TableCell>
+                      <TableCell className="text-right text-sm font-medium">{Number(rec.quantity)}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{rec.unit ?? '—'}</TableCell>
+                      <TableCell className="text-right text-sm">{rec.unit_price ? formatPeso(Number(rec.unit_price)) : '—'}</TableCell>
+                      <TableCell className="text-right text-sm font-medium">{rec.amount ? formatPeso(Number(rec.amount)) : '—'}</TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger className="h-8 w-8 flex items-center justify-center rounded hover:bg-accent">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => openEdit(rec)}>Edit</DropdownMenuItem>
+                            <DropdownMenuItem className="text-destructive" onClick={() => setDeleteId(rec.id)}>Delete</DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -325,14 +466,14 @@ export default function CSIMonitoringPage() {
             </div>
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-1.5">
-                <Label>Unit</Label>
-                <Input placeholder="e.g. Piece/s" value={form.unit}
-                  onChange={e => setForm(f => ({ ...f, unit: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
                 <Label>QTY</Label>
                 <Input type="number" min={0} placeholder="0" value={form.quantity}
                   onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Unit</Label>
+                <Input placeholder="e.g. Piece/s" value={form.unit}
+                  onChange={e => setForm(f => ({ ...f, unit: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
                 <Label>Unit Price</Label>
