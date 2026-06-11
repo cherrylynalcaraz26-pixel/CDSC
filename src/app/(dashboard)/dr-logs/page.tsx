@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Plus, Search, MoreHorizontal, Loader2, Truck, Trash2, ChevronDown, ChevronRight, LayoutGrid, List } from 'lucide-react'
 import { toast } from 'sonner'
-import { format } from 'date-fns'
+import { format, parseISO } from 'date-fns'
 
 interface Supplier { id: string; company_name: string }
 
@@ -116,13 +116,12 @@ export default function DRLogsPage() {
   useEffect(() => { load() }, [])
 
   function getItems(drNumber: string) {
-    return allItems.filter(i => i.dr_number === drNumber)
+    const key = drNumber.trim().toUpperCase()
+    return allItems.filter(i => i.dr_number.trim().toUpperCase() === key)
   }
 
   function getTotalQty(drNumber: string) {
-    return allItems
-      .filter(i => i.dr_number === drNumber)
-      .reduce((sum, i) => sum + (Number(i.quantity) || 0), 0)
+    return getItems(drNumber).reduce((sum, i) => sum + (Number(i.quantity) || 0), 0)
   }
 
   const filtered = logs.filter(l => {
@@ -356,7 +355,7 @@ export default function DRLogsPage() {
                               : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                           </TableCell>
                           <TableCell className="text-sm whitespace-nowrap">
-                            {format(new Date(log.dr_date), 'MMM d, yyyy')}
+                            {format(parseISO(log.dr_date), 'MMM d, yyyy')}
                           </TableCell>
                           <TableCell className="font-mono text-sm font-semibold text-red-600">{log.dr_number}</TableCell>
                           <TableCell className="text-sm font-medium">{log.supplier_name ?? '—'}</TableCell>
@@ -458,7 +457,7 @@ export default function DRLogsPage() {
                           <TableRow key={`${row.id ?? i}-flat`}>
                             <TableCell className="font-mono text-sm font-semibold text-red-600">{row.dr_number}</TableCell>
                             <TableCell className="text-sm whitespace-nowrap">
-                              {format(new Date(row.log.dr_date), 'MMM d, yyyy')}
+                              {format(parseISO(row.log.dr_date), 'MMM d, yyyy')}
                             </TableCell>
                             <TableCell className="text-sm">{row.log.supplier_name ?? '—'}</TableCell>
                             <TableCell className="text-right font-medium text-sm">{row.quantity}</TableCell>
