@@ -133,10 +133,9 @@ export default function DRLogsPage() {
     setOpen(true)
   }
 
-  function handleSupplierChange(supplierId: string) {
+function handleSupplierChange(supplierId: string | null) {
     const sup = suppliers.find(s => s.id === supplierId)
-    setForm(f => ({ ...f, supplier_id: supplierId, supplier_name: sup?.company_name ?? '' }))
-  }
+    setForm(f => ({ ...f, supplier_id: supplierId ?? '', supplier_name: sup?.company_name ?? '' }))
 
   async function save() {
     if (!form.dr_number.trim()) { toast.error('DR Number is required'); return }
