@@ -19,7 +19,7 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Plus, Search, MoreHorizontal, Loader2, Truck, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
+import { Plus, Search, MoreHorizontal, Loader2, Truck, Trash2, ChevronDown, ChevronRight, LayoutGrid, List } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 
@@ -98,6 +98,7 @@ export default function DRLogsPage() {
   const [items, setItems] = useState<DRItem[]>([emptyItem()])
   const [saving, setSaving] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<'by-dr' | 'all-items'>('by-dr')
 
   async function load() {
     setLoading(true)
@@ -271,7 +272,7 @@ export default function DRLogsPage() {
         ))}
       </div>
 
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-3 items-center">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input className="pl-9" placeholder="Search DR#, delivered to, PO…" value={search} onChange={e => setSearch(e.target.value)} />
@@ -286,6 +287,20 @@ export default function DRLogsPage() {
             <SelectItem value="returned">Returned</SelectItem>
           </SelectContent>
         </Select>
+        <div className="flex rounded-md border overflow-hidden">
+          <button
+            onClick={() => setViewMode('by-dr')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm ${viewMode === 'by-dr' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
+          >
+            <LayoutGrid className="h-3.5 w-3.5" /> By DR#
+          </button>
+          <button
+            onClick={() => setViewMode('all-items')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm border-l ${viewMode === 'all-items' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
+          >
+            <List className="h-3.5 w-3.5" /> All Items
+          </button>
+        </div>
       </div>
 
       <Card>
@@ -296,115 +311,170 @@ export default function DRLogsPage() {
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-8" />
-                  <TableHead>Date</TableHead>
-                  <TableHead>DR Number</TableHead>
-                  <TableHead>Delivered To</TableHead>
-                  <TableHead className="text-right">Total Qty</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="w-10" />
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
+            {viewMode === 'by-dr' ? (
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-10">
-                      <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
-                    </TableCell>
+                    <TableHead className="w-8" />
+                    <TableHead>Date</TableHead>
+                    <TableHead>DR Number</TableHead>
+                    <TableHead>Delivered To</TableHead>
+                    <TableHead className="text-right">Total Qty</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="w-10" />
                   </TableRow>
-                ) : filtered.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
-                      No DR logs found. Click <strong>New DR Log</strong> to add one.
-                    </TableCell>
-                  </TableRow>
-                ) : filtered.map(log => {
-                  const sc = STATUS_CFG[log.status] ?? STATUS_CFG.received
-                  const isExpanded = expandedId === log.id
-                  const logItems = getItems(log.dr_number)
-                  const totalQty = getTotalQty(log.dr_number)
+                </TableHeader>
+                <TableBody>
+                  {loading ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-10">
+                        <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
+                      </TableCell>
+                    </TableRow>
+                  ) : filtered.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                        No DR logs found. Click <strong>New DR Log</strong> to add one.
+                      </TableCell>
+                    </TableRow>
+                  ) : filtered.map(log => {
+                    const sc = STATUS_CFG[log.status] ?? STATUS_CFG.received
+                    const isExpanded = expandedId === log.id
+                    const logItems = getItems(log.dr_number)
+                    const totalQty = getTotalQty(log.dr_number)
 
-                  return (
-                    <>
-                      <TableRow
-                        key={log.id}
-                        className="cursor-pointer hover:bg-muted/50"
-                        onClick={() => toggleExpand(log.id)}
-                      >
-                        <TableCell className="pr-0">
-                          {isExpanded
-                            ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                            : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-                        </TableCell>
-                        <TableCell className="text-sm whitespace-nowrap">
-                          {format(new Date(log.dr_date), 'MMM d, yyyy')}
-                        </TableCell>
-                        <TableCell className="font-mono text-sm font-semibold text-red-600">{log.dr_number}</TableCell>
-                        <TableCell className="text-sm font-medium">{log.supplier_name ?? '—'}</TableCell>
-                        <TableCell className="text-right font-medium text-sm">{totalQty}</TableCell>
-                        <TableCell>
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${sc.cls}`}>{sc.label}</span>
-                        </TableCell>
-                        <TableCell onClick={e => e.stopPropagation()}>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger className="h-8 w-8 flex items-center justify-center rounded hover:bg-accent">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => openEdit(log)}>Edit</DropdownMenuItem>
-                              <DropdownMenuItem className="text-destructive" onClick={() => setDeleteId(log.id)}>Delete</DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-
-                      {isExpanded && (
-                        <TableRow key={`${log.id}-expanded`} className="bg-muted/30 hover:bg-muted/30">
-                          <TableCell colSpan={7} className="py-3 px-6">
-                            <div className="space-y-3">
-                              <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
-                                {log.po_number && <span>PO: <span className="font-mono text-foreground">{log.po_number}</span></span>}
-                                {log.received_by_name && <span>Received by: <span className="text-foreground">{log.received_by_name}</span></span>}
-                                {log.remarks && <span>Remarks: <span className="text-foreground">{log.remarks}</span></span>}
-                              </div>
-                              {logItems.length === 0 ? (
-                                <p className="text-xs text-muted-foreground">No items recorded.</p>
-                              ) : (
-                                <div className="border rounded-md overflow-hidden text-xs">
-                                  <table className="w-full">
-                                    <thead className="bg-muted/60">
-                                      <tr>
-                                        <th className="text-left px-3 py-1.5 font-medium w-10">#</th>
-                                        <th className="text-right px-3 py-1.5 font-medium w-16">Qty</th>
-                                        <th className="text-left px-3 py-1.5 font-medium w-24">Unit</th>
-                                        <th className="text-left px-3 py-1.5 font-medium">Item Description</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {logItems.map((item, i) => (
-                                        <tr key={item.id ?? i} className="border-t">
-                                          <td className="px-3 py-1 text-muted-foreground">{i + 1}</td>
-                                          <td className="px-3 py-1 text-right font-medium">{item.quantity}</td>
-                                          <td className="px-3 py-1 text-muted-foreground">{item.unit}</td>
-                                          <td className="px-3 py-1">{item.item_name}</td>
-                                        </tr>
-                                      ))}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              )}
-                            </div>
+                    return (
+                      <>
+                        <TableRow
+                          key={log.id}
+                          className="cursor-pointer hover:bg-muted/50"
+                          onClick={() => toggleExpand(log.id)}
+                        >
+                          <TableCell className="pr-0">
+                            {isExpanded
+                              ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                              : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                          </TableCell>
+                          <TableCell className="text-sm whitespace-nowrap">
+                            {format(new Date(log.dr_date), 'MMM d, yyyy')}
+                          </TableCell>
+                          <TableCell className="font-mono text-sm font-semibold text-red-600">{log.dr_number}</TableCell>
+                          <TableCell className="text-sm font-medium">{log.supplier_name ?? '—'}</TableCell>
+                          <TableCell className="text-right font-medium text-sm">{totalQty}</TableCell>
+                          <TableCell>
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${sc.cls}`}>{sc.label}</span>
+                          </TableCell>
+                          <TableCell onClick={e => e.stopPropagation()}>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger className="h-8 w-8 flex items-center justify-center rounded hover:bg-accent">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => openEdit(log)}>Edit</DropdownMenuItem>
+                                <DropdownMenuItem className="text-destructive" onClick={() => setDeleteId(log.id)}>Delete</DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
                           </TableCell>
                         </TableRow>
-                      )}
-                    </>
-                  )
-                })}
-              </TableBody>
-            </Table>
+
+                        {isExpanded && (
+                          <TableRow key={`${log.id}-expanded`} className="bg-muted/30 hover:bg-muted/30">
+                            <TableCell colSpan={7} className="py-3 px-6">
+                              <div className="space-y-3">
+                                <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
+                                  {log.po_number && <span>PO: <span className="font-mono text-foreground">{log.po_number}</span></span>}
+                                  {log.received_by_name && <span>Received by: <span className="text-foreground">{log.received_by_name}</span></span>}
+                                  {log.remarks && <span>Remarks: <span className="text-foreground">{log.remarks}</span></span>}
+                                </div>
+                                {logItems.length === 0 ? (
+                                  <p className="text-xs text-muted-foreground italic">No item records.</p>
+                                ) : (
+                                  <div className="border rounded-md overflow-hidden text-xs">
+                                    <table className="w-full">
+                                      <thead className="bg-muted/60">
+                                        <tr>
+                                          <th className="text-left px-3 py-1.5 font-medium w-10">#</th>
+                                          <th className="text-right px-3 py-1.5 font-medium w-16">Qty</th>
+                                          <th className="text-left px-3 py-1.5 font-medium w-24">Unit</th>
+                                          <th className="text-left px-3 py-1.5 font-medium">Item Description</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {logItems.map((item, i) => (
+                                          <tr key={item.id ?? i} className="border-t">
+                                            <td className="px-3 py-1 text-muted-foreground">{i + 1}</td>
+                                            <td className="px-3 py-1 text-right font-medium">{item.quantity}</td>
+                                            <td className="px-3 py-1 text-muted-foreground">{item.unit}</td>
+                                            <td className="px-3 py-1">{item.item_name}</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            ) : (
+              (() => {
+                const allItemsFlat = filtered.flatMap(log =>
+                  getItems(log.dr_number).map(item => ({ ...item, log }))
+                )
+                return (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>DR Number</TableHead>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Delivered To</TableHead>
+                        <TableHead className="text-right">Qty</TableHead>
+                        <TableHead>Unit</TableHead>
+                        <TableHead>Item Description</TableHead>
+                        <TableHead>Status</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {loading ? (
+                        <TableRow>
+                          <TableCell colSpan={7} className="text-center py-10">
+                            <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
+                          </TableCell>
+                        </TableRow>
+                      ) : allItemsFlat.length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                            No item records found.
+                          </TableCell>
+                        </TableRow>
+                      ) : allItemsFlat.map((row, i) => {
+                        const sc = STATUS_CFG[row.log.status] ?? STATUS_CFG.received
+                        return (
+                          <TableRow key={`${row.id ?? i}-flat`}>
+                            <TableCell className="font-mono text-sm font-semibold text-red-600">{row.dr_number}</TableCell>
+                            <TableCell className="text-sm whitespace-nowrap">
+                              {format(new Date(row.log.dr_date), 'MMM d, yyyy')}
+                            </TableCell>
+                            <TableCell className="text-sm">{row.log.supplier_name ?? '—'}</TableCell>
+                            <TableCell className="text-right font-medium text-sm">{row.quantity}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground">{row.unit}</TableCell>
+                            <TableCell className="text-sm">{row.item_name}</TableCell>
+                            <TableCell>
+                              <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${sc.cls}`}>{sc.label}</span>
+                            </TableCell>
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                )
+              })()
+            )}
           </div>
         </CardContent>
       </Card>
