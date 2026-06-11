@@ -280,84 +280,57 @@ export default function SalesOrdersPage() {
                 </Button>
               </div>
               <div className="border rounded-lg overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-muted/50">
-                      <TableHead className="text-xs">Item / Description</TableHead>
-                      <TableHead className="text-xs w-20">Qty</TableHead>
-                      <TableHead className="text-xs w-28">Unit</TableHead>
-                      <TableHead className="text-xs w-36">Unit Price (₱)</TableHead>
-                      <TableHead className="text-xs w-28 text-right pr-4">Line Total</TableHead>
-                      <TableHead className="w-10" />
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {lines.map((line, i) => {
-                      const lineTotal = (parseFloat(line.unit_price) || 0) * (parseFloat(line.quantity) || 0)
-                      const filtered = items.filter(it =>
-                        it.item_name.toLowerCase().includes(line.item_name.toLowerCase()) ||
-                        it.item_code.toLowerCase().includes(line.item_name.toLowerCase())
-                      ).slice(0, 25)
-                      return (
-                        <TableRow key={i}>
-                          <TableCell className="p-1.5 relative">
-                            <Input
-                              placeholder="Search item…"
-                              className="h-8 text-sm"
-                              value={line.item_name}
-                              onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, item_name: e.target.value } : l))}
-                              onFocus={() => setActiveItemRow(i)}
-                              onBlur={() => setTimeout(() => setActiveItemRow(null), 200)}
-                              autoComplete="off"
-                            />
-                            {activeItemRow === i && line.item_name.length > 0 && filtered.length > 0 && (
-                              <div className="absolute z-50 top-full left-0 right-0 mt-0.5 bg-popover border rounded-md shadow-lg max-h-48 overflow-y-auto">
-                                {filtered.map(it => (
-                                  <button
-                                    key={it.item_code}
-                                    type="button"
-                                    className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent flex items-center justify-between"
-                                    onMouseDown={e => {
-                                      e.preventDefault()
-                                      setLines(p => p.map((l, idx) => idx === i
-                                        ? { ...l, item_name: it.item_name, unit: it.unit_of_measure || l.unit }
-                                        : l))
-                                      setActiveItemRow(null)
-                                    }}
-                                  >
-                                    <span>{it.item_name}</span>
-                                    <span className="text-xs text-muted-foreground ml-2">{it.unit_of_measure}</span>
-                                  </button>
-                                ))}
-                              </div>
-                            )}
-                          </TableCell>
-                          <TableCell className="p-1.5">
-                            <Input type="number" min={1} placeholder="1" className="h-8 text-sm" value={line.quantity}
-                              onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, quantity: e.target.value } : l))} />
-                          </TableCell>
-                          <TableCell className="p-1.5">
-                            <Input className="h-8 text-sm" value={line.unit} placeholder="unit"
-                              onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, unit: e.target.value } : l))} />
-                          </TableCell>
-                          <TableCell className="p-1.5">
-                            <Input type="number" min={0} step="0.01" placeholder="0.00" className="h-8 text-sm" value={line.unit_price}
-                              onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, unit_price: e.target.value } : l))} />
-                          </TableCell>
-                          <TableCell className="p-1.5 text-right text-sm font-medium pr-4">
-                            ₱{lineTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                          </TableCell>
-                          <TableCell className="p-1.5">
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
-                              onClick={() => setLines(p => p.filter((_, idx) => idx !== i))} disabled={lines.length === 1}>
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      )
-                    })}
-                  </TableBody>
-                </Table>
+                <div className="grid grid-cols-[1fr_64px_88px_120px_96px_36px] gap-1.5 px-2 py-2 bg-muted/50 border-b text-xs font-medium text-muted-foreground">
+                  <span>Item / Description</span><span>Qty</span><span>Unit</span><span>Unit Price (₱)</span>
+                  <span className="text-right">Line Total</span><span />
+                </div>
+                <div className="divide-y">
+                  {lines.map((line, i) => {
+                    const lineTotal = (parseFloat(line.unit_price) || 0) * (parseFloat(line.quantity) || 0)
+                    const filtered = items.filter(it =>
+                      it.item_name.toLowerCase().includes(line.item_name.toLowerCase()) ||
+                      it.item_code.toLowerCase().includes(line.item_name.toLowerCase())
+                    ).slice(0, 25)
+                    return (
+                      <div key={i} className="grid grid-cols-[1fr_64px_88px_120px_96px_36px] gap-1.5 items-center px-2 py-1.5">
+                        <div className="relative">
+                          <Input placeholder="Search item…" className="h-8 text-sm" value={line.item_name}
+                            onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, item_name: e.target.value } : l))}
+                            onFocus={() => setActiveItemRow(i)}
+                            onBlur={() => setTimeout(() => setActiveItemRow(null), 200)}
+                            autoComplete="off" />
+                          {activeItemRow === i && line.item_name.length > 0 && filtered.length > 0 && (
+                            <div className="absolute z-50 top-full left-0 right-0 mt-0.5 bg-popover border rounded-md shadow-lg max-h-48 overflow-y-auto">
+                              {filtered.map(it => (
+                                <button key={it.item_code} type="button"
+                                  className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent flex items-center justify-between"
+                                  onMouseDown={e => {
+                                    e.preventDefault()
+                                    setLines(p => p.map((l, idx) => idx === i ? { ...l, item_name: it.item_name, unit: it.unit_of_measure || l.unit } : l))
+                                    setActiveItemRow(null)
+                                  }}>
+                                  <span>{it.item_name}</span>
+                                  <span className="text-xs text-muted-foreground ml-2 shrink-0">{it.unit_of_measure}</span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <Input type="number" min={1} placeholder="1" className="h-8 text-sm" value={line.quantity}
+                          onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, quantity: e.target.value } : l))} />
+                        <Input className="h-8 text-sm" value={line.unit} placeholder="unit"
+                          onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, unit: e.target.value } : l))} />
+                        <Input type="number" min={0} step="0.01" placeholder="0.00" className="h-8 text-sm" value={line.unit_price}
+                          onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, unit_price: e.target.value } : l))} />
+                        <div className="text-right text-sm font-medium pr-1">₱{lineTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</div>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
+                          onClick={() => setLines(p => p.filter((_, idx) => idx !== i))} disabled={lines.length === 1}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
               <div className="flex justify-end text-sm font-semibold">
                 Total:&nbsp;
