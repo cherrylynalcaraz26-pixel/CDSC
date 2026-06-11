@@ -20,7 +20,7 @@ import { Search, Loader2, ChevronRight, ChevronDown, Pencil, AlertTriangle } fro
 import { toast } from 'sonner'
 
 interface DrDetail  { dr_number: string; qty: number; unit: string }
-interface CsiDetail { si_number: string; qty: number; unit: string }
+interface CsiDetail { si_number: string; qty: number; unit: string; unit_price: number | null }
 
 interface InventoryRow {
   client: string
@@ -102,7 +102,7 @@ export default function InventoryPage() {
     while (true) {
       const { data } = await supabase
         .from('csi_records')
-        .select('client_name, item_name, unit, quantity, si_number')
+        .select('client_name, item_name, unit, quantity, si_number, unit_price')
         .not('client_name', 'is', null)
         .range(from, from + PAGE - 1)
       if (!data || data.length === 0) break
@@ -111,7 +111,12 @@ export default function InventoryPage() {
         if (!csiByClient[client]) csiByClient[client] = {}
         if (!csiByClient[client][rec.item_name]) csiByClient[client][rec.item_name] = { qty: 0, unit: rec.unit ?? '', details: [] }
         csiByClient[client][rec.item_name].qty += Number(rec.quantity) || 0
-        csiByClient[client][rec.item_name].details.push({ si_number: rec.si_number, qty: Number(rec.quantity) || 0, unit: rec.unit ?? '' })
+        csiByClient[client][rec.item_name].details.push({
+          si_number: rec.si_number,
+          qty: Number(rec.quantity) || 0,
+          unit: rec.unit ?? '',
+          unit_price: rec.unit_price != null ? Number(rec.unit_price) : null,
+        })
       }
       if (data.length < PAGE) break
       from += PAGE
@@ -356,17 +361,28 @@ export default function InventoryPage() {
                                       <tr className="text-muted-foreground border-b">
                                         <th className="text-left pb-1">SI #</th>
                                         <th className="text-right pb-1">Qty</th>
-                                        <th className="text-left pb-1 pl-3">Unit</th>
+                                        <th className="text-left pb-1 pl-2">Unit</th>
+                                        <th className="text-right pb-1">Unit Price</th>
+                                        <th className="text-right pb-1">Amount</th>
                                       </tr>
                                     </thead>
                                     <tbody>
-                                      {row.csi_details.map((d, j) => (
-                                        <tr key={j} className="border-b border-muted/30">
-                                          <td className="py-1 font-mono text-red-600">{d.si_number}</td>
-                                          <td className="py-1 text-right font-medium">{Number(d.qty)}</td>
-                                          <td className="py-1 pl-3 text-muted-foreground">{d.unit}</td>
-                                        </tr>
-                                      ))}
+                                      {row.csi_details.map((d, j) => {
+                                        const amount = d.unit_price != null ? d.qty * d.unit_price : null
+                                        return (
+                                          <tr key={j} className="border-b border-muted/30">
+                                            <td className="py-1 font-mono text-red-600">{d.si_number}</td>
+                                            <td className="py-1 text-right font-medium">{Number(d.qty)}</td>
+                                            <td className="py-1 pl-2 text-muted-foreground">{d.unit}</td>
+                                            <td className="py-1 text-right text-blue-600 font-medium">
+                                              {d.unit_price != null ? `₱${Number(d.unit_price).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}
+                                            </td>
+                                            <td className="py-1 text-right font-semibold">
+                                              {amount != null ? `₱${amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}
+                                            </td>
+                                          </tr>
+                                        )
+                                      })}
                                     </tbody>
                                   </table>
                                 )}
