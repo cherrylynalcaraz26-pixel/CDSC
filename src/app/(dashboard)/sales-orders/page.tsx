@@ -32,6 +32,7 @@ interface SO {
   so_date: string | null
   created_at: string
   client_name: string | null
+  client_po_number: string | null
   status: SOStatus
   total_amount: number
   remarks: string | null
@@ -39,6 +40,7 @@ interface SO {
 
 interface SOLine { item_name: string; quantity: string; unit: string; unit_price: string }
 interface ItemOption { item_code: string; item_name: string; unit_of_measure: string }
+interface ClientOption { id: string; company_name: string }
 
 const emptyLine = (): SOLine => ({ item_name: '', quantity: '', unit: '', unit_price: '' })
 
@@ -46,24 +48,29 @@ export default function SalesOrdersPage() {
   const supabase = createClient()
   const [sos, setSOs] = useState<SO[]>([])
   const [items, setItems] = useState<ItemOption[]>([])
+  const [clients, setClients] = useState<ClientOption[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [activeItemRow, setActiveItemRow] = useState<number | null>(null)
 
+  const [clientId, setClientId] = useState('')
   const [clientName, setClientName] = useState('')
+  const [clientPONumber, setClientPONumber] = useState('')
   const [deliveryDate, setDeliveryDate] = useState('')
   const [remarks, setRemarks] = useState('')
   const [lines, setLines] = useState<SOLine[]>([emptyLine()])
 
   async function load() {
     setLoading(true)
-    const [{ data: soData }, { data: itemData }] = await Promise.all([
-      supabase.from('sales_orders').select('id, so_number, so_date, created_at, client_name, status, total_amount, remarks').order('created_at', { ascending: false }),
-      supabase.from('items').select('item_code, item_name, unit_of_measure').eq('status', 'active').order('item_name'),
+    const [{ data: soData }, { data: itemData }, { data: cliData }] = await Promise.all([
+      supabase.from('sales_orders').select('id,so_number,so_date,created_at,client_name,client_po_number,status,total_amount,remarks').order('created_at', { ascending: false }),
+      supabase.from('items').select('item_code,item_name,unit_of_measure').eq('status','active').order('item_name'),
+      supabase.from('clients').select('id,company_name').eq('status','active').order('company_name'),
     ])
     setSOs((soData ?? []) as SO[])
     setItems((itemData ?? []) as ItemOption[])
+    setClients((cliData ?? []) as ClientOption[])
     setLoading(false)
   }
 
@@ -73,14 +80,24 @@ export default function SalesOrdersPage() {
   const fmt = (n: number) => `₱${n.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
 
   function resetForm() {
-    setClientName(''); setDeliveryDate(''); setRemarks(''); setLines([emptyLine()])
+    setClientId(''); setClientName(''); setClientPONumber('')
+    setDeliveryDate(''); setRemarks(''); setLines([emptyLine()])
+  }
+
+  function handleClientSelect(id: string) {
+    setClientId(id)
+    const found = clients.find(c => c.id === id)
+    if (found) setClientName(found.company_name)
   }
 
   async function submitSO() {
-    if (!clientName.trim()) { toast.error('Client name is required'); return }
+    const name = clientName.trim()
+    if (!name) { toast.error('Client name is required'); return }
     setSaving(true)
     const { error } = await supabase.from('sales_orders').insert({
-      client_name: clientName.trim(),
+      client_id: clientId || null,
+      client_name: name,
+      client_po_number: clientPONumber.trim() || null,
       delivery_date: deliveryDate || null,
       remarks: remarks || null,
       status: 'draft',
@@ -168,6 +185,7 @@ export default function SalesOrdersPage() {
                 <TableHead>SO Number</TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead>Client</TableHead>
+                <TableHead>Client PO #</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="w-10" />
@@ -175,27 +193,23 @@ export default function SalesOrdersPage() {
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-10">
-                    <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
-                  </TableCell>
-                </TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center py-10">
+                  <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
+                </TableCell></TableRow>
               ) : sos.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
-                    No sales orders yet. Click <strong>New Sales Order</strong> to create one.
-                  </TableCell>
-                </TableRow>
+                <TableRow><TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                  No sales orders yet. Click <strong>New Sales Order</strong> to create one.
+                </TableCell></TableRow>
               ) : sos.map(so => {
                 const sCfg = STATUS_CFG[so.status] ?? STATUS_CFG.draft
-                const displayDate = so.so_date ?? so.created_at
                 return (
                   <TableRow key={so.id}>
                     <TableCell className="font-mono text-xs font-semibold text-red-600">{so.so_number ?? '—'}</TableCell>
                     <TableCell className="text-sm whitespace-nowrap">
-                      {displayDate ? format(new Date(displayDate), 'MMM d, yyyy') : '—'}
+                      {(so.so_date ?? so.created_at) ? format(new Date(so.so_date ?? so.created_at), 'MMM d, yyyy') : '—'}
                     </TableCell>
                     <TableCell className="font-medium text-sm">{so.client_name ?? '—'}</TableCell>
+                    <TableCell className="text-sm font-mono text-muted-foreground">{so.client_po_number ?? '—'}</TableCell>
                     <TableCell className="text-right font-semibold">{fmt(so.total_amount ?? 0)}</TableCell>
                     <TableCell>
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${sCfg.cls}`}>{sCfg.label}</span>
@@ -266,12 +280,30 @@ export default function SalesOrdersPage() {
                   <Label>SO Number</Label>
                   <Input value="Auto-generated" disabled className="bg-muted text-muted-foreground" />
                 </div>
+                <div className="space-y-1.5 md:col-span-2">
+                  <Label>Client <span className="text-destructive">*</span></Label>
+                  <Select value={clientId} onValueChange={v => handleClientSelect(v ?? '')}>
+                    <SelectTrigger><SelectValue placeholder="Select client…" /></SelectTrigger>
+                    <SelectContent>
+                      {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  {!clientId && (
+                    <Input
+                      placeholder="Or type client name manually"
+                      value={clientName}
+                      onChange={e => setClientName(e.target.value)}
+                    />
+                  )}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
-                  <Label>Client Name <span className="text-destructive">*</span></Label>
+                  <Label>Client PO Number</Label>
                   <Input
-                    placeholder="Client or company name"
-                    value={clientName}
-                    onChange={e => setClientName(e.target.value)}
+                    placeholder="Client's PO reference #"
+                    value={clientPONumber}
+                    onChange={e => setClientPONumber(e.target.value)}
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -346,10 +378,7 @@ export default function SalesOrdersPage() {
                 </div>
               </div>
               <div className="flex justify-end text-sm font-semibold">
-                Total:&nbsp;
-                <span className="text-red-600 ml-1">
-                  ₱{subtotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                </span>
+                Total:&nbsp;<span className="text-red-600 ml-1">₱{subtotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
               </div>
             </div>
           </div>
