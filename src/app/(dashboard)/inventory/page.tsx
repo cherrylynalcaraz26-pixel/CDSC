@@ -39,7 +39,7 @@ export default function InventoryPage() {
         .order('item_name')
         .range(from, from + PAGE - 1)
       if (!data || data.length === 0) break
-      allItems.push(...(data as InventoryItem[]))
+      allItems.push(...(data as unknown as InventoryItem[]))
       if (data.length < PAGE) break
       from += PAGE
     }
