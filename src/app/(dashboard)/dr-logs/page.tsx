@@ -32,8 +32,6 @@ interface DRLog {
   supplier_id: string | null
   supplier_name: string | null
   po_number: string | null
-  rr_number: string | null
-  total_amount: number
   remarks: string | null
   status: string
   received_by_name: string | null
@@ -54,8 +52,6 @@ interface DRForm {
   supplier_id: string
   supplier_name: string
   po_number: string
-  rr_number: string
-  total_amount: string
   remarks: string
   status: string
   received_by_name: string
@@ -67,8 +63,6 @@ const emptyForm = (): DRForm => ({
   supplier_id: '',
   supplier_name: '',
   po_number: '',
-  rr_number: '',
-  total_amount: '',
   remarks: '',
   status: 'received',
   received_by_name: '',
@@ -172,8 +166,6 @@ export default function DRLogsPage() {
       supplier_id: log.supplier_id ?? '',
       supplier_name: log.supplier_name ?? '',
       po_number: log.po_number ?? '',
-      rr_number: log.rr_number ?? '',
-      total_amount: String(log.total_amount ?? ''),
       remarks: log.remarks ?? '',
       status: log.status,
       received_by_name: log.received_by_name ?? '',
@@ -211,8 +203,6 @@ export default function DRLogsPage() {
       supplier_id: form.supplier_id || null,
       supplier_name: form.supplier_name || null,
       po_number: form.po_number || null,
-      rr_number: form.rr_number || null,
-      total_amount: Number(form.total_amount) || 0,
       remarks: form.remarks || null,
       status: form.status,
       received_by_name: form.received_by_name || null,
