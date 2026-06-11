@@ -139,14 +139,6 @@ export default function DRLogsPage() {
   }
 
   async function save() {
-    const sup = suppliers.find(s => s.id === supplierId)
-    setForm(f => ({ ...f, supplier_id: supplierId ?? '', supplier_name: sup?.company_name ?? '' }))
-
-  async function save() {
-    const sup = suppliers.find(s => s.id === supplierId)
-    setForm(f => ({ ...f, supplier_id: supplierId ?? '', supplier_name: sup?.company_name ?? '' }))
-
-  async function save() {
     if (!form.dr_number.trim()) { toast.error('DR Number is required'); return }
     if (!form.dr_date) { toast.error('DR Date is required'); return }
     setSaving(true)
@@ -204,7 +196,6 @@ export default function DRLogsPage() {
         </Button>
       </div>
 
-      {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { label: 'Total DRs', count: counts.total,    color: 'text-foreground' },
@@ -221,7 +212,6 @@ export default function DRLogsPage() {
         ))}
       </div>
 
-      {/* Filters */}
       <div className="flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -239,7 +229,6 @@ export default function DRLogsPage() {
         </Select>
       </div>
 
-      {/* Table */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
@@ -316,7 +305,6 @@ export default function DRLogsPage() {
         </CardContent>
       </Card>
 
-      {/* Add/Edit Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -402,7 +390,6 @@ export default function DRLogsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* View Details Dialog */}
       <Dialog open={!!viewLog} onOpenChange={() => setViewLog(null)}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
@@ -444,7 +431,6 @@ export default function DRLogsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirm */}
       <Dialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
         <DialogContent>
           <DialogHeader><DialogTitle>Delete DR Log?</DialogTitle></DialogHeader>
