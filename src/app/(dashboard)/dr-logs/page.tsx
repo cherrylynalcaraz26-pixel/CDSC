@@ -99,15 +99,22 @@ export default function DRLogsPage() {
   const [viewLog, setViewLog] = useState<DRLog | null>(null)
   const [viewItems, setViewItems] = useState<DRItem[]>([])
   const [viewItemsLoading, setViewItemsLoading] = useState(false)
+  const [itemCounts, setItemCounts] = useState<Record<string, number>>({})
 
   async function load() {
     setLoading(true)
-    const [{ data: drData }, { data: supData }] = await Promise.all([
+    const [{ data: drData }, { data: supData }, { data: countData }] = await Promise.all([
       supabase.from('dr_logs').select('*').order('dr_date', { ascending: false }),
       supabase.from('suppliers').select('id, company_name').order('company_name'),
+      supabase.from('dr_log_items').select('dr_number'),
     ])
     setLogs(drData ?? [])
     setSuppliers(supData ?? [])
+    const counts: Record<string, number> = {}
+    for (const row of countData ?? []) {
+      counts[row.dr_number] = (counts[row.dr_number] ?? 0) + 1
+    }
+    setItemCounts(counts)
     setLoading(false)
   }
 
@@ -306,11 +313,9 @@ export default function DRLogsPage() {
                 <TableRow>
                   <TableHead>DR Number</TableHead>
                   <TableHead>Date</TableHead>
-                  <TableHead>Supplier</TableHead>
-                  <TableHead>PO Ref</TableHead>
-                  <TableHead>RR Ref</TableHead>
-                  <TableHead className="text-right">Amount (₱)</TableHead>
                   <TableHead>Received By</TableHead>
+                  <TableHead>PO Ref</TableHead>
+                  <TableHead className="text-right">Items</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="w-10" />
                 </TableRow>
@@ -318,13 +323,13 @@ export default function DRLogsPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-10">
+                    <TableCell colSpan={7} className="text-center py-10">
                       <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                     </TableCell>
                   </TableRow>
                 ) : filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                       No DR logs found. Click <strong>New DR Log</strong> to add one.
                     </TableCell>
                   </TableRow>
@@ -338,11 +343,7 @@ export default function DRLogsPage() {
                       </TableCell>
                       <TableCell className="text-sm font-medium">{log.supplier_name ?? '—'}</TableCell>
                       <TableCell className="font-mono text-xs text-muted-foreground">{log.po_number ?? '—'}</TableCell>
-                      <TableCell className="font-mono text-xs text-muted-foreground">{log.rr_number ?? '—'}</TableCell>
-                      <TableCell className="text-right font-medium text-sm">
-                        {(log.total_amount ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                      </TableCell>
-                      <TableCell className="text-sm">{log.received_by_name ?? '—'}</TableCell>
+                      <TableCell className="text-right font-medium text-sm">{itemCounts[log.dr_number] ?? 0}</TableCell>
                       <TableCell>
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${sc.cls}`}>{sc.label}</span>
                       </TableCell>
@@ -511,7 +512,7 @@ export default function DRLogsPage() {
               <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                 <div><span className="text-muted-foreground">DR Number:</span><div className="font-mono font-semibold text-red-600">{viewLog.dr_number}</div></div>
                 <div><span className="text-muted-foreground">Date:</span><div>{format(new Date(viewLog.dr_date), 'MMMM d, yyyy')}</div></div>
-                <div><span className="text-muted-foreground">Supplier:</span><div className="font-medium">{viewLog.supplier_name ?? '—'}</div></div>
+                <div><span className="text-muted-foreground">Received By:</span><div className="font-medium">{viewLog.supplier_name ?? '—'}</div></div>
                 <div><span className="text-muted-foreground">Status:</span><div>
                   <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${(STATUS_CFG[viewLog.status] ?? STATUS_CFG.received).cls}`}>
                     {(STATUS_CFG[viewLog.status] ?? STATUS_CFG.received).label}
