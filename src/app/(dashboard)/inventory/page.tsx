@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
@@ -11,7 +11,10 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Search, Loader2 } from 'lucide-react'
+import { Search, Loader2, ChevronRight, ChevronDown } from 'lucide-react'
+
+interface DrDetail   { dr_number: string; qty: number; unit: string }
+interface CsiDetail  { si_number: string; qty: number; unit: string }
 
 interface InventoryRow {
   client: string
@@ -20,6 +23,8 @@ interface InventoryRow {
   dr_qty: number
   csi_qty: number
   balance: number
+  dr_details: DrDetail[]
+  csi_details: CsiDetail[]
 }
 
 export default function InventoryPage() {
@@ -28,13 +33,14 @@ export default function InventoryPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [clientFilter, setClientFilter] = useState('all')
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
   async function load() {
     setLoading(true)
-
-    // Paginate DR log items with their client (supplier_name)
-    const drMap: Record<string, Record<string, { qty: number; unit: string }>> = {}
     const PAGE = 1000
+
+    // DR log items: dr_number → item_name → {qty, unit}
+    const drMap: Record<string, Record<string, { qty: number; unit: string }>> = {}
     let from = 0
     while (true) {
       const { data } = await supabase
@@ -45,15 +51,14 @@ export default function InventoryPage() {
       for (const item of data) {
         if (!item.dr_number) continue
         if (!drMap[item.dr_number]) drMap[item.dr_number] = {}
-        const key = item.item_name
-        if (!drMap[item.dr_number][key]) drMap[item.dr_number][key] = { qty: 0, unit: item.unit ?? '' }
-        drMap[item.dr_number][key].qty += Number(item.quantity) || 0
+        if (!drMap[item.dr_number][item.item_name]) drMap[item.dr_number][item.item_name] = { qty: 0, unit: item.unit ?? '' }
+        drMap[item.dr_number][item.item_name].qty += Number(item.quantity) || 0
       }
       if (data.length < PAGE) break
       from += PAGE
     }
 
-    // Get DR logs to map dr_number → client
+    // DR logs: dr_number → supplier_name
     const drClientMap: Record<string, string> = {}
     from = 0
     while (true) {
@@ -70,39 +75,41 @@ export default function InventoryPage() {
       from += PAGE
     }
 
-    // Aggregate DR qty per client per item
-    const drByClient: Record<string, Record<string, { qty: number; unit: string }>> = {}
+    // Aggregate: client → item_name → { qty, unit, dr_details[] }
+    const drByClient: Record<string, Record<string, { qty: number; unit: string; details: DrDetail[] }>> = {}
     for (const [drNum, items] of Object.entries(drMap)) {
       const client = drClientMap[drNum]
       if (!client) continue
       if (!drByClient[client]) drByClient[client] = {}
       for (const [itemName, val] of Object.entries(items)) {
-        if (!drByClient[client][itemName]) drByClient[client][itemName] = { qty: 0, unit: val.unit }
+        if (!drByClient[client][itemName]) drByClient[client][itemName] = { qty: 0, unit: val.unit, details: [] }
         drByClient[client][itemName].qty += val.qty
+        drByClient[client][itemName].details.push({ dr_number: drNum, qty: val.qty, unit: val.unit })
       }
     }
 
-    // Paginate CSI records
-    const csiByClient: Record<string, Record<string, { qty: number; unit: string }>> = {}
+    // CSI records: client → item_name → { qty, unit, csi_details[] }
+    const csiByClient: Record<string, Record<string, { qty: number; unit: string; details: CsiDetail[] }>> = {}
     from = 0
     while (true) {
       const { data } = await supabase
         .from('csi_records')
-        .select('client_name, item_name, unit, quantity')
+        .select('client_name, item_name, unit, quantity, si_number')
         .not('client_name', 'is', null)
         .range(from, from + PAGE - 1)
       if (!data || data.length === 0) break
       for (const rec of data) {
         const client = rec.client_name!
         if (!csiByClient[client]) csiByClient[client] = {}
-        if (!csiByClient[client][rec.item_name]) csiByClient[client][rec.item_name] = { qty: 0, unit: rec.unit ?? '' }
+        if (!csiByClient[client][rec.item_name]) csiByClient[client][rec.item_name] = { qty: 0, unit: rec.unit ?? '', details: [] }
         csiByClient[client][rec.item_name].qty += Number(rec.quantity) || 0
+        csiByClient[client][rec.item_name].details.push({ si_number: rec.si_number, qty: Number(rec.quantity) || 0, unit: rec.unit ?? '' })
       }
       if (data.length < PAGE) break
       from += PAGE
     }
 
-    // Merge into inventory rows
+    // Merge
     const allClients = new Set([...Object.keys(drByClient), ...Object.keys(csiByClient)])
     const result: InventoryRow[] = []
     for (const client of allClients) {
@@ -110,10 +117,12 @@ export default function InventoryPage() {
       const csiItems = csiByClient[client] ?? {}
       const allItems = new Set([...Object.keys(drItems), ...Object.keys(csiItems)])
       for (const itemName of allItems) {
-        const drQty = drItems[itemName]?.qty ?? 0
+        const drQty  = drItems[itemName]?.qty ?? 0
         const csiQty = csiItems[itemName]?.qty ?? 0
-        const unit = drItems[itemName]?.unit || csiItems[itemName]?.unit || ''
-        result.push({ client, item_name: itemName, unit, dr_qty: drQty, csi_qty: csiQty, balance: drQty - csiQty })
+        const unit   = drItems[itemName]?.unit || csiItems[itemName]?.unit || ''
+        const dr_details  = (drItems[itemName]?.details ?? []).sort((a, b) => a.dr_number.localeCompare(b.dr_number))
+        const csi_details = (csiItems[itemName]?.details ?? []).sort((a, b) => a.si_number.localeCompare(b.si_number))
+        result.push({ client, item_name: itemName, unit, dr_qty: drQty, csi_qty: csiQty, balance: drQty - csiQty, dr_details, csi_details })
       }
     }
 
@@ -134,9 +143,19 @@ export default function InventoryPage() {
   })
 
   const totalItems = filtered.length
-  const inStock = filtered.filter(r => r.balance > 0).length
-  const balanced = filtered.filter(r => r.balance === 0).length
-  const negative = filtered.filter(r => r.balance < 0).length
+  const inStock   = filtered.filter(r => r.balance > 0).length
+  const balanced  = filtered.filter(r => r.balance === 0).length
+  const negative  = filtered.filter(r => r.balance < 0).length
+
+  function rowKey(r: InventoryRow) { return `${r.client}||${r.item_name}` }
+
+  function toggleRow(key: string) {
+    setExpanded(prev => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+  }
 
   function balanceBadge(balance: number) {
     if (balance > 0) return <Badge variant="outline" className="text-green-600 border-green-300 bg-green-50">In Stock</Badge>
@@ -152,30 +171,22 @@ export default function InventoryPage() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card>
-          <CardContent className="pt-4 pb-3">
-            <div className="text-2xl font-bold">{loading ? '—' : totalItems}</div>
-            <div className="text-xs text-muted-foreground">Line Items</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4 pb-3">
-            <div className="text-2xl font-bold text-green-600">{loading ? '—' : inStock}</div>
-            <div className="text-xs text-muted-foreground">In Stock</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4 pb-3">
-            <div className="text-2xl font-bold text-gray-500">{loading ? '—' : balanced}</div>
-            <div className="text-xs text-muted-foreground">Balanced</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-4 pb-3">
-            <div className="text-2xl font-bold text-red-600">{loading ? '—' : negative}</div>
-            <div className="text-xs text-muted-foreground">Deficit</div>
-          </CardContent>
-        </Card>
+        <Card><CardContent className="pt-4 pb-3">
+          <div className="text-2xl font-bold">{loading ? '—' : totalItems}</div>
+          <div className="text-xs text-muted-foreground">Line Items</div>
+        </CardContent></Card>
+        <Card><CardContent className="pt-4 pb-3">
+          <div className="text-2xl font-bold text-green-600">{loading ? '—' : inStock}</div>
+          <div className="text-xs text-muted-foreground">In Stock</div>
+        </CardContent></Card>
+        <Card><CardContent className="pt-4 pb-3">
+          <div className="text-2xl font-bold text-gray-500">{loading ? '—' : balanced}</div>
+          <div className="text-xs text-muted-foreground">Balanced</div>
+        </CardContent></Card>
+        <Card><CardContent className="pt-4 pb-3">
+          <div className="text-2xl font-bold text-red-600">{loading ? '—' : negative}</div>
+          <div className="text-xs text-muted-foreground">Deficit</div>
+        </CardContent></Card>
       </div>
 
       <div className="flex gap-3 flex-wrap">
@@ -200,6 +211,7 @@ export default function InventoryPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-8" />
                   <TableHead>Client</TableHead>
                   <TableHead>Item Name</TableHead>
                   <TableHead>Unit</TableHead>
@@ -212,29 +224,101 @@ export default function InventoryPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-10">
+                    <TableCell colSpan={8} className="text-center py-10">
                       <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                     </TableCell>
                   </TableRow>
                 ) : filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
-                      No inventory data found.
-                    </TableCell>
+                    <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">No inventory data found.</TableCell>
                   </TableRow>
-                ) : filtered.map((row, i) => (
-                  <TableRow key={i}>
-                    <TableCell className="text-sm">{row.client}</TableCell>
-                    <TableCell className="text-sm font-medium">{row.item_name}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{row.unit}</TableCell>
-                    <TableCell className="text-right text-sm">{Number(row.dr_qty)}</TableCell>
-                    <TableCell className="text-right text-sm">{Number(row.csi_qty)}</TableCell>
-                    <TableCell className={`text-right text-sm font-semibold ${row.balance > 0 ? 'text-green-600' : row.balance < 0 ? 'text-red-600' : 'text-gray-500'}`}>
-                      {Number(row.balance)}
-                    </TableCell>
-                    <TableCell>{balanceBadge(row.balance)}</TableCell>
-                  </TableRow>
-                ))}
+                ) : filtered.map((row, i) => {
+                  const key = rowKey(row)
+                  const isOpen = expanded.has(key)
+                  return (
+                    <Fragment key={key}>
+                      <TableRow
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => toggleRow(key)}
+                      >
+                        <TableCell className="text-muted-foreground">
+                          {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                        </TableCell>
+                        <TableCell className="text-sm">{row.client}</TableCell>
+                        <TableCell className="text-sm font-medium">{row.item_name}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{row.unit}</TableCell>
+                        <TableCell className="text-right text-sm">{Number(row.dr_qty)}</TableCell>
+                        <TableCell className="text-right text-sm">{Number(row.csi_qty)}</TableCell>
+                        <TableCell className={`text-right text-sm font-semibold ${row.balance > 0 ? 'text-green-600' : row.balance < 0 ? 'text-red-600' : 'text-gray-500'}`}>
+                          {Number(row.balance)}
+                        </TableCell>
+                        <TableCell>{balanceBadge(row.balance)}</TableCell>
+                      </TableRow>
+
+                      {isOpen && (
+                        <TableRow key={`${key}-detail`}>
+                          <TableCell colSpan={8} className="p-0 bg-muted/20">
+                            <div className="px-10 py-3 grid grid-cols-2 gap-6">
+                              {/* DR Breakdown */}
+                              <div>
+                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">DR Deliveries</p>
+                                {row.dr_details.length === 0 ? (
+                                  <p className="text-xs text-muted-foreground italic">No DR records</p>
+                                ) : (
+                                  <table className="w-full text-xs">
+                                    <thead>
+                                      <tr className="text-muted-foreground border-b">
+                                        <th className="text-left pb-1">DR #</th>
+                                        <th className="text-right pb-1">Qty</th>
+                                        <th className="text-left pb-1 pl-3">Unit</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {row.dr_details.map((d, j) => (
+                                        <tr key={j} className="border-b border-muted/30">
+                                          <td className="py-1 font-mono text-blue-600">{d.dr_number}</td>
+                                          <td className="py-1 text-right font-medium">{Number(d.qty)}</td>
+                                          <td className="py-1 pl-3 text-muted-foreground">{d.unit}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                )}
+                              </div>
+
+                              {/* CSI Breakdown */}
+                              <div>
+                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">CSI Charges</p>
+                                {row.csi_details.length === 0 ? (
+                                  <p className="text-xs text-muted-foreground italic">No CSI records</p>
+                                ) : (
+                                  <table className="w-full text-xs">
+                                    <thead>
+                                      <tr className="text-muted-foreground border-b">
+                                        <th className="text-left pb-1">SI #</th>
+                                        <th className="text-right pb-1">Qty</th>
+                                        <th className="text-left pb-1 pl-3">Unit</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {row.csi_details.map((d, j) => (
+                                        <tr key={j} className="border-b border-muted/30">
+                                          <td className="py-1 font-mono text-red-600">{d.si_number}</td>
+                                          <td className="py-1 text-right font-medium">{Number(d.qty)}</td>
+                                          <td className="py-1 pl-3 text-muted-foreground">{d.unit}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                )}
+                              </div>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </Fragment>
+                  )
+                })}
               </TableBody>
             </Table>
           </div>
