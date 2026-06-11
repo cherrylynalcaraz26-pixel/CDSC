@@ -105,7 +105,7 @@ export default function DRLogsPage() {
     const [{ data: drData }, { data: supData }, { data: itemData }] = await Promise.all([
       supabase.from('dr_logs').select('*').order('dr_date', { ascending: false }),
       supabase.from('suppliers').select('id, company_name').order('company_name'),
-      supabase.from('dr_log_items').select('*').order('id'),
+      supabase.from('dr_log_items').select('*').order('id').limit(5000),
     ])
     setLogs(drData ?? [])
     setSuppliers(supData ?? [])
@@ -402,7 +402,7 @@ export default function DRLogsPage() {
                                         {logItems.map((item, i) => (
                                           <tr key={item.id ?? i} className="border-t">
                                             <td className="px-3 py-1 text-muted-foreground">{i + 1}</td>
-                                            <td className="px-3 py-1 text-right font-medium">{item.quantity}</td>
+                                            <td className="px-3 py-1 text-right font-medium">{Number(item.quantity)}</td>
                                             <td className="px-3 py-1 text-muted-foreground">{item.unit}</td>
                                             <td className="px-3 py-1">{item.item_name}</td>
                                           </tr>
@@ -460,7 +460,7 @@ export default function DRLogsPage() {
                               {format(parseISO(row.log.dr_date), 'MMM d, yyyy')}
                             </TableCell>
                             <TableCell className="text-sm">{row.log.supplier_name ?? '—'}</TableCell>
-                            <TableCell className="text-right font-medium text-sm">{row.quantity}</TableCell>
+                            <TableCell className="text-right font-medium text-sm">{Number(row.quantity)}</TableCell>
                             <TableCell className="text-sm text-muted-foreground">{row.unit}</TableCell>
                             <TableCell className="text-sm">{row.item_name}</TableCell>
                             <TableCell>
