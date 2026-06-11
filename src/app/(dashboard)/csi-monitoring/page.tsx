@@ -205,10 +205,23 @@ export default function CSIMonitoringPage() {
 
   async function confirmDelete() {
     if (deleteId === null) return
+    const { data: saved } = await supabase.from('csi_records').select('*').eq('id', deleteId).single()
     const { error } = await supabase.from('csi_records').delete().eq('id', deleteId)
-    if (error) toast.error(error.message)
-    else { toast.success('Record deleted'); load() }
+    if (error) { toast.error(error.message); setDeleteId(null); return }
     setDeleteId(null)
+    load()
+    toast.success('Record deleted', {
+      action: {
+        label: 'Undo',
+        onClick: async () => {
+          if (saved) {
+            const { id: _id, created_at: _ca, ...rest } = saved as any
+            await supabase.from('csi_records').insert(rest)
+            load()
+          }
+        },
+      },
+    })
   }
 
   return (

@@ -2,33 +2,51 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Button } from '@/components/ui/button'
 import {
-  BarChart, Bar, PieChart, Pie, Cell,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts'
 import {
-  Package, ShoppingCart, Truck, AlertTriangle, XCircle,
-  FileText, RotateCcw, TrendingUp, DollarSign, Boxes,
+  Package, ShoppingCart, Truck, FileText, ClipboardList,
+  TrendingUp, Cpu, Users, ArrowRight, Loader2,
 } from 'lucide-react'
-
-const COLORS = ['#dc2626', '#f97316', '#eab308', '#22c55e', '#3b82f6']
+import Link from 'next/link'
+import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns'
 
 interface KPI {
   totalItems: number
   activeSuppliers: number
-  lowStock: number
-  outOfStock: number
   openPOs: number
   pendingPRs: number
-  totalStockValue: number
+  drLogsThisMonth: number
+  csiThisMonth: number
+  totalAssets: number
+  totalDRs: number
 }
 
-function StatCard({ title, value, icon: Icon, sub, color }: { title: string; value: string | number; icon: any; sub?: string; color?: string }) {
-  return (
-    <Card>
+interface MonthBar { month: string; dr: number; csi: number }
+interface RecentDR { id: string; dr_number: string | null; date: string | null; delivered_to: string | null; status: string }
+interface RecentPR { id: string; pr_number: string | null; created_at: string; department: string | null; priority: string; status: string }
+
+const STATUS_COLORS: Record<string, string> = {
+  open:       'bg-blue-100 text-blue-700',
+  completed:  'bg-green-100 text-green-700',
+  draft:      'bg-gray-100 text-gray-600',
+  submitted:  'bg-blue-100 text-blue-700',
+  dept_approved: 'bg-yellow-100 text-yellow-700',
+  admin_approved: 'bg-orange-100 text-orange-700',
+  purchasing_approved: 'bg-purple-100 text-purple-700',
+  converted_to_po: 'bg-green-100 text-green-700',
+  rejected:   'bg-red-100 text-red-700',
+}
+
+function StatCard({ title, value, icon: Icon, sub, color, href }: {
+  title: string; value: string | number; icon: any; sub?: string; color?: string; href?: string
+}) {
+  const inner = (
+    <Card className={href ? 'hover:shadow-md transition-shadow cursor-pointer' : ''}>
       <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
         <CardTitle className="text-xs font-medium text-muted-foreground">{title}</CardTitle>
         <Icon className={`h-4 w-4 ${color ?? 'text-muted-foreground'}`} />
@@ -39,153 +57,236 @@ function StatCard({ title, value, icon: Icon, sub, color }: { title: string; val
       </CardContent>
     </Card>
   )
+  return href ? <Link href={href}>{inner}</Link> : inner
 }
 
 export default function DashboardPage() {
   const supabase = createClient()
-  const [kpi, setKpi] = useState<KPI>({ totalItems: 0, activeSuppliers: 0, lowStock: 0, outOfStock: 0, openPOs: 0, pendingPRs: 0, totalStockValue: 0 })
-  const [categoryData, setCategoryData] = useState<{ name: string; value: number }[]>([])
-  const [recentPOs, setRecentPOs] = useState<any[]>([])
+  const [kpi, setKpi] = useState<KPI>({ totalItems: 0, activeSuppliers: 0, openPOs: 0, pendingPRs: 0, drLogsThisMonth: 0, csiThisMonth: 0, totalAssets: 0, totalDRs: 0 })
+  const [monthlyData, setMonthlyData] = useState<MonthBar[]>([])
+  const [recentDRs, setRecentDRs] = useState<RecentDR[]>([])
+  const [recentPRs, setRecentPRs] = useState<RecentPR[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function load() {
-      const [items, suppliers, stockLevels, pos, prs, categories] = await Promise.all([
-        supabase.from('items').select('id, status, cost, reorder_level, category_id'),
-        supabase.from('suppliers').select('id, is_active'),
-        supabase.from('stock_levels').select('item_id, quantity_on_hand'),
-        supabase.from('purchase_orders').select('id, status, total_amount, po_number, created_at, supplier:suppliers(company_name)'),
-        supabase.from('purchase_requests').select('id, status'),
-        supabase.from('categories').select('id, category_name'),
+      const now = new Date()
+      const thisMonthStart = startOfMonth(now).toISOString()
+      const thisMonthEnd = endOfMonth(now).toISOString()
+
+      // Build 6-month range for bar chart
+      const months = Array.from({ length: 6 }, (_, i) => {
+        const d = subMonths(now, 5 - i)
+        return { label: format(d, 'MMM'), start: startOfMonth(d).toISOString(), end: endOfMonth(d).toISOString() }
+      })
+
+      const [items, suppliers, pos, prs, assets, drLogs, csiRecs, recentDRData, recentPRData] = await Promise.all([
+        supabase.from('items').select('id', { count: 'exact', head: true }).eq('status', 'active'),
+        supabase.from('suppliers').select('id', { count: 'exact', head: true }).eq('is_active', true),
+        supabase.from('purchase_orders').select('id, status', { count: 'exact' }),
+        supabase.from('purchase_requests').select('id, status', { count: 'exact' }),
+        supabase.from('assets').select('id', { count: 'exact', head: true }),
+        supabase.from('dr_logs').select('id, date', { count: 'exact' }),
+        supabase.from('csi_records').select('id, date', { count: 'exact' }),
+        supabase.from('dr_logs').select('id, dr_number, date, delivered_to, status').order('date', { ascending: false }).limit(8),
+        supabase.from('purchase_requests').select('id, pr_number, created_at, department, priority, status').order('created_at', { ascending: false }).limit(6),
       ])
-
-      const allItems = items.data ?? []
-      const allStock = stockLevels.data ?? []
-
-      // Map quantity per item
-      const qtyMap: Record<string, number> = {}
-      for (const s of allStock) {
-        qtyMap[s.item_id] = (qtyMap[s.item_id] ?? 0) + s.quantity_on_hand
-      }
-
-      const activeItems = allItems.filter(i => i.status === 'active')
-      const lowStock = activeItems.filter(i => {
-        const qty = qtyMap[i.id] ?? 0
-        return qty > 0 && qty <= (i.reorder_level ?? 0)
-      }).length
-      const outOfStock = activeItems.filter(i => (qtyMap[i.id] ?? 0) === 0).length
-      const totalStockValue = activeItems.reduce((s, i) => s + (qtyMap[i.id] ?? 0) * (i.cost ?? 0), 0)
 
       const allPOs = pos.data ?? []
       const allPRs = prs.data ?? []
-      const allSuppliers = suppliers.data ?? []
-      const allCats = categories.data ?? []
+      const allDRs = drLogs.data ?? []
+      const allCSI = csiRecs.data ?? []
+
+      // Monthly bar chart data
+      const bars: MonthBar[] = months.map(m => ({
+        month: m.label,
+        dr: allDRs.filter(d => d.date && d.date >= m.start.slice(0, 10) && d.date <= m.end.slice(0, 10)).length,
+        csi: allCSI.filter(c => c.date && c.date >= m.start.slice(0, 10) && c.date <= m.end.slice(0, 10)).length,
+      }))
 
       setKpi({
-        totalItems: activeItems.length,
-        activeSuppliers: allSuppliers.filter(s => s.is_active).length,
-        lowStock,
-        outOfStock,
-        openPOs: allPOs.filter(p => ['draft', 'sent', 'approved'].includes(p.status)).length,
-        pendingPRs: allPRs.filter(p => p.status === 'pending').length,
-        totalStockValue,
+        totalItems: items.count ?? 0,
+        activeSuppliers: suppliers.count ?? 0,
+        openPOs: allPOs.filter(p => p.status === 'open').length,
+        pendingPRs: allPRs.filter(p => ['submitted', 'dept_approved', 'admin_approved'].includes(p.status)).length,
+        drLogsThisMonth: allDRs.filter(d => d.date && d.date >= thisMonthStart.slice(0, 10) && d.date <= thisMonthEnd.slice(0, 10)).length,
+        csiThisMonth: allCSI.filter(c => c.date && c.date >= thisMonthStart.slice(0, 10) && c.date <= thisMonthEnd.slice(0, 10)).length,
+        totalAssets: assets.count ?? 0,
+        totalDRs: drLogs.count ?? 0,
       })
 
-      // Category distribution
-      const catCount: Record<string, number> = {}
-      for (const item of activeItems) {
-        const catName = allCats.find(c => c.id === item.category_id)?.category_name ?? 'Uncategorized'
-        catCount[catName] = (catCount[catName] ?? 0) + 1
-      }
-      setCategoryData(
-        Object.entries(catCount)
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 5)
-          .map(([name, value]) => ({ name, value }))
-      )
-
-      setRecentPOs(allPOs.slice(0, 8))
+      setMonthlyData(bars)
+      setRecentDRs((recentDRData.data ?? []) as RecentDR[])
+      setRecentPRs((recentPRData.data ?? []) as RecentPR[])
       setLoading(false)
     }
     load()
   }, [])
 
-  const fmt = (v: number) => `₱${v.toLocaleString('en-PH', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
-
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold">Dashboard</h2>
-        <p className="text-muted-foreground text-sm">Business overview — live data</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">Dashboard</h2>
+          <p className="text-muted-foreground text-sm">{format(new Date(), 'EEEE, MMMM d, yyyy')} — Live overview</p>
+        </div>
+        {loading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
       </div>
 
-      {/* KPI Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4">
-        <StatCard title="Total Items" value={loading ? '—' : kpi.totalItems} icon={Package} />
-        <StatCard title="Active Suppliers" value={loading ? '—' : kpi.activeSuppliers} icon={TrendingUp} />
-        <StatCard title="Stock Value" value={loading ? '—' : fmt(kpi.totalStockValue)} icon={DollarSign} color="text-green-600" />
-        <StatCard title="Low Stock" value={loading ? '—' : kpi.lowStock} icon={AlertTriangle} color="text-yellow-500" sub="Below reorder level" />
-        <StatCard title="Out of Stock" value={loading ? '—' : kpi.outOfStock} icon={XCircle} color="text-red-600" sub="Zero inventory" />
-        <StatCard title="Open POs" value={loading ? '—' : kpi.openPOs} icon={ShoppingCart} sub="Pending orders" />
-        <StatCard title="Pending PRs" value={loading ? '—' : kpi.pendingPRs} icon={FileText} sub="Awaiting approval" />
+      {/* KPI Row */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+        <StatCard title="Items" value={loading ? '—' : kpi.totalItems.toLocaleString()} icon={Package} href="/items" />
+        <StatCard title="Suppliers" value={loading ? '—' : kpi.activeSuppliers} icon={TrendingUp} href="/setup" />
+        <StatCard title="Open POs" value={loading ? '—' : kpi.openPOs} icon={ShoppingCart} color="text-blue-600" href="/purchase-orders" sub="Awaiting delivery" />
+        <StatCard title="Pending PRs" value={loading ? '—' : kpi.pendingPRs} icon={FileText} color="text-yellow-600" href="/purchase-requests" sub="In approval" />
+        <StatCard title="DR Logs" value={loading ? '—' : kpi.totalDRs.toLocaleString()} icon={Truck} href="/dr-logs" sub="All time" />
+        <StatCard title="DR This Month" value={loading ? '—' : kpi.drLogsThisMonth} icon={ClipboardList} color="text-green-600" href="/dr-logs" />
+        <StatCard title="CSI This Month" value={loading ? '—' : kpi.csiThisMonth} icon={TrendingUp} color="text-purple-600" href="/csi-monitoring" />
+        <StatCard title="Assets" value={loading ? '—' : kpi.totalAssets} icon={Cpu} href="/assets" />
       </div>
 
-      {/* Charts + Table */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Pie chart */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">Items by Category</CardTitle>
-            <CardDescription className="text-xs">Top 5 categories</CardDescription>
+      {/* Charts + Activity */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        {/* Bar chart */}
+        <Card className="lg:col-span-2">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Monthly Activity (Last 6 Months)</CardTitle>
           </CardHeader>
           <CardContent>
-            {categoryData.length === 0 ? (
-              <div className="h-48 flex items-center justify-center text-muted-foreground text-sm">No data yet</div>
+            {monthlyData.every(m => m.dr === 0 && m.csi === 0) ? (
+              <div className="h-40 flex items-center justify-center text-muted-foreground text-xs">No data yet</div>
             ) : (
-              <ResponsiveContainer width="100%" height={200}>
-                <PieChart>
-                  <Pie data={categoryData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={75} label={({ name, percent }) => `${name} ${((percent ?? 0) * 100).toFixed(0)}%`} labelLine={false}>
-                    {categoryData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                  </Pie>
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={monthlyData} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                   <Tooltip />
-                </PieChart>
+                  <Bar dataKey="dr" name="DR Logs" fill="#dc2626" radius={[3, 3, 0, 0]} />
+                  <Bar dataKey="csi" name="CSI Records" fill="#f97316" radius={[3, 3, 0, 0]} />
+                </BarChart>
               </ResponsiveContainer>
             )}
+            <div className="flex gap-4 mt-2 justify-center text-xs text-muted-foreground">
+              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-red-600 inline-block" />DR Logs</span>
+              <span className="flex items-center gap-1"><span className="h-2 w-2 rounded-sm bg-orange-500 inline-block" />CSI Records</span>
+            </div>
           </CardContent>
         </Card>
 
-        {/* Recent POs */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">Recent Purchase Orders</CardTitle>
+        {/* Recent DRs */}
+        <Card className="lg:col-span-3">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm font-medium">Recent DR Logs</CardTitle>
+            <Link href="/dr-logs">
+              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground">
+                View all <ArrowRight className="h-3 w-3" />
+              </Button>
+            </Link>
           </CardHeader>
           <CardContent className="p-0">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b">
-                  <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">PO #</th>
-                  <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Supplier</th>
-                  <th className="text-right px-4 py-2 text-xs font-medium text-muted-foreground">Amount</th>
+                  <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">DR #</th>
+                  <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Delivered To</th>
+                  <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Date</th>
                   <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr><td colSpan={4} className="text-center py-6 text-muted-foreground text-xs">Loading…</td></tr>
-                ) : recentPOs.length === 0 ? (
-                  <tr><td colSpan={4} className="text-center py-6 text-muted-foreground text-xs">No purchase orders yet</td></tr>
-                ) : recentPOs.map((po: any) => (
-                  <tr key={po.id} className="border-b last:border-0 hover:bg-muted/30">
-                    <td className="px-4 py-2 font-mono text-xs">{po.po_number}</td>
-                    <td className="px-4 py-2 text-xs">{po.supplier?.company_name ?? '—'}</td>
-                    <td className="px-4 py-2 text-right text-xs font-medium">{fmt(po.total_amount ?? 0)}</td>
+                ) : recentDRs.length === 0 ? (
+                  <tr><td colSpan={4} className="text-center py-6 text-muted-foreground text-xs">No DR logs yet</td></tr>
+                ) : recentDRs.map(dr => (
+                  <tr key={dr.id} className="border-b last:border-0 hover:bg-muted/30">
+                    <td className="px-4 py-2 font-mono text-xs font-semibold text-red-600">{dr.dr_number ?? '—'}</td>
+                    <td className="px-4 py-2 text-xs max-w-[140px] truncate">{dr.delivered_to ?? '—'}</td>
+                    <td className="px-4 py-2 text-xs text-muted-foreground whitespace-nowrap">
+                      {dr.date ? format(new Date(dr.date), 'MMM d, yyyy') : '—'}
+                    </td>
                     <td className="px-4 py-2">
-                      <Badge variant="secondary" className="text-xs">{po.status}</Badge>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[dr.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                        {dr.status}
+                      </span>
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Recent PRs + Quick Links */}
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        {/* Recent PRs */}
+        <Card className="lg:col-span-3">
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm font-medium">Recent Purchase Requests</CardTitle>
+            <Link href="/purchase-requests">
+              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground">
+                View all <ArrowRight className="h-3 w-3" />
+              </Button>
+            </Link>
+          </CardHeader>
+          <CardContent className="p-0">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">PR #</th>
+                  <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Department</th>
+                  <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Priority</th>
+                  <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={4} className="text-center py-6 text-muted-foreground text-xs">Loading…</td></tr>
+                ) : recentPRs.length === 0 ? (
+                  <tr><td colSpan={4} className="text-center py-6 text-muted-foreground text-xs">No purchase requests yet</td></tr>
+                ) : recentPRs.map(pr => (
+                  <tr key={pr.id} className="border-b last:border-0 hover:bg-muted/30">
+                    <td className="px-4 py-2 font-mono text-xs font-semibold text-red-600">{pr.pr_number ?? '—'}</td>
+                    <td className="px-4 py-2 text-xs">{pr.department ?? '—'}</td>
+                    <td className="px-4 py-2">
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${pr.priority === 'urgent' ? 'bg-red-100 text-red-700' : pr.priority === 'high' ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'}`}>
+                        {pr.priority}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2">
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[pr.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                        {pr.status.replace(/_/g, ' ')}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+
+        {/* Quick Links */}
+        <Card className="lg:col-span-2">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Quick Actions</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {[
+              { label: 'New Purchase Request', href: '/purchase-requests', icon: FileText, color: 'text-blue-600' },
+              { label: 'Create Purchase Order', href: '/purchase-orders', icon: ShoppingCart, color: 'text-green-600' },
+              { label: 'Add DR Log', href: '/dr-logs', icon: Truck, color: 'text-red-600' },
+              { label: 'CSI Monitoring', href: '/csi-monitoring', icon: TrendingUp, color: 'text-purple-600' },
+              { label: 'View Inventory', href: '/inventory', icon: Package, color: 'text-orange-600' },
+              { label: 'Issue Asset', href: '/assets', icon: Cpu, color: 'text-teal-600' },
+            ].map(item => (
+              <Link key={item.href} href={item.href} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors">
+                <item.icon className={`h-4 w-4 shrink-0 ${item.color}`} />
+                <span className="text-sm font-medium">{item.label}</span>
+                <ArrowRight className="h-3 w-3 ml-auto text-muted-foreground" />
+              </Link>
+            ))}
           </CardContent>
         </Card>
       </div>

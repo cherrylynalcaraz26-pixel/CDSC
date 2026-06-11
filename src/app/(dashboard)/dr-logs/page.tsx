@@ -239,11 +239,30 @@ export default function DRLogsPage() {
   async function confirmDelete() {
     if (!deleteId) return
     const log = logs.find(l => l.id === deleteId)
+    const { data: savedItems } = log
+      ? await supabase.from('dr_log_items').select('*').eq('dr_number', log.dr_number)
+      : { data: [] }
     if (log) await supabase.from('dr_log_items').delete().eq('dr_number', log.dr_number)
     const { error } = await supabase.from('dr_logs').delete().eq('id', deleteId)
-    if (error) toast.error(error.message)
-    else { toast.success('DR Log deleted'); load() }
+    if (error) { toast.error(error.message); setDeleteId(null); return }
     setDeleteId(null)
+    load()
+    toast.success('DR Log deleted', {
+      action: {
+        label: 'Undo',
+        onClick: async () => {
+          if (log) {
+            const { id: _id, created_at: _ca, ...logRest } = log as any
+            await supabase.from('dr_logs').insert(logRest)
+            if (savedItems && savedItems.length > 0) {
+              const items = savedItems.map(({ id: _i, ...r }: any) => r)
+              await supabase.from('dr_log_items').insert(items)
+            }
+            load()
+          }
+        },
+      },
+    })
   }
 
   const counts = {

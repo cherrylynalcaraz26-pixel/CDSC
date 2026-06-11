@@ -138,9 +138,22 @@ export default function PurchaseOrdersPage() {
   }
 
   async function deletePO(id: string) {
+    const { data: saved } = await supabase.from('purchase_orders').select('*').eq('id', id).single()
     const { error } = await supabase.from('purchase_orders').delete().eq('id', id)
-    if (error) toast.error(error.message)
-    else { toast.success('PO deleted'); load() }
+    if (error) { toast.error(error.message); return }
+    load()
+    toast.success('PO deleted', {
+      action: {
+        label: 'Undo',
+        onClick: async () => {
+          if (saved) {
+            const { id: _id, po_number: _po, created_at: _ca, ...rest } = saved as any
+            await supabase.from('purchase_orders').insert(rest)
+            load()
+          }
+        },
+      },
+    })
   }
 
   const fmt = (n: number) => `₱${n.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`

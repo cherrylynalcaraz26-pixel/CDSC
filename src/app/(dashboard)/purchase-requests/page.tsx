@@ -131,9 +131,22 @@ export default function PurchaseRequestsPage() {
   }
 
   async function deletePR(id: string) {
+    const { data: saved } = await supabase.from('purchase_requests').select('*').eq('id', id).single()
     const { error } = await supabase.from('purchase_requests').delete().eq('id', id)
-    if (error) toast.error(error.message)
-    else { toast.success('Purchase request deleted'); load() }
+    if (error) { toast.error(error.message); return }
+    load()
+    toast.success('Purchase request deleted', {
+      action: {
+        label: 'Undo',
+        onClick: async () => {
+          if (saved) {
+            const { id: _id, pr_number: _pr, created_at: _ca, ...rest } = saved as any
+            await supabase.from('purchase_requests').insert(rest)
+            load()
+          }
+        },
+      },
+    })
   }
 
   function openEmail(pr: PR) { setEmailId(pr.id); setEmailRecipient('') }

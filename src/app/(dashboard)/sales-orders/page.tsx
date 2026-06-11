@@ -101,9 +101,22 @@ export default function SalesOrdersPage() {
   }
 
   async function deleteSO(id: string) {
+    const { data: saved } = await supabase.from('sales_orders').select('*').eq('id', id).single()
     const { error } = await supabase.from('sales_orders').delete().eq('id', id)
-    if (error) toast.error(error.message)
-    else { toast.success('Sales Order deleted'); load() }
+    if (error) { toast.error(error.message); return }
+    load()
+    toast.success('Sales Order deleted', {
+      action: {
+        label: 'Undo',
+        onClick: async () => {
+          if (saved) {
+            const { id: _id, so_number: _so, created_at: _ca, ...rest } = saved as any
+            await supabase.from('sales_orders').insert(rest)
+            load()
+          }
+        },
+      },
+    })
   }
 
   const counts = {
