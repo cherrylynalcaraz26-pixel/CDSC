@@ -202,12 +202,12 @@ function SidebarContent({
       <div className={cn('py-4 flex items-center gap-3 transition-all', collapsed ? 'px-3 justify-center' : 'px-4')}>
         {collapsed ? (
           <button onClick={onToggleCollapse} title="Expand sidebar" className="relative h-8 w-8 shrink-0">
-            <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="rounded object-contain" priority />
+            <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="rounded-md object-cover" priority />
           </button>
         ) : (
           <>
             <div className="relative h-8 w-8 shrink-0">
-              <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="rounded object-contain" priority />
+              <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="rounded-md object-cover" priority />
             </div>
             <div className="min-w-0 flex-1">
               <div className="text-white font-semibold text-sm leading-tight truncate">CDSC Industrial</div>
