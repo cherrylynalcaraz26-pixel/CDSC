@@ -102,14 +102,24 @@ export default function DRLogsPage() {
 
   async function load() {
     setLoading(true)
-    const [{ data: drData }, { data: supData }, { data: itemData }] = await Promise.all([
+    const [{ data: drData }, { data: supData }] = await Promise.all([
       supabase.from('dr_logs').select('*').order('dr_date', { ascending: false }),
       supabase.from('suppliers').select('id, company_name').order('company_name'),
-      supabase.from('dr_log_items').select('*').order('id').limit(5000),
     ])
     setLogs(drData ?? [])
     setSuppliers(supData ?? [])
-    setAllItems(itemData ?? [])
+
+    const drNumbers = (drData ?? []).map(d => d.dr_number)
+    if (drNumbers.length > 0) {
+      const { data: itemData } = await supabase
+        .from('dr_log_items')
+        .select('*')
+        .in('dr_number', drNumbers)
+        .order('id')
+      setAllItems(itemData ?? [])
+    } else {
+      setAllItems([])
+    }
     setLoading(false)
   }
 
