@@ -111,12 +111,22 @@ export default function DRLogsPage() {
 
     const drNumbers = (drData ?? []).map(d => d.dr_number)
     if (drNumbers.length > 0) {
-      const { data: itemData } = await supabase
-        .from('dr_log_items')
-        .select('*')
-        .in('dr_number', drNumbers)
-        .order('id')
-      setAllItems(itemData ?? [])
+      const allFetched: DRItem[] = []
+      const PAGE = 1000
+      let from = 0
+      while (true) {
+        const { data } = await supabase
+          .from('dr_log_items')
+          .select('*')
+          .in('dr_number', drNumbers)
+          .order('id')
+          .range(from, from + PAGE - 1)
+        if (!data || data.length === 0) break
+        allFetched.push(...data)
+        if (data.length < PAGE) break
+        from += PAGE
+      }
+      setAllItems(allFetched)
     } else {
       setAllItems([])
     }
