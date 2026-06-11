@@ -4,17 +4,23 @@ import { useState, useEffect, Fragment } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
-import { Search, Loader2, ChevronRight, ChevronDown } from 'lucide-react'
+import { Search, Loader2, ChevronRight, ChevronDown, Pencil, AlertTriangle } from 'lucide-react'
+import { toast } from 'sonner'
 
-interface DrDetail   { dr_number: string; qty: number; unit: string }
-interface CsiDetail  { si_number: string; qty: number; unit: string }
+interface DrDetail  { dr_number: string; qty: number; unit: string }
+interface CsiDetail { si_number: string; qty: number; unit: string }
 
 interface InventoryRow {
   client: string
@@ -35,11 +41,16 @@ export default function InventoryPage() {
   const [clientFilter, setClientFilter] = useState('all')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
+  // Edit dialog state
+  const [editRow, setEditRow] = useState<InventoryRow | null>(null)
+  const [editName, setEditName] = useState('')
+  const [editUnit, setEditUnit] = useState('')
+  const [saving, setSaving] = useState(false)
+
   async function load() {
     setLoading(true)
     const PAGE = 1000
 
-    // DR log items: dr_number → item_name → {qty, unit}
     const drMap: Record<string, Record<string, { qty: number; unit: string }>> = {}
     let from = 0
     while (true) {
@@ -58,7 +69,6 @@ export default function InventoryPage() {
       from += PAGE
     }
 
-    // DR logs: dr_number → supplier_name
     const drClientMap: Record<string, string> = {}
     from = 0
     while (true) {
@@ -75,7 +85,6 @@ export default function InventoryPage() {
       from += PAGE
     }
 
-    // Aggregate: client → item_name → { qty, unit, dr_details[] }
     const drByClient: Record<string, Record<string, { qty: number; unit: string; details: DrDetail[] }>> = {}
     for (const [drNum, items] of Object.entries(drMap)) {
       const client = drClientMap[drNum]
@@ -88,7 +97,6 @@ export default function InventoryPage() {
       }
     }
 
-    // CSI records: client → item_name → { qty, unit, csi_details[] }
     const csiByClient: Record<string, Record<string, { qty: number; unit: string; details: CsiDetail[] }>> = {}
     from = 0
     while (true) {
@@ -109,7 +117,6 @@ export default function InventoryPage() {
       from += PAGE
     }
 
-    // Merge
     const allClients = new Set([...Object.keys(drByClient), ...Object.keys(csiByClient)])
     const result: InventoryRow[] = []
     for (const client of allClients) {
@@ -143,9 +150,9 @@ export default function InventoryPage() {
   })
 
   const totalItems = filtered.length
-  const inStock   = filtered.filter(r => r.balance > 0).length
-  const balanced  = filtered.filter(r => r.balance === 0).length
-  const negative  = filtered.filter(r => r.balance < 0).length
+  const inStock  = filtered.filter(r => r.balance > 0).length
+  const balanced = filtered.filter(r => r.balance === 0).length
+  const negative = filtered.filter(r => r.balance < 0).length
 
   function rowKey(r: InventoryRow) { return `${r.client}||${r.item_name}` }
 
@@ -155,6 +162,42 @@ export default function InventoryPage() {
       next.has(key) ? next.delete(key) : next.add(key)
       return next
     })
+  }
+
+  function openEdit(e: React.MouseEvent, row: InventoryRow) {
+    e.stopPropagation()
+    setEditRow(row)
+    setEditName(row.item_name)
+    setEditUnit(row.unit)
+  }
+
+  async function saveEdit() {
+    if (!editRow || !editName.trim()) return
+    setSaving(true)
+    const oldName = editRow.item_name
+    const newName = editName.trim()
+    const newUnit = editUnit.trim()
+
+    // Update dr_log_items
+    const { error: drErr } = await supabase
+      .from('dr_log_items')
+      .update({ item_name: newName, ...(newUnit ? { unit: newUnit } : {}) })
+      .eq('item_name', oldName)
+
+    // Update csi_records
+    const { error: csiErr } = await supabase
+      .from('csi_records')
+      .update({ item_name: newName, ...(newUnit ? { unit: newUnit } : {}) })
+      .eq('item_name', oldName)
+
+    if (drErr || csiErr) {
+      toast.error((drErr || csiErr)!.message)
+    } else {
+      toast.success(`Updated "${oldName}" → "${newName}" in DR and CSI records`)
+      setEditRow(null)
+      load()
+    }
+    setSaving(false)
   }
 
   function balanceBadge(balance: number) {
@@ -219,22 +262,24 @@ export default function InventoryPage() {
                   <TableHead className="text-right">CSI Qty</TableHead>
                   <TableHead className="text-right">Balance</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead className="w-16">Action</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-10">
+                    <TableCell colSpan={9} className="text-center py-10">
                       <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                     </TableCell>
                   </TableRow>
                 ) : filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">No inventory data found.</TableCell>
+                    <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">No inventory data found.</TableCell>
                   </TableRow>
-                ) : filtered.map((row, i) => {
+                ) : filtered.map((row) => {
                   const key = rowKey(row)
                   const isOpen = expanded.has(key)
+                  const isDeficit = row.balance < 0
                   return (
                     <Fragment key={key}>
                       <TableRow
@@ -245,7 +290,16 @@ export default function InventoryPage() {
                           {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                         </TableCell>
                         <TableCell className="text-sm">{row.client}</TableCell>
-                        <TableCell className="text-sm font-medium">{row.item_name}</TableCell>
+                        <TableCell className="text-sm font-medium">
+                          <span className="flex items-center gap-1.5">
+                            {isDeficit && (
+                              <span title="Deficit: CSI charges exceed DR deliveries">
+                                <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                              </span>
+                            )}
+                            {row.item_name}
+                          </span>
+                        </TableCell>
                         <TableCell className="text-sm text-muted-foreground">{row.unit}</TableCell>
                         <TableCell className="text-right text-sm">{Number(row.dr_qty)}</TableCell>
                         <TableCell className="text-right text-sm">{Number(row.csi_qty)}</TableCell>
@@ -253,13 +307,20 @@ export default function InventoryPage() {
                           {Number(row.balance)}
                         </TableCell>
                         <TableCell>{balanceBadge(row.balance)}</TableCell>
+                        <TableCell onClick={e => e.stopPropagation()}>
+                          <button
+                            onClick={e => openEdit(e, row)}
+                            className="flex items-center gap-1 px-2 py-1 text-xs rounded border border-yellow-300 bg-yellow-50 text-yellow-700 hover:bg-yellow-100"
+                          >
+                            <Pencil className="h-3 w-3" /> Edit
+                          </button>
+                        </TableCell>
                       </TableRow>
 
                       {isOpen && (
                         <TableRow key={`${key}-detail`}>
-                          <TableCell colSpan={8} className="p-0 bg-muted/20">
+                          <TableCell colSpan={9} className="p-0 bg-muted/20">
                             <div className="px-10 py-3 grid grid-cols-2 gap-6">
-                              {/* DR Breakdown */}
                               <div>
                                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">DR Deliveries</p>
                                 {row.dr_details.length === 0 ? (
@@ -285,8 +346,6 @@ export default function InventoryPage() {
                                   </table>
                                 )}
                               </div>
-
-                              {/* CSI Breakdown */}
                               <div>
                                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">CSI Charges</p>
                                 {row.csi_details.length === 0 ? (
@@ -324,6 +383,36 @@ export default function InventoryPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Edit Item Name Dialog */}
+      <Dialog open={!!editRow} onOpenChange={o => { if (!o) setEditRow(null) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="h-4 w-4 text-yellow-600" /> Edit Item
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            This will rename the item in <strong>all</strong> matching DR Log and CSI records.
+          </p>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Item Name</Label>
+              <Input value={editName} onChange={e => setEditName(e.target.value)} placeholder="Item name" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Unit</Label>
+              <Input value={editUnit} onChange={e => setEditUnit(e.target.value)} placeholder="e.g. Piece/s" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditRow(null)}>Cancel</Button>
+            <Button onClick={saveEdit} disabled={saving || !editName.trim()} className="bg-yellow-600 hover:bg-yellow-700 text-white">
+              {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
