@@ -19,7 +19,7 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Plus, Search, MoreHorizontal, FileText, Loader2, Truck } from 'lucide-react'
+import { Plus, Search, MoreHorizontal, FileText, Loader2, Truck, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 
@@ -38,6 +38,14 @@ interface DRLog {
   status: string
   received_by_name: string | null
   created_at: string
+}
+
+interface DRItem {
+  id?: number
+  dr_number: string
+  quantity: number | string
+  unit: string
+  item_name: string
 }
 
 interface DRForm {
@@ -66,6 +74,8 @@ const emptyForm = (): DRForm => ({
   received_by_name: '',
 })
 
+const emptyItem = (): DRItem => ({ dr_number: '', quantity: '', unit: '', item_name: '' })
+
 const STATUS_CFG: Record<string, { label: string; cls: string }> = {
   received: { label: 'Received', cls: 'bg-green-100 text-green-700' },
   partial:  { label: 'Partial',  cls: 'bg-yellow-100 text-yellow-700' },
@@ -83,9 +93,12 @@ export default function DRLogsPage() {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<DRLog | null>(null)
   const [form, setForm] = useState<DRForm>(emptyForm())
+  const [items, setItems] = useState<DRItem[]>([emptyItem()])
   const [saving, setSaving] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [viewLog, setViewLog] = useState<DRLog | null>(null)
+  const [viewItems, setViewItems] = useState<DRItem[]>([])
+  const [viewItemsLoading, setViewItemsLoading] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -100,6 +113,17 @@ export default function DRLogsPage() {
 
   useEffect(() => { load() }, [])
 
+  async function loadViewItems(drNumber: string) {
+    setViewItemsLoading(true)
+    const { data } = await supabase
+      .from('dr_log_items')
+      .select('*')
+      .eq('dr_number', drNumber)
+      .order('id')
+    setViewItems(data ?? [])
+    setViewItemsLoading(false)
+  }
+
   const filtered = logs.filter(l => {
     const matchSearch =
       l.dr_number.toLowerCase().includes(search.toLowerCase()) ||
@@ -113,10 +137,11 @@ export default function DRLogsPage() {
   function openAdd() {
     setEditing(null)
     setForm(emptyForm())
+    setItems([emptyItem()])
     setOpen(true)
   }
 
-  function openEdit(log: DRLog) {
+  async function openEdit(log: DRLog) {
     setEditing(log)
     setForm({
       dr_number: log.dr_number,
@@ -130,6 +155,12 @@ export default function DRLogsPage() {
       status: log.status,
       received_by_name: log.received_by_name ?? '',
     })
+    const { data } = await supabase
+      .from('dr_log_items')
+      .select('*')
+      .eq('dr_number', log.dr_number)
+      .order('id')
+    setItems(data && data.length > 0 ? data : [emptyItem()])
     setOpen(true)
   }
 
@@ -138,12 +169,25 @@ export default function DRLogsPage() {
     setForm(f => ({ ...f, supplier_id: supplierId ?? '', supplier_name: sup?.company_name ?? '' }))
   }
 
+  function updateItem(index: number, field: keyof DRItem, value: string) {
+    setItems(prev => prev.map((item, i) => i === index ? { ...item, [field]: value } : item))
+  }
+
+  function addItemRow() {
+    setItems(prev => [...prev, emptyItem()])
+  }
+
+  function removeItemRow(index: number) {
+    setItems(prev => prev.length === 1 ? [emptyItem()] : prev.filter((_, i) => i !== index))
+  }
+
   async function save() {
     if (!form.dr_number.trim()) { toast.error('DR Number is required'); return }
     if (!form.dr_date) { toast.error('DR Date is required'); return }
     setSaving(true)
+    const drNumber = form.dr_number.trim().toUpperCase()
     const payload = {
-      dr_number: form.dr_number.trim().toUpperCase(),
+      dr_number: drNumber,
       dr_date: form.dr_date,
       supplier_id: form.supplier_id || null,
       supplier_name: form.supplier_name || null,
@@ -155,15 +199,30 @@ export default function DRLogsPage() {
       received_by_name: form.received_by_name || null,
       updated_at: new Date().toISOString(),
     }
+
     if (editing) {
       const { error } = await supabase.from('dr_logs').update(payload).eq('id', editing.id)
       if (error) { toast.error(error.message); setSaving(false); return }
-      toast.success('DR Log updated')
     } else {
       const { error } = await supabase.from('dr_logs').insert(payload)
       if (error) { toast.error(error.message); setSaving(false); return }
-      toast.success('DR Log recorded')
     }
+
+    // sync items: delete existing then re-insert
+    const validItems = items.filter(it => it.item_name.trim())
+    await supabase.from('dr_log_items').delete().eq('dr_number', drNumber)
+    if (validItems.length > 0) {
+      await supabase.from('dr_log_items').insert(
+        validItems.map(it => ({
+          dr_number: drNumber,
+          quantity: Number(it.quantity) || 0,
+          unit: it.unit || '',
+          item_name: it.item_name.trim(),
+        }))
+      )
+    }
+
+    toast.success(editing ? 'DR Log updated' : 'DR Log recorded')
     setOpen(false)
     load()
     setSaving(false)
@@ -171,6 +230,8 @@ export default function DRLogsPage() {
 
   async function confirmDelete() {
     if (!deleteId) return
+    const log = logs.find(l => l.id === deleteId)
+    if (log) await supabase.from('dr_log_items').delete().eq('dr_number', log.dr_number)
     const { error } = await supabase.from('dr_logs').delete().eq('id', deleteId)
     if (error) toast.error(error.message)
     else { toast.success('DR Log deleted'); load() }
@@ -196,6 +257,7 @@ export default function DRLogsPage() {
         </Button>
       </div>
 
+      {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { label: 'Total DRs', count: counts.total,    color: 'text-foreground' },
@@ -212,6 +274,7 @@ export default function DRLogsPage() {
         ))}
       </div>
 
+      {/* Filters */}
       <div className="flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -229,6 +292,7 @@ export default function DRLogsPage() {
         </Select>
       </div>
 
+      {/* Table */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
@@ -288,7 +352,7 @@ export default function DRLogsPage() {
                             <MoreHorizontal className="h-4 w-4" />
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => setViewLog(log)}>
+                            <DropdownMenuItem onClick={() => { setViewLog(log); loadViewItems(log.dr_number) }}>
                               <FileText className="mr-2 h-4 w-4" /> View Details
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => openEdit(log)}>Edit</DropdownMenuItem>
@@ -305,8 +369,9 @@ export default function DRLogsPage() {
         </CardContent>
       </Card>
 
+      {/* Add/Edit Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Truck className="h-5 w-5 text-red-600" />
@@ -314,6 +379,7 @@ export default function DRLogsPage() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-5 py-2">
+            {/* DR Header */}
             <div className="space-y-3">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">DR Details</p>
               <div className="grid grid-cols-2 gap-4">
@@ -380,6 +446,48 @@ export default function DRLogsPage() {
                   onChange={e => setForm(f => ({ ...f, remarks: e.target.value }))} />
               </div>
             </div>
+
+            {/* Line Items */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">Delivery Items</p>
+              <div className="space-y-2">
+                <div className="grid grid-cols-[80px_120px_1fr_32px] gap-2 text-xs font-medium text-muted-foreground px-1">
+                  <span>Qty</span><span>Unit</span><span>Item Description</span><span />
+                </div>
+                {items.map((item, i) => (
+                  <div key={i} className="grid grid-cols-[80px_120px_1fr_32px] gap-2 items-center">
+                    <Input
+                      type="number" min={0} placeholder="0"
+                      value={item.quantity}
+                      onChange={e => updateItem(i, 'quantity', e.target.value)}
+                      className="h-8 text-sm"
+                    />
+                    <Input
+                      placeholder="e.g. Piece/s"
+                      value={item.unit}
+                      onChange={e => updateItem(i, 'unit', e.target.value)}
+                      className="h-8 text-sm"
+                    />
+                    <Input
+                      placeholder="Item name / description"
+                      value={item.item_name}
+                      onChange={e => updateItem(i, 'item_name', e.target.value)}
+                      className="h-8 text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeItemRow(i)}
+                      className="h-8 w-8 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <Button type="button" variant="outline" size="sm" onClick={addItemRow} className="mt-1">
+                <Plus className="h-3.5 w-3.5 mr-1" /> Add Item
+              </Button>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
@@ -390,15 +498,16 @@ export default function DRLogsPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!viewLog} onOpenChange={() => setViewLog(null)}>
-        <DialogContent className="sm:max-w-lg">
+      {/* View Details Dialog */}
+      <Dialog open={!!viewLog} onOpenChange={() => { setViewLog(null); setViewItems([]) }}>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5 text-red-600" /> DR Log Details
             </DialogTitle>
           </DialogHeader>
           {viewLog && (
-            <div className="space-y-3 py-2 text-sm">
+            <div className="space-y-4 py-2 text-sm">
               <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                 <div><span className="text-muted-foreground">DR Number:</span><div className="font-mono font-semibold text-red-600">{viewLog.dr_number}</div></div>
                 <div><span className="text-muted-foreground">Date:</span><div>{format(new Date(viewLog.dr_date), 'MMMM d, yyyy')}</div></div>
@@ -419,22 +528,59 @@ export default function DRLogsPage() {
                   <div className="mt-1 p-2 bg-muted rounded text-sm">{viewLog.remarks}</div>
                 </div>
               )}
+
+              {/* Line items */}
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1 mb-2">Delivery Items</p>
+                {viewItemsLoading ? (
+                  <div className="flex items-center gap-2 text-muted-foreground py-3">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Loading items…
+                  </div>
+                ) : viewItems.length === 0 ? (
+                  <p className="text-muted-foreground text-xs py-2">No items recorded for this DR.</p>
+                ) : (
+                  <div className="border rounded-md overflow-hidden">
+                    <table className="w-full text-xs">
+                      <thead className="bg-muted/50">
+                        <tr>
+                          <th className="text-left px-3 py-2 font-medium w-16">#</th>
+                          <th className="text-right px-3 py-2 font-medium w-20">Qty</th>
+                          <th className="text-left px-3 py-2 font-medium w-24">Unit</th>
+                          <th className="text-left px-3 py-2 font-medium">Item Description</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {viewItems.map((item, i) => (
+                          <tr key={item.id ?? i} className="border-t">
+                            <td className="px-3 py-1.5 text-muted-foreground">{i + 1}</td>
+                            <td className="px-3 py-1.5 text-right font-medium">{item.quantity}</td>
+                            <td className="px-3 py-1.5 text-muted-foreground">{item.unit}</td>
+                            <td className="px-3 py-1.5">{item.item_name}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
               <div className="text-xs text-muted-foreground pt-1">
                 Logged: {format(new Date(viewLog.created_at), 'MMM d, yyyy h:mm a')}
               </div>
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setViewLog(null)}>Close</Button>
-            {viewLog && <Button onClick={() => { setViewLog(null); openEdit(viewLog) }} className="bg-red-600 hover:bg-red-700">Edit</Button>}
+            <Button variant="outline" onClick={() => { setViewLog(null); setViewItems([]) }}>Close</Button>
+            {viewLog && <Button onClick={() => { setViewLog(null); setViewItems([]); openEdit(viewLog) }} className="bg-red-600 hover:bg-red-700">Edit</Button>}
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* Delete Confirm */}
       <Dialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
         <DialogContent>
           <DialogHeader><DialogTitle>Delete DR Log?</DialogTitle></DialogHeader>
-          <p className="text-sm text-muted-foreground">This will permanently delete this delivery receipt log.</p>
+          <p className="text-sm text-muted-foreground">This will permanently delete this delivery receipt log and all its items.</p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteId(null)}>Cancel</Button>
             <Button variant="destructive" onClick={confirmDelete}>Delete</Button>
