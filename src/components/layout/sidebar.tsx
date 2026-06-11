@@ -11,7 +11,7 @@ import {
   Truck, Warehouse, RotateCcw, Cpu, UserCheck, Calculator,
   FileBarChart, Settings, ChevronDown, ChevronRight, Building2,
   SlidersHorizontal, ArrowRightLeft, LogOut, X, Wrench,
-  Receipt, PanelLeftClose, PanelLeftOpen, ClipboardList,
+  Receipt, PanelLeftClose, PanelLeftOpen, ClipboardList, BoxesIcon,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
@@ -25,12 +25,6 @@ interface NavItem {
 const navigation: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   {
-    label: 'Item Master', icon: Package,
-    children: [
-      { label: 'Item List', href: '/items', icon: Package },
-    ],
-  },
-  {
     label: 'Purchasing', icon: ShoppingCart,
     children: [
       { label: 'Purchase Requests', href: '/purchase-requests', icon: FileText },
@@ -41,6 +35,7 @@ const navigation: NavItem[] = [
     label: 'Warehouse', icon: Warehouse,
     children: [
       { label: 'Receiving', href: '/receiving', icon: Truck },
+      { label: 'Inventory', href: '/inventory', icon: BoxesIcon },
       { label: 'DR Logs', href: '/dr-logs', icon: ClipboardList },
       { label: 'CSI Monitoring', href: '/csi-monitoring', icon: FileText },
       { label: 'Stock Transfer', href: '/warehouse/transfer', icon: ArrowRightLeft },
@@ -63,6 +58,7 @@ const navigation: NavItem[] = [
     label: 'Setup', icon: Wrench,
     children: [
       { label: 'Configuration', href: '/setup', icon: SlidersHorizontal },
+      { label: 'Item List', href: '/items', icon: Package },
       { label: 'Users', href: '/users', icon: Users },
     ],
   },
