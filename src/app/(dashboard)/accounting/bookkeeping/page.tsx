@@ -425,7 +425,7 @@ function GeneralLedgerTab({ lines }: { lines: JournalLine[] }) {
           <p className="text-xs text-muted-foreground">All journal entries with running balances by account</p>
         </div>
         <div className="flex gap-2 items-center">
-          <Select value={filterAccount} onValueChange={v => setFilterAccount(v === '_all' ? '' : v)}>
+          <Select value={filterAccount} onValueChange={v => setFilterAccount(!v || v === '_all' ? '' : v)}>
             <SelectTrigger className="w-52 h-8 text-sm"><SelectValue placeholder="Filter by account…" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="_all">All accounts</SelectItem>
