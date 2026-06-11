@@ -86,12 +86,24 @@ export default function CSIMonitoringPage() {
 
   async function load() {
     setLoading(true)
-    const [{ data: recData }, { data: supData }] = await Promise.all([
-      supabase.from('csi_records').select('*').order('si_date', { ascending: false }).order('si_number'),
-      supabase.from('suppliers').select('id, company_name').order('company_name'),
-    ])
-    setRecords(recData ?? [])
+    const { data: supData } = await supabase.from('suppliers').select('id, company_name').order('company_name')
     setSuppliers(supData ?? [])
+    const allFetched: CSIRecord[] = []
+    const PAGE = 1000
+    let from = 0
+    while (true) {
+      const { data } = await supabase
+        .from('csi_records')
+        .select('*')
+        .order('si_date', { ascending: false })
+        .order('si_number')
+        .range(from, from + PAGE - 1)
+      if (!data || data.length === 0) break
+      allFetched.push(...data)
+      if (data.length < PAGE) break
+      from += PAGE
+    }
+    setRecords(allFetched)
     setLoading(false)
   }
 
@@ -273,18 +285,19 @@ export default function CSIMonitoringPage() {
                     <TableHead>DR Number</TableHead>
                     <TableHead className="text-right">Items</TableHead>
                     <TableHead className="text-right">Total Amount</TableHead>
+                    <TableHead className="w-24">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-10">
+                      <TableCell colSpan={9} className="text-center py-10">
                         <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                       </TableCell>
                     </TableRow>
                   ) : siGroups.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
+                      <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
                         No records found. Click <strong>New Record</strong> to add one.
                       </TableCell>
                     </TableRow>
@@ -309,10 +322,26 @@ export default function CSIMonitoringPage() {
                         <TableCell className="text-sm font-mono">{group.dr ?? '—'}</TableCell>
                         <TableCell className="text-right text-sm">{group.items.length}</TableCell>
                         <TableCell className="text-right text-sm font-medium">{formatPeso(group.total)}</TableCell>
+                        <TableCell onClick={e => e.stopPropagation()}>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => openEdit(group.items[0])}
+                              className="flex items-center gap-1 px-2 py-1 text-xs rounded border border-yellow-300 bg-yellow-50 text-yellow-700 hover:bg-yellow-100"
+                            >
+                              ✏ Edit
+                            </button>
+                            <button
+                              onClick={() => setDeleteId(group.items[0].id)}
+                              className="flex items-center gap-1 px-2 py-1 text-xs rounded border border-red-300 bg-red-50 text-red-600 hover:bg-red-100"
+                            >
+                              🗑 Del
+                            </button>
+                          </div>
+                        </TableCell>
                       </TableRow>
                       {expandedSIs.has(group.si_number) && (
                         <TableRow key={`${group.si_number}-items`}>
-                          <TableCell colSpan={8} className="p-0 bg-muted/20">
+                          <TableCell colSpan={9} className="p-0 bg-muted/20">
                             <div className="px-8 py-2">
                               <Table>
                                 <TableHeader>
