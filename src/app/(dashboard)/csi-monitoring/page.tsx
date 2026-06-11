@@ -2,234 +2,366 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Plus, Star, TrendingUp, ThumbsUp, AlertCircle, Loader2 } from 'lucide-react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table'
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog'
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select'
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { Plus, Search, MoreHorizontal, Loader2, FileText } from 'lucide-react'
 import { toast } from 'sonner'
-import { format } from 'date-fns'
+import { format, parseISO } from 'date-fns'
+
+interface Supplier { id: string; company_name: string }
 
 interface CSIRecord {
-  id: string
-  client_name: string
-  date: string
-  category: string
-  rating: number
-  feedback: string | null
-  status: string
+  id: number
+  si_date: string
+  si_number: string
+  po_number: string | null
+  client_name: string | null
+  item_name: string
+  unit: string | null
+  quantity: number
+  unit_price: number
+  amount: number
+  dr_number: string | null
   created_at: string
 }
 
-const CATEGORIES = ['Delivery Speed', 'Product Quality', 'Customer Service', 'Pricing', 'Order Accuracy', 'Overall Experience']
+interface CSIForm {
+  si_date: string
+  si_number: string
+  po_number: string
+  client_name: string
+  item_name: string
+  unit: string
+  quantity: string
+  unit_price: string
+  amount: string
+  dr_number: string
+}
 
-function StarRating({ value, onChange }: { value: number; onChange?: (n: number) => void }) {
-  return (
-    <div className="flex gap-1">
-      {[1, 2, 3, 4, 5].map(n => (
-        <button key={n} type="button" onClick={() => onChange?.(n)} className={onChange ? 'cursor-pointer' : 'cursor-default'}>
-          <Star className={`h-5 w-5 ${n <= value ? 'fill-yellow-400 text-yellow-400' : 'text-gray-300'}`} />
-        </button>
-      ))}
-    </div>
-  )
+const emptyForm = (): CSIForm => ({
+  si_date: new Date().toISOString().split('T')[0],
+  si_number: '',
+  po_number: '',
+  client_name: '',
+  item_name: '',
+  unit: '',
+  quantity: '',
+  unit_price: '',
+  amount: '',
+  dr_number: '',
+})
+
+function formatPeso(val: number) {
+  if (!val) return '—'
+  return '₱' + val.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 export default function CSIMonitoringPage() {
   const supabase = createClient()
   const [records, setRecords] = useState<CSIRecord[]>([])
+  const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
+  const [editing, setEditing] = useState<CSIRecord | null>(null)
+  const [form, setForm] = useState<CSIForm>(emptyForm())
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({ client_name: '', category: 'Overall Experience', rating: 5, feedback: '' })
+  const [deleteId, setDeleteId] = useState<number | null>(null)
 
   async function load() {
     setLoading(true)
-    const { data, error } = await supabase
-      .from('csi_records')
-      .select('*')
-      .order('created_at', { ascending: false })
-    if (!error) setRecords(data ?? [])
+    const [{ data: recData }, { data: supData }] = await Promise.all([
+      supabase.from('csi_records').select('*').order('si_date', { ascending: false }).order('si_number'),
+      supabase.from('suppliers').select('id, company_name').order('company_name'),
+    ])
+    setRecords(recData ?? [])
+    setSuppliers(supData ?? [])
     setLoading(false)
   }
 
   useEffect(() => { load() }, [])
 
-  async function save() {
-    if (!form.client_name.trim()) { toast.error('Client name required'); return }
-    setSaving(true)
-    const { error } = await supabase.from('csi_records').insert({
-      client_name: form.client_name.trim(),
-      category: form.category,
-      rating: form.rating,
-      feedback: form.feedback || null,
-      date: new Date().toISOString().split('T')[0],
-      status: 'received',
+  const filtered = records.filter(r => {
+    const q = search.toLowerCase()
+    return (
+      r.si_number.toLowerCase().includes(q) ||
+      (r.client_name ?? '').toLowerCase().includes(q) ||
+      r.item_name.toLowerCase().includes(q) ||
+      (r.dr_number ?? '').toLowerCase().includes(q)
+    )
+  })
+
+  const totalAmount = filtered.reduce((s, r) => s + (Number(r.amount) || 0), 0)
+  const uniqueSIs = new Set(filtered.map(r => r.si_number)).size
+
+  function openAdd() {
+    setEditing(null)
+    setForm(emptyForm())
+    setOpen(true)
+  }
+
+  function openEdit(rec: CSIRecord) {
+    setEditing(rec)
+    setForm({
+      si_date: rec.si_date,
+      si_number: rec.si_number,
+      po_number: rec.po_number ?? '',
+      client_name: rec.client_name ?? '',
+      item_name: rec.item_name,
+      unit: rec.unit ?? '',
+      quantity: String(rec.quantity ?? ''),
+      unit_price: String(rec.unit_price ?? ''),
+      amount: String(rec.amount ?? ''),
+      dr_number: rec.dr_number ?? '',
     })
-    if (error) {
-      // Table might not exist yet — guide user
-      if (error.code === '42P01') {
-        toast.error('CSI table not set up. Contact your administrator.')
-      } else {
-        toast.error(error.message)
-      }
-    } else {
-      toast.success('Feedback recorded')
-      setOpen(false)
-      setForm({ client_name: '', category: 'Overall Experience', rating: 5, feedback: '' })
-      load()
+    setOpen(true)
+  }
+
+  async function save() {
+    if (!form.si_number.trim()) { toast.error('SI Number is required'); return }
+    if (!form.si_date)          { toast.error('Date is required'); return }
+    if (!form.item_name.trim()) { toast.error('Item is required'); return }
+    setSaving(true)
+    const payload = {
+      si_date:     form.si_date,
+      si_number:   form.si_number.trim(),
+      po_number:   form.po_number || null,
+      client_name: form.client_name || null,
+      item_name:   form.item_name.trim(),
+      unit:        form.unit || null,
+      quantity:    Number(form.quantity) || 0,
+      unit_price:  Number(form.unit_price) || 0,
+      amount:      Number(form.amount) || 0,
+      dr_number:   form.dr_number || null,
     }
+    if (editing) {
+      const { error } = await supabase.from('csi_records').update(payload).eq('id', editing.id)
+      if (error) { toast.error(error.message); setSaving(false); return }
+    } else {
+      const { error } = await supabase.from('csi_records').insert(payload)
+      if (error) { toast.error(error.message); setSaving(false); return }
+    }
+    toast.success(editing ? 'Record updated' : 'Record added')
+    setOpen(false)
+    load()
     setSaving(false)
   }
 
-  const avgRating = records.length ? (records.reduce((s, r) => s + r.rating, 0) / records.length).toFixed(1) : '—'
-  const excellent = records.filter(r => r.rating >= 4).length
-  const poor = records.filter(r => r.rating <= 2).length
-
-  const categoryAvg = CATEGORIES.map(cat => {
-    const catRecords = records.filter(r => r.category === cat)
-    const avg = catRecords.length ? catRecords.reduce((s, r) => s + r.rating, 0) / catRecords.length : 0
-    return { cat, avg: avg.toFixed(1), count: catRecords.length }
-  }).filter(c => c.count > 0)
+  async function confirmDelete() {
+    if (deleteId === null) return
+    const { error } = await supabase.from('csi_records').delete().eq('id', deleteId)
+    if (error) toast.error(error.message)
+    else { toast.success('Record deleted'); load() }
+    setDeleteId(null)
+  }
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">CSI Monitoring</h2>
-          <p className="text-muted-foreground text-sm">Customer Satisfaction Index — track feedback and ratings</p>
+          <h1 className="text-2xl font-semibold">CSI Monitoring</h1>
+          <p className="text-muted-foreground text-sm">Charge Sales Invoice records</p>
         </div>
-        <Button onClick={() => setOpen(true)} className="bg-red-600 hover:bg-red-700">
-          <Plus className="h-4 w-4 mr-2" />Record Feedback
+        <Button onClick={openAdd} className="bg-red-600 hover:bg-red-700">
+          <Plus className="h-4 w-4 mr-2" /> New Record
         </Button>
       </div>
 
-      {/* KPI cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card><CardContent className="pt-5 pb-4">
-          <div className="flex items-center gap-2">
-            <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
-            <span className="text-2xl font-bold">{avgRating}</span>
-          </div>
-          <div className="text-sm text-muted-foreground mt-1">Average Rating</div>
-        </CardContent></Card>
-        <Card><CardContent className="pt-5 pb-4">
-          <div className="text-2xl font-bold">{loading ? '—' : records.length}</div>
-          <div className="text-sm text-muted-foreground mt-1">Total Responses</div>
-        </CardContent></Card>
-        <Card><CardContent className="pt-5 pb-4">
-          <div className="text-2xl font-bold text-green-600">{loading ? '—' : excellent}</div>
-          <div className="text-sm text-muted-foreground mt-1">Excellent (4–5 ★)</div>
-        </CardContent></Card>
-        <Card><CardContent className="pt-5 pb-4">
-          <div className="text-2xl font-bold text-red-600">{loading ? '—' : poor}</div>
-          <div className="text-sm text-muted-foreground mt-1">Poor (1–2 ★)</div>
-        </CardContent></Card>
-      </div>
-
-      {/* Category breakdown */}
-      {categoryAvg.length > 0 && (
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         <Card>
-          <CardHeader className="pb-3"><CardTitle className="text-sm">Ratings by Category</CardTitle></CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {categoryAvg.map(c => (
-                <div key={c.cat} className="flex items-center justify-between p-3 bg-muted/40 rounded-lg">
-                  <div>
-                    <p className="text-sm font-medium">{c.cat}</p>
-                    <p className="text-xs text-muted-foreground">{c.count} response{c.count !== 1 ? 's' : ''}</p>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                    <span className="font-bold">{c.avg}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
+          <CardContent className="pt-4 pb-3">
+            <div className="text-2xl font-bold">{loading ? '—' : uniqueSIs}</div>
+            <div className="text-xs text-muted-foreground">Total SI Numbers</div>
           </CardContent>
         </Card>
-      )}
+        <Card>
+          <CardContent className="pt-4 pb-3">
+            <div className="text-2xl font-bold">{loading ? '—' : filtered.length}</div>
+            <div className="text-xs text-muted-foreground">Line Items</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4 pb-3">
+            <div className="text-2xl font-bold text-green-600">{loading ? '—' : formatPeso(totalAmount)}</div>
+            <div className="text-xs text-muted-foreground">Total Amount</div>
+          </CardContent>
+        </Card>
+      </div>
 
-      {/* Records table */}
+      <div className="flex gap-3">
+        <div className="relative flex-1 min-w-[200px] max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input className="pl-9" placeholder="Search SI#, client, item, DR#…" value={search} onChange={e => setSearch(e.target.value)} />
+        </div>
+      </div>
+
       <Card>
-        <CardHeader className="pb-3"><CardTitle className="text-base">Feedback Records</CardTitle></CardHeader>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base flex items-center gap-2">
+            <FileText className="h-4 w-4 text-red-600" /> Charge Sales Invoice Log
+          </CardTitle>
+        </CardHeader>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Client</TableHead>
-                <TableHead>Category</TableHead>
-                <TableHead>Rating</TableHead>
-                <TableHead>Feedback</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow><TableCell colSpan={5} className="text-center py-10">
-                  <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
-                </TableCell></TableRow>
-              ) : records.length === 0 ? (
-                <TableRow><TableCell colSpan={5} className="text-center py-12 text-muted-foreground">
-                  No feedback recorded yet. Click <strong>Record Feedback</strong> to add the first entry.
-                </TableCell></TableRow>
-              ) : records.map(r => (
-                <TableRow key={r.id}>
-                  <TableCell className="text-sm whitespace-nowrap">
-                    {r.date ? format(new Date(r.date), 'MMM d, yyyy') : '—'}
-                  </TableCell>
-                  <TableCell className="font-medium text-sm">{r.client_name}</TableCell>
-                  <TableCell>
-                    <span className="text-xs bg-muted px-2 py-0.5 rounded-full">{r.category}</span>
-                  </TableCell>
-                  <TableCell><StarRating value={r.rating} /></TableCell>
-                  <TableCell className="text-sm text-muted-foreground max-w-xs truncate">{r.feedback ?? '—'}</TableCell>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>SI Number</TableHead>
+                  <TableHead>Client</TableHead>
+                  <TableHead>Item/s</TableHead>
+                  <TableHead>Unit</TableHead>
+                  <TableHead className="text-right">QTY</TableHead>
+                  <TableHead className="text-right">Unit Price</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead className="w-10" />
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={9} className="text-center py-10">
+                      <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
+                    </TableCell>
+                  </TableRow>
+                ) : filtered.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
+                      No records found. Click <strong>New Record</strong> to add one.
+                    </TableCell>
+                  </TableRow>
+                ) : filtered.map(rec => (
+                  <TableRow key={rec.id}>
+                    <TableCell className="text-sm whitespace-nowrap">
+                      {format(parseISO(rec.si_date), 'MMM d, yyyy')}
+                    </TableCell>
+                    <TableCell className="font-mono text-sm font-semibold text-red-600">{rec.si_number}</TableCell>
+                    <TableCell className="text-sm">{rec.client_name ?? '—'}</TableCell>
+                    <TableCell className="text-sm">{rec.item_name}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{rec.unit ?? '—'}</TableCell>
+                    <TableCell className="text-right text-sm font-medium">{Number(rec.quantity)}</TableCell>
+                    <TableCell className="text-right text-sm">{rec.unit_price ? formatPeso(Number(rec.unit_price)) : '—'}</TableCell>
+                    <TableCell className="text-right text-sm font-medium">{rec.amount ? formatPeso(Number(rec.amount)) : '—'}</TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger className="h-8 w-8 flex items-center justify-center rounded hover:bg-accent">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => openEdit(rec)}>Edit</DropdownMenuItem>
+                          <DropdownMenuItem className="text-destructive" onClick={() => setDeleteId(rec.id)}>Delete</DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
 
-      {/* Record feedback dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Record Customer Feedback</DialogTitle></DialogHeader>
+        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-red-600" />
+              {editing ? 'Edit CSI Record' : 'New CSI Record'}
+            </DialogTitle>
+          </DialogHeader>
           <div className="space-y-4 py-2">
-            <div className="space-y-1.5">
-              <Label>Client Name <span className="text-destructive">*</span></Label>
-              <Input placeholder="Company or person name" value={form.client_name}
-                onChange={e => setForm(p => ({ ...p, client_name: e.target.value }))} />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Date <span className="text-destructive">*</span></Label>
+                <Input type="date" value={form.si_date}
+                  onChange={e => setForm(f => ({ ...f, si_date: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>SI Number <span className="text-destructive">*</span></Label>
+                <Input placeholder="e.g. 00001" value={form.si_number}
+                  onChange={e => setForm(f => ({ ...f, si_number: e.target.value }))} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Client</Label>
+                <Select value={form.client_name} onValueChange={v => setForm(f => ({ ...f, client_name: v ?? '' }))}>
+                  <SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">— None —</SelectItem>
+                    {suppliers.map(s => <SelectItem key={s.id} value={s.company_name}>{s.company_name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>DR Number</Label>
+                <Input placeholder="e.g. 00001" value={form.dr_number}
+                  onChange={e => setForm(f => ({ ...f, dr_number: e.target.value }))} />
+              </div>
             </div>
             <div className="space-y-1.5">
-              <Label>Category</Label>
-              <Select value={form.category} onValueChange={v => setForm(p => ({ ...p, category: v ?? p.category }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Label>PO Number</Label>
+              <Input placeholder="e.g. PO-2025-00001" value={form.po_number}
+                onChange={e => setForm(f => ({ ...f, po_number: e.target.value }))} />
             </div>
             <div className="space-y-1.5">
-              <Label>Rating</Label>
-              <StarRating value={form.rating} onChange={n => setForm(p => ({ ...p, rating: n }))} />
+              <Label>Item/s <span className="text-destructive">*</span></Label>
+              <Input placeholder="Item name / description" value={form.item_name}
+                onChange={e => setForm(f => ({ ...f, item_name: e.target.value }))} />
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="space-y-1.5">
+                <Label>Unit</Label>
+                <Input placeholder="e.g. Piece/s" value={form.unit}
+                  onChange={e => setForm(f => ({ ...f, unit: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>QTY</Label>
+                <Input type="number" min={0} placeholder="0" value={form.quantity}
+                  onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Unit Price</Label>
+                <Input type="number" min={0} step="0.01" placeholder="0.00" value={form.unit_price}
+                  onChange={e => setForm(f => ({ ...f, unit_price: e.target.value }))} />
+              </div>
             </div>
             <div className="space-y-1.5">
-              <Label>Feedback / Comments</Label>
-              <Textarea rows={3} placeholder="Any additional comments…" value={form.feedback}
-                onChange={e => setForm(p => ({ ...p, feedback: e.target.value }))} />
+              <Label>Amount</Label>
+              <Input type="number" min={0} step="0.01" placeholder="0.00" value={form.amount}
+                onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
             <Button onClick={save} disabled={saving} className="bg-red-600 hover:bg-red-700">
-              {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : 'Save Feedback'}
+              {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : editing ? 'Update' : 'Save'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Delete Record?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">This will permanently delete this CSI record.</p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteId(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={confirmDelete}>Delete</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
