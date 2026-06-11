@@ -42,6 +42,7 @@ const navigation: NavItem[] = [
     children: [
       { label: 'Receiving', href: '/receiving', icon: Truck },
       { label: 'DR Logs', href: '/dr-logs', icon: ClipboardList },
+      { label: 'CSI Monitoring', href: '/csi-monitoring', icon: FileText },
       { label: 'Stock Transfer', href: '/warehouse/transfer', icon: ArrowRightLeft },
       { label: 'Stock Adjustment', href: '/warehouse/adjustment', icon: SlidersHorizontal },
       { label: 'Returns', href: '/returns', icon: RotateCcw },
