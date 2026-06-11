@@ -133,7 +133,16 @@ export default function DRLogsPage() {
     setOpen(true)
   }
 
-function handleSupplierChange(supplierId: string | null) {
+  function handleSupplierChange(supplierId: string | null) {
+    const sup = suppliers.find(s => s.id === supplierId)
+    setForm(f => ({ ...f, supplier_id: supplierId ?? '', supplier_name: sup?.company_name ?? '' }))
+  }
+
+  async function save() {
+    const sup = suppliers.find(s => s.id === supplierId)
+    setForm(f => ({ ...f, supplier_id: supplierId ?? '', supplier_name: sup?.company_name ?? '' }))
+
+  async function save() {
     const sup = suppliers.find(s => s.id === supplierId)
     setForm(f => ({ ...f, supplier_id: supplierId ?? '', supplier_name: sup?.company_name ?? '' }))
 
