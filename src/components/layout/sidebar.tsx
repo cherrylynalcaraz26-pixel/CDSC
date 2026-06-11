@@ -29,6 +29,7 @@ const navigation: NavItem[] = [
     children: [
       { label: 'Purchase Requests', href: '/purchase-requests', icon: FileText },
       { label: 'Purchase Orders', href: '/purchase-orders', icon: ShoppingCart },
+      { label: 'Sales Orders', href: '/sales-orders', icon: Receipt },
     ],
   },
   {
@@ -44,7 +45,6 @@ const navigation: NavItem[] = [
     ],
   },
   { label: 'Assets', href: '/assets', icon: Cpu },
-  { label: 'My Requests', href: '/employee-requests', icon: UserCheck },
   {
     label: 'Accounting', icon: Calculator,
     children: [
@@ -58,7 +58,6 @@ const navigation: NavItem[] = [
     label: 'Setup', icon: Wrench,
     children: [
       { label: 'Configuration', href: '/setup', icon: SlidersHorizontal },
-      { label: 'Item List', href: '/items', icon: Package },
       { label: 'Users', href: '/users', icon: Users },
     ],
   },
@@ -201,14 +200,27 @@ function SidebarContent({
   return (
     <div className="flex flex-col h-full bg-[#111111]">
       <div className={cn('py-4 flex items-center gap-3 transition-all', collapsed ? 'px-3 justify-center' : 'px-4')}>
-        <div className="relative h-8 w-8 shrink-0">
-          <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="rounded object-contain" priority />
-        </div>
-        {!collapsed && (
-          <div className="min-w-0">
-            <div className="text-white font-semibold text-sm leading-tight truncate">CDSC Industrial</div>
-            <div className="text-white/35 text-[11px] leading-tight">Supply ERP</div>
-          </div>
+        {collapsed ? (
+          <button onClick={onToggleCollapse} title="Expand sidebar" className="relative h-8 w-8 shrink-0">
+            <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="rounded object-contain" priority />
+          </button>
+        ) : (
+          <>
+            <div className="relative h-8 w-8 shrink-0">
+              <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="rounded object-contain" priority />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="text-white font-semibold text-sm leading-tight truncate">CDSC Industrial</div>
+              <div className="text-white/35 text-[11px] leading-tight">Supply ERP</div>
+            </div>
+            <button
+              onClick={onToggleCollapse}
+              title="Collapse sidebar"
+              className="text-white/40 hover:text-white/80 transition-colors shrink-0"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </>
         )}
       </div>
 
@@ -220,20 +232,7 @@ function SidebarContent({
         ))}
       </nav>
 
-      <div className={cn('p-3 border-t border-white/8 space-y-1', collapsed && 'flex flex-col items-center')}>
-        <button
-          onClick={onToggleCollapse}
-          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          className={cn(
-            'flex items-center gap-2.5 rounded-md text-[13px] font-medium text-white/40 hover:text-white/80 hover:bg-white/5 transition-colors',
-            collapsed ? 'h-9 w-9 justify-center' : 'w-full px-3 py-2',
-          )}
-        >
-          {collapsed
-            ? <PanelLeftOpen className="h-[15px] w-[15px] shrink-0" />
-            : <><PanelLeftClose className="h-[15px] w-[15px] shrink-0" /><span>Collapse</span></>}
-        </button>
-
+      <div className={cn('p-3 border-t border-white/8', collapsed && 'flex flex-col items-center')}>
         <button
           onClick={handleSignOut}
           title="Sign Out"

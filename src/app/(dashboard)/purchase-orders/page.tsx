@@ -19,6 +19,8 @@ import {
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 
+interface ItemOption { item_code: string; item_name: string; unit_of_measure: string }
+
 type POStatus = 'open' | 'partially_delivered' | 'completed' | 'cancelled'
 
 const STATUS_CFG: Record<POStatus, { label: string; cls: string }> = {
@@ -53,9 +55,11 @@ export default function PurchaseOrdersPage() {
   const supabase = createClient()
   const [pos, setPOs] = useState<PO[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [items, setItems] = useState<ItemOption[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [activeItemRow, setActiveItemRow] = useState<number | null>(null)
 
   // Form state
   const [supplierId, setSupplierId] = useState('')
@@ -67,15 +71,17 @@ export default function PurchaseOrdersPage() {
 
   async function load() {
     setLoading(true)
-    const [{ data: poData }, { data: supData }] = await Promise.all([
+    const [{ data: poData }, { data: supData }, { data: itemData }] = await Promise.all([
       supabase
         .from('purchase_orders')
         .select('*, supplier:suppliers(company_name), pr:purchase_requests(pr_number)')
         .order('created_at', { ascending: false }),
       supabase.from('suppliers').select('id, company_name, payment_terms, ewt_rate').eq('is_active', true).order('company_name'),
+      supabase.from('items').select('item_code, item_name, unit_of_measure').eq('status', 'active').order('item_name'),
     ])
     setPOs((poData ?? []) as PO[])
     setSuppliers(supData ?? [])
+    setItems((itemData ?? []) as ItemOption[])
     setLoading(false)
   }
 
@@ -276,7 +282,7 @@ export default function PurchaseOrdersPage() {
 
       {/* ── Create PO Dialog ── */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold">Create Purchase Order</DialogTitle>
           </DialogHeader>
@@ -343,7 +349,7 @@ export default function PurchaseOrdersPage() {
                   <TableHeader>
                     <TableRow className="bg-muted/50">
                       <TableHead className="text-xs">Item / Description</TableHead>
-                      <TableHead className="text-xs w-24">Qty</TableHead>
+                      <TableHead className="text-xs w-20">Qty</TableHead>
                       <TableHead className="text-xs w-28">Unit</TableHead>
                       <TableHead className="text-xs w-36">Unit Price (₱)</TableHead>
                       <TableHead className="text-xs w-28 text-right pr-4">Line Total</TableHead>
@@ -353,23 +359,53 @@ export default function PurchaseOrdersPage() {
                   <TableBody>
                     {lines.map((line, i) => {
                       const lineTotal = (parseFloat(line.unit_price) || 0) * (parseFloat(line.quantity) || 0)
+                      const filtered = items.filter(it =>
+                        it.item_name.toLowerCase().includes(line.item_name.toLowerCase()) ||
+                        it.item_code.toLowerCase().includes(line.item_name.toLowerCase())
+                      ).slice(0, 25)
                       return (
                         <TableRow key={i}>
-                          <TableCell className="p-1.5">
-                            <Input className="h-8 text-sm" placeholder="Item name" value={line.item_name}
-                              onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, item_name: e.target.value } : l))} />
+                          <TableCell className="p-1.5 relative">
+                            <Input
+                              className="h-8 text-sm" placeholder="Search item…" value={line.item_name}
+                              onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, item_name: e.target.value } : l))}
+                              onFocus={() => setActiveItemRow(i)}
+                              onBlur={() => setTimeout(() => setActiveItemRow(null), 200)}
+                              autoComplete="off"
+                            />
+                            {activeItemRow === i && line.item_name.length > 0 && filtered.length > 0 && (
+                              <div className="absolute z-50 top-full left-0 right-0 mt-0.5 bg-popover border rounded-md shadow-lg max-h-48 overflow-y-auto">
+                                {filtered.map(it => (
+                                  <button
+                                    key={it.item_code}
+                                    type="button"
+                                    className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent flex items-center justify-between"
+                                    onMouseDown={e => {
+                                      e.preventDefault()
+                                      setLines(p => p.map((l, idx) => idx === i
+                                        ? { ...l, item_name: it.item_name, unit: it.unit_of_measure || l.unit }
+                                        : l))
+                                      setActiveItemRow(null)
+                                    }}
+                                  >
+                                    <span>{it.item_name}</span>
+                                    <span className="text-xs text-muted-foreground ml-2">{it.unit_of_measure}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
                           </TableCell>
                           <TableCell className="p-1.5">
                             <Input type="number" min={1} className="h-8 text-sm" placeholder="1" value={line.quantity}
                               onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, quantity: e.target.value } : l))} />
                           </TableCell>
                           <TableCell className="p-1.5">
-                            <Select value={line.unit} onValueChange={v => setLines(p => p.map((l, idx) => idx === i ? { ...l, unit: v ?? l.unit } : l))}>
-                              <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                {['piece','box','set','unit','kg','ltr','mtr','roll','pack'].map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
-                              </SelectContent>
-                            </Select>
+                            <Input
+                              className="h-8 text-sm"
+                              value={line.unit}
+                              onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, unit: e.target.value } : l))}
+                              placeholder="unit"
+                            />
                           </TableCell>
                           <TableCell className="p-1.5">
                             <Input type="number" min={0} step="0.01" className="h-8 text-sm" placeholder="0.00" value={line.unit_price}

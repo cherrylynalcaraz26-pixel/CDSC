@@ -13,10 +13,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import {
   Plus, MoreHorizontal, CheckCircle2, XCircle, ArrowRight,
-  Trash2, Mail, Eye, Printer, ArrowRightLeft, Loader2,
+  Trash2, Mail, Eye, Printer, ArrowRightLeft, Loader2, Search,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
+
+interface ItemOption { item_code: string; item_name: string; unit_of_measure: string }
 
 type PRStatus = 'draft' | 'submitted' | 'dept_approved' | 'admin_approved' | 'purchasing_approved' | 'rejected' | 'converted_to_po'
 
@@ -65,6 +67,8 @@ export default function PurchaseRequestsPage() {
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [items, setItems] = useState<ItemOption[]>([])
+  const [activeItemRow, setActiveItemRow] = useState<number | null>(null)
 
   // Email dialog
   const [emailId, setEmailId] = useState<string | null>(null)
@@ -87,7 +91,12 @@ export default function PurchaseRequestsPage() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  async function loadItems() {
+    const { data } = await supabase.from('items').select('item_code, item_name, unit_of_measure').eq('status', 'active').order('item_name')
+    setItems((data ?? []) as ItemOption[])
+  }
+
+  useEffect(() => { load(); loadItems() }, [])
 
   const totalEstimated = lines.reduce(
     (sum, l) => sum + (parseFloat(l.estimated_cost) || 0) * (parseFloat(l.quantity) || 0), 0
@@ -323,7 +332,7 @@ export default function PurchaseRequestsPage() {
 
       {/* ── New PR Dialog ── */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold">New Purchase Request</DialogTitle>
           </DialogHeader>
@@ -385,8 +394,8 @@ export default function PurchaseRequestsPage() {
                   <TableHeader>
                     <TableRow className="bg-muted/50">
                       <TableHead className="text-xs">Item / Description</TableHead>
-                      <TableHead className="text-xs w-24">Qty</TableHead>
-                      <TableHead className="text-xs w-32">Unit</TableHead>
+                      <TableHead className="text-xs w-20">Qty</TableHead>
+                      <TableHead className="text-xs w-28">Unit</TableHead>
                       <TableHead className="text-xs w-36">Est. Unit Cost (₱)</TableHead>
                       <TableHead className="text-xs w-28 text-right pr-4">Line Total</TableHead>
                       <TableHead className="w-10" />
@@ -395,15 +404,43 @@ export default function PurchaseRequestsPage() {
                   <TableBody>
                     {lines.map((line, i) => {
                       const lineTotal = (parseFloat(line.estimated_cost) || 0) * (parseFloat(line.quantity) || 0)
+                      const filtered = items.filter(it =>
+                        it.item_name.toLowerCase().includes(line.item_name.toLowerCase()) ||
+                        it.item_code.toLowerCase().includes(line.item_name.toLowerCase())
+                      ).slice(0, 25)
                       return (
                         <TableRow key={i}>
-                          <TableCell className="p-1.5">
+                          <TableCell className="p-1.5 relative">
                             <Input
-                              placeholder="Item name or description"
+                              placeholder="Search item…"
                               className="h-8 text-sm"
                               value={line.item_name}
                               onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, item_name: e.target.value } : l))}
+                              onFocus={() => setActiveItemRow(i)}
+                              onBlur={() => setTimeout(() => setActiveItemRow(null), 200)}
+                              autoComplete="off"
                             />
+                            {activeItemRow === i && line.item_name.length > 0 && filtered.length > 0 && (
+                              <div className="absolute z-50 top-full left-0 right-0 mt-0.5 bg-popover border rounded-md shadow-lg max-h-48 overflow-y-auto">
+                                {filtered.map(it => (
+                                  <button
+                                    key={it.item_code}
+                                    type="button"
+                                    className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent flex items-center justify-between"
+                                    onMouseDown={e => {
+                                      e.preventDefault()
+                                      setLines(p => p.map((l, idx) => idx === i
+                                        ? { ...l, item_name: it.item_name, unit: it.unit_of_measure || l.unit }
+                                        : l))
+                                      setActiveItemRow(null)
+                                    }}
+                                  >
+                                    <span>{it.item_name}</span>
+                                    <span className="text-xs text-muted-foreground ml-2">{it.unit_of_measure}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
                           </TableCell>
                           <TableCell className="p-1.5">
                             <Input
@@ -413,14 +450,12 @@ export default function PurchaseRequestsPage() {
                             />
                           </TableCell>
                           <TableCell className="p-1.5">
-                            <Select value={line.unit} onValueChange={v => setLines(p => p.map((l, idx) => idx === i ? { ...l, unit: v ?? l.unit } : l))}>
-                              <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-                              <SelectContent>
-                                {['piece','box','ream','set','unit','pack','kg','ltr','mtr','roll'].map(u =>
-                                  <SelectItem key={u} value={u}>{u}</SelectItem>
-                                )}
-                              </SelectContent>
-                            </Select>
+                            <Input
+                              className="h-8 text-sm"
+                              value={line.unit}
+                              onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, unit: e.target.value } : l))}
+                              placeholder="unit"
+                            />
                           </TableCell>
                           <TableCell className="p-1.5">
                             <Input

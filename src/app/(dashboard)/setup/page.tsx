@@ -1104,17 +1104,177 @@ function ClientsTab() {
   )
 }
 
+/* ─── Item List Tab ───────────────────────────────────── */
+interface ItemRow {
+  id: string; item_code: string; item_name: string
+  unit_of_measure: string; cost: number; status: string
+}
+
+function ItemListTab() {
+  const supabase = createClient()
+  const [rows, setRows] = useState<ItemRow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch] = useState('')
+  const [open, setOpen] = useState(false)
+  const [editing, setEditing] = useState<ItemRow | null>(null)
+  const [form, setForm] = useState({ item_code: '', item_name: '', unit_of_measure: '', cost: '' })
+  const [saving, setSaving] = useState(false)
+  const [deleteId, setDeleteId] = useState<string | null>(null)
+
+  async function load() {
+    setLoading(true)
+    const { data } = await supabase.from('items').select('id, item_code, item_name, unit_of_measure, cost, status').order('item_name')
+    setRows(data ?? [])
+    setLoading(false)
+  }
+  useEffect(() => { load() }, [])
+
+  const filtered = rows.filter(r =>
+    r.item_name.toLowerCase().includes(search.toLowerCase()) ||
+    r.item_code.toLowerCase().includes(search.toLowerCase())
+  )
+
+  function openAdd() { setEditing(null); setForm({ item_code: '', item_name: '', unit_of_measure: '', cost: '' }); setOpen(true) }
+  function openEdit(r: ItemRow) {
+    setEditing(r)
+    setForm({ item_code: r.item_code, item_name: r.item_name, unit_of_measure: r.unit_of_measure, cost: String(r.cost) })
+    setOpen(true)
+  }
+
+  async function save() {
+    if (!form.item_name.trim()) { toast.error('Item name required'); return }
+    setSaving(true)
+    const payload = {
+      item_code: form.item_code.trim() || undefined,
+      item_name: form.item_name.trim(),
+      unit_of_measure: form.unit_of_measure.trim(),
+      cost: parseFloat(form.cost) || 0,
+    }
+    const { error } = editing
+      ? await supabase.from('items').update(payload).eq('id', editing.id)
+      : await supabase.from('items').insert({ ...payload, status: 'active' })
+    if (error) toast.error(error.message)
+    else { toast.success(editing ? 'Item updated' : 'Item added'); setOpen(false); load() }
+    setSaving(false)
+  }
+
+  async function toggleStatus(r: ItemRow) {
+    await supabase.from('items').update({ status: r.status === 'active' ? 'inactive' : 'active' }).eq('id', r.id)
+    load()
+  }
+
+  async function del() {
+    if (!deleteId) return
+    const { error } = await supabase.from('items').delete().eq('id', deleteId)
+    if (error) toast.error(error.message)
+    else { toast.success('Deleted'); load() }
+    setDeleteId(null)
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <Input placeholder="Search items…" value={search} onChange={e => setSearch(e.target.value)} className="max-w-sm" />
+        <Button onClick={openAdd} size="sm" className="bg-red-600 hover:bg-red-700">
+          <Plus className="h-4 w-4 mr-1" />Add Item
+        </Button>
+      </div>
+      <div className="text-xs text-muted-foreground">{filtered.length} items</div>
+      <div className="rounded-lg border bg-card overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Code</TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead>Unit</TableHead>
+              <TableHead className="text-right">Cost</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="w-24" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loading ? (
+              <TableRow><TableCell colSpan={6} className="text-center py-6 text-muted-foreground">Loading…</TableCell></TableRow>
+            ) : filtered.length === 0 ? (
+              <TableRow><TableCell colSpan={6} className="text-center py-6 text-muted-foreground">No items found</TableCell></TableRow>
+            ) : filtered.map(r => (
+              <TableRow key={r.id}>
+                <TableCell className="font-mono text-sm">{r.item_code}</TableCell>
+                <TableCell className="font-medium text-sm">{r.item_name}</TableCell>
+                <TableCell className="text-sm">{r.unit_of_measure}</TableCell>
+                <TableCell className="text-right text-sm">₱{r.cost.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</TableCell>
+                <TableCell>
+                  <button onClick={() => toggleStatus(r)}>
+                    <Badge className={r.status === 'active' ? 'bg-green-100 text-green-800 cursor-pointer' : 'bg-gray-100 text-gray-600 cursor-pointer'}>
+                      {r.status}
+                    </Badge>
+                  </button>
+                </TableCell>
+                <TableCell>
+                  <div className="flex gap-1">
+                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(r)}><Pencil className="h-3.5 w-3.5" /></Button>
+                    <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => setDeleteId(r.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>{editing ? 'Edit Item' : 'Add Item'}</DialogTitle></DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Item Code</Label>
+                <Input placeholder="e.g. ITM-001" value={form.item_code} onChange={e => setForm(p => ({ ...p, item_code: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Unit of Measure</Label>
+                <Input placeholder="e.g. pcs, kg, box" value={form.unit_of_measure} onChange={e => setForm(p => ({ ...p, unit_of_measure: e.target.value }))} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Item Name <span className="text-destructive">*</span></Label>
+              <Input placeholder="Item name" value={form.item_name} onChange={e => setForm(p => ({ ...p, item_name: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Cost (₱)</Label>
+              <Input type="number" min={0} step="0.01" placeholder="0.00" value={form.cost} onChange={e => setForm(p => ({ ...p, cost: e.target.value }))} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+            <Button onClick={save} disabled={saving} className="bg-red-600 hover:bg-red-700">{saving ? 'Saving…' : 'Save'}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Delete Item?</DialogTitle></DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteId(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={del}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
 /* ─── Page ────────────────────────────────────────────── */
 export default function SetupPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Setup</h1>
-        <p className="text-muted-foreground text-sm">Manage suppliers, clients, categories, UOM, brands, and attributes</p>
+        <h1 className="text-2xl font-semibold">Configuration</h1>
+        <p className="text-muted-foreground text-sm">Manage items, suppliers, clients, categories, and system settings</p>
       </div>
 
       <Tabs defaultValue="suppliers">
         <TabsList className="flex-wrap h-auto gap-1">
+          <TabsTrigger value="items">Item List</TabsTrigger>
           <TabsTrigger value="suppliers">Suppliers</TabsTrigger>
           <TabsTrigger value="clients">Clients</TabsTrigger>
           <TabsTrigger value="categories">Categories</TabsTrigger>
@@ -1122,6 +1282,7 @@ export default function SetupPage() {
           <TabsTrigger value="brands">Brands</TabsTrigger>
           <TabsTrigger value="attributes">Attributes</TabsTrigger>
         </TabsList>
+        <TabsContent value="items" className="mt-4"><ItemListTab /></TabsContent>
         <TabsContent value="suppliers" className="mt-4"><SuppliersTab /></TabsContent>
         <TabsContent value="clients" className="mt-4"><ClientsTab /></TabsContent>
         <TabsContent value="categories" className="mt-4"><CategoriesTab /></TabsContent>
