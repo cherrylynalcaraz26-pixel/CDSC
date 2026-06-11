@@ -22,6 +22,7 @@ interface Collection {
   collection_date: string | null
   client_name: string | null
   amount: number
+  form_2307: number | null
   payment_mode: string
   reference_number: string | null
   remarks: string | null
@@ -104,7 +105,7 @@ export default function CollectionsPage() {
     else { toast.success('Deleted'); load() }
   }
 
-  const totalPosted = records.filter(r => r.status === 'posted').reduce((s, r) => s + (r.amount ?? 0), 0)
+  const totalPosted = records.filter(r => r.status === 'posted').reduce((s, r) => s + (r.amount ?? 0) - (r.form_2307 ?? 0), 0)
   const countPosted = records.filter(r => r.status === 'posted').length
   const countVoided = records.filter(r => r.status === 'voided').length
 
@@ -153,8 +154,9 @@ export default function CollectionsPage() {
                 <TableHead>Date</TableHead>
                 <TableHead>Client</TableHead>
                 <TableHead>Payment Mode</TableHead>
-                <TableHead>Reference #</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
+                <TableHead className="text-right">Gross Amount</TableHead>
+                <TableHead className="text-right">Form 2307</TableHead>
+                <TableHead className="text-right">Net Total</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="w-10" />
               </TableRow>
@@ -180,8 +182,9 @@ export default function CollectionsPage() {
                       {(r.payment_mode ?? '').replace('_', ' ')}
                     </span>
                   </TableCell>
-                  <TableCell className="text-sm font-mono">{r.reference_number ?? '—'}</TableCell>
                   <TableCell className="text-right font-semibold">{fmt(r.amount ?? 0)}</TableCell>
+                  <TableCell className="text-right text-sm text-muted-foreground">{r.form_2307 ? fmt(r.form_2307) : '—'}</TableCell>
+                  <TableCell className="text-right font-semibold text-green-700">{fmt((r.amount ?? 0) - (r.form_2307 ?? 0))}</TableCell>
                   <TableCell>
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_CLS[r.status] ?? 'bg-gray-100 text-gray-600'}`}>
                       {r.status}
