@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -302,7 +302,7 @@ export default function CSIMonitoringPage() {
                       </TableCell>
                     </TableRow>
                   ) : siGroups.map(group => (
-                    <>
+                    <Fragment key={group.si_number}>
                       <TableRow
                         key={group.si_number}
                         className="cursor-pointer hover:bg-muted/50"
@@ -381,7 +381,7 @@ export default function CSIMonitoringPage() {
                           </TableCell>
                         </TableRow>
                       )}
-                    </>
+                    </Fragment>
                   ))}
                 </TableBody>
               </Table>
