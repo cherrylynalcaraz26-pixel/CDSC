@@ -19,7 +19,7 @@ import { Badge } from '@/components/ui/badge'
 import { Search, Loader2, ChevronRight, ChevronDown, Pencil, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 
-interface DrDetail  { dr_number: string; qty: number; unit: string }
+interface DrDetail  { dr_number: string; qty: number; unit: string; unit_price: number | null }
 interface CsiDetail { si_number: string; qty: number; unit: string; unit_price: number | null }
 
 interface InventoryRow {
@@ -50,6 +50,19 @@ export default function InventoryPage() {
   async function load() {
     setLoading(true)
     const PAGE = 1000
+
+    // Load item costs for DR unit price lookup
+    const itemCostMap: Record<string, number | null> = {}
+    {
+      let f = 0
+      while (true) {
+        const { data } = await supabase.from('items').select('item_name, cost').range(f, f + PAGE - 1)
+        if (!data || data.length === 0) break
+        for (const it of data) itemCostMap[it.item_name] = it.cost ?? null
+        if (data.length < PAGE) break
+        f += PAGE
+      }
+    }
 
     const drMap: Record<string, Record<string, { qty: number; unit: string }>> = {}
     let from = 0
@@ -93,7 +106,12 @@ export default function InventoryPage() {
       for (const [itemName, val] of Object.entries(items)) {
         if (!drByClient[client][itemName]) drByClient[client][itemName] = { qty: 0, unit: val.unit, details: [] }
         drByClient[client][itemName].qty += val.qty
-        drByClient[client][itemName].details.push({ dr_number: drNum, qty: val.qty, unit: val.unit })
+        drByClient[client][itemName].details.push({
+          dr_number: drNum,
+          qty: val.qty,
+          unit: val.unit,
+          unit_price: itemCostMap[itemName] ?? null,
+        })
       }
     }
 
@@ -336,17 +354,28 @@ export default function InventoryPage() {
                                       <tr className="text-muted-foreground border-b">
                                         <th className="text-left pb-1">DR #</th>
                                         <th className="text-right pb-1">Qty</th>
-                                        <th className="text-left pb-1 pl-3">Unit</th>
+                                        <th className="text-left pb-1 pl-2">Unit</th>
+                                        <th className="text-right pb-1">Unit Price</th>
+                                        <th className="text-right pb-1">Amount</th>
                                       </tr>
                                     </thead>
                                     <tbody>
-                                      {row.dr_details.map((d, j) => (
-                                        <tr key={j} className="border-b border-muted/30">
-                                          <td className="py-1 font-mono text-blue-600">{d.dr_number}</td>
-                                          <td className="py-1 text-right font-medium">{Number(d.qty)}</td>
-                                          <td className="py-1 pl-3 text-muted-foreground">{d.unit}</td>
-                                        </tr>
-                                      ))}
+                                      {row.dr_details.map((d, j) => {
+                                        const amount = d.unit_price != null ? d.qty * d.unit_price : null
+                                        return (
+                                          <tr key={j} className="border-b border-muted/30">
+                                            <td className="py-1 font-mono text-blue-600">{d.dr_number}</td>
+                                            <td className="py-1 text-right font-medium">{Number(d.qty)}</td>
+                                            <td className="py-1 pl-2 text-muted-foreground">{d.unit}</td>
+                                            <td className="py-1 text-right text-blue-600 font-medium">
+                                              {d.unit_price != null ? `₱${Number(d.unit_price).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}
+                                            </td>
+                                            <td className="py-1 text-right font-semibold">
+                                              {amount != null ? `₱${amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}
+                                            </td>
+                                          </tr>
+                                        )
+                                      })}
                                     </tbody>
                                   </table>
                                 )}
