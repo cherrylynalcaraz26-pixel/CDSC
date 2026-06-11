@@ -19,7 +19,7 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Plus, Search, MoreHorizontal, FileText, Loader2, Truck, Trash2 } from 'lucide-react'
+import { Plus, Search, MoreHorizontal, Loader2, Truck, Trash2, ChevronDown, ChevronRight } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 
@@ -87,59 +87,55 @@ export default function DRLogsPage() {
   const supabase = createClient()
   const [logs, setLogs] = useState<DRLog[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [allItems, setAllItems] = useState<DRItem[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [expandedId, setExpandedId] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<DRLog | null>(null)
   const [form, setForm] = useState<DRForm>(emptyForm())
   const [items, setItems] = useState<DRItem[]>([emptyItem()])
   const [saving, setSaving] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [viewLog, setViewLog] = useState<DRLog | null>(null)
-  const [viewItems, setViewItems] = useState<DRItem[]>([])
-  const [viewItemsLoading, setViewItemsLoading] = useState(false)
-  const [itemCounts, setItemCounts] = useState<Record<string, number>>({})
 
   async function load() {
     setLoading(true)
-    const [{ data: drData }, { data: supData }, { data: countData }] = await Promise.all([
+    const [{ data: drData }, { data: supData }, { data: itemData }] = await Promise.all([
       supabase.from('dr_logs').select('*').order('dr_date', { ascending: false }),
       supabase.from('suppliers').select('id, company_name').order('company_name'),
-      supabase.from('dr_log_items').select('dr_number'),
+      supabase.from('dr_log_items').select('*').order('id'),
     ])
     setLogs(drData ?? [])
     setSuppliers(supData ?? [])
-    const counts: Record<string, number> = {}
-    for (const row of countData ?? []) {
-      counts[row.dr_number] = (counts[row.dr_number] ?? 0) + 1
-    }
-    setItemCounts(counts)
+    setAllItems(itemData ?? [])
     setLoading(false)
   }
 
   useEffect(() => { load() }, [])
 
-  async function loadViewItems(drNumber: string) {
-    setViewItemsLoading(true)
-    const { data } = await supabase
-      .from('dr_log_items')
-      .select('*')
-      .eq('dr_number', drNumber)
-      .order('id')
-    setViewItems(data ?? [])
-    setViewItemsLoading(false)
+  function getItems(drNumber: string) {
+    return allItems.filter(i => i.dr_number === drNumber)
+  }
+
+  function getTotalQty(drNumber: string) {
+    return allItems
+      .filter(i => i.dr_number === drNumber)
+      .reduce((sum, i) => sum + (Number(i.quantity) || 0), 0)
   }
 
   const filtered = logs.filter(l => {
     const matchSearch =
       l.dr_number.toLowerCase().includes(search.toLowerCase()) ||
       (l.supplier_name ?? '').toLowerCase().includes(search.toLowerCase()) ||
-      (l.po_number ?? '').toLowerCase().includes(search.toLowerCase()) ||
-      (l.rr_number ?? '').toLowerCase().includes(search.toLowerCase())
+      (l.po_number ?? '').toLowerCase().includes(search.toLowerCase())
     const matchStatus = statusFilter === 'all' || l.status === statusFilter
     return matchSearch && matchStatus
   })
+
+  function toggleExpand(id: string) {
+    setExpandedId(prev => prev === id ? null : id)
+  }
 
   function openAdd() {
     setEditing(null)
@@ -162,12 +158,8 @@ export default function DRLogsPage() {
       status: log.status,
       received_by_name: log.received_by_name ?? '',
     })
-    const { data } = await supabase
-      .from('dr_log_items')
-      .select('*')
-      .eq('dr_number', log.dr_number)
-      .order('id')
-    setItems(data && data.length > 0 ? data : [emptyItem()])
+    const existing = getItems(log.dr_number)
+    setItems(existing.length > 0 ? existing : [emptyItem()])
     setOpen(true)
   }
 
@@ -215,7 +207,6 @@ export default function DRLogsPage() {
       if (error) { toast.error(error.message); setSaving(false); return }
     }
 
-    // sync items: delete existing then re-insert
     const validItems = items.filter(it => it.item_name.trim())
     await supabase.from('dr_log_items').delete().eq('dr_number', drNumber)
     if (validItems.length > 0) {
@@ -264,7 +255,6 @@ export default function DRLogsPage() {
         </Button>
       </div>
 
-      {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { label: 'Total DRs', count: counts.total,    color: 'text-foreground' },
@@ -281,11 +271,10 @@ export default function DRLogsPage() {
         ))}
       </div>
 
-      {/* Filters */}
       <div className="flex flex-wrap gap-3">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input className="pl-9" placeholder="Search DR#, supplier, PO…" value={search} onChange={e => setSearch(e.target.value)} />
+          <Input className="pl-9" placeholder="Search DR#, delivered to, PO…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <Select value={statusFilter} onValueChange={v => setStatusFilter(v ?? 'all')}>
           <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
@@ -299,7 +288,6 @@ export default function DRLogsPage() {
         </Select>
       </div>
 
-      {/* Table */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
@@ -311,11 +299,11 @@ export default function DRLogsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>DR Number</TableHead>
+                  <TableHead className="w-8" />
                   <TableHead>Date</TableHead>
-                  <TableHead>Received By</TableHead>
-                  <TableHead>PO Ref</TableHead>
-                  <TableHead className="text-right">Items</TableHead>
+                  <TableHead>DR Number</TableHead>
+                  <TableHead>Delivered To</TableHead>
+                  <TableHead className="text-right">Total Qty</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="w-10" />
                 </TableRow>
@@ -335,33 +323,84 @@ export default function DRLogsPage() {
                   </TableRow>
                 ) : filtered.map(log => {
                   const sc = STATUS_CFG[log.status] ?? STATUS_CFG.received
+                  const isExpanded = expandedId === log.id
+                  const logItems = getItems(log.dr_number)
+                  const totalQty = getTotalQty(log.dr_number)
+
                   return (
-                    <TableRow key={log.id}>
-                      <TableCell className="font-mono text-sm font-semibold text-red-600">{log.dr_number}</TableCell>
-                      <TableCell className="text-sm whitespace-nowrap">
-                        {format(new Date(log.dr_date), 'MMM d, yyyy')}
-                      </TableCell>
-                      <TableCell className="text-sm font-medium">{log.supplier_name ?? '—'}</TableCell>
-                      <TableCell className="font-mono text-xs text-muted-foreground">{log.po_number ?? '—'}</TableCell>
-                      <TableCell className="text-right font-medium text-sm">{itemCounts[log.dr_number] ?? 0}</TableCell>
-                      <TableCell>
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${sc.cls}`}>{sc.label}</span>
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger className="h-8 w-8 flex items-center justify-center rounded hover:bg-accent">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => { setViewLog(log); loadViewItems(log.dr_number) }}>
-                              <FileText className="mr-2 h-4 w-4" /> View Details
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => openEdit(log)}>Edit</DropdownMenuItem>
-                            <DropdownMenuItem className="text-destructive" onClick={() => setDeleteId(log.id)}>Delete</DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
+                    <>
+                      <TableRow
+                        key={log.id}
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => toggleExpand(log.id)}
+                      >
+                        <TableCell className="pr-0">
+                          {isExpanded
+                            ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                            : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                        </TableCell>
+                        <TableCell className="text-sm whitespace-nowrap">
+                          {format(new Date(log.dr_date), 'MMM d, yyyy')}
+                        </TableCell>
+                        <TableCell className="font-mono text-sm font-semibold text-red-600">{log.dr_number}</TableCell>
+                        <TableCell className="text-sm font-medium">{log.supplier_name ?? '—'}</TableCell>
+                        <TableCell className="text-right font-medium text-sm">{totalQty}</TableCell>
+                        <TableCell>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${sc.cls}`}>{sc.label}</span>
+                        </TableCell>
+                        <TableCell onClick={e => e.stopPropagation()}>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger className="h-8 w-8 flex items-center justify-center rounded hover:bg-accent">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => openEdit(log)}>Edit</DropdownMenuItem>
+                              <DropdownMenuItem className="text-destructive" onClick={() => setDeleteId(log.id)}>Delete</DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+
+                      {isExpanded && (
+                        <TableRow key={`${log.id}-expanded`} className="bg-muted/30 hover:bg-muted/30">
+                          <TableCell colSpan={7} className="py-3 px-6">
+                            <div className="space-y-3">
+                              <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
+                                {log.po_number && <span>PO: <span className="font-mono text-foreground">{log.po_number}</span></span>}
+                                {log.received_by_name && <span>Received by: <span className="text-foreground">{log.received_by_name}</span></span>}
+                                {log.remarks && <span>Remarks: <span className="text-foreground">{log.remarks}</span></span>}
+                              </div>
+                              {logItems.length === 0 ? (
+                                <p className="text-xs text-muted-foreground">No items recorded.</p>
+                              ) : (
+                                <div className="border rounded-md overflow-hidden text-xs">
+                                  <table className="w-full">
+                                    <thead className="bg-muted/60">
+                                      <tr>
+                                        <th className="text-left px-3 py-1.5 font-medium w-10">#</th>
+                                        <th className="text-right px-3 py-1.5 font-medium w-16">Qty</th>
+                                        <th className="text-left px-3 py-1.5 font-medium w-24">Unit</th>
+                                        <th className="text-left px-3 py-1.5 font-medium">Item Description</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {logItems.map((item, i) => (
+                                        <tr key={item.id ?? i} className="border-t">
+                                          <td className="px-3 py-1 text-muted-foreground">{i + 1}</td>
+                                          <td className="px-3 py-1 text-right font-medium">{item.quantity}</td>
+                                          <td className="px-3 py-1 text-muted-foreground">{item.unit}</td>
+                                          <td className="px-3 py-1">{item.item_name}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </>
                   )
                 })}
               </TableBody>
@@ -370,7 +409,6 @@ export default function DRLogsPage() {
         </CardContent>
       </Card>
 
-      {/* Add/Edit Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -380,7 +418,6 @@ export default function DRLogsPage() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-5 py-2">
-            {/* DR Header */}
             <div className="space-y-3">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">DR Details</p>
               <div className="grid grid-cols-2 gap-4">
@@ -396,11 +433,11 @@ export default function DRLogsPage() {
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label>Supplier</Label>
+                <Label>Delivered To</Label>
                 <Select value={form.supplier_id} onValueChange={handleSupplierChange}>
-                  <SelectTrigger><SelectValue placeholder="Select supplier" /></SelectTrigger>
+                  <SelectTrigger><SelectValue placeholder="Select client / delivered to" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">— No supplier —</SelectItem>
+                    <SelectItem value="">— None —</SelectItem>
                     {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.company_name}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -410,18 +447,6 @@ export default function DRLogsPage() {
                   <Label>PO Reference</Label>
                   <Input placeholder="e.g. PO-2025-00045" value={form.po_number}
                     onChange={e => setForm(f => ({ ...f, po_number: e.target.value }))} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>RR Reference</Label>
-                  <Input placeholder="e.g. RR-2025-00032" value={form.rr_number}
-                    onChange={e => setForm(f => ({ ...f, rr_number: e.target.value }))} />
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label>Total Amount (₱)</Label>
-                  <Input type="number" min={0} step="0.01" placeholder="0.00" value={form.total_amount}
-                    onChange={e => setForm(f => ({ ...f, total_amount: e.target.value }))} />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Status</Label>
@@ -448,7 +473,6 @@ export default function DRLogsPage() {
               </div>
             </div>
 
-            {/* Line Items */}
             <div className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">Delivery Items</p>
               <div className="space-y-2">
@@ -499,85 +523,6 @@ export default function DRLogsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* View Details Dialog */}
-      <Dialog open={!!viewLog} onOpenChange={() => { setViewLog(null); setViewItems([]) }}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-red-600" /> DR Log Details
-            </DialogTitle>
-          </DialogHeader>
-          {viewLog && (
-            <div className="space-y-4 py-2 text-sm">
-              <div className="grid grid-cols-2 gap-x-4 gap-y-2">
-                <div><span className="text-muted-foreground">DR Number:</span><div className="font-mono font-semibold text-red-600">{viewLog.dr_number}</div></div>
-                <div><span className="text-muted-foreground">Date:</span><div>{format(new Date(viewLog.dr_date), 'MMMM d, yyyy')}</div></div>
-                <div><span className="text-muted-foreground">Received By:</span><div className="font-medium">{viewLog.supplier_name ?? '—'}</div></div>
-                <div><span className="text-muted-foreground">Status:</span><div>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${(STATUS_CFG[viewLog.status] ?? STATUS_CFG.received).cls}`}>
-                    {(STATUS_CFG[viewLog.status] ?? STATUS_CFG.received).label}
-                  </span>
-                </div></div>
-                <div><span className="text-muted-foreground">PO Reference:</span><div className="font-mono">{viewLog.po_number ?? '—'}</div></div>
-                <div><span className="text-muted-foreground">RR Reference:</span><div className="font-mono">{viewLog.rr_number ?? '—'}</div></div>
-                <div><span className="text-muted-foreground">Total Amount:</span><div className="font-semibold">₱{(viewLog.total_amount ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</div></div>
-                <div><span className="text-muted-foreground">Received By:</span><div>{viewLog.received_by_name ?? '—'}</div></div>
-              </div>
-              {viewLog.remarks && (
-                <div>
-                  <span className="text-muted-foreground">Remarks:</span>
-                  <div className="mt-1 p-2 bg-muted rounded text-sm">{viewLog.remarks}</div>
-                </div>
-              )}
-
-              {/* Line items */}
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1 mb-2">Delivery Items</p>
-                {viewItemsLoading ? (
-                  <div className="flex items-center gap-2 text-muted-foreground py-3">
-                    <Loader2 className="h-4 w-4 animate-spin" /> Loading items…
-                  </div>
-                ) : viewItems.length === 0 ? (
-                  <p className="text-muted-foreground text-xs py-2">No items recorded for this DR.</p>
-                ) : (
-                  <div className="border rounded-md overflow-hidden">
-                    <table className="w-full text-xs">
-                      <thead className="bg-muted/50">
-                        <tr>
-                          <th className="text-left px-3 py-2 font-medium w-16">#</th>
-                          <th className="text-right px-3 py-2 font-medium w-20">Qty</th>
-                          <th className="text-left px-3 py-2 font-medium w-24">Unit</th>
-                          <th className="text-left px-3 py-2 font-medium">Item Description</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {viewItems.map((item, i) => (
-                          <tr key={item.id ?? i} className="border-t">
-                            <td className="px-3 py-1.5 text-muted-foreground">{i + 1}</td>
-                            <td className="px-3 py-1.5 text-right font-medium">{item.quantity}</td>
-                            <td className="px-3 py-1.5 text-muted-foreground">{item.unit}</td>
-                            <td className="px-3 py-1.5">{item.item_name}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-
-              <div className="text-xs text-muted-foreground pt-1">
-                Logged: {format(new Date(viewLog.created_at), 'MMM d, yyyy h:mm a')}
-              </div>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => { setViewLog(null); setViewItems([]) }}>Close</Button>
-            {viewLog && <Button onClick={() => { setViewLog(null); setViewItems([]); openEdit(viewLog) }} className="bg-red-600 hover:bg-red-700">Edit</Button>}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Delete Confirm */}
       <Dialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
         <DialogContent>
           <DialogHeader><DialogTitle>Delete DR Log?</DialogTitle></DialogHeader>
