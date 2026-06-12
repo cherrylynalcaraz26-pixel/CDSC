@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import {
   LayoutDashboard, Users, Package, ShoppingCart, FileText,
-  Truck, Warehouse, RotateCcw, Cpu, UserCheck, Calculator,
+  Truck, Warehouse, RotateCcw, UserCheck, Calculator,
   FileBarChart, Settings, ChevronDown, ChevronRight, Building2,
   SlidersHorizontal, ArrowRightLeft, LogOut, X, Wrench,
   Receipt, PanelLeftClose, PanelLeftOpen, ClipboardList, BoxesIcon,
@@ -44,7 +44,6 @@ const navigation: NavItem[] = [
       { label: 'Returns', href: '/returns', icon: RotateCcw },
     ],
   },
-  { label: 'Assets', href: '/assets', icon: Cpu },
   {
     label: 'Accounting', icon: Calculator,
     children: [
