@@ -17,7 +17,10 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
-import { Plus, Pencil, Trash2, X } from 'lucide-react'
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { Plus, Pencil, Trash2, X, MoreHorizontal } from 'lucide-react'
 import { toast } from 'sonner'
 
 /* ─── UOM ─────────────────────────────────────────────── */
@@ -1107,37 +1110,44 @@ function ClientsTab() {
 /* ─── Item List Tab ───────────────────────────────────── */
 interface ItemRow {
   id: string; item_code: string; item_name: string
-  unit_of_measure: string; cost: number; status: string
+  brand: string | null; unit_of_measure: string; cost: number; status: string
 }
+interface UOMOption { id: string; code: string; name: string }
 
 function ItemListTab() {
   const supabase = createClient()
   const [rows, setRows] = useState<ItemRow[]>([])
+  const [uomList, setUomList] = useState<UOMOption[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<ItemRow | null>(null)
-  const [form, setForm] = useState({ item_code: '', item_name: '', unit_of_measure: '', cost: '' })
+  const [form, setForm] = useState({ item_code: '', item_name: '', brand: '', unit_of_measure: '', cost: '' })
   const [saving, setSaving] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
 
   async function load() {
     setLoading(true)
-    const { data } = await supabase.from('items').select('id, item_code, item_name, unit_of_measure, cost, status').order('item_name')
-    setRows(data ?? [])
+    const [{ data: itemData }, { data: uomData }] = await Promise.all([
+      supabase.from('items').select('id, item_code, item_name, brand, unit_of_measure, cost, status').order('item_name'),
+      supabase.from('uom_list').select('id, code, name').eq('is_active', true).order('code'),
+    ])
+    setRows(itemData ?? [])
+    setUomList(uomData ?? [])
     setLoading(false)
   }
   useEffect(() => { load() }, [])
 
   const filtered = rows.filter(r =>
     r.item_name.toLowerCase().includes(search.toLowerCase()) ||
-    r.item_code.toLowerCase().includes(search.toLowerCase())
+    r.item_code.toLowerCase().includes(search.toLowerCase()) ||
+    (r.brand ?? '').toLowerCase().includes(search.toLowerCase())
   )
 
-  function openAdd() { setEditing(null); setForm({ item_code: '', item_name: '', unit_of_measure: '', cost: '' }); setOpen(true) }
+  function openAdd() { setEditing(null); setForm({ item_code: '', item_name: '', brand: '', unit_of_measure: '', cost: '' }); setOpen(true) }
   function openEdit(r: ItemRow) {
     setEditing(r)
-    setForm({ item_code: r.item_code, item_name: r.item_name, unit_of_measure: r.unit_of_measure, cost: String(r.cost) })
+    setForm({ item_code: r.item_code, item_name: r.item_name, brand: r.brand ?? '', unit_of_measure: r.unit_of_measure, cost: String(r.cost) })
     setOpen(true)
   }
 
@@ -1147,6 +1157,7 @@ function ItemListTab() {
     const payload = {
       item_code: form.item_code.trim() || undefined,
       item_name: form.item_name.trim(),
+      brand: form.brand.trim() || null,
       unit_of_measure: form.unit_of_measure.trim(),
       cost: parseFloat(form.cost) || 0,
     }
@@ -1186,21 +1197,23 @@ function ItemListTab() {
             <TableRow>
               <TableHead>Code</TableHead>
               <TableHead>Name</TableHead>
+              <TableHead>Brand</TableHead>
               <TableHead>Unit</TableHead>
-              <TableHead className="text-right">Cost</TableHead>
+              <TableHead className="text-right">Unit Cost</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="w-24" />
+              <TableHead className="w-10" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={6} className="text-center py-6 text-muted-foreground">Loading…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center py-6 text-muted-foreground">Loading…</TableCell></TableRow>
             ) : filtered.length === 0 ? (
-              <TableRow><TableCell colSpan={6} className="text-center py-6 text-muted-foreground">No items found</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center py-6 text-muted-foreground">No items found</TableCell></TableRow>
             ) : filtered.map(r => (
               <TableRow key={r.id}>
                 <TableCell className="font-mono text-sm">{r.item_code}</TableCell>
                 <TableCell className="font-medium text-sm">{r.item_name}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">{r.brand ?? '—'}</TableCell>
                 <TableCell className="text-sm">{r.unit_of_measure}</TableCell>
                 <TableCell className="text-right text-sm">₱{r.cost.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</TableCell>
                 <TableCell>
@@ -1211,10 +1224,15 @@ function ItemListTab() {
                   </button>
                 </TableCell>
                 <TableCell>
-                  <div className="flex gap-1">
-                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => openEdit(r)}><Pencil className="h-3.5 w-3.5" /></Button>
-                    <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => setDeleteId(r.id)}><Trash2 className="h-3.5 w-3.5" /></Button>
-                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger className="h-8 w-8 flex items-center justify-center rounded hover:bg-accent">
+                      <MoreHorizontal className="h-4 w-4" />
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => openEdit(r)}><Pencil className="h-3.5 w-3.5 mr-2" />Edit</DropdownMenuItem>
+                      <DropdownMenuItem className="text-destructive" onClick={() => setDeleteId(r.id)}><Trash2 className="h-3.5 w-3.5 mr-2" />Delete</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </TableCell>
               </TableRow>
             ))}
@@ -1232,16 +1250,29 @@ function ItemListTab() {
               </div>
               <div className="space-y-1.5">
                 <Label>Unit of Measure</Label>
-                <Input placeholder="e.g. pcs, kg, box" value={form.unit_of_measure} onChange={e => setForm(p => ({ ...p, unit_of_measure: e.target.value }))} />
+                <Select value={form.unit_of_measure} onValueChange={v => setForm(p => ({ ...p, unit_of_measure: v ?? '' }))}>
+                  <SelectTrigger><SelectValue placeholder="Select UOM…" /></SelectTrigger>
+                  <SelectContent>
+                    {uomList.map(u => (
+                      <SelectItem key={u.id} value={u.code}>{u.code} – {u.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <div className="space-y-1.5">
               <Label>Item Name <span className="text-destructive">*</span></Label>
               <Input placeholder="Item name" value={form.item_name} onChange={e => setForm(p => ({ ...p, item_name: e.target.value }))} />
             </div>
-            <div className="space-y-1.5">
-              <Label>Cost (₱)</Label>
-              <Input type="number" min={0} step="0.01" placeholder="0.00" value={form.cost} onChange={e => setForm(p => ({ ...p, cost: e.target.value }))} />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Brand</Label>
+                <Input placeholder="e.g. Samsung, 3M" value={form.brand} onChange={e => setForm(p => ({ ...p, brand: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Unit Cost (₱)</Label>
+                <Input type="number" min={0} step="0.01" placeholder="0.00" value={form.cost} onChange={e => setForm(p => ({ ...p, cost: e.target.value }))} />
+              </div>
             </div>
           </div>
           <DialogFooter>

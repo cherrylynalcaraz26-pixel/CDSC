@@ -298,7 +298,7 @@ export default function CSIMonitoringPage() {
                     <TableHead>DR Number</TableHead>
                     <TableHead className="text-right">Items</TableHead>
                     <TableHead className="text-right">Total Amount</TableHead>
-                    <TableHead className="w-24">Actions</TableHead>
+                    <TableHead className="w-10" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -336,20 +336,15 @@ export default function CSIMonitoringPage() {
                         <TableCell className="text-right text-sm">{group.items.length}</TableCell>
                         <TableCell className="text-right text-sm font-medium">{formatPeso(group.total)}</TableCell>
                         <TableCell onClick={e => e.stopPropagation()}>
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => openEdit(group.items[0])}
-                              className="flex items-center gap-1 px-2 py-1 text-xs rounded border border-yellow-300 bg-yellow-50 text-yellow-700 hover:bg-yellow-100"
-                            >
-                              ✏ Edit
-                            </button>
-                            <button
-                              onClick={() => setDeleteId(group.items[0].id)}
-                              className="flex items-center gap-1 px-2 py-1 text-xs rounded border border-red-300 bg-red-50 text-red-600 hover:bg-red-100"
-                            >
-                              🗑 Del
-                            </button>
-                          </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger className="h-8 w-8 flex items-center justify-center rounded hover:bg-accent">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => openEdit(group.items[0])}>Edit</DropdownMenuItem>
+                              <DropdownMenuItem className="text-destructive" onClick={() => setDeleteId(group.items[0].id)}>Delete</DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </TableCell>
                       </TableRow>
                       {expandedSIs.has(group.si_number) && (
