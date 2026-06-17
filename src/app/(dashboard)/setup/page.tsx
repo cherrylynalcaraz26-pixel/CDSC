@@ -1307,6 +1307,30 @@ const CONFIG_TABS = [
 
 export default function SetupPage() {
   const [active, setActive] = useState('suppliers')
+  const [counts, setCounts] = useState<Record<string, number>>({})
+
+  useEffect(() => {
+    const supabase = createClient()
+    async function loadCounts() {
+      const [suppliers, clients, items, categories, uom, brands] = await Promise.all([
+        supabase.from('suppliers').select('id', { count: 'exact', head: true }),
+        supabase.from('clients').select('id', { count: 'exact', head: true }),
+        supabase.from('items').select('id', { count: 'exact', head: true }),
+        supabase.from('categories').select('id', { count: 'exact', head: true }),
+        supabase.from('uom_list').select('id', { count: 'exact', head: true }),
+        supabase.from('brands').select('id', { count: 'exact', head: true }),
+      ])
+      setCounts({
+        suppliers: suppliers.count ?? 0,
+        clients: clients.count ?? 0,
+        items: items.count ?? 0,
+        categories: categories.count ?? 0,
+        uom: uom.count ?? 0,
+        brands: brands.count ?? 0,
+      })
+    }
+    loadCounts()
+  }, [])
 
   return (
     <div className="space-y-4">
@@ -1323,14 +1347,22 @@ export default function SetupPage() {
               key={tab.key}
               onClick={() => setActive(tab.key)}
               className={cn(
-                'w-full text-left px-4 py-2.5 text-sm font-medium transition-colors',
+                'w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium transition-colors',
                 i < CONFIG_TABS.length - 1 && 'border-b border-border/60',
                 active === tab.key
                   ? 'bg-red-600 text-white'
                   : 'text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
             >
-              {tab.label}
+              <span>{tab.label}</span>
+              {counts[tab.key] !== undefined && (
+                <span className={cn(
+                  'text-xs rounded-full px-2 py-0.5 font-semibold',
+                  active === tab.key ? 'bg-white/20 text-white' : 'bg-muted text-muted-foreground'
+                )}>
+                  {counts[tab.key].toLocaleString()}
+                </span>
+              )}
             </button>
           ))}
         </nav>

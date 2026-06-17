@@ -55,8 +55,8 @@ export default function ReportsPage() {
     loadStats()
   }, [])
 
-  async function generateReport(key: string) {
-    setGenerating(key)
+  async function generateReport(key: string, skipStateManagement = false) {
+    if (!skipStateManagement) setGenerating(key)
     try {
       if (key === 'inventory') {
         const { data } = await supabase.from('items').select('item_code, item_name, unit_of_measure, cost, status').order('item_name')
@@ -92,7 +92,18 @@ export default function ReportsPage() {
     } catch (e) {
       toast.error('Export failed')
     }
+    if (!skipStateManagement) setGenerating(null)
+  }
+
+  async function downloadAll() {
+    setGenerating('all')
+    const keys = ['inventory', 'purchase_history', 'purchase_requests', 'dr_logs', 'suppliers', 'clients', 'csi']
+    for (const key of keys) {
+      await generateReport(key, true)
+      await new Promise(r => setTimeout(r, 400))
+    }
     setGenerating(null)
+    toast.success('All reports downloaded')
   }
 
   const reportGroups = [
@@ -150,17 +161,23 @@ export default function ReportsPage() {
           <h2 className="text-2xl font-bold">Reports Center</h2>
           <p className="text-muted-foreground text-sm">Generate and export system reports as CSV</p>
         </div>
-        <Select value={period} onValueChange={v => setPeriod(v ?? 'all')}>
-          <SelectTrigger className="w-40">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Time</SelectItem>
-            <SelectItem value="this_month">This Month</SelectItem>
-            <SelectItem value="last_month">Last Month</SelectItem>
-            <SelectItem value="this_year">This Year</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-3">
+          <Button onClick={downloadAll} disabled={generating === 'all'} variant="outline" className="gap-2">
+            {generating === 'all' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+            Download All CSV
+          </Button>
+          <Select value={period} onValueChange={v => setPeriod(v ?? 'all')}>
+            <SelectTrigger className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Time</SelectItem>
+              <SelectItem value="this_month">This Month</SelectItem>
+              <SelectItem value="last_month">Last Month</SelectItem>
+              <SelectItem value="this_year">This Year</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {/* Stats summary */}

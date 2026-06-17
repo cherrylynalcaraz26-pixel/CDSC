@@ -48,6 +48,7 @@ interface PO {
 }
 
 interface Supplier { id: string; company_name: string; payment_terms: string | null; ewt_rate: number | null }
+interface Client { id: string; company_name: string; payment_terms: string | null }
 interface POLine { item_name: string; quantity: string; unit: string; unit_price: string }
 const emptyLine = (): POLine => ({ item_name: '', quantity: '', unit: 'piece', unit_price: '' })
 
@@ -55,6 +56,7 @@ export default function PurchaseOrdersPage() {
   const supabase = createClient()
   const [pos, setPOs] = useState<PO[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [clients, setClients] = useState<Client[]>([])
   const [items, setItems] = useState<ItemOption[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
@@ -62,6 +64,7 @@ export default function PurchaseOrdersPage() {
 
   // Form state
   const [supplierId, setSupplierId] = useState('')
+  const [clientId, setClientId] = useState('')
   const [poNumber, setPoNumber] = useState('')
   const [deliveryDate, setDeliveryDate] = useState('')
   const [paymentTerms, setPaymentTerms] = useState('30 days')
@@ -70,17 +73,19 @@ export default function PurchaseOrdersPage() {
 
   async function load() {
     setLoading(true)
-    const [{ data: poData }, { data: supData }, { data: itemData }] = await Promise.all([
+    const [{ data: poData }, { data: supData }, { data: itemData }, { data: clientData }] = await Promise.all([
       supabase
         .from('purchase_orders')
         .select('*, supplier:suppliers(company_name), pr:purchase_requests(pr_number)')
         .order('created_at', { ascending: false }),
       supabase.from('suppliers').select('id, company_name, payment_terms, ewt_rate').eq('is_active', true).order('company_name'),
       supabase.from('items').select('item_code, item_name, unit_of_measure').eq('status', 'active').order('item_name'),
+      supabase.from('clients').select('id, company_name, payment_terms').eq('status', 'active').order('company_name'),
     ])
     setPOs((poData ?? []) as PO[])
     setSuppliers(supData ?? [])
     setItems((itemData ?? []) as ItemOption[])
+    setClients(clientData ?? [])
     setLoading(false)
   }
 
@@ -96,15 +101,16 @@ export default function PurchaseOrdersPage() {
   const netPayable = totalAmount - ewtAmount
 
   function resetForm() {
-    setSupplierId(''); setPoNumber(''); setDeliveryDate(''); setPaymentTerms('30 days'); setRemarks(''); setLines([emptyLine()])
+    setSupplierId(''); setClientId(''); setPoNumber(''); setDeliveryDate(''); setPaymentTerms('30 days'); setRemarks(''); setLines([emptyLine()])
   }
 
   async function submitPO() {
-    if (!supplierId) { toast.error('Select a supplier'); return }
+    if (!supplierId && !clientId) { toast.error('Select a supplier or client'); return }
     setSaving(true)
     const { data, error } = await supabase.from('purchase_orders').insert({
       po_number: poNumber || null,   // if blank, trigger auto-generates
-      supplier_id: supplierId,
+      supplier_id: supplierId || null,
+      client_id: clientId || null,
       delivery_date: deliveryDate || null,
       payment_terms: paymentTerms || null,
       remarks: remarks || null,
@@ -303,26 +309,37 @@ export default function PurchaseOrdersPage() {
             {/* Header */}
             <div className="space-y-3">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">PO Details</p>
-              {/* Row 1: PO Number | Client/Supplier | Delivery Date */}
-              <div className="grid grid-cols-3 gap-3">
+              {/* Row 1 */}
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>PO Number</Label>
-                  <Input
-                    placeholder="Enter PO number"
-                    value={poNumber}
-                    onChange={e => setPoNumber(e.target.value)}
-                  />
+                  <Input placeholder="Enter PO number" value={poNumber} onChange={e => setPoNumber(e.target.value)} />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Client / Supplier <span className="text-destructive">*</span></Label>
-                  <Select value={supplierId} onValueChange={v => {
-                    setSupplierId(v ?? '')
-                    const sup = suppliers.find(s => s.id === v)
-                    if (sup?.payment_terms) setPaymentTerms(sup.payment_terms)
-                  }}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select client or supplier">
-                        {supplierId ? suppliers.find(s => s.id === supplierId)?.company_name : 'Select client or supplier'}
+                  <Label>Delivery Date</Label>
+                  <Input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} />
+                </div>
+              </div>
+              {/* Row 2: Supplier | Client — mutually exclusive */}
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className={clientId ? 'text-muted-foreground' : ''}>
+                    Supplier {!clientId && <span className="text-destructive">*</span>}
+                    {clientId && <span className="text-xs text-muted-foreground ml-1">(clear client first)</span>}
+                  </Label>
+                  <Select
+                    value={supplierId}
+                    onValueChange={v => {
+                      setSupplierId(v ?? '')
+                      setClientId('')
+                      const sup = suppliers.find(s => s.id === v)
+                      if (sup?.payment_terms) setPaymentTerms(sup.payment_terms)
+                    }}
+                    disabled={!!clientId}
+                  >
+                    <SelectTrigger className={clientId ? 'opacity-50' : ''}>
+                      <SelectValue placeholder="Select supplier…">
+                        {supplierId ? suppliers.find(s => s.id === supplierId)?.company_name : 'Select supplier…'}
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
@@ -331,11 +348,32 @@ export default function PurchaseOrdersPage() {
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Delivery Date</Label>
-                  <Input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} />
+                  <Label className={supplierId ? 'text-muted-foreground' : ''}>
+                    Client {!supplierId && <span className="text-destructive">*</span>}
+                    {supplierId && <span className="text-xs text-muted-foreground ml-1">(clear supplier first)</span>}
+                  </Label>
+                  <Select
+                    value={clientId}
+                    onValueChange={v => {
+                      setClientId(v ?? '')
+                      setSupplierId('')
+                      const cli = clients.find(c => c.id === v)
+                      if (cli?.payment_terms) setPaymentTerms(cli.payment_terms)
+                    }}
+                    disabled={!!supplierId}
+                  >
+                    <SelectTrigger className={supplierId ? 'opacity-50' : ''}>
+                      <SelectValue placeholder="Select client…">
+                        {clientId ? clients.find(c => c.id === clientId)?.company_name : 'Select client…'}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
-              {/* Row 2: Payment Terms | Remarks */}
+              {/* Row 3 */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1.5">
                   <Label>Payment Terms</Label>

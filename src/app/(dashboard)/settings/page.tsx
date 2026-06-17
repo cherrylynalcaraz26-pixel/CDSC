@@ -55,17 +55,17 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6 max-w-3xl">
       <div>
-        <h1 className="text-2xl font-semibold">Settings</h1>
-        <p className="text-muted-foreground text-sm">System and account configuration</p>
+        <h1 className="text-2xl font-semibold">Company Profile</h1>
+        <p className="text-muted-foreground text-sm">Manage your company information and preferences</p>
       </div>
 
       {/* Company Info */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
-            <Building2 className="h-5 w-5 text-red-600" /> Company Information
+            <Building2 className="h-5 w-5 text-red-600" /> Company Profile
           </CardTitle>
-          <CardDescription>Basic company details used across the system</CardDescription>
+          <CardDescription>Your organization's details, used on documents and reports</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4">

@@ -60,7 +60,7 @@ const navigation: NavItem[] = [
       { label: 'Users', href: '/users', icon: Users },
     ],
   },
-  { label: 'Settings', href: '/settings', icon: Settings },
+  { label: 'Company Profile', href: '/settings', icon: Settings },
 ]
 
 function checkActive(pathname: string, href: string) {
