@@ -16,22 +16,27 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
-import { Search, Loader2, ChevronRight, ChevronDown, Pencil, AlertTriangle } from 'lucide-react'
+import { Search, Loader2, ChevronRight, ChevronDown, Pencil, AlertTriangle, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface DrDetail  { dr_number: string; qty: number; unit: string; unit_price: number | null }
 interface CsiDetail { si_number: string; qty: number; unit: string; unit_price: number | null }
+interface WsDetail  { id: string; notes: string | null; qty: number; unit: string; created_at: string }
 
 interface InventoryRow {
   client: string
   item_name: string
   unit: string
   dr_qty: number
+  ws_qty: number
   csi_qty: number
   balance: number
   dr_details: DrDetail[]
   csi_details: CsiDetail[]
+  ws_details: WsDetail[]
 }
+
+interface ItemOption { item_name: string; unit: string }
 
 export default function InventoryPage() {
   const supabase = createClient()
@@ -42,17 +47,24 @@ export default function InventoryPage() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
-  // Edit dialog state
   const [editRow, setEditRow] = useState<InventoryRow | null>(null)
   const [editName, setEditName] = useState('')
   const [editUnit, setEditUnit] = useState('')
   const [saving, setSaving] = useState(false)
 
+  const [addOpen, setAddOpen] = useState(false)
+  const [addClient, setAddClient] = useState('')
+  const [addItemName, setAddItemName] = useState('')
+  const [addQty, setAddQty] = useState('')
+  const [addUnit, setAddUnit] = useState('')
+  const [addNotes, setAddNotes] = useState('')
+  const [addSaving, setAddSaving] = useState(false)
+  const [itemOptions, setItemOptions] = useState<ItemOption[]>([])
+
   async function load() {
     setLoading(true)
     const PAGE = 1000
 
-    // Load item costs for DR unit price lookup
     const itemCostMap: Record<string, number | null> = {}
     {
       let f = 0
@@ -141,6 +153,31 @@ export default function InventoryPage() {
       from += PAGE
     }
 
+    const wsMap: Record<string, { qty: number; details: WsDetail[] }> = {}
+    from = 0
+    while (true) {
+      const { data } = await supabase
+        .from('warehouse_stock')
+        .select('id, client_name, item_name, unit, quantity, notes, created_at')
+        .range(from, from + PAGE - 1)
+      if (!data || data.length === 0) break
+      for (const rec of data) {
+        const clientKey = rec.client_name ?? ''
+        const wsKey = `${clientKey}||${rec.item_name}`
+        if (!wsMap[wsKey]) wsMap[wsKey] = { qty: 0, details: [] }
+        wsMap[wsKey].qty += Number(rec.quantity) || 0
+        wsMap[wsKey].details.push({
+          id: rec.id,
+          notes: rec.notes ?? null,
+          qty: Number(rec.quantity) || 0,
+          unit: rec.unit ?? '',
+          created_at: rec.created_at,
+        })
+      }
+      if (data.length < PAGE) break
+      from += PAGE
+    }
+
     const allClients = new Set([...Object.keys(drByClient), ...Object.keys(csiByClient)])
     const result: InventoryRow[] = []
     for (const client of allClients) {
@@ -153,7 +190,27 @@ export default function InventoryPage() {
         const unit   = drItems[itemName]?.unit || csiItems[itemName]?.unit || ''
         const dr_details  = (drItems[itemName]?.details ?? []).sort((a, b) => a.dr_number.localeCompare(b.dr_number))
         const csi_details = (csiItems[itemName]?.details ?? []).sort((a, b) => a.si_number.localeCompare(b.si_number))
-        result.push({ client, item_name: itemName, unit, dr_qty: drQty, csi_qty: csiQty, balance: drQty - csiQty, dr_details, csi_details })
+
+        const wsClientEntry = wsMap[`${client}||${itemName}`]
+        const wsGeneralEntry = wsMap[`||${itemName}`]
+        const wsQty = (wsClientEntry?.qty ?? 0) + (wsGeneralEntry?.qty ?? 0)
+        const ws_details: WsDetail[] = [
+          ...(wsClientEntry?.details ?? []),
+          ...(wsGeneralEntry?.details ?? []),
+        ].sort((a, b) => a.created_at.localeCompare(b.created_at))
+
+        result.push({
+          client,
+          item_name: itemName,
+          unit,
+          dr_qty: drQty,
+          ws_qty: wsQty,
+          csi_qty: csiQty,
+          balance: drQty + wsQty - csiQty,
+          dr_details,
+          csi_details,
+          ws_details,
+        })
       }
     }
 
@@ -162,7 +219,48 @@ export default function InventoryPage() {
     setLoading(false)
   }
 
+  async function loadItemOptions() {
+    const { data } = await supabase.from('items').select('item_name, unit').order('item_name')
+    if (data) setItemOptions(data)
+  }
+
   useEffect(() => { load() }, [])
+
+  function openAddDialog() {
+    setAddClient('')
+    setAddItemName('')
+    setAddQty('')
+    setAddUnit('')
+    setAddNotes('')
+    loadItemOptions()
+    setAddOpen(true)
+  }
+
+  function handleAddItemSelect(value: string) {
+    setAddItemName(value)
+    const found = itemOptions.find(o => o.item_name === value)
+    if (found) setAddUnit(found.unit ?? '')
+  }
+
+  async function saveAddStock() {
+    if (!addItemName.trim() || !addQty.trim()) return
+    setAddSaving(true)
+    const { error } = await supabase.from('warehouse_stock').insert({
+      client_name: addClient.trim() || null,
+      item_name: addItemName.trim(),
+      unit: addUnit.trim(),
+      quantity: Number(addQty),
+      notes: addNotes.trim() || null,
+    })
+    if (error) {
+      toast.error(error.message)
+    } else {
+      toast.success('Warehouse stock added')
+      setAddOpen(false)
+      load()
+    }
+    setAddSaving(false)
+  }
 
   const clients = Array.from(new Set(rows.map(r => r.client))).sort()
 
@@ -207,13 +305,11 @@ export default function InventoryPage() {
     const newName = editName.trim()
     const newUnit = editUnit.trim()
 
-    // Update dr_log_items
     const { error: drErr } = await supabase
       .from('dr_log_items')
       .update({ item_name: newName, ...(newUnit ? { unit: newUnit } : {}) })
       .eq('item_name', oldName)
 
-    // Update csi_records
     const { error: csiErr } = await supabase
       .from('csi_records')
       .update({ item_name: newName, ...(newUnit ? { unit: newUnit } : {}) })
@@ -237,9 +333,14 @@ export default function InventoryPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Inventory</h1>
-        <p className="text-muted-foreground text-sm">Stock balance per client (DR delivered − CSI charged)</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold">Inventory</h1>
+          <p className="text-muted-foreground text-sm">Stock balance per client (DR delivered + WH Stock − CSI charged)</p>
+        </div>
+        <Button onClick={openAddDialog} className="bg-red-600 hover:bg-red-700 text-white shrink-0">
+          <Plus className="h-4 w-4 mr-1.5" /> Add Stock
+        </Button>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -299,6 +400,7 @@ export default function InventoryPage() {
                   <TableHead>Item Name</TableHead>
                   <TableHead>Unit</TableHead>
                   <TableHead className="text-right">DR Qty</TableHead>
+                  <TableHead className="text-right">WH Stock</TableHead>
                   <TableHead className="text-right">CSI Qty</TableHead>
                   <TableHead className="text-right">Balance</TableHead>
                   <TableHead>Status</TableHead>
@@ -308,13 +410,13 @@ export default function InventoryPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-10">
+                    <TableCell colSpan={10} className="text-center py-10">
                       <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                     </TableCell>
                   </TableRow>
                 ) : filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">No inventory data found.</TableCell>
+                    <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">No inventory data found.</TableCell>
                   </TableRow>
                 ) : filtered.map((row) => {
                   const key = rowKey(row)
@@ -333,7 +435,7 @@ export default function InventoryPage() {
                         <TableCell className="text-sm font-medium">
                           <span className="flex items-center gap-1.5">
                             {isDeficit && (
-                              <span title="Deficit: CSI charges exceed DR deliveries">
+                              <span title="Deficit: CSI charges exceed DR deliveries + WH Stock">
                                 <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
                               </span>
                             )}
@@ -342,6 +444,12 @@ export default function InventoryPage() {
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">{row.unit}</TableCell>
                         <TableCell className="text-right text-sm">{Number(row.dr_qty)}</TableCell>
+                        <TableCell className="text-right text-sm">
+                          {row.ws_qty > 0
+                            ? <span className="text-green-600 font-medium">{Number(row.ws_qty)}</span>
+                            : <span className="text-muted-foreground">—</span>
+                          }
+                        </TableCell>
                         <TableCell className="text-right text-sm">{Number(row.csi_qty)}</TableCell>
                         <TableCell className={`text-right text-sm font-semibold ${row.balance > 0 ? 'text-green-600' : row.balance < 0 ? 'text-red-600' : 'text-gray-500'}`}>
                           {Number(row.balance)}
@@ -359,8 +467,8 @@ export default function InventoryPage() {
 
                       {isOpen && (
                         <TableRow key={`${key}-detail`}>
-                          <TableCell colSpan={9} className="p-0 bg-muted/20">
-                            <div className="px-10 py-3 grid grid-cols-2 gap-6">
+                          <TableCell colSpan={10} className="p-0 bg-muted/20">
+                            <div className="px-10 py-3 grid grid-cols-3 gap-6">
                               <div>
                                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">DR Deliveries</p>
                                 {row.dr_details.length === 0 ? (
@@ -393,6 +501,33 @@ export default function InventoryPage() {
                                           </tr>
                                         )
                                       })}
+                                    </tbody>
+                                  </table>
+                                )}
+                              </div>
+                              <div>
+                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Warehouse Stock</p>
+                                {row.ws_details.length === 0 ? (
+                                  <p className="text-xs text-muted-foreground italic">No warehouse stock</p>
+                                ) : (
+                                  <table className="w-full text-xs">
+                                    <thead>
+                                      <tr className="text-muted-foreground border-b">
+                                        <th className="text-left pb-1">Date Added</th>
+                                        <th className="text-left pb-1 pl-2">Notes</th>
+                                        <th className="text-right pb-1">Qty</th>
+                                        <th className="text-left pb-1 pl-2">Unit</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {row.ws_details.map((d) => (
+                                        <tr key={d.id} className="border-b border-muted/30">
+                                          <td className="py-1 font-mono text-green-700">{new Date(d.created_at).toLocaleDateString('en-PH')}</td>
+                                          <td className="py-1 pl-2 text-muted-foreground">{d.notes ?? '—'}</td>
+                                          <td className="py-1 text-right font-medium text-green-600">{Number(d.qty)}</td>
+                                          <td className="py-1 pl-2 text-muted-foreground">{d.unit}</td>
+                                        </tr>
+                                      ))}
                                     </tbody>
                                   </table>
                                 )}
@@ -446,7 +581,6 @@ export default function InventoryPage() {
         </CardContent>
       </Card>
 
-      {/* Edit Item Name Dialog */}
       <Dialog open={!!editRow} onOpenChange={o => { if (!o) setEditRow(null) }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -471,6 +605,57 @@ export default function InventoryPage() {
             <Button variant="outline" onClick={() => setEditRow(null)}>Cancel</Button>
             <Button onClick={saveEdit} disabled={saving || !editName.trim()} className="bg-yellow-600 hover:bg-yellow-700 text-white">
               {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={addOpen} onOpenChange={o => { if (!o) setAddOpen(false) }}>
+        <DialogContent className="w-[95vw] max-w-lg sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Plus className="h-4 w-4 text-red-600" /> Add Warehouse Stock
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Client <span className="text-muted-foreground text-xs">(optional — blank = General Warehouse Stock)</span></Label>
+              <Input value={addClient} onChange={e => setAddClient(e.target.value)} placeholder="Client name" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Item Name <span className="text-red-500">*</span></Label>
+              <Select value={addItemName} onValueChange={handleAddItemSelect}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select item…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {itemOptions.map(o => (
+                    <SelectItem key={o.item_name} value={o.item_name}>{o.item_name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Quantity <span className="text-red-500">*</span></Label>
+              <Input type="number" min="0" value={addQty} onChange={e => setAddQty(e.target.value)} placeholder="0" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Unit</Label>
+              <Input value={addUnit} onChange={e => setAddUnit(e.target.value)} placeholder="e.g. Piece/s" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Notes <span className="text-muted-foreground text-xs">(optional)</span></Label>
+              <Input value={addNotes} onChange={e => setAddNotes(e.target.value)} placeholder="Optional notes" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
+            <Button
+              onClick={saveAddStock}
+              disabled={addSaving || !addItemName.trim() || !addQty.trim()}
+              className="bg-red-600 hover:bg-red-700 text-white"
+            >
+              {addSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : 'Add Stock'}
             </Button>
           </DialogFooter>
         </DialogContent>
