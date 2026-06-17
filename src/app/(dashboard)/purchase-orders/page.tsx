@@ -59,7 +59,6 @@ export default function PurchaseOrdersPage() {
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [activeItemRow, setActiveItemRow] = useState<number | null>(null)
 
   // Form state
   const [supplierId, setSupplierId] = useState('')
@@ -295,7 +294,7 @@ export default function PurchaseOrdersPage() {
 
       {/* ── Create PO Dialog ── */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold">Create Purchase Order</DialogTitle>
           </DialogHeader>
@@ -308,20 +307,19 @@ export default function PurchaseOrdersPage() {
                 <div className="space-y-1.5">
                   <Label>PO Number</Label>
                   <Input
-                    placeholder="Auto-generated"
+                    placeholder="Enter PO number"
                     value={poNumber}
                     onChange={e => setPoNumber(e.target.value)}
                   />
-                  <p className="text-xs text-muted-foreground">Leave blank to auto-generate</p>
                 </div>
                 <div className="space-y-1.5 md:col-span-2">
-                  <Label>Supplier <span className="text-destructive">*</span></Label>
+                  <Label>Client / Supplier <span className="text-destructive">*</span></Label>
                   <Select value={supplierId} onValueChange={v => {
                     setSupplierId(v ?? '')
                     const sup = suppliers.find(s => s.id === v)
                     if (sup?.payment_terms) setPaymentTerms(sup.payment_terms)
                   }}>
-                    <SelectTrigger><SelectValue placeholder="Select supplier" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder="Select client or supplier" /></SelectTrigger>
                     <SelectContent>
                       {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.company_name}</SelectItem>)}
                     </SelectContent>
@@ -358,7 +356,7 @@ export default function PurchaseOrdersPage() {
                 </Button>
               </div>
               <div className="border rounded-lg overflow-hidden">
-                <div className="grid grid-cols-[1fr_64px_88px_120px_96px_36px] gap-1.5 px-2 py-2 bg-muted/50 border-b text-xs font-medium text-muted-foreground">
+                <div className="grid grid-cols-[2fr_64px_88px_120px_96px_36px] gap-1.5 px-2 py-2 bg-muted/50 border-b text-xs font-medium text-muted-foreground">
                   <span>Item / Description</span>
                   <span>Qty</span>
                   <span>Unit</span>
@@ -369,46 +367,34 @@ export default function PurchaseOrdersPage() {
                 <div className="divide-y">
                   {lines.map((line, i) => {
                     const lineTotal = (parseFloat(line.unit_price) || 0) * (parseFloat(line.quantity) || 0)
-                    const filtered = items.filter(it =>
-                      it.item_name.toLowerCase().includes(line.item_name.toLowerCase()) ||
-                      it.item_code.toLowerCase().includes(line.item_name.toLowerCase())
-                    ).slice(0, 25)
                     return (
-                      <div key={i} className="grid grid-cols-[1fr_64px_88px_120px_96px_36px] gap-1.5 items-center px-2 py-1.5">
-                        <div className="relative">
-                          <Input
-                            className="h-8 text-sm" placeholder="Search item…" value={line.item_name}
-                            onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, item_name: e.target.value } : l))}
-                            onFocus={() => setActiveItemRow(i)}
-                            onBlur={() => setTimeout(() => setActiveItemRow(null), 200)}
-                            autoComplete="off"
-                          />
-                          {activeItemRow === i && line.item_name.length > 0 && filtered.length > 0 && (
-                            <div className="absolute z-50 top-full left-0 right-0 mt-0.5 bg-popover border rounded-md shadow-lg max-h-48 overflow-y-auto">
-                              {filtered.map(it => (
-                                <button
-                                  key={it.item_code}
-                                  type="button"
-                                  className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent flex items-center justify-between"
-                                  onMouseDown={e => {
-                                    e.preventDefault()
-                                    setLines(p => p.map((l, idx) => idx === i
-                                      ? { ...l, item_name: it.item_name, unit: it.unit_of_measure || l.unit }
-                                      : l))
-                                    setActiveItemRow(null)
-                                  }}
-                                >
-                                  <span>{it.item_name}</span>
-                                  <span className="text-xs text-muted-foreground ml-2 shrink-0">{it.unit_of_measure}</span>
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
+                      <div key={i} className="grid grid-cols-[2fr_64px_88px_120px_96px_36px] gap-1.5 items-center px-2 py-1.5">
+                        <Select
+                          value={line.item_name}
+                          onValueChange={val => {
+                            const selected = items.find(it => it.item_name === val)
+                            setLines(p => p.map((l, idx) => idx === i
+                              ? { ...l, item_name: val, unit: selected?.unit_of_measure || l.unit }
+                              : l))
+                          }}
+                        >
+                          <SelectTrigger className="h-8 text-sm">
+                            <SelectValue placeholder="Select item…" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {items.map(it => (
+                              <SelectItem key={it.item_code} value={it.item_name}>
+                                <span>{it.item_name}</span>
+                                <span className="text-xs text-muted-foreground ml-2">({it.unit_of_measure})</span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                         <Input type="number" min={1} className="h-8 text-sm" placeholder="1" value={line.quantity}
                           onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, quantity: e.target.value } : l))} />
-                        <Input className="h-8 text-sm" placeholder="unit" value={line.unit}
-                          onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, unit: e.target.value } : l))} />
+                        <div className="h-8 flex items-center px-2 text-sm bg-muted/30 rounded border text-muted-foreground">
+                          {line.unit || '—'}
+                        </div>
                         <Input type="number" min={0} step="0.01" className="h-8 text-sm" placeholder="0.00" value={line.unit_price}
                           onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, unit_price: e.target.value } : l))} />
                         <div className="text-right text-sm font-medium pr-1">

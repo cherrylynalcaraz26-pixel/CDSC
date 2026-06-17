@@ -27,7 +27,6 @@ const navigation: NavItem[] = [
   {
     label: 'Purchasing', icon: ShoppingCart,
     children: [
-      { label: 'Purchase Requests', href: '/purchase-requests', icon: FileText },
       { label: 'Purchase Orders', href: '/purchase-orders', icon: ShoppingCart },
       { label: 'Sales Orders', href: '/sales-orders', icon: Receipt },
     ],
