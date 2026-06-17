@@ -215,6 +215,67 @@ export default function DashboardPage() {
         <StatCard title="Assets" value={loading ? '—' : kpi.totalAssets} icon={Cpu} href="/assets" />
       </div>
 
+      {/* PO Pipeline */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm font-medium flex items-center gap-2">
+            <ShoppingCart className="h-4 w-4 text-red-600" />
+            Purchase Order Pipeline — Next Actions
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {/* Pipeline stage header */}
+          <div className="grid grid-cols-5 text-center text-[10px] font-semibold uppercase tracking-wider border-b">
+            {[
+              { label: 'PO Created', color: 'text-blue-600 bg-blue-50' },
+              { label: 'Receiving', color: 'text-yellow-600 bg-yellow-50' },
+              { label: 'DR Logged', color: 'text-orange-600 bg-orange-50' },
+              { label: 'CSI Issued', color: 'text-purple-600 bg-purple-50' },
+              { label: 'Collected', color: 'text-green-600 bg-green-50' },
+            ].map(s => (
+              <div key={s.label} className={`py-2 ${s.color}`}>{s.label}</div>
+            ))}
+          </div>
+
+          {loading ? (
+            <div className="text-center py-6"><Loader2 className="h-4 w-4 animate-spin mx-auto text-muted-foreground" /></div>
+          ) : pipelinePOs.length === 0 ? (
+            <div className="text-center py-6 text-xs text-muted-foreground">No open purchase orders</div>
+          ) : (
+            <div className="divide-y">
+              {pipelinePOs.map(po => {
+                const isReceived = receivedPONumbers.has(po.po_number ?? '')
+                const supplierName = (po.supplier as any)?.company_name ?? ''
+                const hasCsi = csiRows.some(r => r.client === supplierName)
+                const hasOr = orRows.some(r => r.client === supplierName)
+
+                const stages = [
+                  { done: true,       label: po.po_number ?? '—', sub: STATUS_COLORS[po.status as any] ? po.status : po.status },
+                  { done: isReceived, label: isReceived ? 'Received' : 'Pending',  sub: '' },
+                  { done: isReceived, label: isReceived ? 'DR Expected' : '—',     sub: '' },
+                  { done: hasCsi,     label: hasCsi ? 'Issued' : 'Pending',        sub: '' },
+                  { done: hasOr,      label: hasOr ? 'Collected' : 'Pending',      sub: '' },
+                ]
+
+                return (
+                  <div key={po.id} className="grid grid-cols-5 text-center text-xs">
+                    {stages.map((s, i) => (
+                      <div key={i} className={`py-2.5 px-1 border-r last:border-r-0 ${s.done ? '' : 'opacity-40'}`}>
+                        <div className={`inline-flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold mx-auto mb-0.5 ${s.done ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+                          {s.done ? '✓' : (i + 1)}
+                        </div>
+                        <div className="font-medium truncate px-1">{s.label}</div>
+                        {s.sub && <div className="text-[10px] text-muted-foreground">{s.sub}</div>}
+                      </div>
+                    ))}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Charts + Activity */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
         {/* Bar chart */}

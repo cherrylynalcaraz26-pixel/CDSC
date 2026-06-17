@@ -529,9 +529,23 @@ export default function DRLogsPage() {
               {editing ? 'Edit DR Log' : 'New DR Log'}
             </DialogTitle>
           </DialogHeader>
+          <div className="flex rounded-md border overflow-hidden w-fit lg:hidden">
+            <button
+              onClick={() => setDrActiveTab('form')}
+              className={`px-4 py-1.5 text-sm font-medium ${drActiveTab === 'form' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
+            >
+              Form
+            </button>
+            <button
+              onClick={() => setDrActiveTab('preview')}
+              className={`px-4 py-1.5 text-sm font-medium border-l ${drActiveTab === 'preview' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
+            >
+              Preview
+            </button>
+          </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 py-2">
             {/* LEFT: existing form content */}
-            <div className="space-y-5">
+            <div className={`space-y-5 ${drActiveTab === 'preview' ? 'hidden lg:block' : 'block'}`}>
             <div className="space-y-3">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">DR Details</p>
               <div className="grid grid-cols-2 gap-4">
@@ -646,15 +660,18 @@ export default function DRLogsPage() {
             </div>
 
             {/* RIGHT: live preview */}
-            <div className="hidden lg:block">
+            <div className={`${drActiveTab === 'form' ? 'hidden lg:block' : 'block'}`}>
               <div className="sticky top-0">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Live Preview</p>
                 <div className="border rounded-lg bg-white text-[11px] p-4 shadow-sm space-y-3 font-sans">
                   {/* Header */}
                   <div className="flex justify-between items-start border-b pb-2">
-                    <div>
-                      <div className="text-base font-bold text-red-700">CDSC INDUSTRIAL</div>
-                      <div className="text-[10px] text-gray-500">DELIVERY RECEIPT</div>
+                    <div className="flex items-center gap-2">
+                      <img src="/cdsc-logo.jpg" alt="CDSC" className="h-10 w-10 rounded object-cover" />
+                      <div>
+                        <div className="text-base font-bold text-red-700">CDSC INDUSTRIAL</div>
+                        <div className="text-[10px] text-gray-500">DELIVERY RECEIPT</div>
+                      </div>
                     </div>
                     <div className="text-right space-y-0.5">
                       <div><span className="text-gray-500">DR No: </span><span className="font-mono font-bold">{form.dr_number || '—'}</span></div>
