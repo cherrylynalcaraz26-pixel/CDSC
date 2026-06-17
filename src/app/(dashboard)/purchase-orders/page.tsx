@@ -7,14 +7,13 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 import {
   Plus, MoreHorizontal, Eye, Printer, Loader2,
-  Trash2, CheckCircle2, XCircle, ArrowRightLeft,
+  Trash2, CheckCircle2, XCircle, ArrowRightLeft, X,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
@@ -124,8 +123,8 @@ export default function PurchaseOrdersPage() {
     }).select('id').single()
     if (error) { toast.error(error.message); setSaving(false); return }
     toast.success('Purchase Order created')
-    setOpen(false)
     resetForm()
+    setOpen(false)
     load()
     setSaving(false)
   }
@@ -178,12 +177,18 @@ export default function PurchaseOrdersPage() {
           <h2 className="text-2xl font-bold">Purchase Orders</h2>
           <p className="text-muted-foreground text-sm">Manage supplier purchase orders, track deliveries and payments</p>
         </div>
-        <Button onClick={() => { resetForm(); setOpen(true) }} className="bg-red-600 hover:bg-red-700">
-          <Plus className="h-4 w-4 mr-2" />Create PO
-        </Button>
+        {open ? (
+          <Button variant="outline" onClick={() => { setOpen(false); resetForm() }}>
+            <X className="h-4 w-4 mr-2" />Cancel
+          </Button>
+        ) : (
+          <Button onClick={() => { resetForm(); setOpen(true) }} className="bg-red-600 hover:bg-red-700">
+            <Plus className="h-4 w-4 mr-2" />Create PO
+          </Button>
+        )}
       </div>
 
-      {/* Summary cards */}
+      {open ? null : (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card><CardContent className="pt-5 pb-4">
           <div className="text-2xl font-bold">{loading ? '—' : fmt(counts.total)}</div>
@@ -202,8 +207,10 @@ export default function PurchaseOrdersPage() {
           <div className="text-sm text-muted-foreground">Completed</div>
         </CardContent></Card>
       </div>
+      )}
 
       {/* PO List */}
+      {!open && (
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Purchase Order List</CardTitle>
@@ -298,14 +305,13 @@ export default function PurchaseOrdersPage() {
           </Table>
         </CardContent>
       </Card>
+      )}
 
-      {/* ── Create PO Dialog ── */}
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-[95vw] max-w-7xl sm:max-w-7xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
-          <DialogHeader>
-            <DialogTitle className="text-lg font-semibold">Create Purchase Order</DialogTitle>
-          </DialogHeader>
-
+      {/* ── Inline Create PO Form ── */}
+      {open && (
+      <Card>
+        <CardHeader className="pb-3 flex flex-row items-center justify-between">
+          <CardTitle className="text-base font-semibold">New Purchase Order</CardTitle>
           <div className="flex rounded-md border overflow-hidden w-fit lg:hidden">
             <button
               onClick={() => setActiveTab('form')}
@@ -320,8 +326,9 @@ export default function PurchaseOrdersPage() {
               Preview
             </button>
           </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 py-2">
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* LEFT: existing form */}
             <div className={`space-y-5 ${activeTab === 'preview' ? 'hidden lg:block' : 'block'}`}>
             {/* Header */}
@@ -584,14 +591,15 @@ export default function PurchaseOrdersPage() {
             </div>
           </div>
 
-          <DialogFooter className="gap-2 pt-2 border-t">
-            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+          <div className="flex justify-end gap-2 pt-4 border-t mt-2">
+            <Button variant="outline" onClick={() => { setOpen(false); resetForm() }}>Cancel</Button>
             <Button onClick={submitPO} disabled={saving} className="bg-red-600 hover:bg-red-700">
               {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Creating…</> : 'Create Purchase Order'}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </CardContent>
+      </Card>
+      )}
     </div>
   )
 }
