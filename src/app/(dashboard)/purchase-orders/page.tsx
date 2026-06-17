@@ -374,7 +374,7 @@ export default function PurchaseOrdersPage() {
                           onValueChange={val => {
                             const selected = items.find(it => it.item_name === val)
                             setLines(p => p.map((l, idx) => idx === i
-                              ? { ...l, item_name: val, unit: selected?.unit_of_measure || l.unit }
+                              ? { ...l, item_name: val ?? '', unit: selected?.unit_of_measure || l.unit }
                               : l))
                           }}
                         >
