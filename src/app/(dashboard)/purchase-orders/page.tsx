@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
+
 import {
   Plus, MoreHorizontal, Eye, Printer, Loader2,
   Trash2, CheckCircle2, XCircle, ArrowRightLeft,
@@ -303,7 +303,8 @@ export default function PurchaseOrdersPage() {
             {/* Header */}
             <div className="space-y-3">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">PO Details</p>
-              <div className="grid grid-cols-2 gap-3">
+              {/* Row 1: PO Number | Client/Supplier | Delivery Date */}
+              <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1.5">
                   <Label>PO Number</Label>
                   <Input
@@ -313,28 +314,29 @@ export default function PurchaseOrdersPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
+                  <Label>Client / Supplier <span className="text-destructive">*</span></Label>
+                  <Select value={supplierId} onValueChange={v => {
+                    setSupplierId(v ?? '')
+                    const sup = suppliers.find(s => s.id === v)
+                    if (sup?.payment_terms) setPaymentTerms(sup.payment_terms)
+                  }}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select client or supplier">
+                        {supplierId ? suppliers.find(s => s.id === supplierId)?.company_name : 'Select client or supplier'}
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.company_name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
                   <Label>Delivery Date</Label>
                   <Input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} />
                 </div>
               </div>
-              <div className="space-y-1.5">
-                <Label>Client / Supplier <span className="text-destructive">*</span></Label>
-                <Select value={supplierId} onValueChange={v => {
-                  setSupplierId(v ?? '')
-                  const sup = suppliers.find(s => s.id === v)
-                  if (sup?.payment_terms) setPaymentTerms(sup.payment_terms)
-                }}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select client or supplier">
-                      {supplierId ? suppliers.find(s => s.id === supplierId)?.company_name : 'Select client or supplier'}
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.company_name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
+              {/* Row 2: Payment Terms | Remarks */}
+              <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1.5">
                   <Label>Payment Terms</Label>
                   <Select value={paymentTerms} onValueChange={v => setPaymentTerms(v ?? '30 days')}>
@@ -344,9 +346,9 @@ export default function PurchaseOrdersPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-1.5">
+                <div className="space-y-1.5 col-span-2">
                   <Label>Remarks</Label>
-                  <Textarea rows={1} value={remarks} onChange={e => setRemarks(e.target.value)} placeholder="Optional notes…" />
+                  <Input value={remarks} onChange={e => setRemarks(e.target.value)} placeholder="Optional notes…" />
                 </div>
               </div>
             </div>
