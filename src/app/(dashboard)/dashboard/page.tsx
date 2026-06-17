@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts'
@@ -73,6 +74,9 @@ export default function DashboardPage() {
   const [orRows, setOrRows] = useState<ORClientRow[]>([])
   const [csiRows, setCsiRows] = useState<CSIClientRow[]>([])
   const [reconRows, setReconRows] = useState<ReconRow[]>([])
+  const [orDetails, setOrDetails] = useState<Record<string, any[]>>({})
+  const [csiDetails, setCsiDetails] = useState<Record<string, any[]>>({})
+  const [detailModal, setDetailModal] = useState<{ type: 'or' | 'csi' | 'recon'; client: string } | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -97,8 +101,8 @@ export default function DashboardPage() {
         supabase.from('csi_records').select('id, date', { count: 'exact' }),
         supabase.from('dr_logs').select('id, dr_number, date, delivered_to, status').order('date', { ascending: false }).limit(8),
         supabase.from('purchase_requests').select('id, pr_number, created_at, department, priority, status').order('created_at', { ascending: false }).limit(6),
-        supabase.from('collections').select('client_name, amount, form_2307, status'),
-        supabase.from('csi_records').select('client_name, si_number, quantity, unit_price'),
+        supabase.from('collections').select('client_name, or_number, amount, form_2307, status, date'),
+        supabase.from('csi_records').select('client_name, si_number, item_name, quantity, unit_price, date'),
       ])
 
       const allPOs = pos.data ?? []
@@ -126,31 +130,39 @@ export default function DashboardPage() {
 
       // --- OR collections by client ---
       const orMap: Record<string, { collected: number; ewt: number; ors: number }> = {}
+      const orDetailMap: Record<string, any[]> = {}
       for (const c of collectionData.data ?? []) {
         const name = c.client_name?.trim() || 'Unknown'
         if (!orMap[name]) orMap[name] = { collected: 0, ewt: 0, ors: 0 }
         orMap[name].collected += Number(c.amount) || 0
         orMap[name].ewt += Number(c.form_2307) || 0
         orMap[name].ors += 1
+        if (!orDetailMap[name]) orDetailMap[name] = []
+        orDetailMap[name].push(c)
       }
       const orSorted: ORClientRow[] = Object.entries(orMap)
         .map(([client, v]) => ({ client, ...v }))
         .sort((a, b) => b.collected - a.collected)
       setOrRows(orSorted)
+      setOrDetails(orDetailMap)
 
       // --- CSI invoices by client ---
       const csiMap: Record<string, { billed: number; siNums: Set<string>; items: number }> = {}
+      const csiDetailMap: Record<string, any[]> = {}
       for (const r of csiDetailData.data ?? []) {
         const name = r.client_name?.trim() || 'Unknown'
         if (!csiMap[name]) csiMap[name] = { billed: 0, siNums: new Set(), items: 0 }
         csiMap[name].billed += (Number(r.quantity) || 0) * (Number(r.unit_price) || 0)
         if (r.si_number) csiMap[name].siNums.add(r.si_number)
         csiMap[name].items += 1
+        if (!csiDetailMap[name]) csiDetailMap[name] = []
+        csiDetailMap[name].push(r)
       }
       const csiSorted: CSIClientRow[] = Object.entries(csiMap)
         .map(([client, v]) => ({ client, billed: v.billed, invoices: v.siNums.size, items: v.items }))
         .sort((a, b) => b.billed - a.billed)
       setCsiRows(csiSorted)
+      setCsiDetails(csiDetailMap)
 
       // --- Reconciliation ---
       const allClients = new Set([...Object.keys(orMap), ...Object.keys(csiMap)])
@@ -292,7 +304,7 @@ export default function DashboardPage() {
                 {loading ? (
                   <tr><td colSpan={5} className="text-center py-6 text-muted-foreground text-xs">Loading…</td></tr>
                 ) : orRows.map((r, i) => (
-                  <tr key={r.client} className="border-b last:border-0 hover:bg-muted/30 cursor-pointer">
+                  <tr key={r.client} className="border-b last:border-0 hover:bg-muted/30 cursor-pointer" onClick={() => setDetailModal({ type: 'or', client: r.client })}>
                     <td className="px-3 py-2 text-xs text-muted-foreground">{i + 1}</td>
                     <td className="px-3 py-2 text-xs text-blue-600 font-medium">{r.client}</td>
                     <td className="px-3 py-2 text-xs text-right text-green-600 font-medium tabular-nums">
@@ -342,7 +354,7 @@ export default function DashboardPage() {
                 {loading ? (
                   <tr><td colSpan={5} className="text-center py-6 text-muted-foreground text-xs">Loading…</td></tr>
                 ) : csiRows.map((r, i) => (
-                  <tr key={r.client} className="border-b last:border-0 hover:bg-muted/30 cursor-pointer">
+                  <tr key={r.client} className="border-b last:border-0 hover:bg-muted/30 cursor-pointer" onClick={() => setDetailModal({ type: 'csi', client: r.client })}>
                     <td className="px-3 py-2 text-xs text-muted-foreground">{i + 1}</td>
                     <td className="px-3 py-2 text-xs font-medium">{r.client}</td>
                     <td className="px-3 py-2 text-xs text-right text-blue-600 font-medium tabular-nums">
@@ -389,7 +401,7 @@ export default function DashboardPage() {
               {loading ? (
                 <tr><td colSpan={6} className="text-center py-6 text-muted-foreground text-xs">Loading…</td></tr>
               ) : reconRows.map((r, i) => (
-                <tr key={r.client} className="border-b last:border-0 hover:bg-muted/30">
+                <tr key={r.client} className="border-b last:border-0 hover:bg-muted/30 cursor-pointer" onClick={() => setDetailModal({ type: 'recon', client: r.client })}>
                   <td className="px-3 py-2 text-xs text-muted-foreground">{i + 1}</td>
                   <td className="px-3 py-2 text-xs font-medium">{r.client}</td>
                   <td className="px-3 py-2 text-xs text-right text-blue-600 tabular-nums">
@@ -414,6 +426,127 @@ export default function DashboardPage() {
           </table>
         </CardContent>
       </Card>
+
+      {/* Detail Modal */}
+      <Dialog open={!!detailModal} onOpenChange={() => setDetailModal(null)}>
+        <DialogContent className="w-[95vw] max-w-4xl sm:max-w-4xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-base">
+              {detailModal?.type === 'or' && `Collections — ${detailModal.client}`}
+              {detailModal?.type === 'csi' && `CSI Invoices — ${detailModal.client}`}
+              {detailModal?.type === 'recon' && `Reconciliation — ${detailModal.client}`}
+            </DialogTitle>
+          </DialogHeader>
+          {detailModal?.type === 'or' && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-red-600 text-white text-xs">
+                    <th className="px-3 py-2 text-left">OR Number</th>
+                    <th className="px-3 py-2 text-left">Date</th>
+                    <th className="px-3 py-2 text-right">Amount</th>
+                    <th className="px-3 py-2 text-right">EWT (2307)</th>
+                    <th className="px-3 py-2 text-left">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(orDetails[detailModal.client] ?? []).map((r, i) => (
+                    <tr key={i} className="border-b last:border-0 hover:bg-muted/30">
+                      <td className="px-3 py-2 font-mono text-xs text-red-600">{r.or_number ?? '—'}</td>
+                      <td className="px-3 py-2 text-xs text-muted-foreground">{r.date ? format(new Date(r.date), 'MMM d, yyyy') : '—'}</td>
+                      <td className="px-3 py-2 text-xs text-right text-green-600 tabular-nums font-medium">₱{(Number(r.amount) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+                      <td className="px-3 py-2 text-xs text-right text-orange-500 tabular-nums">₱{(Number(r.form_2307) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+                      <td className="px-3 py-2 text-xs">{r.status ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {detailModal?.type === 'csi' && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-red-600 text-white text-xs">
+                    <th className="px-3 py-2 text-left">SI Number</th>
+                    <th className="px-3 py-2 text-left">Date</th>
+                    <th className="px-3 py-2 text-left">Item</th>
+                    <th className="px-3 py-2 text-right">Qty</th>
+                    <th className="px-3 py-2 text-right">Unit Price</th>
+                    <th className="px-3 py-2 text-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(csiDetails[detailModal.client] ?? []).map((r, i) => (
+                    <tr key={i} className="border-b last:border-0 hover:bg-muted/30">
+                      <td className="px-3 py-2 font-mono text-xs text-red-600">{r.si_number ?? '—'}</td>
+                      <td className="px-3 py-2 text-xs text-muted-foreground">{r.date ? format(new Date(r.date), 'MMM d, yyyy') : '—'}</td>
+                      <td className="px-3 py-2 text-xs">{r.item_name ?? '—'}</td>
+                      <td className="px-3 py-2 text-xs text-right tabular-nums">{Number(r.quantity) || 0}</td>
+                      <td className="px-3 py-2 text-xs text-right tabular-nums">₱{(Number(r.unit_price) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+                      <td className="px-3 py-2 text-xs text-right text-blue-600 tabular-nums font-medium">₱{((Number(r.quantity) || 0) * (Number(r.unit_price) || 0)).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {detailModal?.type === 'recon' && (
+            <div className="space-y-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1 mb-2">OR Collections</p>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-green-700 text-white text-xs">
+                      <th className="px-3 py-2 text-left">OR Number</th>
+                      <th className="px-3 py-2 text-left">Date</th>
+                      <th className="px-3 py-2 text-right">Amount</th>
+                      <th className="px-3 py-2 text-right">EWT</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(orDetails[detailModal.client] ?? []).length === 0
+                      ? <tr><td colSpan={4} className="px-3 py-3 text-xs text-muted-foreground text-center">No OR records</td></tr>
+                      : (orDetails[detailModal.client] ?? []).map((r, i) => (
+                        <tr key={i} className="border-b last:border-0">
+                          <td className="px-3 py-1.5 font-mono text-xs text-red-600">{r.or_number ?? '—'}</td>
+                          <td className="px-3 py-1.5 text-xs text-muted-foreground">{r.date ? format(new Date(r.date), 'MMM d, yyyy') : '—'}</td>
+                          <td className="px-3 py-1.5 text-xs text-right text-green-600 tabular-nums">₱{(Number(r.amount) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+                          <td className="px-3 py-1.5 text-xs text-right text-orange-500 tabular-nums">₱{(Number(r.form_2307) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1 mb-2">CSI Invoices</p>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-blue-700 text-white text-xs">
+                      <th className="px-3 py-2 text-left">SI Number</th>
+                      <th className="px-3 py-2 text-left">Item</th>
+                      <th className="px-3 py-2 text-right">Qty</th>
+                      <th className="px-3 py-2 text-right">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(csiDetails[detailModal.client] ?? []).length === 0
+                      ? <tr><td colSpan={4} className="px-3 py-3 text-xs text-muted-foreground text-center">No CSI records</td></tr>
+                      : (csiDetails[detailModal.client] ?? []).map((r, i) => (
+                        <tr key={i} className="border-b last:border-0">
+                          <td className="px-3 py-1.5 font-mono text-xs text-red-600">{r.si_number ?? '—'}</td>
+                          <td className="px-3 py-1.5 text-xs">{r.item_name ?? '—'}</td>
+                          <td className="px-3 py-1.5 text-xs text-right tabular-nums">{Number(r.quantity) || 0}</td>
+                          <td className="px-3 py-1.5 text-xs text-right text-blue-600 tabular-nums">₱{((Number(r.quantity) || 0) * (Number(r.unit_price) || 0)).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Recent PRs + Quick Links */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
