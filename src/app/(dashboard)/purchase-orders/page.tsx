@@ -294,7 +294,7 @@ export default function PurchaseOrdersPage() {
 
       {/* ── Create PO Dialog ── */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-[95vw] max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-5xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold">Create Purchase Order</DialogTitle>
           </DialogHeader>
@@ -359,9 +359,8 @@ export default function PurchaseOrdersPage() {
                   <Plus className="h-3.5 w-3.5 mr-1" />Add Row
                 </Button>
               </div>
-              <div className="border rounded-lg overflow-x-auto">
-                <div className="min-w-[540px]">
-                <div className="grid grid-cols-[minmax(160px,2fr)_60px_72px_100px_90px_32px] gap-1.5 px-2 py-2 bg-muted/50 border-b text-xs font-medium text-muted-foreground">
+              <div className="border rounded-lg">
+                <div className="grid grid-cols-[1fr_80px_90px_130px_110px_36px] gap-2 px-3 py-2 bg-muted/50 border-b text-xs font-medium text-muted-foreground">
                   <span>Item / Description</span>
                   <span>Qty</span>
                   <span>Unit</span>
@@ -373,7 +372,7 @@ export default function PurchaseOrdersPage() {
                   {lines.map((line, i) => {
                     const lineTotal = (parseFloat(line.unit_price) || 0) * (parseFloat(line.quantity) || 0)
                     return (
-                      <div key={i} className="grid grid-cols-[minmax(160px,2fr)_60px_72px_100px_90px_32px] gap-1.5 items-center px-2 py-1.5">
+                      <div key={i} className="grid grid-cols-[1fr_80px_90px_130px_110px_36px] gap-2 items-center px-3 py-2">
                         <Select
                           value={line.item_name}
                           onValueChange={val => {
@@ -411,7 +410,6 @@ export default function PurchaseOrdersPage() {
                       </div>
                     )
                   })}
-                </div>
                 </div>
               </div>
 

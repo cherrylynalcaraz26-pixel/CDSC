@@ -13,20 +13,10 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Plus, MoreHorizontal, CheckCircle2, Package } from 'lucide-react'
 import { toast } from 'sonner'
 
-const mockRRs = [
-  { id: '1', rr_number: 'RR-2025-00032', po_number: 'PO-2025-00043', supplier: 'DEF General Supply', delivery_date: '2025-06-01', received_by: 'Jose Manalo', warehouse: 'Main Warehouse', status: 'completed', total_items: 8, total_received: 8 },
-  { id: '2', rr_number: 'RR-2025-00031', po_number: 'PO-2025-00044', supplier: 'XYZ Technology Inc.', delivery_date: '2025-06-03', received_by: 'Lisa Reyes', warehouse: 'IT Storage Room', status: 'partial', total_items: 3, total_received: 2 },
-]
-
-const mockPendingPOs = [
-  { id: 'po1', po_number: 'PO-2025-00045', supplier: 'ABC Trading Corporation', expected_date: '2025-06-12', items: 5 },
-  { id: 'po2', po_number: 'PO-2025-00044', supplier: 'XYZ Technology Inc.', expected_date: '2025-06-17', items: 3 },
-]
-
+const mockRRs: never[] = []
+const mockPendingPOs: never[] = []
 const rrItems = [
-  { item: 'Bond Paper A4', qty_ordered: 50, qty_received: 50, qty_rejected: 0 },
-  { item: 'Ballpen Black (box)', qty_ordered: 20, qty_received: 18, qty_rejected: 2 },
-  { item: 'Printer Toner HP', qty_ordered: 10, qty_received: 10, qty_rejected: 0 },
+  { item: '', qty_ordered: 0, qty_received: 0, qty_rejected: 0 },
 ]
 
 export default function ReceivingPage() {
