@@ -276,7 +276,7 @@ export default function CRMPage() {
             className="pl-9"
           />
         </div>
-        <Select value={stageFilter} onValueChange={setStageFilter}>
+        <Select value={stageFilter} onValueChange={v => setStageFilter(v ?? 'all')}>
           <SelectTrigger className="w-[160px]">
             <SelectValue placeholder="All Stages" />
           </SelectTrigger>
@@ -287,7 +287,7 @@ export default function CRMPage() {
             ))}
           </SelectContent>
         </Select>
-        <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+        <Select value={priorityFilter} onValueChange={v => setPriorityFilter(v ?? 'all')}>
           <SelectTrigger className="w-[150px]">
             <SelectValue placeholder="All Priorities" />
           </SelectTrigger>
