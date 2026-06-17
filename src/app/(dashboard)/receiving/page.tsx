@@ -13,8 +13,11 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Plus, MoreHorizontal, CheckCircle2, Package } from 'lucide-react'
 import { toast } from 'sonner'
 
-const mockRRs: never[] = []
-const mockPendingPOs: never[] = []
+interface RR { id: string; rr_number: string; po_number: string; supplier: string; delivery_date: string; received_by: string; warehouse: string; status: string; total_items: number; total_received: number }
+interface PendingPO { id: string; po_number: string; supplier: string; expected_date: string; items: number }
+
+const mockRRs: RR[] = []
+const mockPendingPOs: PendingPO[] = []
 const rrItems = [
   { item: '', qty_ordered: 0, qty_received: 0, qty_rejected: 0 },
 ]
