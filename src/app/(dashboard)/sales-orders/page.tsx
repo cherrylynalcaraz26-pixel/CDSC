@@ -264,7 +264,7 @@ export default function SalesOrdersPage() {
 
       {/* ── New SO Dialog ── */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-[95vw] max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-3xl sm:max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold">New Sales Order</DialogTitle>
           </DialogHeader>

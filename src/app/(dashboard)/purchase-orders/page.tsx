@@ -294,7 +294,7 @@ export default function PurchaseOrdersPage() {
 
       {/* ── Create PO Dialog ── */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-[95vw] max-w-5xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
+        <DialogContent className="w-[95vw] max-w-5xl sm:max-w-5xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold">Create Purchase Order</DialogTitle>
           </DialogHeader>
