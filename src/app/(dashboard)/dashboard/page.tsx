@@ -30,6 +30,10 @@ interface MonthBar { month: string; dr: number; csi: number }
 interface RecentDR { id: string; dr_number: string | null; date: string | null; delivered_to: string | null; status: string }
 interface RecentPR { id: string; pr_number: string | null; created_at: string; department: string | null; priority: string; status: string }
 
+interface ORClientRow { client: string; collected: number; ewt: number; ors: number }
+interface CSIClientRow { client: string; billed: number; invoices: number; items: number }
+interface ReconRow { client: string; csi_billed: number; or_collected: number; diff: number; status: 'Balanced' | 'Outstanding' | 'Over-collected' }
+
 const STATUS_COLORS: Record<string, string> = {
   open:       'bg-blue-100 text-blue-700',
   completed:  'bg-green-100 text-green-700',
@@ -66,6 +70,9 @@ export default function DashboardPage() {
   const [monthlyData, setMonthlyData] = useState<MonthBar[]>([])
   const [recentDRs, setRecentDRs] = useState<RecentDR[]>([])
   const [recentPRs, setRecentPRs] = useState<RecentPR[]>([])
+  const [orRows, setOrRows] = useState<ORClientRow[]>([])
+  const [csiRows, setCsiRows] = useState<CSIClientRow[]>([])
+  const [reconRows, setReconRows] = useState<ReconRow[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -80,7 +87,7 @@ export default function DashboardPage() {
         return { label: format(d, 'MMM'), start: startOfMonth(d).toISOString(), end: endOfMonth(d).toISOString() }
       })
 
-      const [items, suppliers, pos, prs, assets, drLogs, csiRecs, recentDRData, recentPRData] = await Promise.all([
+      const [items, suppliers, pos, prs, assets, drLogs, csiRecs, recentDRData, recentPRData, collectionData, csiDetailData] = await Promise.all([
         supabase.from('items').select('id', { count: 'exact', head: true }).eq('status', 'active'),
         supabase.from('suppliers').select('id', { count: 'exact', head: true }).eq('is_active', true),
         supabase.from('purchase_orders').select('id, status', { count: 'exact' }),
@@ -90,6 +97,8 @@ export default function DashboardPage() {
         supabase.from('csi_records').select('id, date', { count: 'exact' }),
         supabase.from('dr_logs').select('id, dr_number, date, delivered_to, status').order('date', { ascending: false }).limit(8),
         supabase.from('purchase_requests').select('id, pr_number, created_at, department, priority, status').order('created_at', { ascending: false }).limit(6),
+        supabase.from('collections').select('client_name, amount, form_2307, status'),
+        supabase.from('csi_records').select('client_name, si_number, quantity, unit_price'),
       ])
 
       const allPOs = pos.data ?? []
@@ -114,6 +123,47 @@ export default function DashboardPage() {
         totalAssets: assets.count ?? 0,
         totalDRs: drLogs.count ?? 0,
       })
+
+      // --- OR collections by client ---
+      const orMap: Record<string, { collected: number; ewt: number; ors: number }> = {}
+      for (const c of collectionData.data ?? []) {
+        const name = c.client_name?.trim() || 'Unknown'
+        if (!orMap[name]) orMap[name] = { collected: 0, ewt: 0, ors: 0 }
+        orMap[name].collected += Number(c.amount) || 0
+        orMap[name].ewt += Number(c.form_2307) || 0
+        orMap[name].ors += 1
+      }
+      const orSorted: ORClientRow[] = Object.entries(orMap)
+        .map(([client, v]) => ({ client, ...v }))
+        .sort((a, b) => b.collected - a.collected)
+      setOrRows(orSorted)
+
+      // --- CSI invoices by client ---
+      const csiMap: Record<string, { billed: number; siNums: Set<string>; items: number }> = {}
+      for (const r of csiDetailData.data ?? []) {
+        const name = r.client_name?.trim() || 'Unknown'
+        if (!csiMap[name]) csiMap[name] = { billed: 0, siNums: new Set(), items: 0 }
+        csiMap[name].billed += (Number(r.quantity) || 0) * (Number(r.unit_price) || 0)
+        if (r.si_number) csiMap[name].siNums.add(r.si_number)
+        csiMap[name].items += 1
+      }
+      const csiSorted: CSIClientRow[] = Object.entries(csiMap)
+        .map(([client, v]) => ({ client, billed: v.billed, invoices: v.siNums.size, items: v.items }))
+        .sort((a, b) => b.billed - a.billed)
+      setCsiRows(csiSorted)
+
+      // --- Reconciliation ---
+      const allClients = new Set([...Object.keys(orMap), ...Object.keys(csiMap)])
+      const recon: ReconRow[] = Array.from(allClients).map(client => {
+        const csi = csiMap[client]?.billed ?? 0
+        const or  = orMap[client]?.collected ?? 0
+        const diff = csi - or
+        const status: ReconRow['status'] =
+          Math.abs(diff) < 0.01 ? 'Balanced' :
+          diff > 0 ? 'Outstanding' : 'Over-collected'
+        return { client, csi_billed: csi, or_collected: or, diff, status }
+      }).sort((a, b) => b.csi_billed - a.csi_billed)
+      setReconRows(recon)
 
       setMonthlyData(bars)
       setRecentDRs((recentDRData.data ?? []) as RecentDR[])
@@ -218,6 +268,152 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Collections + CSI tables */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Collections by Client */}
+        <Card>
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm font-medium">Collections by Client (OR Log)</CardTitle>
+            <span className="text-xs text-muted-foreground">Click row for details</span>
+          </CardHeader>
+          <CardContent className="p-0">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-red-600 text-white text-xs">
+                  <th className="px-3 py-2 text-left w-8">#</th>
+                  <th className="px-3 py-2 text-left">CLIENT</th>
+                  <th className="px-3 py-2 text-right">COLLECTED</th>
+                  <th className="px-3 py-2 text-right">EWT</th>
+                  <th className="px-3 py-2 text-right">ORs</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={5} className="text-center py-6 text-muted-foreground text-xs">Loading…</td></tr>
+                ) : orRows.map((r, i) => (
+                  <tr key={r.client} className="border-b last:border-0 hover:bg-muted/30 cursor-pointer">
+                    <td className="px-3 py-2 text-xs text-muted-foreground">{i + 1}</td>
+                    <td className="px-3 py-2 text-xs text-blue-600 font-medium">{r.client}</td>
+                    <td className="px-3 py-2 text-xs text-right text-green-600 font-medium tabular-nums">
+                      ₱{r.collected.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-right text-orange-500 tabular-nums">
+                      ₱{r.ewt.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-right">{r.ors}</td>
+                  </tr>
+                ))}
+                {!loading && orRows.length > 0 && (
+                  <tr className="border-t bg-muted/20 font-semibold text-xs">
+                    <td colSpan={2} className="px-3 py-2 text-right">TOTAL</td>
+                    <td className="px-3 py-2 text-right text-green-600 tabular-nums">
+                      ₱{orRows.reduce((s, r) => s + r.collected, 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="px-3 py-2 text-right text-orange-500 tabular-nums">
+                      ₱{orRows.reduce((s, r) => s + r.ewt, 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="px-3 py-2 text-right">{orRows.reduce((s, r) => s + r.ors, 0)}</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+
+        {/* CSI Invoices by Client */}
+        <Card>
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <CardTitle className="text-sm font-medium">CSI Invoices by Client</CardTitle>
+            <span className="text-xs text-muted-foreground">Click row for details</span>
+          </CardHeader>
+          <CardContent className="p-0">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-red-600 text-white text-xs">
+                  <th className="px-3 py-2 text-left w-8">#</th>
+                  <th className="px-3 py-2 text-left">CLIENT</th>
+                  <th className="px-3 py-2 text-right">BILLED</th>
+                  <th className="px-3 py-2 text-right">INVOICES</th>
+                  <th className="px-3 py-2 text-right">ITEMS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={5} className="text-center py-6 text-muted-foreground text-xs">Loading…</td></tr>
+                ) : csiRows.map((r, i) => (
+                  <tr key={r.client} className="border-b last:border-0 hover:bg-muted/30 cursor-pointer">
+                    <td className="px-3 py-2 text-xs text-muted-foreground">{i + 1}</td>
+                    <td className="px-3 py-2 text-xs font-medium">{r.client}</td>
+                    <td className="px-3 py-2 text-xs text-right text-blue-600 font-medium tabular-nums">
+                      ₱{r.billed.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-right">{r.invoices}</td>
+                    <td className="px-3 py-2 text-xs text-right">{r.items}</td>
+                  </tr>
+                ))}
+                {!loading && csiRows.length > 0 && (
+                  <tr className="border-t bg-muted/20 font-semibold text-xs">
+                    <td colSpan={2} className="px-3 py-2 text-right">TOTAL</td>
+                    <td className="px-3 py-2 text-right text-blue-600 tabular-nums">
+                      ₱{csiRows.reduce((s, r) => s + r.billed, 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="px-3 py-2 text-right">{csiRows.reduce((s, r) => s + r.invoices, 0)}</td>
+                    <td className="px-3 py-2 text-right">{csiRows.reduce((s, r) => s + r.items, 0)}</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* CSI vs OR Reconciliation */}
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium">CSI vs OR Reconciliation by Client</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-red-600 text-white text-xs">
+                <th className="px-3 py-2 text-left w-8">#</th>
+                <th className="px-3 py-2 text-left">CLIENT</th>
+                <th className="px-3 py-2 text-right">CSI BILLED</th>
+                <th className="px-3 py-2 text-right">OR COLLECTED</th>
+                <th className="px-3 py-2 text-right">DIFFERENCE</th>
+                <th className="px-3 py-2 text-left">STATUS</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr><td colSpan={6} className="text-center py-6 text-muted-foreground text-xs">Loading…</td></tr>
+              ) : reconRows.map((r, i) => (
+                <tr key={r.client} className="border-b last:border-0 hover:bg-muted/30">
+                  <td className="px-3 py-2 text-xs text-muted-foreground">{i + 1}</td>
+                  <td className="px-3 py-2 text-xs font-medium">{r.client}</td>
+                  <td className="px-3 py-2 text-xs text-right text-blue-600 tabular-nums">
+                    ₱{r.csi_billed.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                  </td>
+                  <td className="px-3 py-2 text-xs text-right text-green-600 tabular-nums">
+                    ₱{r.or_collected.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                  </td>
+                  <td className={`px-3 py-2 text-xs text-right tabular-nums font-medium ${r.diff > 0 ? 'text-orange-600' : r.diff < 0 ? 'text-red-600' : 'text-gray-500'}`}>
+                    {r.diff > 0 ? '+' : ''}₱{r.diff.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                  </td>
+                  <td className="px-3 py-2">
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                      r.status === 'Balanced' ? 'bg-green-100 text-green-700' :
+                      r.status === 'Outstanding' ? 'bg-orange-100 text-orange-700' :
+                      'bg-red-100 text-red-700'
+                    }`}>{r.status}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </CardContent>
+      </Card>
 
       {/* Recent PRs + Quick Links */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
