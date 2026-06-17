@@ -39,6 +39,7 @@ export default function InventoryPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [clientFilter, setClientFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('all')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
   // Edit dialog state
@@ -169,7 +170,12 @@ export default function InventoryPage() {
     const matchClient = clientFilter === 'all' || r.client === clientFilter
     const q = search.toLowerCase()
     const matchSearch = !q || r.item_name.toLowerCase().includes(q) || r.client.toLowerCase().includes(q)
-    return matchClient && matchSearch
+    const matchStatus =
+      statusFilter === 'all' ||
+      (statusFilter === 'in_stock' && r.balance > 0) ||
+      (statusFilter === 'balanced' && r.balance === 0) ||
+      (statusFilter === 'deficit' && r.balance < 0)
+    return matchClient && matchSearch && matchStatus
   })
 
   const totalItems = filtered.length
@@ -261,12 +267,23 @@ export default function InventoryPage() {
           <Input className="pl-9" placeholder="Search item or client…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <Select value={clientFilter} onValueChange={v => setClientFilter(v ?? 'all')}>
-          <SelectTrigger className="w-72">
+          <SelectTrigger className="w-60">
             <SelectValue placeholder="Filter by client" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Clients</SelectItem>
             {clients.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={statusFilter} onValueChange={v => setStatusFilter(v ?? 'all')}>
+          <SelectTrigger className="w-44">
+            <SelectValue placeholder="Filter by status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Statuses</SelectItem>
+            <SelectItem value="in_stock">In Stock</SelectItem>
+            <SelectItem value="balanced">Balanced</SelectItem>
+            <SelectItem value="deficit">Deficit</SelectItem>
           </SelectContent>
         </Select>
       </div>

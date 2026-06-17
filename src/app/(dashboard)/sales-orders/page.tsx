@@ -49,13 +49,13 @@ export default function SalesOrdersPage() {
   const [sos, setSOs] = useState<SO[]>([])
   const [items, setItems] = useState<ItemOption[]>([])
   const [clients, setClients] = useState<ClientOption[]>([])
+  const [poNumbers, setPoNumbers] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [activeItemRow, setActiveItemRow] = useState<number | null>(null)
 
+  const [soNumber, setSoNumber] = useState('')
   const [clientId, setClientId] = useState('')
-  const [clientName, setClientName] = useState('')
   const [clientPONumber, setClientPONumber] = useState('')
   const [deliveryDate, setDeliveryDate] = useState('')
   const [remarks, setRemarks] = useState('')
@@ -63,14 +63,16 @@ export default function SalesOrdersPage() {
 
   async function load() {
     setLoading(true)
-    const [{ data: soData }, { data: itemData }, { data: cliData }] = await Promise.all([
+    const [{ data: soData }, { data: itemData }, { data: cliData }, { data: poData }] = await Promise.all([
       supabase.from('sales_orders').select('id,so_number,so_date,created_at,client_name,client_po_number,status,total_amount,remarks').order('created_at', { ascending: false }),
       supabase.from('items').select('item_code,item_name,unit_of_measure').eq('status','active').order('item_name'),
       supabase.from('clients').select('id,company_name').eq('status','active').order('company_name'),
+      supabase.from('purchase_orders').select('po_number').not('po_number', 'is', null).order('created_at', { ascending: false }),
     ])
     setSOs((soData ?? []) as SO[])
     setItems((itemData ?? []) as ItemOption[])
     setClients((cliData ?? []) as ClientOption[])
+    setPoNumbers((poData ?? []).map((p: any) => p.po_number).filter(Boolean))
     setLoading(false)
   }
 
@@ -80,24 +82,19 @@ export default function SalesOrdersPage() {
   const fmt = (n: number) => `₱${n.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
 
   function resetForm() {
-    setClientId(''); setClientName(''); setClientPONumber('')
+    setSoNumber(''); setClientId(''); setClientPONumber('')
     setDeliveryDate(''); setRemarks(''); setLines([emptyLine()])
   }
 
-  function handleClientSelect(id: string) {
-    setClientId(id)
-    const found = clients.find(c => c.id === id)
-    if (found) setClientName(found.company_name)
-  }
-
   async function submitSO() {
-    const name = clientName.trim()
-    if (!name) { toast.error('Client name is required'); return }
+    if (!clientId) { toast.error('Client is required'); return }
+    const found = clients.find(c => c.id === clientId)
     setSaving(true)
     const { error } = await supabase.from('sales_orders').insert({
-      client_id: clientId || null,
-      client_name: name,
-      client_po_number: clientPONumber.trim() || null,
+      so_number: soNumber.trim() || null,
+      client_id: clientId,
+      client_name: found?.company_name ?? '',
+      client_po_number: clientPONumber || null,
       delivery_date: deliveryDate || null,
       remarks: remarks || null,
       status: 'draft',
@@ -267,49 +264,49 @@ export default function SalesOrdersPage() {
 
       {/* ── New SO Dialog ── */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold">New Sales Order</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-6 py-2">
-            <div className="space-y-4">
+          <div className="space-y-5 py-2">
+            <div className="space-y-3">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">Order Details</p>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>SO Number</Label>
-                  <Input value="Auto-generated" disabled className="bg-muted text-muted-foreground" />
-                </div>
-                <div className="space-y-1.5 md:col-span-2">
-                  <Label>Client <span className="text-destructive">*</span></Label>
-                  <Select value={clientId} onValueChange={v => handleClientSelect(v ?? '')}>
-                    <SelectTrigger><SelectValue placeholder="Select client…" /></SelectTrigger>
-                    <SelectContent>
-                      {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                  {!clientId && (
-                    <Input
-                      placeholder="Or type client name manually"
-                      value={clientName}
-                      onChange={e => setClientName(e.target.value)}
-                    />
-                  )}
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-1.5">
-                  <Label>Client PO Number</Label>
-                  <Input
-                    placeholder="Client's PO reference #"
-                    value={clientPONumber}
-                    onChange={e => setClientPONumber(e.target.value)}
-                  />
+                  <Input placeholder="Enter SO number" value={soNumber} onChange={e => setSoNumber(e.target.value)} />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Delivery Date</Label>
                   <Input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} />
                 </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Client <span className="text-destructive">*</span></Label>
+                <Select value={clientId} onValueChange={v => setClientId(v ?? '')}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select client…">
+                      {clientId ? clients.find(c => c.id === clientId)?.company_name : 'Select client…'}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Client PO Number</Label>
+                <Select value={clientPONumber} onValueChange={v => setClientPONumber(v ?? '')}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select PO number…">
+                      {clientPONumber || 'Select PO number…'}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {poNumbers.map(po => <SelectItem key={po} value={po}>{po}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1.5">
                 <Label>Remarks</Label>
@@ -319,62 +316,58 @@ export default function SalesOrdersPage() {
 
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1 flex-1">Items Ordered</p>
-                <Button type="button" variant="outline" size="sm" className="ml-4 shrink-0" onClick={() => setLines(p => [...p, emptyLine()])}>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pb-1">Items Ordered</p>
+                <Button type="button" variant="outline" size="sm" onClick={() => setLines(p => [...p, emptyLine()])}>
                   <Plus className="h-3.5 w-3.5 mr-1" />Add Row
                 </Button>
               </div>
-              <div className="border rounded-lg overflow-hidden">
-                <div className="grid grid-cols-[1fr_64px_88px_120px_96px_36px] gap-1.5 px-2 py-2 bg-muted/50 border-b text-xs font-medium text-muted-foreground">
-                  <span>Item / Description</span><span>Qty</span><span>Unit</span><span>Unit Price (₱)</span>
-                  <span className="text-right">Line Total</span><span />
-                </div>
-                <div className="divide-y">
-                  {lines.map((line, i) => {
-                    const lineTotal = (parseFloat(line.unit_price) || 0) * (parseFloat(line.quantity) || 0)
-                    const filtered = items.filter(it =>
-                      it.item_name.toLowerCase().includes(line.item_name.toLowerCase()) ||
-                      it.item_code.toLowerCase().includes(line.item_name.toLowerCase())
-                    ).slice(0, 25)
-                    return (
-                      <div key={i} className="grid grid-cols-[1fr_64px_88px_120px_96px_36px] gap-1.5 items-center px-2 py-1.5">
-                        <div className="relative">
-                          <Input placeholder="Search item…" className="h-8 text-sm" value={line.item_name}
-                            onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, item_name: e.target.value } : l))}
-                            onFocus={() => setActiveItemRow(i)}
-                            onBlur={() => setTimeout(() => setActiveItemRow(null), 200)}
-                            autoComplete="off" />
-                          {activeItemRow === i && line.item_name.length > 0 && filtered.length > 0 && (
-                            <div className="absolute z-50 top-full left-0 right-0 mt-0.5 bg-popover border rounded-md shadow-lg max-h-48 overflow-y-auto">
-                              {filtered.map(it => (
-                                <button key={it.item_code} type="button"
-                                  className="w-full text-left px-3 py-1.5 text-sm hover:bg-accent flex items-center justify-between"
-                                  onMouseDown={e => {
-                                    e.preventDefault()
-                                    setLines(p => p.map((l, idx) => idx === i ? { ...l, item_name: it.item_name, unit: it.unit_of_measure || l.unit } : l))
-                                    setActiveItemRow(null)
-                                  }}>
-                                  <span>{it.item_name}</span>
-                                  <span className="text-xs text-muted-foreground ml-2 shrink-0">{it.unit_of_measure}</span>
-                                </button>
+              <div className="border rounded-lg overflow-x-auto">
+                <div className="min-w-[540px]">
+                  <div className="grid grid-cols-[minmax(160px,2fr)_60px_72px_100px_90px_32px] gap-1.5 px-2 py-2 bg-muted/50 border-b text-xs font-medium text-muted-foreground">
+                    <span>Item / Description</span><span>Qty</span><span>Unit</span><span>Unit Price (₱)</span>
+                    <span className="text-right">Line Total</span><span />
+                  </div>
+                  <div className="divide-y">
+                    {lines.map((line, i) => {
+                      const lineTotal = (parseFloat(line.unit_price) || 0) * (parseFloat(line.quantity) || 0)
+                      return (
+                        <div key={i} className="grid grid-cols-[minmax(160px,2fr)_60px_72px_100px_90px_32px] gap-1.5 items-center px-2 py-1.5">
+                          <Select
+                            value={line.item_name}
+                            onValueChange={val => {
+                              const selected = items.find(it => it.item_name === val)
+                              setLines(p => p.map((l, idx) => idx === i
+                                ? { ...l, item_name: val ?? '', unit: selected?.unit_of_measure || l.unit }
+                                : l))
+                            }}
+                          >
+                            <SelectTrigger className="h-8 text-sm">
+                              <SelectValue placeholder="Select item…" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {items.map(it => (
+                                <SelectItem key={it.item_code} value={it.item_name}>
+                                  {it.item_name} <span className="text-xs text-muted-foreground ml-1">({it.unit_of_measure})</span>
+                                </SelectItem>
                               ))}
-                            </div>
-                          )}
+                            </SelectContent>
+                          </Select>
+                          <Input type="number" min={1} placeholder="1" className="h-8 text-sm" value={line.quantity}
+                            onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, quantity: e.target.value } : l))} />
+                          <div className="h-8 flex items-center px-2 text-sm bg-muted/30 rounded border text-muted-foreground truncate">
+                            {line.unit || '—'}
+                          </div>
+                          <Input type="number" min={0} step="0.01" placeholder="0.00" className="h-8 text-sm" value={line.unit_price}
+                            onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, unit_price: e.target.value } : l))} />
+                          <div className="text-right text-sm font-medium pr-1 tabular-nums">₱{lineTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</div>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
+                            onClick={() => setLines(p => p.filter((_, idx) => idx !== i))} disabled={lines.length === 1}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
                         </div>
-                        <Input type="number" min={1} placeholder="1" className="h-8 text-sm" value={line.quantity}
-                          onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, quantity: e.target.value } : l))} />
-                        <Input className="h-8 text-sm" value={line.unit} placeholder="unit"
-                          onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, unit: e.target.value } : l))} />
-                        <Input type="number" min={0} step="0.01" placeholder="0.00" className="h-8 text-sm" value={line.unit_price}
-                          onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, unit_price: e.target.value } : l))} />
-                        <div className="text-right text-sm font-medium pr-1">₱{lineTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</div>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
-                          onClick={() => setLines(p => p.filter((_, idx) => idx !== i))} disabled={lines.length === 1}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    )
-                  })}
+                      )
+                    })}
+                  </div>
                 </div>
               </div>
               <div className="flex justify-end text-sm font-semibold">

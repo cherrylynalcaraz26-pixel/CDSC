@@ -104,10 +104,20 @@ export default function ReceivingPage() {
                     <DropdownMenu>
                       <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-accent"><MoreHorizontal className="h-4 w-4" /></DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem>View Details</DropdownMenuItem>
-                        <DropdownMenuItem>Print RR</DropdownMenuItem>
-                        {rr.status === 'partial' && <DropdownMenuItem>Add Remaining Items</DropdownMenuItem>}
-                        <DropdownMenuItem>View Inventory Update</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => toast.info(`RR: ${rr.rr_number} — ${rr.supplier} | Received ${rr.total_received}/${rr.total_items} items`)}>
+                          View Details
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => window.print()}>
+                          Print RR
+                        </DropdownMenuItem>
+                        {rr.status === 'partial' && (
+                          <DropdownMenuItem onClick={() => { setSelectedPO(rr.po_number); setOpen(true) }}>
+                            Add Remaining Items
+                          </DropdownMenuItem>
+                        )}
+                        <DropdownMenuItem onClick={() => toast.info(`Inventory updated for ${rr.rr_number}: ${rr.total_received} items added to stock`)}>
+                          View Inventory Update
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
