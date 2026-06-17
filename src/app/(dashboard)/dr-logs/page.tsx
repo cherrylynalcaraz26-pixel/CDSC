@@ -24,6 +24,8 @@ import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
 
 interface Supplier { id: string; company_name: string }
+interface Client { id: string; company_name: string }
+interface ItemOption { item_code: string; item_name: string; unit_of_measure: string }
 
 interface DRLog {
   id: string
@@ -81,6 +83,9 @@ export default function DRLogsPage() {
   const supabase = createClient()
   const [logs, setLogs] = useState<DRLog[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [clients, setClients] = useState<Client[]>([])
+  const [itemOptions, setItemOptions] = useState<ItemOption[]>([])
+  const [poNumbers, setPoNumbers] = useState<string[]>([])
   const [allItems, setAllItems] = useState<DRItem[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -96,12 +101,18 @@ export default function DRLogsPage() {
 
   async function load() {
     setLoading(true)
-    const [{ data: drData }, { data: supData }] = await Promise.all([
+    const [{ data: drData }, { data: supData }, { data: clientData }, { data: itemData }, { data: poData }] = await Promise.all([
       supabase.from('dr_logs').select('*').order('dr_date', { ascending: false }),
       supabase.from('suppliers').select('id, company_name').order('company_name'),
+      supabase.from('clients').select('id, company_name').order('company_name'),
+      supabase.from('items').select('item_code, item_name, unit_of_measure').eq('status', 'active').order('item_name'),
+      supabase.from('purchase_orders').select('po_number').not('po_number', 'is', null).order('created_at', { ascending: false }),
     ])
     setLogs(drData ?? [])
     setSuppliers(supData ?? [])
+    setClients(clientData ?? [])
+    setItemOptions((itemData ?? []) as ItemOption[])
+    setPoNumbers((poData ?? []).map((p: any) => p.po_number).filter(Boolean))
 
     const drNumbers = (drData ?? []).map(d => d.dr_number)
     if (drNumbers.length > 0) {
@@ -175,9 +186,9 @@ export default function DRLogsPage() {
     setOpen(true)
   }
 
-  function handleSupplierChange(supplierId: string | null) {
-    const sup = suppliers.find(s => s.id === supplierId)
-    setForm(f => ({ ...f, supplier_id: supplierId ?? '', supplier_name: sup?.company_name ?? '' }))
+  function handleClientChange(clientId: string | null) {
+    const client = clients.find(c => c.id === clientId)
+    setForm(f => ({ ...f, supplier_id: clientId ?? '', supplier_name: client?.company_name ?? '' }))
   }
 
   function updateItem(index: number, field: keyof DRItem, value: string) {
@@ -508,7 +519,7 @@ export default function DRLogsPage() {
       </Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-4xl sm:max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Truck className="h-5 w-5 text-red-600" />
@@ -532,19 +543,24 @@ export default function DRLogsPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>Delivered To</Label>
-                <Select value={form.supplier_id} onValueChange={handleSupplierChange}>
+                <Select value={form.supplier_id} onValueChange={handleClientChange}>
                   <SelectTrigger><SelectValue placeholder="Select client / delivered to" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">— None —</SelectItem>
-                    {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.company_name}</SelectItem>)}
+                    {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
                   <Label>PO Reference</Label>
-                  <Input placeholder="e.g. PO-2025-00045" value={form.po_number}
-                    onChange={e => setForm(f => ({ ...f, po_number: e.target.value }))} />
+                  <Select value={form.po_number} onValueChange={v => setForm(f => ({ ...f, po_number: v ?? '' }))}>
+                    <SelectTrigger><SelectValue placeholder="Select PO…" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">— None —</SelectItem>
+                      {poNumbers.map(po => <SelectItem key={po} value={po}>{po}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-1.5">
                   <Label>Status</Label>
@@ -574,29 +590,40 @@ export default function DRLogsPage() {
             <div className="space-y-2">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">Delivery Items</p>
               <div className="space-y-2">
-                <div className="grid grid-cols-[80px_120px_1fr_32px] gap-2 text-xs font-medium text-muted-foreground px-1">
+                <div className="grid grid-cols-[80px_90px_1fr_32px] gap-2 text-xs font-medium text-muted-foreground px-1">
                   <span>Qty</span><span>Unit</span><span>Item Description</span><span />
                 </div>
                 {items.map((item, i) => (
-                  <div key={i} className="grid grid-cols-[80px_120px_1fr_32px] gap-2 items-center">
+                  <div key={i} className="grid grid-cols-[80px_90px_1fr_32px] gap-2 items-center">
                     <Input
                       type="number" min={0} placeholder="0"
                       value={item.quantity}
                       onChange={e => updateItem(i, 'quantity', e.target.value)}
                       className="h-8 text-sm"
                     />
-                    <Input
-                      placeholder="e.g. Piece/s"
-                      value={item.unit}
-                      onChange={e => updateItem(i, 'unit', e.target.value)}
-                      className="h-8 text-sm"
-                    />
-                    <Input
-                      placeholder="Item name / description"
+                    <div className="h-8 flex items-center px-2 text-sm bg-muted/30 rounded border text-muted-foreground truncate">
+                      {item.unit || '—'}
+                    </div>
+                    <Select
                       value={item.item_name}
-                      onChange={e => updateItem(i, 'item_name', e.target.value)}
-                      className="h-8 text-sm"
-                    />
+                      onValueChange={val => {
+                        const selected = itemOptions.find(it => it.item_name === val)
+                        setItems(prev => prev.map((it, idx) => idx === i
+                          ? { ...it, item_name: val ?? '', unit: selected?.unit_of_measure || it.unit }
+                          : it))
+                      }}
+                    >
+                      <SelectTrigger className="h-8 text-sm">
+                        <SelectValue placeholder="Select item…" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {itemOptions.map(it => (
+                          <SelectItem key={it.item_code} value={it.item_name}>
+                            {it.item_name} <span className="text-xs text-muted-foreground ml-1">({it.unit_of_measure})</span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <button
                       type="button"
                       onClick={() => removeItemRow(i)}
