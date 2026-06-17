@@ -12,6 +12,7 @@ import {
   FileBarChart, Settings, ChevronDown, ChevronRight, Building2,
   SlidersHorizontal, ArrowRightLeft, LogOut, X, Wrench,
   Receipt, PanelLeftClose, PanelLeftOpen, ClipboardList, BoxesIcon,
+  TrendingUp,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 
@@ -24,6 +25,7 @@ interface NavItem {
 
 const navigation: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { label: 'CRM / Inquiry', href: '/crm', icon: TrendingUp },
   {
     label: 'Purchasing', icon: ShoppingCart,
     children: [

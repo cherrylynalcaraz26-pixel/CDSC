@@ -18,6 +18,7 @@ interface HeaderProps {
 
 const SEARCH_ITEMS = [
   { label: 'Dashboard',             href: '/dashboard',               section: 'Main' },
+  { label: 'CRM / Inquiry',        href: '/crm',                     section: 'CRM' },
   { label: 'Purchase Orders',       href: '/purchase-orders',         section: 'Purchasing' },
   { label: 'Sales Orders',          href: '/sales-orders',            section: 'Purchasing' },
   { label: 'Receiving',             href: '/receiving',               section: 'Warehouse' },
