@@ -98,6 +98,7 @@ export default function DRLogsPage() {
   const [saving, setSaving] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<'by-dr' | 'all-items'>('by-dr')
+  const [drActiveTab, setDrActiveTab] = useState<'form' | 'preview'>('form')
 
   async function load() {
     setLoading(true)
@@ -166,6 +167,7 @@ export default function DRLogsPage() {
     setEditing(null)
     setForm(emptyForm())
     setItems([emptyItem()])
+    setDrActiveTab('form')
     setOpen(true)
   }
 
@@ -183,6 +185,7 @@ export default function DRLogsPage() {
     })
     const existing = getItems(log.dr_number)
     setItems(existing.length > 0 ? existing : [emptyItem()])
+    setDrActiveTab('form')
     setOpen(true)
   }
 

@@ -36,7 +36,7 @@ interface InventoryRow {
   ws_details: WsDetail[]
 }
 
-interface ItemOption { item_name: string; unit: string }
+interface ItemOption { item_name: string; unit_of_measure: string }
 
 export default function InventoryPage() {
   const supabase = createClient()
@@ -53,7 +53,6 @@ export default function InventoryPage() {
   const [saving, setSaving] = useState(false)
 
   const [addOpen, setAddOpen] = useState(false)
-  const [addClient, setAddClient] = useState('')
   const [addItemName, setAddItemName] = useState('')
   const [addQty, setAddQty] = useState('')
   const [addUnit, setAddUnit] = useState('')
@@ -220,14 +219,13 @@ export default function InventoryPage() {
   }
 
   async function loadItemOptions() {
-    const { data } = await supabase.from('items').select('item_name, unit').order('item_name')
+    const { data } = await supabase.from('items').select('item_name, unit_of_measure').order('item_name')
     if (data) setItemOptions(data)
   }
 
   useEffect(() => { load() }, [])
 
   function openAddDialog() {
-    setAddClient('')
     setAddItemName('')
     setAddQty('')
     setAddUnit('')
@@ -240,14 +238,14 @@ export default function InventoryPage() {
     if (!value) return
     setAddItemName(value)
     const found = itemOptions.find(o => o.item_name === value)
-    if (found) setAddUnit(found.unit ?? '')
+    if (found) setAddUnit(found.unit_of_measure ?? '')
   }
 
   async function saveAddStock() {
     if (!addItemName.trim() || !addQty.trim()) return
     setAddSaving(true)
     const { error } = await supabase.from('warehouse_stock').insert({
-      client_name: addClient.trim() || null,
+      client_name: null,
       item_name: addItemName.trim(),
       unit: addUnit.trim(),
       quantity: Number(addQty),
@@ -620,10 +618,6 @@ export default function InventoryPage() {
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
-              <Label>Client <span className="text-muted-foreground text-xs">(optional — blank = General Warehouse Stock)</span></Label>
-              <Input value={addClient} onChange={e => setAddClient(e.target.value)} placeholder="Client name" />
-            </div>
-            <div className="space-y-1.5">
               <Label>Item Name <span className="text-red-500">*</span></Label>
               <Select value={addItemName} onValueChange={handleAddItemSelect}>
                 <SelectTrigger>
@@ -642,7 +636,9 @@ export default function InventoryPage() {
             </div>
             <div className="space-y-1.5">
               <Label>Unit</Label>
-              <Input value={addUnit} onChange={e => setAddUnit(e.target.value)} placeholder="e.g. Piece/s" />
+              <div className="h-9 flex items-center px-3 text-sm bg-muted/30 rounded border text-muted-foreground">
+                {addUnit || '— auto-filled from item —'}
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label>Notes <span className="text-muted-foreground text-xs">(optional)</span></Label>

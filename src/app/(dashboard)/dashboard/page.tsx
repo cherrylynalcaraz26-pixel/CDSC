@@ -71,6 +71,8 @@ export default function DashboardPage() {
   const [monthlyData, setMonthlyData] = useState<MonthBar[]>([])
   const [recentDRs, setRecentDRs] = useState<RecentDR[]>([])
   const [recentPRs, setRecentPRs] = useState<RecentPR[]>([])
+  const [pipelinePOs, setPipelinePOs] = useState<any[]>([])
+  const [receivedPONumbers, setReceivedPONumbers] = useState<Set<string>>(new Set())
   const [orRows, setOrRows] = useState<ORClientRow[]>([])
   const [csiRows, setCsiRows] = useState<CSIClientRow[]>([])
   const [reconRows, setReconRows] = useState<ReconRow[]>([])
@@ -176,6 +178,12 @@ export default function DashboardPage() {
         return { client, csi_billed: csi, or_collected: or, diff, status }
       }).sort((a, b) => b.csi_billed - a.csi_billed)
       setReconRows(recon)
+
+      // --- PO Pipeline ---
+      const openPOsData = await supabase.from('purchase_orders').select('id, po_number, status, delivery_date, supplier:suppliers(company_name)').in('status', ['open', 'partially_delivered']).order('created_at', { ascending: false }).limit(10)
+      const rrData = await supabase.from('receiving_reports').select('po_number, status').order('created_at', { ascending: false })
+      setPipelinePOs(openPOsData.data ?? [])
+      setReceivedPONumbers(new Set((rrData.data ?? []).map((r: any) => r.po_number).filter(Boolean)))
 
       setMonthlyData(bars)
       setRecentDRs((recentDRData.data ?? []) as RecentDR[])
