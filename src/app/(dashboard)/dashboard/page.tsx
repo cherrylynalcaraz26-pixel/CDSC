@@ -28,7 +28,7 @@ interface KPI {
 }
 
 interface MonthBar { month: string; dr: number; csi: number }
-interface RecentDR { id: string; dr_number: string | null; date: string | null; delivered_to: string | null; status: string }
+interface RecentDR { id: string; dr_number: string | null; dr_date: string | null; supplier_name: string | null; status: string }
 interface RecentPR { id: string; pr_number: string | null; created_at: string; department: string | null; priority: string; status: string }
 
 interface ORClientRow { client: string; collected: number; ewt: number; ors: number }
@@ -97,12 +97,12 @@ export default function DashboardPage() {
         supabase.from('purchase_orders').select('id, status', { count: 'exact' }),
         supabase.from('purchase_requests').select('id, status', { count: 'exact' }),
         supabase.from('assets').select('id', { count: 'exact', head: true }),
-        supabase.from('dr_logs').select('id, date', { count: 'exact' }),
-        supabase.from('csi_records').select('id, date', { count: 'exact' }),
-        supabase.from('dr_logs').select('id, dr_number, date, delivered_to, status').order('date', { ascending: false }).limit(8),
+        supabase.from('dr_logs').select('id, dr_date', { count: 'exact' }),
+        supabase.from('csi_records').select('id, si_date', { count: 'exact' }),
+        supabase.from('dr_logs').select('id, dr_number, dr_date, supplier_name, status').order('dr_date', { ascending: false }).limit(8),
         supabase.from('purchase_requests').select('id, pr_number, created_at, department, priority, status').order('created_at', { ascending: false }).limit(6),
-        supabase.from('collections').select('client_name, or_number, amount, form_2307, status, date'),
-        supabase.from('csi_records').select('client_name, si_number, item_name, quantity, unit_price, date'),
+        supabase.from('collections').select('client_name, or_number, amount, form_2307, status, collection_date'),
+        supabase.from('csi_records').select('client_name, si_number, item_name, quantity, unit_price, si_date'),
       ])
 
       const allPOs = pos.data ?? []
@@ -113,8 +113,8 @@ export default function DashboardPage() {
       // Monthly bar chart data
       const bars: MonthBar[] = months.map(m => ({
         month: m.label,
-        dr: allDRs.filter(d => d.date && d.date >= m.start.slice(0, 10) && d.date <= m.end.slice(0, 10)).length,
-        csi: allCSI.filter(c => c.date && c.date >= m.start.slice(0, 10) && c.date <= m.end.slice(0, 10)).length,
+        dr: allDRs.filter(d => d.dr_date && d.dr_date >= m.start.slice(0, 10) && d.dr_date <= m.end.slice(0, 10)).length,
+        csi: allCSI.filter(c => c.si_date && c.si_date >= m.start.slice(0, 10) && c.si_date <= m.end.slice(0, 10)).length,
       }))
 
       setKpi({
@@ -122,8 +122,8 @@ export default function DashboardPage() {
         activeSuppliers: suppliers.count ?? 0,
         openPOs: allPOs.filter(p => p.status === 'open').length,
         pendingPRs: allPRs.filter(p => ['submitted', 'dept_approved', 'admin_approved'].includes(p.status)).length,
-        drLogsThisMonth: allDRs.filter(d => d.date && d.date >= thisMonthStart.slice(0, 10) && d.date <= thisMonthEnd.slice(0, 10)).length,
-        csiThisMonth: allCSI.filter(c => c.date && c.date >= thisMonthStart.slice(0, 10) && c.date <= thisMonthEnd.slice(0, 10)).length,
+        drLogsThisMonth: allDRs.filter(d => d.dr_date && d.dr_date >= thisMonthStart.slice(0, 10) && d.dr_date <= thisMonthEnd.slice(0, 10)).length,
+        csiThisMonth: allCSI.filter(c => c.si_date && c.si_date >= thisMonthStart.slice(0, 10) && c.si_date <= thisMonthEnd.slice(0, 10)).length,
         totalAssets: assets.count ?? 0,
         totalDRs: drLogs.count ?? 0,
       })
@@ -264,9 +264,9 @@ export default function DashboardPage() {
                 ) : recentDRs.map(dr => (
                   <tr key={dr.id} className="border-b last:border-0 hover:bg-muted/30">
                     <td className="px-4 py-2 font-mono text-xs font-semibold text-red-600">{dr.dr_number ?? '—'}</td>
-                    <td className="px-4 py-2 text-xs max-w-[140px] truncate">{dr.delivered_to ?? '—'}</td>
+                    <td className="px-4 py-2 text-xs max-w-[140px] truncate">{dr.supplier_name ?? '—'}</td>
                     <td className="px-4 py-2 text-xs text-muted-foreground whitespace-nowrap">
-                      {dr.date ? format(new Date(dr.date), 'MMM d, yyyy') : '—'}
+                      {dr.dr_date ? format(new Date(dr.dr_date), 'MMM d, yyyy') : '—'}
                     </td>
                     <td className="px-4 py-2">
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[dr.status] ?? 'bg-gray-100 text-gray-600'}`}>
@@ -453,7 +453,7 @@ export default function DashboardPage() {
                   {(orDetails[detailModal.client] ?? []).map((r, i) => (
                     <tr key={i} className="border-b last:border-0 hover:bg-muted/30">
                       <td className="px-3 py-2 font-mono text-xs text-red-600">{r.or_number ?? '—'}</td>
-                      <td className="px-3 py-2 text-xs text-muted-foreground">{r.date ? format(new Date(r.date), 'MMM d, yyyy') : '—'}</td>
+                      <td className="px-3 py-2 text-xs text-muted-foreground">{r.collection_date ? format(new Date(r.collection_date), 'MMM d, yyyy') : '—'}</td>
                       <td className="px-3 py-2 text-xs text-right text-green-600 tabular-nums font-medium">₱{(Number(r.amount) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
                       <td className="px-3 py-2 text-xs text-right text-orange-500 tabular-nums">₱{(Number(r.form_2307) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
                       <td className="px-3 py-2 text-xs">{r.status ?? '—'}</td>
@@ -480,7 +480,7 @@ export default function DashboardPage() {
                   {(csiDetails[detailModal.client] ?? []).map((r, i) => (
                     <tr key={i} className="border-b last:border-0 hover:bg-muted/30">
                       <td className="px-3 py-2 font-mono text-xs text-red-600">{r.si_number ?? '—'}</td>
-                      <td className="px-3 py-2 text-xs text-muted-foreground">{r.date ? format(new Date(r.date), 'MMM d, yyyy') : '—'}</td>
+                      <td className="px-3 py-2 text-xs text-muted-foreground">{r.si_date ? format(new Date(r.si_date), 'MMM d, yyyy') : '—'}</td>
                       <td className="px-3 py-2 text-xs">{r.item_name ?? '—'}</td>
                       <td className="px-3 py-2 text-xs text-right tabular-nums">{Number(r.quantity) || 0}</td>
                       <td className="px-3 py-2 text-xs text-right tabular-nums">₱{(Number(r.unit_price) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
@@ -510,7 +510,7 @@ export default function DashboardPage() {
                       : (orDetails[detailModal.client] ?? []).map((r, i) => (
                         <tr key={i} className="border-b last:border-0">
                           <td className="px-3 py-1.5 font-mono text-xs text-red-600">{r.or_number ?? '—'}</td>
-                          <td className="px-3 py-1.5 text-xs text-muted-foreground">{r.date ? format(new Date(r.date), 'MMM d, yyyy') : '—'}</td>
+                          <td className="px-3 py-1.5 text-xs text-muted-foreground">{r.collection_date ? format(new Date(r.collection_date), 'MMM d, yyyy') : '—'}</td>
                           <td className="px-3 py-1.5 text-xs text-right text-green-600 tabular-nums">₱{(Number(r.amount) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
                           <td className="px-3 py-1.5 text-xs text-right text-orange-500 tabular-nums">₱{(Number(r.form_2307) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
                         </tr>
