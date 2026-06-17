@@ -52,11 +52,11 @@ const navigation: NavItem[] = [
       { label: 'BIR Compliance', href: '/bir', icon: FileBarChart },
     ],
   },
-  { label: 'Reports', href: '/reports', icon: FileBarChart },
   {
     label: 'Setup', icon: Wrench,
     children: [
       { label: 'Configuration', href: '/setup', icon: SlidersHorizontal },
+      { label: 'Reports', href: '/reports', icon: FileBarChart },
       { label: 'Users', href: '/users', icon: Users },
     ],
   },

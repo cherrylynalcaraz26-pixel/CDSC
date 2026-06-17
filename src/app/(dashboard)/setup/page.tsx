@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { cn } from '@/lib/utils'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
@@ -1295,32 +1295,57 @@ function ItemListTab() {
 }
 
 /* ─── Page ────────────────────────────────────────────── */
+const CONFIG_TABS = [
+  { key: 'suppliers',  label: 'Suppliers' },
+  { key: 'clients',    label: 'Clients' },
+  { key: 'items',      label: 'Item List' },
+  { key: 'categories', label: 'Categories' },
+  { key: 'uom',        label: 'Units of Measure' },
+  { key: 'brands',     label: 'Brands' },
+  { key: 'attributes', label: 'Attributes' },
+]
+
 export default function SetupPage() {
+  const [active, setActive] = useState('suppliers')
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-semibold">Configuration</h1>
         <p className="text-muted-foreground text-sm">Manage items, suppliers, clients, categories, and system settings</p>
       </div>
 
-      <Tabs defaultValue="suppliers">
-        <TabsList className="flex-wrap h-auto gap-1">
-          <TabsTrigger value="items">Item List</TabsTrigger>
-          <TabsTrigger value="suppliers">Suppliers</TabsTrigger>
-          <TabsTrigger value="clients">Clients</TabsTrigger>
-          <TabsTrigger value="categories">Categories</TabsTrigger>
-          <TabsTrigger value="uom">Units of Measure</TabsTrigger>
-          <TabsTrigger value="brands">Brands</TabsTrigger>
-          <TabsTrigger value="attributes">Attributes</TabsTrigger>
-        </TabsList>
-        <TabsContent value="items" className="mt-4"><ItemListTab /></TabsContent>
-        <TabsContent value="suppliers" className="mt-4"><SuppliersTab /></TabsContent>
-        <TabsContent value="clients" className="mt-4"><ClientsTab /></TabsContent>
-        <TabsContent value="categories" className="mt-4"><CategoriesTab /></TabsContent>
-        <TabsContent value="uom" className="mt-4"><UOMTab /></TabsContent>
-        <TabsContent value="brands" className="mt-4"><BrandsTab /></TabsContent>
-        <TabsContent value="attributes" className="mt-4"><AttributesTab /></TabsContent>
-      </Tabs>
+      <div className="flex gap-6 items-start">
+        {/* Vertical nav */}
+        <nav className="w-48 shrink-0 rounded-xl border bg-card shadow-sm overflow-hidden">
+          {CONFIG_TABS.map((tab, i) => (
+            <button
+              key={tab.key}
+              onClick={() => setActive(tab.key)}
+              className={cn(
+                'w-full text-left px-4 py-2.5 text-sm font-medium transition-colors',
+                i < CONFIG_TABS.length - 1 && 'border-b border-border/60',
+                active === tab.key
+                  ? 'bg-red-600 text-white'
+                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+              )}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+
+        {/* Content */}
+        <div className="flex-1 min-w-0">
+          {active === 'suppliers'  && <SuppliersTab />}
+          {active === 'clients'    && <ClientsTab />}
+          {active === 'items'      && <ItemListTab />}
+          {active === 'categories' && <CategoriesTab />}
+          {active === 'uom'        && <UOMTab />}
+          {active === 'brands'     && <BrandsTab />}
+          {active === 'attributes' && <AttributesTab />}
+        </div>
+      </div>
     </div>
   )
 }

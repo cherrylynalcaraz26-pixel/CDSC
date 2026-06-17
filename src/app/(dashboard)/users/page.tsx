@@ -23,16 +23,9 @@ import { toast } from 'sonner'
 import { format } from 'date-fns'
 
 const ROLES = [
-  { value: 'super_admin',        label: 'Super Admin',        color: 'bg-red-100 text-red-800' },
-  { value: 'admin',              label: 'Admin',              color: 'bg-orange-100 text-orange-800' },
-  { value: 'purchasing_officer', label: 'Purchasing Officer', color: 'bg-blue-100 text-blue-800' },
-  { value: 'warehouse_manager',  label: 'Warehouse Manager',  color: 'bg-green-100 text-green-800' },
-  { value: 'warehouse_staff',    label: 'Warehouse Staff',    color: 'bg-teal-100 text-teal-800' },
-  { value: 'accounting_manager', label: 'Accounting Manager', color: 'bg-purple-100 text-purple-800' },
-  { value: 'accounting_staff',   label: 'Accounting Staff',   color: 'bg-violet-100 text-violet-800' },
-  { value: 'department_head',    label: 'Department Head',    color: 'bg-amber-100 text-amber-800' },
-  { value: 'employee',           label: 'Employee',           color: 'bg-gray-100 text-gray-700' },
-  { value: 'auditor',            label: 'Auditor',            color: 'bg-slate-100 text-slate-700' },
+  { value: 'super_admin', label: 'Super-Admin', color: 'bg-red-100 text-red-800' },
+  { value: 'admin',       label: 'Admin',       color: 'bg-orange-100 text-orange-800' },
+  { value: 'client',      label: 'Client',      color: 'bg-blue-100 text-blue-800' },
 ]
 
 const roleOf = (v: string) => ROLES.find(r => r.value === v) ?? { label: v, color: 'bg-gray-100 text-gray-700' }
@@ -67,8 +60,8 @@ export default function UsersPage() {
   const [editOpen, setEditOpen] = useState(false)
   const [editing, setEditing] = useState<Profile | null>(null)
   const [inviting, setInviting] = useState(false)
-  const [inviteForm, setInviteForm] = useState({ email: '', full_name: '', role: 'employee', department: '' })
-  const [editForm, setEditForm] = useState({ full_name: '', role: 'employee', department: '' })
+  const [inviteForm, setInviteForm] = useState({ email: '', full_name: '', role: 'client', department: '' })
+  const [editForm, setEditForm] = useState({ full_name: '', role: 'client', department: '' })
 
   async function load() {
     setLoading(true)
@@ -144,10 +137,10 @@ export default function UsersPage() {
   }
 
   // Stats
-  const total     = profiles.length
-  const active    = profiles.filter(p => p.status === 'active').length
-  const admins    = profiles.filter(p => ['super_admin','admin'].includes(p.role)).length
-  const warehouse = profiles.filter(p => p.role.startsWith('warehouse')).length
+  const total      = profiles.length
+  const active     = profiles.filter(p => p.status === 'active').length
+  const superAdmins = profiles.filter(p => p.role === 'super_admin').length
+  const clients    = profiles.filter(p => p.role === 'client').length
 
   return (
     <div className="space-y-6">
@@ -170,10 +163,10 @@ export default function UsersPage() {
       {/* Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: 'Total Users',    value: total,     color: '' },
-          { label: 'Active',         value: active,    color: 'text-green-600' },
-          { label: 'Admins',         value: admins,    color: 'text-red-600' },
-          { label: 'Warehouse',      value: warehouse, color: 'text-teal-600' },
+          { label: 'Total Users',  value: total,       color: '' },
+          { label: 'Active',       value: active,      color: 'text-green-600' },
+          { label: 'Super-Admins', value: superAdmins, color: 'text-red-600' },
+          { label: 'Clients',      value: clients,     color: 'text-blue-600' },
         ].map(s => (
           <Card key={s.label}>
             <CardContent className="pt-4 pb-3">
@@ -294,7 +287,7 @@ export default function UsersPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Role</Label>
-                <Select value={inviteForm.role} onValueChange={v => setInviteForm(f => ({ ...f, role: v ?? 'employee' }))}>
+                <Select value={inviteForm.role} onValueChange={v => setInviteForm(f => ({ ...f, role: v ?? 'client' }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {ROLES.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
@@ -345,7 +338,7 @@ export default function UsersPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Role</Label>
-                <Select value={editForm.role} onValueChange={v => setEditForm(f => ({ ...f, role: v ?? 'employee' }))}>
+                <Select value={editForm.role} onValueChange={v => setEditForm(f => ({ ...f, role: v ?? 'client' }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {ROLES.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
