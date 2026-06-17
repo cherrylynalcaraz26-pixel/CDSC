@@ -61,7 +61,7 @@ export default function ReceivingPage() {
         .select('*')
         .order('created_at', { ascending: false }),
     ])
-    setPOs((poData ?? []) as PO[])
+    setPOs((poData ?? []) as unknown as PO[])
     setRRs((rrData ?? []) as RR[])
     setLoading(false)
   }
