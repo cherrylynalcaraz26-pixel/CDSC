@@ -300,12 +300,14 @@ export default function PurchaseOrdersPage() {
 
       {/* ── Create PO Dialog ── */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-[95vw] max-w-5xl sm:max-w-5xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
+        <DialogContent className="w-[95vw] max-w-7xl sm:max-w-7xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold">Create Purchase Order</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-5 py-2">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 py-2">
+            {/* LEFT: existing form */}
+            <div className="space-y-5">
             {/* Header */}
             <div className="space-y-3">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">PO Details</p>
@@ -460,6 +462,104 @@ export default function PurchaseOrdersPage() {
                   <div className="flex justify-between"><span className="text-muted-foreground">Input VAT (12%)</span><span className="text-blue-600">{fmt(vatAmount)}</span></div>
                   <div className="flex justify-between"><span className="text-muted-foreground">EWT ({selectedSupplier?.ewt_rate ?? 2}%)</span><span className="text-red-700">− {fmt(ewtAmount)}</span></div>
                   <div className="flex justify-between border-t pt-1 font-semibold"><span>Net Payable</span><span className="text-red-600">{fmt(netPayable)}</span></div>
+                </div>
+              </div>
+            </div>
+            </div>
+
+            {/* RIGHT: live preview */}
+            <div className="hidden lg:block">
+              <div className="sticky top-0">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Live Preview</p>
+                <div className="border rounded-lg bg-white text-[11px] p-4 shadow-sm space-y-3 font-sans">
+                  {/* Header */}
+                  <div className="flex justify-between items-start border-b pb-2">
+                    <div>
+                      <div className="text-base font-bold text-red-700">CDSC INDUSTRIAL</div>
+                      <div className="text-[10px] text-gray-500">PURCHASE ORDER</div>
+                    </div>
+                    <div className="text-right space-y-0.5">
+                      <div><span className="text-gray-500">PO No: </span><span className="font-mono font-bold">{poNumber || '—'}</span></div>
+                      <div><span className="text-gray-500">Date: </span><span>{new Date().toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</span></div>
+                      {deliveryDate && <div><span className="text-gray-500">Delivery: </span><span>{new Date(deliveryDate).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</span></div>}
+                    </div>
+                  </div>
+
+                  {/* Party info */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-0.5">
+                      <div className="text-[9px] font-semibold uppercase text-gray-400">{supplierId ? 'Supplier' : clientId ? 'Client' : 'Supplier / Client'}</div>
+                      <div className="font-semibold text-gray-800">
+                        {supplierId
+                          ? suppliers.find(s => s.id === supplierId)?.company_name || '—'
+                          : clientId
+                          ? clients.find(c => c.id === clientId)?.company_name || '—'
+                          : <span className="text-gray-400 italic">Not selected</span>}
+                      </div>
+                    </div>
+                    <div className="space-y-0.5">
+                      <div className="text-[9px] font-semibold uppercase text-gray-400">Payment Terms</div>
+                      <div className="font-semibold text-gray-800">{paymentTerms || '—'}</div>
+                    </div>
+                  </div>
+
+                  {/* Items table */}
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="bg-red-700 text-white">
+                        <th className="text-left px-1.5 py-1">#</th>
+                        <th className="text-left px-1.5 py-1">Item Description</th>
+                        <th className="text-right px-1.5 py-1">Qty</th>
+                        <th className="text-left px-1.5 py-1">Unit</th>
+                        <th className="text-right px-1.5 py-1">Unit Price</th>
+                        <th className="text-right px-1.5 py-1">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {lines.map((line, i) => {
+                        const total = (parseFloat(line.unit_price) || 0) * (parseFloat(line.quantity) || 0)
+                        return (
+                          <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                            <td className="px-1.5 py-1 text-gray-400">{i + 1}</td>
+                            <td className="px-1.5 py-1">{line.item_name || <span className="text-gray-300 italic">—</span>}</td>
+                            <td className="px-1.5 py-1 text-right">{line.quantity || '—'}</td>
+                            <td className="px-1.5 py-1 text-gray-500">{line.unit || '—'}</td>
+                            <td className="px-1.5 py-1 text-right">₱{(parseFloat(line.unit_price) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+                            <td className="px-1.5 py-1 text-right font-medium">₱{total.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+
+                  {/* Totals */}
+                  <div className="flex justify-end">
+                    <div className="w-48 space-y-0.5">
+                      <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span>₱{subtotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+                      <div className="flex justify-between"><span className="text-gray-500">VAT (12%)</span><span className="text-blue-600">₱{vatAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+                      <div className="flex justify-between"><span className="text-gray-500">EWT</span><span className="text-red-700">−₱{ewtAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+                      <div className="flex justify-between border-t pt-0.5 font-bold"><span>Net Payable</span><span className="text-red-700">₱{netPayable.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+                    </div>
+                  </div>
+
+                  {/* Remarks */}
+                  {remarks && (
+                    <div className="border-t pt-2 text-[10px]">
+                      <span className="text-gray-400 font-semibold">Remarks: </span>{remarks}
+                    </div>
+                  )}
+
+                  {/* Signatures */}
+                  <div className="grid grid-cols-2 gap-4 border-t pt-3 mt-2">
+                    <div className="text-center">
+                      <div className="border-b border-gray-400 mb-1 h-6" />
+                      <div className="text-[9px] text-gray-400 uppercase">Prepared By</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="border-b border-gray-400 mb-1 h-6" />
+                      <div className="text-[9px] text-gray-400 uppercase">Approved By</div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>

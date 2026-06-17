@@ -519,14 +519,16 @@ export default function DRLogsPage() {
       </Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-[95vw] max-w-4xl sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-6xl sm:max-w-6xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Truck className="h-5 w-5 text-red-600" />
               {editing ? 'Edit DR Log' : 'New DR Log'}
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-5 py-2">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 py-2">
+            {/* LEFT: existing form content */}
+            <div className="space-y-5">
             <div className="space-y-3">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">DR Details</p>
               <div className="grid grid-cols-2 gap-4">
@@ -637,6 +639,103 @@ export default function DRLogsPage() {
               <Button type="button" variant="outline" size="sm" onClick={addItemRow} className="mt-1">
                 <Plus className="h-3.5 w-3.5 mr-1" /> Add Item
               </Button>
+            </div>
+            </div>
+
+            {/* RIGHT: live preview */}
+            <div className="hidden lg:block">
+              <div className="sticky top-0">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Live Preview</p>
+                <div className="border rounded-lg bg-white text-[11px] p-4 shadow-sm space-y-3 font-sans">
+                  {/* Header */}
+                  <div className="flex justify-between items-start border-b pb-2">
+                    <div>
+                      <div className="text-base font-bold text-red-700">CDSC INDUSTRIAL</div>
+                      <div className="text-[10px] text-gray-500">DELIVERY RECEIPT</div>
+                    </div>
+                    <div className="text-right space-y-0.5">
+                      <div><span className="text-gray-500">DR No: </span><span className="font-mono font-bold">{form.dr_number || '—'}</span></div>
+                      <div><span className="text-gray-500">Date: </span><span>{form.dr_date ? new Date(form.dr_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</span></div>
+                    </div>
+                  </div>
+
+                  {/* Details */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <div className="text-[9px] font-semibold uppercase text-gray-400 mb-0.5">Delivered To</div>
+                      <div className="font-semibold text-gray-800">{form.supplier_name || <span className="text-gray-400 italic">—</span>}</div>
+                    </div>
+                    {form.po_number && (
+                      <div>
+                        <div className="text-[9px] font-semibold uppercase text-gray-400 mb-0.5">PO Reference</div>
+                        <div className="font-mono text-gray-800">{form.po_number}</div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Items table */}
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="bg-red-700 text-white">
+                        <th className="text-left px-1.5 py-1">#</th>
+                        <th className="text-right px-1.5 py-1">Qty</th>
+                        <th className="text-left px-1.5 py-1">Unit</th>
+                        <th className="text-left px-1.5 py-1">Item Description</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {items.filter(it => it.item_name).length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="px-1.5 py-3 text-center text-gray-300 italic">No items added yet</td>
+                        </tr>
+                      ) : items.map((item, i) => (
+                        item.item_name ? (
+                          <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                            <td className="px-1.5 py-1 text-gray-400">{i + 1}</td>
+                            <td className="px-1.5 py-1 text-right font-medium">{Number(item.quantity) || '—'}</td>
+                            <td className="px-1.5 py-1 text-gray-500">{item.unit || '—'}</td>
+                            <td className="px-1.5 py-1">{item.item_name}</td>
+                          </tr>
+                        ) : null
+                      ))}
+                    </tbody>
+                  </table>
+
+                  {/* Footer info */}
+                  <div className="grid grid-cols-2 gap-3 text-[10px]">
+                    {form.received_by_name && (
+                      <div>
+                        <span className="text-gray-400">Received By: </span>
+                        <span className="font-medium">{form.received_by_name}</span>
+                      </div>
+                    )}
+                    {form.status && (
+                      <div>
+                        <span className="text-gray-400">Status: </span>
+                        <span className="font-medium capitalize">{form.status}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {form.remarks && (
+                    <div className="border-t pt-2 text-[10px]">
+                      <span className="text-gray-400 font-semibold">Remarks: </span>{form.remarks}
+                    </div>
+                  )}
+
+                  {/* Signatures */}
+                  <div className="grid grid-cols-2 gap-4 border-t pt-3 mt-2">
+                    <div className="text-center">
+                      <div className="border-b border-gray-400 mb-1 h-6" />
+                      <div className="text-[9px] text-gray-400 uppercase">Delivered By</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="border-b border-gray-400 mb-1 h-6" />
+                      <div className="text-[9px] text-gray-400 uppercase">Received By</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
           <DialogFooter>
