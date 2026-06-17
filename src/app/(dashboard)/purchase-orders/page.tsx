@@ -294,16 +294,16 @@ export default function PurchaseOrdersPage() {
 
       {/* ── Create PO Dialog ── */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
+        <DialogContent className="w-[95vw] max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold">Create Purchase Order</DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-6 py-2">
+          <div className="space-y-5 py-2">
             {/* Header */}
-            <div className="space-y-4">
+            <div className="space-y-3">
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">PO Details</p>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>PO Number</Label>
                   <Input
@@ -312,25 +312,29 @@ export default function PurchaseOrdersPage() {
                     onChange={e => setPoNumber(e.target.value)}
                   />
                 </div>
-                <div className="space-y-1.5 md:col-span-2">
-                  <Label>Client / Supplier <span className="text-destructive">*</span></Label>
-                  <Select value={supplierId} onValueChange={v => {
-                    setSupplierId(v ?? '')
-                    const sup = suppliers.find(s => s.id === v)
-                    if (sup?.payment_terms) setPaymentTerms(sup.payment_terms)
-                  }}>
-                    <SelectTrigger><SelectValue placeholder="Select client or supplier" /></SelectTrigger>
-                    <SelectContent>
-                      {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.company_name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
                 <div className="space-y-1.5">
                   <Label>Delivery Date</Label>
                   <Input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Client / Supplier <span className="text-destructive">*</span></Label>
+                <Select value={supplierId} onValueChange={v => {
+                  setSupplierId(v ?? '')
+                  const sup = suppliers.find(s => s.id === v)
+                  if (sup?.payment_terms) setPaymentTerms(sup.payment_terms)
+                }}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select client or supplier">
+                      {supplierId ? suppliers.find(s => s.id === supplierId)?.company_name : 'Select client or supplier'}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.company_name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>Payment Terms</Label>
                   <Select value={paymentTerms} onValueChange={v => setPaymentTerms(v ?? '30 days')}>
@@ -355,8 +359,9 @@ export default function PurchaseOrdersPage() {
                   <Plus className="h-3.5 w-3.5 mr-1" />Add Row
                 </Button>
               </div>
-              <div className="border rounded-lg overflow-hidden">
-                <div className="grid grid-cols-[2fr_64px_88px_120px_96px_36px] gap-1.5 px-2 py-2 bg-muted/50 border-b text-xs font-medium text-muted-foreground">
+              <div className="border rounded-lg overflow-x-auto">
+                <div className="min-w-[540px]">
+                <div className="grid grid-cols-[minmax(160px,2fr)_60px_72px_100px_90px_32px] gap-1.5 px-2 py-2 bg-muted/50 border-b text-xs font-medium text-muted-foreground">
                   <span>Item / Description</span>
                   <span>Qty</span>
                   <span>Unit</span>
@@ -368,7 +373,7 @@ export default function PurchaseOrdersPage() {
                   {lines.map((line, i) => {
                     const lineTotal = (parseFloat(line.unit_price) || 0) * (parseFloat(line.quantity) || 0)
                     return (
-                      <div key={i} className="grid grid-cols-[2fr_64px_88px_120px_96px_36px] gap-1.5 items-center px-2 py-1.5">
+                      <div key={i} className="grid grid-cols-[minmax(160px,2fr)_60px_72px_100px_90px_32px] gap-1.5 items-center px-2 py-1.5">
                         <Select
                           value={line.item_name}
                           onValueChange={val => {
@@ -384,20 +389,19 @@ export default function PurchaseOrdersPage() {
                           <SelectContent>
                             {items.map(it => (
                               <SelectItem key={it.item_code} value={it.item_name}>
-                                <span>{it.item_name}</span>
-                                <span className="text-xs text-muted-foreground ml-2">({it.unit_of_measure})</span>
+                                {it.item_name} <span className="text-xs text-muted-foreground ml-1">({it.unit_of_measure})</span>
                               </SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
                         <Input type="number" min={1} className="h-8 text-sm" placeholder="1" value={line.quantity}
                           onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, quantity: e.target.value } : l))} />
-                        <div className="h-8 flex items-center px-2 text-sm bg-muted/30 rounded border text-muted-foreground">
+                        <div className="h-8 flex items-center px-2 text-sm bg-muted/30 rounded border text-muted-foreground truncate">
                           {line.unit || '—'}
                         </div>
                         <Input type="number" min={0} step="0.01" className="h-8 text-sm" placeholder="0.00" value={line.unit_price}
                           onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, unit_price: e.target.value } : l))} />
-                        <div className="text-right text-sm font-medium pr-1">
+                        <div className="text-right text-sm font-medium pr-1 tabular-nums">
                           ₱{lineTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                         </div>
                         <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
@@ -407,6 +411,7 @@ export default function PurchaseOrdersPage() {
                       </div>
                     )
                   })}
+                </div>
                 </div>
               </div>
 
