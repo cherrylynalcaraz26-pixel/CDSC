@@ -236,7 +236,8 @@ export default function InventoryPage() {
     setAddOpen(true)
   }
 
-  function handleAddItemSelect(value: string) {
+  function handleAddItemSelect(value: string | null) {
+    if (!value) return
     setAddItemName(value)
     const found = itemOptions.find(o => o.item_name === value)
     if (found) setAddUnit(found.unit ?? '')
