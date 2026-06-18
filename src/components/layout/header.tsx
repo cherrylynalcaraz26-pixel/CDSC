@@ -25,8 +25,6 @@ const SEARCH_ITEMS = [
   { label: 'Inventory',             href: '/inventory',               section: 'Warehouse' },
   { label: 'DR Logs',               href: '/dr-logs',                 section: 'Warehouse' },
   { label: 'CSI Monitoring',        href: '/csi-monitoring',          section: 'Warehouse' },
-  { label: 'Stock Transfer',        href: '/warehouse/transfer',      section: 'Warehouse' },
-  { label: 'Stock Adjustment',      href: '/warehouse/adjustment',    section: 'Warehouse' },
   { label: 'Returns',               href: '/returns',                 section: 'Warehouse' },
   { label: 'Accounting Overview',   href: '/accounting',              section: 'Accounting' },
   { label: 'Collections (OR/CR)',   href: '/accounting/collections',  section: 'Accounting' },

@@ -396,7 +396,7 @@ export default function InventoryPage() {
                 <TableRow>
                   <TableHead className="w-8" />
                   <TableHead>Client</TableHead>
-                  <TableHead>Item Name</TableHead>
+                  <TableHead className="min-w-[200px]">Item Name</TableHead>
                   <TableHead>Unit</TableHead>
                   <TableHead className="text-right">DR Qty</TableHead>
                   <TableHead className="text-right">WH Stock</TableHead>
@@ -431,14 +431,14 @@ export default function InventoryPage() {
                           {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
                         </TableCell>
                         <TableCell className="text-sm">{row.client}</TableCell>
-                        <TableCell className="text-sm font-medium">
+                        <TableCell className="text-sm font-medium min-w-[200px]">
                           <span className="flex items-center gap-1.5">
                             {isDeficit && (
                               <span title="Deficit: CSI charges exceed DR deliveries + WH Stock">
                                 <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
                               </span>
                             )}
-                            {row.item_name}
+                            <span className="break-words">{row.item_name}</span>
                           </span>
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">{row.unit}</TableCell>
