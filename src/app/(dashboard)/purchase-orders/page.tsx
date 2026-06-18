@@ -61,6 +61,7 @@ export default function PurchaseOrdersPage() {
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [activeTab, setActiveTab] = useState<'form' | 'preview'>('form')
+  const [companyInfo, setCompanyInfo] = useState<{ company_name: string; address: string; phone: string; email: string; tin: string } | null>(null)
 
   // Form state
   const [supplierId, setSupplierId] = useState('')
@@ -86,6 +87,8 @@ export default function PurchaseOrdersPage() {
     setSuppliers(supData ?? [])
     setItems((itemData ?? []) as ItemOption[])
     setClients(clientData ?? [])
+    const { data: sysData } = await supabase.from('system_settings').select('company_name, address, phone, email, tin').single()
+    if (sysData) setCompanyInfo(sysData)
     setLoading(false)
   }
 
@@ -500,8 +503,15 @@ export default function PurchaseOrdersPage() {
                     <div className="flex items-center gap-2">
                       <img src="/cdsc-logo.jpg" alt="CDSC" className="h-10 w-10 rounded object-cover" />
                       <div>
-                        <div className="text-base font-bold text-red-700">CDSC INDUSTRIAL</div>
+                        <div className="text-base font-bold text-red-700">{companyInfo?.company_name || 'CDSC INDUSTRIAL'}</div>
                         <div className="text-[10px] text-gray-500">PURCHASE ORDER</div>
+                        {companyInfo?.address && <div className="text-[9px] text-gray-400">{companyInfo.address}</div>}
+                        {(companyInfo?.phone || companyInfo?.email) && (
+                          <div className="text-[9px] text-gray-400">
+                            {companyInfo.phone}{companyInfo.phone && companyInfo.email ? ' | ' : ''}{companyInfo.email}
+                          </div>
+                        )}
+                        {companyInfo?.tin && <div className="text-[9px] text-gray-400">TIN: {companyInfo.tin}</div>}
                       </div>
                     </div>
                     <div className="text-right space-y-0.5">

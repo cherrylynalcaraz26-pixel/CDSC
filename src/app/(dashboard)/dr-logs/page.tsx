@@ -11,15 +11,15 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
-} from '@/components/ui/dialog'
-import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Plus, Search, MoreHorizontal, Loader2, Truck, Trash2, ChevronDown, ChevronRight, LayoutGrid, List } from 'lucide-react'
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog'
+import { Plus, Search, MoreHorizontal, Loader2, Truck, Trash2, ChevronDown, ChevronRight, LayoutGrid, List, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
 
@@ -99,6 +99,7 @@ export default function DRLogsPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<'by-dr' | 'all-items'>('by-dr')
   const [drActiveTab, setDrActiveTab] = useState<'form' | 'preview'>('form')
+  const [companyInfo, setCompanyInfo] = useState<{ company_name: string; address: string; phone: string; email: string; tin: string } | null>(null)
 
   async function load() {
     setLoading(true)
@@ -136,6 +137,8 @@ export default function DRLogsPage() {
     } else {
       setAllItems([])
     }
+    const { data: sysData } = await supabase.from('system_settings').select('company_name, address, phone, email, tin').single()
+    if (sysData) setCompanyInfo(sysData)
     setLoading(false)
   }
 
@@ -293,11 +296,18 @@ export default function DRLogsPage() {
           <h1 className="text-2xl font-semibold">DR Logs</h1>
           <p className="text-muted-foreground text-sm">Delivery Receipt log — track all incoming supplier DRs</p>
         </div>
-        <Button onClick={openAdd} className="bg-red-600 hover:bg-red-700">
-          <Plus className="h-4 w-4 mr-2" /> New DR Log
-        </Button>
+        {open ? (
+          <Button variant="outline" onClick={() => { setOpen(false); setEditing(null); setForm(emptyForm()); setItems([emptyItem()]) }}>
+            <X className="h-4 w-4 mr-2" />Cancel
+          </Button>
+        ) : (
+          <Button onClick={openAdd} className="bg-red-600 hover:bg-red-700">
+            <Plus className="h-4 w-4 mr-2" /> New DR Log
+          </Button>
+        )}
       </div>
 
+      {!open && (<>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { label: 'Total DRs', count: counts.total,    color: 'text-foreground' },
@@ -520,252 +530,258 @@ export default function DRLogsPage() {
           </div>
         </CardContent>
       </Card>
+      </>)}
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-[95vw] max-w-6xl sm:max-w-6xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Truck className="h-5 w-5 text-red-600" />
+      {open && (
+        <Card>
+          <CardHeader className="pb-3 flex flex-row items-center justify-between">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Truck className="h-4 w-4 text-red-600" />
               {editing ? 'Edit DR Log' : 'New DR Log'}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="flex rounded-md border overflow-hidden w-fit lg:hidden">
-            <button
-              onClick={() => setDrActiveTab('form')}
-              className={`px-4 py-1.5 text-sm font-medium ${drActiveTab === 'form' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
-            >
-              Form
-            </button>
-            <button
-              onClick={() => setDrActiveTab('preview')}
-              className={`px-4 py-1.5 text-sm font-medium border-l ${drActiveTab === 'preview' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
-            >
-              Preview
-            </button>
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 py-2">
-            {/* LEFT: existing form content */}
-            <div className={`space-y-5 ${drActiveTab === 'preview' ? 'hidden lg:block' : 'block'}`}>
-            <div className="space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">DR Details</p>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label>DR Number <span className="text-destructive">*</span></Label>
-                  <Input placeholder="e.g. DR-2025-00001" value={form.dr_number}
-                    onChange={e => setForm(f => ({ ...f, dr_number: e.target.value }))} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>DR Date <span className="text-destructive">*</span></Label>
-                  <Input type="date" value={form.dr_date}
-                    onChange={e => setForm(f => ({ ...f, dr_date: e.target.value }))} />
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Delivered To</Label>
-                <Select value={form.supplier_id} onValueChange={handleClientChange}>
-                  <SelectTrigger><SelectValue placeholder="Select client / delivered to" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">— None —</SelectItem>
-                    {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label>PO Reference</Label>
-                  <Select value={form.po_number} onValueChange={v => setForm(f => ({ ...f, po_number: v ?? '' }))}>
-                    <SelectTrigger><SelectValue placeholder="Select PO…" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="">— None —</SelectItem>
-                      {poNumbers.map(po => <SelectItem key={po} value={po}>{po}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Status</Label>
-                  <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v ?? 'received' }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="received">Received</SelectItem>
-                      <SelectItem value="partial">Partial</SelectItem>
-                      <SelectItem value="rejected">Rejected</SelectItem>
-                      <SelectItem value="returned">Returned</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Received By</Label>
-                <Input placeholder="Name of person who received" value={form.received_by_name}
-                  onChange={e => setForm(f => ({ ...f, received_by_name: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Remarks</Label>
-                <Textarea rows={2} placeholder="Notes, discrepancies, condition of goods…" value={form.remarks}
-                  onChange={e => setForm(f => ({ ...f, remarks: e.target.value }))} />
-              </div>
+            </CardTitle>
+            <div className="flex rounded-md border overflow-hidden w-fit lg:hidden">
+              <button
+                onClick={() => setDrActiveTab('form')}
+                className={`px-4 py-1.5 text-sm font-medium ${drActiveTab === 'form' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
+              >Form</button>
+              <button
+                onClick={() => setDrActiveTab('preview')}
+                className={`px-4 py-1.5 text-sm font-medium border-l ${drActiveTab === 'preview' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
+              >Preview</button>
             </div>
-
-            <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">Delivery Items</p>
-              <div className="space-y-2">
-                <div className="grid grid-cols-[80px_90px_1fr_32px] gap-2 text-xs font-medium text-muted-foreground px-1">
-                  <span>Qty</span><span>Unit</span><span>Item Description</span><span />
-                </div>
-                {items.map((item, i) => (
-                  <div key={i} className="grid grid-cols-[80px_90px_1fr_32px] gap-2 items-center">
-                    <Input
-                      type="number" min={0} placeholder="0"
-                      value={item.quantity}
-                      onChange={e => updateItem(i, 'quantity', e.target.value)}
-                      className="h-8 text-sm"
-                    />
-                    <div className="h-8 flex items-center px-2 text-sm bg-muted/30 rounded border text-muted-foreground truncate">
-                      {item.unit || '—'}
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* LEFT column: all form fields */}
+              <div className={`space-y-5 ${drActiveTab === 'preview' ? 'hidden lg:block' : 'block'}`}>
+                <div className="space-y-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">DR Details</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label>DR Number <span className="text-destructive">*</span></Label>
+                      <Input placeholder="e.g. DR-2025-00001" value={form.dr_number}
+                        onChange={e => setForm(f => ({ ...f, dr_number: e.target.value }))} />
                     </div>
-                    <Select
-                      value={item.item_name}
-                      onValueChange={val => {
-                        const selected = itemOptions.find(it => it.item_name === val)
-                        setItems(prev => prev.map((it, idx) => idx === i
-                          ? { ...it, item_name: val ?? '', unit: selected?.unit_of_measure || it.unit }
-                          : it))
-                      }}
-                    >
-                      <SelectTrigger className="h-8 text-sm">
-                        <SelectValue placeholder="Select item…" />
-                      </SelectTrigger>
+                    <div className="space-y-1.5">
+                      <Label>DR Date <span className="text-destructive">*</span></Label>
+                      <Input type="date" value={form.dr_date}
+                        onChange={e => setForm(f => ({ ...f, dr_date: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Delivered To</Label>
+                    <Select value={form.supplier_id} onValueChange={handleClientChange}>
+                      <SelectTrigger><SelectValue placeholder="Select client / delivered to" /></SelectTrigger>
                       <SelectContent>
-                        {itemOptions.map(it => (
-                          <SelectItem key={it.item_code} value={it.item_name}>
-                            {it.item_name} <span className="text-xs text-muted-foreground ml-1">({it.unit_of_measure})</span>
-                          </SelectItem>
-                        ))}
+                        <SelectItem value="">— None —</SelectItem>
+                        {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
                       </SelectContent>
                     </Select>
-                    <button
-                      type="button"
-                      onClick={() => removeItemRow(i)}
-                      className="h-8 w-8 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
                   </div>
-                ))}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label>PO Reference</Label>
+                      <Select value={form.po_number} onValueChange={v => setForm(f => ({ ...f, po_number: v ?? '' }))}>
+                        <SelectTrigger><SelectValue placeholder="Select PO…" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">— None —</SelectItem>
+                          {poNumbers.map(po => <SelectItem key={po} value={po}>{po}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Status</Label>
+                      <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v ?? 'received' }))}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="received">Received</SelectItem>
+                          <SelectItem value="partial">Partial</SelectItem>
+                          <SelectItem value="rejected">Rejected</SelectItem>
+                          <SelectItem value="returned">Returned</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Received By</Label>
+                    <Input placeholder="Name of person who received" value={form.received_by_name}
+                      onChange={e => setForm(f => ({ ...f, received_by_name: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Remarks</Label>
+                    <Textarea rows={2} placeholder="Notes, discrepancies, condition of goods…" value={form.remarks}
+                      onChange={e => setForm(f => ({ ...f, remarks: e.target.value }))} />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">Delivery Items</p>
+                  <div className="space-y-2">
+                    <div className="grid grid-cols-[80px_90px_1fr_32px] gap-2 text-xs font-medium text-muted-foreground px-1">
+                      <span>Qty</span><span>Unit</span><span>Item Description</span><span />
+                    </div>
+                    {items.map((item, i) => (
+                      <div key={i} className="grid grid-cols-[80px_90px_1fr_32px] gap-2 items-center">
+                        <Input
+                          type="number" min={0} placeholder="0"
+                          value={item.quantity}
+                          onChange={e => updateItem(i, 'quantity', e.target.value)}
+                          className="h-8 text-sm"
+                        />
+                        <div className="h-8 flex items-center px-2 text-sm bg-muted/30 rounded border text-muted-foreground truncate">
+                          {item.unit || '—'}
+                        </div>
+                        <Select
+                          value={item.item_name}
+                          onValueChange={val => {
+                            const selected = itemOptions.find(it => it.item_name === val)
+                            setItems(prev => prev.map((it, idx) => idx === i
+                              ? { ...it, item_name: val ?? '', unit: selected?.unit_of_measure || it.unit }
+                              : it))
+                          }}
+                        >
+                          <SelectTrigger className="h-8 text-sm">
+                            <SelectValue placeholder="Select item…" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {itemOptions.map(it => (
+                              <SelectItem key={it.item_code} value={it.item_name}>
+                                {it.item_name} <span className="text-xs text-muted-foreground ml-1">({it.unit_of_measure})</span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <button
+                          type="button"
+                          onClick={() => removeItemRow(i)}
+                          className="h-8 w-8 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <Button type="button" variant="outline" size="sm" onClick={addItemRow} className="mt-1">
+                    <Plus className="h-3.5 w-3.5 mr-1" /> Add Item
+                  </Button>
+                </div>
               </div>
-              <Button type="button" variant="outline" size="sm" onClick={addItemRow} className="mt-1">
-                <Plus className="h-3.5 w-3.5 mr-1" /> Add Item
-              </Button>
-            </div>
-            </div>
 
-            {/* RIGHT: live preview */}
-            <div className={`${drActiveTab === 'form' ? 'hidden lg:block' : 'block'}`}>
-              <div className="sticky top-0">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Live Preview</p>
-                <div className="border rounded-lg bg-white text-[11px] p-4 shadow-sm space-y-3 font-sans">
-                  {/* Header */}
-                  <div className="flex justify-between items-start border-b pb-2">
-                    <div className="flex items-center gap-2">
-                      <img src="/cdsc-logo.jpg" alt="CDSC" className="h-10 w-10 rounded object-cover" />
-                      <div>
-                        <div className="text-base font-bold text-red-700">CDSC INDUSTRIAL</div>
-                        <div className="text-[10px] text-gray-500">DELIVERY RECEIPT</div>
+              {/* RIGHT column: live preview */}
+              <div className={`${drActiveTab === 'form' ? 'hidden lg:block' : 'block'}`}>
+                <div className="sticky top-0">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Live Preview</p>
+                  <div className="border rounded-lg bg-white text-[11px] p-4 shadow-sm space-y-3 font-sans">
+                    {/* Header */}
+                    <div className="flex justify-between items-start border-b pb-2">
+                      <div className="flex items-center gap-2">
+                        <img src="/cdsc-logo.jpg" alt="CDSC" className="h-10 w-10 rounded object-cover" />
+                        <div>
+                          <div className="text-base font-bold text-red-700">{companyInfo?.company_name || 'CDSC INDUSTRIAL'}</div>
+                          <div className="text-[10px] text-gray-500">DELIVERY RECEIPT</div>
+                          {companyInfo?.address && <div className="text-[9px] text-gray-400">{companyInfo.address}</div>}
+                          {(companyInfo?.phone || companyInfo?.email) && (
+                            <div className="text-[9px] text-gray-400">
+                              {companyInfo.phone}{companyInfo.phone && companyInfo.email ? ' | ' : ''}{companyInfo.email}
+                            </div>
+                          )}
+                          {companyInfo?.tin && <div className="text-[9px] text-gray-400">TIN: {companyInfo.tin}</div>}
+                        </div>
+                      </div>
+                      <div className="text-right space-y-0.5">
+                        <div><span className="text-gray-500">DR No: </span><span className="font-mono font-bold">{form.dr_number || '—'}</span></div>
+                        <div><span className="text-gray-500">Date: </span><span>{form.dr_date ? new Date(form.dr_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</span></div>
                       </div>
                     </div>
-                    <div className="text-right space-y-0.5">
-                      <div><span className="text-gray-500">DR No: </span><span className="font-mono font-bold">{form.dr_number || '—'}</span></div>
-                      <div><span className="text-gray-500">Date: </span><span>{form.dr_date ? new Date(form.dr_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</span></div>
-                    </div>
-                  </div>
 
-                  {/* Details */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <div className="text-[9px] font-semibold uppercase text-gray-400 mb-0.5">Delivered To</div>
-                      <div className="font-semibold text-gray-800">{form.supplier_name || <span className="text-gray-400 italic">—</span>}</div>
-                    </div>
-                    {form.po_number && (
+                    {/* Details */}
+                    <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <div className="text-[9px] font-semibold uppercase text-gray-400 mb-0.5">PO Reference</div>
-                        <div className="font-mono text-gray-800">{form.po_number}</div>
+                        <div className="text-[9px] font-semibold uppercase text-gray-400 mb-0.5">Delivered To</div>
+                        <div className="font-semibold text-gray-800">{form.supplier_name || <span className="text-gray-400 italic">—</span>}</div>
                       </div>
-                    )}
-                  </div>
+                      {form.po_number && (
+                        <div>
+                          <div className="text-[9px] font-semibold uppercase text-gray-400 mb-0.5">PO Reference</div>
+                          <div className="font-mono text-gray-800">{form.po_number}</div>
+                        </div>
+                      )}
+                    </div>
 
-                  {/* Items table */}
-                  <table className="w-full border-collapse">
-                    <thead>
-                      <tr className="bg-red-700 text-white">
-                        <th className="text-left px-1.5 py-1">#</th>
-                        <th className="text-right px-1.5 py-1">Qty</th>
-                        <th className="text-left px-1.5 py-1">Unit</th>
-                        <th className="text-left px-1.5 py-1">Item Description</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {items.filter(it => it.item_name).length === 0 ? (
-                        <tr>
-                          <td colSpan={4} className="px-1.5 py-3 text-center text-gray-300 italic">No items added yet</td>
+                    {/* Items table */}
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr className="bg-red-700 text-white">
+                          <th className="text-left px-1.5 py-1">#</th>
+                          <th className="text-right px-1.5 py-1">Qty</th>
+                          <th className="text-left px-1.5 py-1">Unit</th>
+                          <th className="text-left px-1.5 py-1">Item Description</th>
                         </tr>
-                      ) : items.map((item, i) => (
-                        item.item_name ? (
-                          <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                            <td className="px-1.5 py-1 text-gray-400">{i + 1}</td>
-                            <td className="px-1.5 py-1 text-right font-medium">{Number(item.quantity) || '—'}</td>
-                            <td className="px-1.5 py-1 text-gray-500">{item.unit || '—'}</td>
-                            <td className="px-1.5 py-1">{item.item_name}</td>
+                      </thead>
+                      <tbody>
+                        {items.filter(it => it.item_name).length === 0 ? (
+                          <tr>
+                            <td colSpan={4} className="px-1.5 py-3 text-center text-gray-300 italic">No items added yet</td>
                           </tr>
-                        ) : null
-                      ))}
-                    </tbody>
-                  </table>
+                        ) : items.map((item, i) => (
+                          item.item_name ? (
+                            <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                              <td className="px-1.5 py-1 text-gray-400">{i + 1}</td>
+                              <td className="px-1.5 py-1 text-right font-medium">{Number(item.quantity) || '—'}</td>
+                              <td className="px-1.5 py-1 text-gray-500">{item.unit || '—'}</td>
+                              <td className="px-1.5 py-1">{item.item_name}</td>
+                            </tr>
+                          ) : null
+                        ))}
+                      </tbody>
+                    </table>
 
-                  {/* Footer info */}
-                  <div className="grid grid-cols-2 gap-3 text-[10px]">
-                    {form.received_by_name && (
-                      <div>
-                        <span className="text-gray-400">Received By: </span>
-                        <span className="font-medium">{form.received_by_name}</span>
+                    {/* Footer info */}
+                    <div className="grid grid-cols-2 gap-3 text-[10px]">
+                      {form.received_by_name && (
+                        <div>
+                          <span className="text-gray-400">Received By: </span>
+                          <span className="font-medium">{form.received_by_name}</span>
+                        </div>
+                      )}
+                      {form.status && (
+                        <div>
+                          <span className="text-gray-400">Status: </span>
+                          <span className="font-medium capitalize">{form.status}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {form.remarks && (
+                      <div className="border-t pt-2 text-[10px]">
+                        <span className="text-gray-400 font-semibold">Remarks: </span>{form.remarks}
                       </div>
                     )}
-                    {form.status && (
-                      <div>
-                        <span className="text-gray-400">Status: </span>
-                        <span className="font-medium capitalize">{form.status}</span>
+
+                    {/* Signatures */}
+                    <div className="grid grid-cols-2 gap-4 border-t pt-3 mt-2">
+                      <div className="text-center">
+                        <div className="border-b border-gray-400 mb-1 h-6" />
+                        <div className="text-[9px] text-gray-400 uppercase">Delivered By</div>
                       </div>
-                    )}
-                  </div>
-
-                  {form.remarks && (
-                    <div className="border-t pt-2 text-[10px]">
-                      <span className="text-gray-400 font-semibold">Remarks: </span>{form.remarks}
-                    </div>
-                  )}
-
-                  {/* Signatures */}
-                  <div className="grid grid-cols-2 gap-4 border-t pt-3 mt-2">
-                    <div className="text-center">
-                      <div className="border-b border-gray-400 mb-1 h-6" />
-                      <div className="text-[9px] text-gray-400 uppercase">Delivered By</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="border-b border-gray-400 mb-1 h-6" />
-                      <div className="text-[9px] text-gray-400 uppercase">Received By</div>
+                      <div className="text-center">
+                        <div className="border-b border-gray-400 mb-1 h-6" />
+                        <div className="text-[9px] text-gray-400 uppercase">Received By</div>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={save} disabled={saving} className="bg-red-600 hover:bg-red-700">
-              {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : editing ? 'Update DR Log' : 'Save DR Log'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            <div className="flex justify-end gap-2 pt-4 border-t mt-4">
+              <Button variant="outline" onClick={() => { setOpen(false); setEditing(null) }}>Cancel</Button>
+              <Button onClick={save} disabled={saving} className="bg-red-600 hover:bg-red-700">
+                {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : editing ? 'Update DR Log' : 'Save DR Log'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Dialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
         <DialogContent>
