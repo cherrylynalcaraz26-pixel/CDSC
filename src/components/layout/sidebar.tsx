@@ -30,6 +30,7 @@ const navigation: NavItem[] = [
     label: 'Purchasing', icon: ShoppingCart,
     children: [
       { label: 'Purchase Orders', href: '/purchase-orders', icon: ShoppingCart },
+      { label: 'Quotation', href: '/quotation', icon: FileText },
       { label: 'Sales Orders', href: '/sales-orders', icon: Receipt },
     ],
   },
@@ -40,7 +41,6 @@ const navigation: NavItem[] = [
       { label: 'Inventory', href: '/inventory', icon: BoxesIcon },
       { label: 'DR Logs', href: '/dr-logs', icon: ClipboardList },
       { label: 'CSI Monitoring', href: '/csi-monitoring', icon: FileText },
-      { label: 'Returns', href: '/returns', icon: RotateCcw },
     ],
   },
   {
