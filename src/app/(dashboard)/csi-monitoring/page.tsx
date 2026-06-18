@@ -18,11 +18,11 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Plus, Search, MoreHorizontal, Loader2, FileText, LayoutGrid, List, ChevronDown, ChevronRight } from 'lucide-react'
+import { Plus, Search, MoreHorizontal, Loader2, FileText, LayoutGrid, List, ChevronDown, ChevronRight, Package, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
 
-interface Supplier { id: string; company_name: string }
+interface ItemOption { item_name: string; unit_of_measure: string }
 
 interface CSIRecord {
   id: number
@@ -39,29 +39,20 @@ interface CSIRecord {
   created_at: string
 }
 
-interface CSIForm {
-  si_date: string
-  si_number: string
-  po_number: string
-  client_name: string
+interface CSIItem {
   item_name: string
   unit: string
   quantity: string
   unit_price: string
-  amount: string
-  dr_number: string
 }
 
-const emptyForm = (): CSIForm => ({
+const emptyItem = (): CSIItem => ({ item_name: '', unit: '', quantity: '', unit_price: '' })
+
+const emptyHeader = () => ({
   si_date: new Date().toISOString().split('T')[0],
   si_number: '',
   po_number: '',
   client_name: '',
-  item_name: '',
-  unit: '',
-  quantity: '',
-  unit_price: '',
-  amount: '',
   dr_number: '',
 })
 
@@ -73,21 +64,26 @@ function formatPeso(val: number) {
 export default function CSIMonitoringPage() {
   const supabase = createClient()
   const [records, setRecords] = useState<CSIRecord[]>([])
-  const [suppliers, setSuppliers] = useState<Supplier[]>([])
+  const [itemOptions, setItemOptions] = useState<ItemOption[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
-  const [editing, setEditing] = useState<CSIRecord | null>(null)
-  const [form, setForm] = useState<CSIForm>(emptyForm())
+  const [editingSiNumber, setEditingSiNumber] = useState<string | null>(null)
+  const [header, setHeader] = useState(emptyHeader())
+  const [items, setItems] = useState<CSIItem[]>([emptyItem()])
   const [saving, setSaving] = useState(false)
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [viewMode, setViewMode] = useState<'by-si' | 'all-items'>('by-si')
   const [expandedSIs, setExpandedSIs] = useState<Set<string>>(new Set())
+  const [inventoryItem, setInventoryItem] = useState<string>('')
+  const [inventoryOpen, setInventoryOpen] = useState(false)
 
   async function load() {
     setLoading(true)
-    const { data: supData } = await supabase.from('suppliers').select('id, company_name').order('company_name')
-    setSuppliers(supData ?? [])
+    const [{ data: itemOptData }] = await Promise.all([
+      supabase.from('items').select('item_name, unit_of_measure').order('item_name'),
+    ])
+    setItemOptions((itemOptData ?? []) as ItemOption[])
     const allFetched: CSIRecord[] = []
     const PAGE = 1000
     let from = 0
@@ -122,21 +118,20 @@ export default function CSIMonitoringPage() {
   const totalAmount = filtered.reduce((s, r) => s + (Number(r.amount) || 0), 0)
   const uniqueSIs = new Set(filtered.map(r => r.si_number)).size
 
-  // Group by SI number for "By SI" view
   const siGroups: { si_number: string; date: string; client: string; po: string | null; dr: string | null; items: CSIRecord[]; total: number }[] = []
   const siSeen = new Set<string>()
   for (const rec of filtered) {
     if (!siSeen.has(rec.si_number)) {
       siSeen.add(rec.si_number)
-      const items = filtered.filter(r => r.si_number === rec.si_number)
+      const siItems = filtered.filter(r => r.si_number === rec.si_number)
       siGroups.push({
         si_number: rec.si_number,
         date: rec.si_date,
         client: rec.client_name ?? '—',
         po: rec.po_number,
         dr: rec.dr_number,
-        items,
-        total: items.reduce((s, r) => s + (Number(r.amount) || 0), 0),
+        items: siItems,
+        total: siItems.reduce((s, r) => s + (Number(r.amount) || 0), 0),
       })
     }
   }
@@ -151,53 +146,61 @@ export default function CSIMonitoringPage() {
   }
 
   function openAdd() {
-    setEditing(null)
-    setForm(emptyForm())
+    setEditingSiNumber(null)
+    setHeader(emptyHeader())
+    setItems([emptyItem()])
     setOpen(true)
   }
 
-  function openEdit(rec: CSIRecord) {
-    setEditing(rec)
-    setForm({
-      si_date: rec.si_date,
-      si_number: rec.si_number,
-      po_number: rec.po_number ?? '',
-      client_name: rec.client_name ?? '',
-      item_name: rec.item_name,
-      unit: rec.unit ?? '',
-      quantity: String(rec.quantity ?? ''),
-      unit_price: String(rec.unit_price ?? ''),
-      amount: String(rec.amount ?? ''),
-      dr_number: rec.dr_number ?? '',
+  function openEdit(siNumber: string) {
+    const siRecords = records.filter(r => r.si_number === siNumber)
+    if (siRecords.length === 0) return
+    const first = siRecords[0]
+    setEditingSiNumber(siNumber)
+    setHeader({
+      si_date: first.si_date,
+      si_number: first.si_number,
+      po_number: first.po_number ?? '',
+      client_name: first.client_name ?? '',
+      dr_number: first.dr_number ?? '',
     })
+    setItems(siRecords.map(r => ({
+      item_name: r.item_name,
+      unit: r.unit ?? '',
+      quantity: String(r.quantity ?? ''),
+      unit_price: String(r.unit_price ?? ''),
+    })))
     setOpen(true)
   }
 
   async function save() {
-    if (!form.si_number.trim()) { toast.error('SI Number is required'); return }
-    if (!form.si_date)          { toast.error('Date is required'); return }
-    if (!form.item_name.trim()) { toast.error('Item is required'); return }
+    if (!header.si_number.trim()) { toast.error('SI Number is required'); return }
+    if (!header.si_date) { toast.error('Date is required'); return }
+    const validItems = items.filter(it => it.item_name.trim())
+    if (validItems.length === 0) { toast.error('At least one item is required'); return }
     setSaving(true)
-    const payload = {
-      si_date:     form.si_date,
-      si_number:   form.si_number.trim(),
-      po_number:   form.po_number || null,
-      client_name: form.client_name || null,
-      item_name:   form.item_name.trim(),
-      unit:        form.unit || null,
-      quantity:    Number(form.quantity) || 0,
-      unit_price:  Number(form.unit_price) || 0,
-      amount:      Number(form.amount) || 0,
-      dr_number:   form.dr_number || null,
+
+    // Delete existing records for this SI number if editing
+    if (editingSiNumber) {
+      await supabase.from('csi_records').delete().eq('si_number', editingSiNumber)
     }
-    if (editing) {
-      const { error } = await supabase.from('csi_records').update(payload).eq('id', editing.id)
-      if (error) { toast.error(error.message); setSaving(false); return }
-    } else {
-      const { error } = await supabase.from('csi_records').insert(payload)
-      if (error) { toast.error(error.message); setSaving(false); return }
-    }
-    toast.success(editing ? 'Record updated' : 'Record added')
+
+    const rows = validItems.map(it => ({
+      si_date: header.si_date,
+      si_number: header.si_number.trim(),
+      po_number: header.po_number || null,
+      client_name: header.client_name || null,
+      item_name: it.item_name.trim(),
+      unit: it.unit || null,
+      quantity: Number(it.quantity) || 0,
+      unit_price: Number(it.unit_price) || 0,
+      amount: (Number(it.quantity) || 0) * (Number(it.unit_price) || 0),
+      dr_number: header.dr_number || null,
+    }))
+
+    const { error } = await supabase.from('csi_records').insert(rows)
+    if (error) { toast.error(error.message); setSaving(false); return }
+    toast.success(editingSiNumber ? 'Record updated' : 'Record added')
     setOpen(false)
     load()
     setSaving(false)
@@ -205,24 +208,14 @@ export default function CSIMonitoringPage() {
 
   async function confirmDelete() {
     if (deleteId === null) return
-    const { data: saved } = await supabase.from('csi_records').select('*').eq('id', deleteId).single()
     const { error } = await supabase.from('csi_records').delete().eq('id', deleteId)
     if (error) { toast.error(error.message); setDeleteId(null); return }
     setDeleteId(null)
     load()
-    toast.success('Record deleted', {
-      action: {
-        label: 'Undo',
-        onClick: async () => {
-          if (saved) {
-            const { id: _id, created_at: _ca, ...rest } = saved as any
-            await supabase.from('csi_records').insert(rest)
-            load()
-          }
-        },
-      },
-    })
+    toast.success('Record deleted')
   }
+
+  const totalItems = items.reduce((s, it) => s + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0), 0)
 
   return (
     <div className="space-y-6">
@@ -317,7 +310,6 @@ export default function CSIMonitoringPage() {
                   ) : siGroups.map(group => (
                     <Fragment key={group.si_number}>
                       <TableRow
-                        key={group.si_number}
                         className="cursor-pointer hover:bg-muted/50"
                         onClick={() => toggleSI(group.si_number)}
                       >
@@ -341,7 +333,7 @@ export default function CSIMonitoringPage() {
                               <MoreHorizontal className="h-4 w-4" />
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => openEdit(group.items[0])}>Edit</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openEdit(group.si_number)}>Edit</DropdownMenuItem>
                               <DropdownMenuItem className="text-destructive" onClick={() => setDeleteId(group.items[0].id)}>Delete</DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -376,8 +368,8 @@ export default function CSIMonitoringPage() {
                                             <MoreHorizontal className="h-4 w-4" />
                                           </DropdownMenuTrigger>
                                           <DropdownMenuContent align="end">
-                                            <DropdownMenuItem onClick={() => openEdit(item)}>Edit</DropdownMenuItem>
-                                            <DropdownMenuItem className="text-destructive" onClick={() => setDeleteId(item.id)}>Delete</DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => openEdit(item.si_number)}>Edit SI</DropdownMenuItem>
+                                            <DropdownMenuItem className="text-destructive" onClick={() => setDeleteId(item.id)}>Delete Item</DropdownMenuItem>
                                           </DropdownMenuContent>
                                         </DropdownMenu>
                                       </TableCell>
@@ -439,8 +431,8 @@ export default function CSIMonitoringPage() {
                             <MoreHorizontal className="h-4 w-4" />
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => openEdit(rec)}>Edit</DropdownMenuItem>
-                            <DropdownMenuItem className="text-destructive" onClick={() => setDeleteId(rec.id)}>Delete</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openEdit(rec.si_number)}>Edit SI</DropdownMenuItem>
+                            <DropdownMenuItem className="text-destructive" onClick={() => setDeleteId(rec.id)}>Delete Item</DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -453,86 +445,184 @@ export default function CSIMonitoringPage() {
         </CardContent>
       </Card>
 
+      {/* New/Edit Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5 text-red-600" />
-              {editing ? 'Edit CSI Record' : 'New CSI Record'}
+              {editingSiNumber ? 'Edit CSI Record' : 'New CSI Record'}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
+            {/* Header fields */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Date <span className="text-destructive">*</span></Label>
-                <Input type="date" value={form.si_date}
-                  onChange={e => setForm(f => ({ ...f, si_date: e.target.value }))} />
+                <Input type="date" value={header.si_date}
+                  onChange={e => setHeader(h => ({ ...h, si_date: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
                 <Label>SI Number <span className="text-destructive">*</span></Label>
-                <Input placeholder="e.g. 00001" value={form.si_number}
-                  onChange={e => setForm(f => ({ ...f, si_number: e.target.value }))} />
+                <Input placeholder="e.g. 00001" value={header.si_number}
+                  onChange={e => setHeader(h => ({ ...h, si_number: e.target.value }))} />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Client</Label>
-                <Select value={form.client_name} onValueChange={v => setForm(f => ({ ...f, client_name: v ?? '' }))}>
-                  <SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">— None —</SelectItem>
-                    {suppliers.map(s => <SelectItem key={s.id} value={s.company_name}>{s.company_name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Input placeholder="Client name" value={header.client_name}
+                  onChange={e => setHeader(h => ({ ...h, client_name: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
                 <Label>DR Number</Label>
-                <Input placeholder="e.g. 00001" value={form.dr_number}
-                  onChange={e => setForm(f => ({ ...f, dr_number: e.target.value }))} />
+                <Input placeholder="e.g. 00001" value={header.dr_number}
+                  onChange={e => setHeader(h => ({ ...h, dr_number: e.target.value }))} />
               </div>
             </div>
             <div className="space-y-1.5">
               <Label>PO Number</Label>
-              <Input placeholder="e.g. PO-2025-00001" value={form.po_number}
-                onChange={e => setForm(f => ({ ...f, po_number: e.target.value }))} />
+              <Input placeholder="e.g. PO-2025-00001" value={header.po_number}
+                onChange={e => setHeader(h => ({ ...h, po_number: e.target.value }))} />
             </div>
-            <div className="space-y-1.5">
-              <Label>Item/s <span className="text-destructive">*</span></Label>
-              <Input placeholder="Item name / description" value={form.item_name}
-                onChange={e => setForm(f => ({ ...f, item_name: e.target.value }))} />
-            </div>
-            <div className="grid grid-cols-3 gap-4">
-              <div className="space-y-1.5">
-                <Label>QTY</Label>
-                <Input type="number" min={0} placeholder="0" value={form.quantity}
-                  onChange={e => setForm(f => ({ ...f, quantity: e.target.value }))} />
+
+            {/* Items */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-semibold">Items <span className="text-destructive">*</span></Label>
+                <Button type="button" variant="outline" size="sm" onClick={() => setItems(prev => [...prev, emptyItem()])}>
+                  <Plus className="h-3.5 w-3.5 mr-1" />Add Item
+                </Button>
               </div>
-              <div className="space-y-1.5">
-                <Label>Unit</Label>
-                <Input placeholder="e.g. Piece/s" value={form.unit}
-                  onChange={e => setForm(f => ({ ...f, unit: e.target.value }))} />
+              <div className="border rounded-lg">
+                <div className="grid grid-cols-[32px_1fr_80px_100px_110px_110px_36px] gap-2 px-3 py-2 bg-muted/50 border-b text-xs font-medium text-muted-foreground">
+                  <span />
+                  <span>Item Name</span>
+                  <span>Unit</span>
+                  <span>Qty</span>
+                  <span>Unit Price (₱)</span>
+                  <span className="text-right">Amount</span>
+                  <span />
+                </div>
+                <div className="divide-y">
+                  {items.map((item, i) => {
+                    const amt = (Number(item.quantity) || 0) * (Number(item.unit_price) || 0)
+                    return (
+                      <div key={i} className="grid grid-cols-[32px_1fr_80px_100px_110px_110px_36px] gap-2 items-center px-3 py-2">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-blue-600"
+                          title="View inventory"
+                          onClick={() => { setInventoryItem(item.item_name); setInventoryOpen(true) }}
+                        >
+                          <Package className="h-3.5 w-3.5" />
+                        </Button>
+                        <Select
+                          value={item.item_name}
+                          onValueChange={val => {
+                            const opt = itemOptions.find(o => o.item_name === (val ?? ''))
+                            setItems(prev => prev.map((it, idx) => idx === i
+                              ? { ...it, item_name: val ?? '', unit: opt?.unit_of_measure ?? it.unit }
+                              : it))
+                          }}
+                        >
+                          <SelectTrigger className="h-8 text-sm">
+                            <SelectValue placeholder="Select item…" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {itemOptions.map(opt => (
+                              <SelectItem key={opt.item_name} value={opt.item_name}>
+                                {opt.item_name} <span className="text-xs text-muted-foreground ml-1">({opt.unit_of_measure})</span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <div className="h-8 flex items-center px-2 text-sm bg-muted/30 rounded border text-muted-foreground truncate">
+                          {item.unit || '—'}
+                        </div>
+                        <Input type="number" min={0} className="h-8 text-sm" placeholder="0" value={item.quantity}
+                          onChange={e => setItems(prev => prev.map((it, idx) => idx === i ? { ...it, quantity: e.target.value } : it))} />
+                        <Input type="number" min={0} step="0.01" className="h-8 text-sm" placeholder="0.00" value={item.unit_price}
+                          onChange={e => setItems(prev => prev.map((it, idx) => idx === i ? { ...it, unit_price: e.target.value } : it))} />
+                        <div className="text-right text-sm font-medium pr-1 tabular-nums">
+                          ₱{amt.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                        </div>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
+                          onClick={() => setItems(prev => prev.filter((_, idx) => idx !== i))} disabled={items.length === 1}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div className="flex justify-end px-3 py-2 bg-muted/20 border-t text-sm font-semibold">
+                  Total: ₱{totalItems.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                </div>
               </div>
-              <div className="space-y-1.5">
-                <Label>Unit Price</Label>
-                <Input type="number" min={0} step="0.01" placeholder="0.00" value={form.unit_price}
-                  onChange={e => setForm(f => ({ ...f, unit_price: e.target.value }))} />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Amount</Label>
-              <Input type="number" min={0} step="0.01" placeholder="0.00" value={form.amount}
-                onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
             <Button onClick={save} disabled={saving} className="bg-red-600 hover:bg-red-700">
-              {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : editing ? 'Update' : 'Save'}
+              {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : editingSiNumber ? 'Update' : 'Save'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
+      {/* Inventory Lookup Modal */}
+      <Dialog open={inventoryOpen} onOpenChange={setInventoryOpen}>
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Inventory Stock — {inventoryItem || 'All Items'}</DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>SI Number</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Client</TableHead>
+                  <TableHead className="text-right">Qty</TableHead>
+                  <TableHead>Unit</TableHead>
+                  <TableHead className="text-right">Unit Price</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {records
+                  .filter(r => !inventoryItem || r.item_name === inventoryItem)
+                  .slice(0, 50)
+                  .map(r => (
+                    <TableRow key={r.id}>
+                      <TableCell className="font-mono text-xs text-red-600">{r.si_number}</TableCell>
+                      <TableCell className="text-sm whitespace-nowrap">{format(parseISO(r.si_date), 'MMM d, yyyy')}</TableCell>
+                      <TableCell className="text-sm">{r.client_name ?? '—'}</TableCell>
+                      <TableCell className="text-right text-sm">{r.quantity}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{r.unit ?? '—'}</TableCell>
+                      <TableCell className="text-right text-sm">{r.unit_price ? formatPeso(Number(r.unit_price)) : '—'}</TableCell>
+                      <TableCell className="text-right text-sm font-medium">{r.amount ? formatPeso(Number(r.amount)) : '—'}</TableCell>
+                    </TableRow>
+                  ))}
+                {records.filter(r => !inventoryItem || r.item_name === inventoryItem).length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                      No CSI records found for this item.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setInventoryOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation */}
       <Dialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
         <DialogContent>
           <DialogHeader><DialogTitle>Delete Record?</DialogTitle></DialogHeader>

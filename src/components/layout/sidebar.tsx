@@ -43,15 +43,7 @@ const navigation: NavItem[] = [
       { label: 'CSI Monitoring', href: '/csi-monitoring', icon: FileText },
     ],
   },
-  {
-    label: 'Accounting', icon: Calculator,
-    children: [
-      { label: 'Overview', href: '/accounting', icon: Calculator },
-      { label: 'Collections (OR/CR)', href: '/accounting/collections', icon: Receipt },
-      { label: 'Bookkeeping', href: '/accounting/bookkeeping', icon: FileBarChart },
-      { label: 'BIR Compliance', href: '/bir', icon: FileBarChart },
-    ],
-  },
+  { label: 'Accounting', href: '/accounting', icon: Calculator },
   {
     label: 'Setup', icon: Wrench,
     children: [

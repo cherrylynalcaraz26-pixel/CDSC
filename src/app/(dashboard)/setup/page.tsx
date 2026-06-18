@@ -897,7 +897,7 @@ interface Client {
 const emptyClientForm = () => ({
   company_name: '', contact_person: '', mobile_number: '', email: '',
   address: '', tin: '', client_type: 'corporate',
-  credit_limit: '0', payment_terms: '30 days', discount_rate: '0',
+  credit_limit: '0', payment_terms: '30 days',
 })
 
 function ClientsTab() {
@@ -934,7 +934,6 @@ function ClientsTab() {
       client_type: c.client_type ?? 'corporate',
       credit_limit: String(c.credit_limit ?? 0),
       payment_terms: c.payment_terms ?? '30 days',
-      discount_rate: String(c.discount_rate ?? 0),
     })
     setOpen(true)
   }
@@ -954,7 +953,6 @@ function ClientsTab() {
       client_type: form.client_type,
       credit_limit: Number(form.credit_limit) || 0,
       payment_terms: form.payment_terms || null,
-      discount_rate: Number(form.discount_rate) || 0,
     }
     const { error } = editing
       ? await supabase.from('clients').update(payload).eq('id', editing.id)
@@ -994,7 +992,6 @@ function ClientsTab() {
               <TableHead>Company</TableHead>
               <TableHead>Contact</TableHead>
               <TableHead>Type</TableHead>
-              <TableHead>Discount %</TableHead>
               <TableHead>Credit Limit</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="w-12" />
@@ -1016,7 +1013,6 @@ function ClientsTab() {
                 <TableCell>
                   <span className="text-xs bg-muted px-2 py-0.5 rounded-full capitalize">{c.client_type}</span>
                 </TableCell>
-                <TableCell className="text-sm font-medium">{c.discount_rate ?? 0}%</TableCell>
                 <TableCell className="text-sm">₱{(c.credit_limit ?? 0).toLocaleString('en-PH')}</TableCell>
                 <TableCell>
                   <button onClick={() => toggleStatus(c)}>
@@ -1075,10 +1071,6 @@ function ClientsTab() {
                   {['COD','7 days','15 days','30 days','45 days','60 days'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
                 </SelectContent>
               </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Discount Rate (%)</Label>
-              <Input type="number" min={0} max={100} step="0.1" value={form.discount_rate} onChange={e => setForm(p => ({ ...p, discount_rate: e.target.value }))} />
             </div>
             <div className="space-y-1.5">
               <Label>Credit Limit (₱)</Label>

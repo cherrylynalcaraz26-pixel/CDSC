@@ -71,6 +71,9 @@ export default function PurchaseOrdersPage() {
   const [paymentTerms, setPaymentTerms] = useState('30 days')
   const [remarks, setRemarks] = useState('')
   const [lines, setLines] = useState<POLine[]>([emptyLine()])
+  const [discountType, setDiscountType] = useState<'none' | '2' | '5' | 'custom'>('none')
+  const [discountCustom, setDiscountCustom] = useState('')
+  const discountRate = discountType === 'none' ? 0 : discountType === 'custom' ? (parseFloat(discountCustom) || 0) : parseFloat(discountType)
 
   async function load() {
     setLoading(true)
@@ -96,15 +99,23 @@ export default function PurchaseOrdersPage() {
 
   // Computed totals
   const subtotal = lines.reduce((s, l) => s + (parseFloat(l.unit_price) || 0) * (parseFloat(l.quantity) || 0), 0)
-  const vatAmount = subtotal * 0.12
   const selectedSupplier = suppliers.find(s => s.id === supplierId)
-  const ewtRate = (selectedSupplier?.ewt_rate ?? 2) / 100
-  const ewtAmount = (subtotal / 1.12) * ewtRate   // EWT on VAT-exclusive amount
-  const totalAmount = subtotal + vatAmount
-  const netPayable = totalAmount - ewtAmount
+  const isClient = !!clientId && !supplierId
+  const taxType = isClient ? 'cwt' : 'ewt'
+  const taxRate = isClient ? 0.02 : (selectedSupplier?.ewt_rate ?? 2) / 100
+  const taxLabel = isClient ? 'CWT' : 'EWT'
+
+  // Discount
+  const discountAmount = subtotal * (discountRate / 100)
+  const netSubtotal = subtotal - discountAmount
+  const vatAmount = netSubtotal * 0.12
+  const taxAmount = (netSubtotal / 1.12) * taxRate
+  const totalAmount = netSubtotal + vatAmount
+  const netPayable = totalAmount - taxAmount
 
   function resetForm() {
     setSupplierId(''); setClientId(''); setPoNumber(''); setDeliveryDate(''); setPaymentTerms('30 days'); setRemarks(''); setLines([emptyLine()]); setActiveTab('form')
+    setDiscountType('none'); setDiscountCustom('')
   }
 
   async function submitPO() {
@@ -120,7 +131,11 @@ export default function PurchaseOrdersPage() {
       status: 'open',
       subtotal,
       vat_amount: vatAmount,
-      ewt_amount: ewtAmount,
+      ewt_amount: isClient ? 0 : taxAmount,
+      cwt_amount: isClient ? taxAmount : 0,
+      discount_rate: discountRate,
+      discount_amount: discountAmount,
+      tax_type: taxType,
       total_amount: totalAmount,
       net_payable: netPayable,
     }).select('id').single()
@@ -417,6 +432,34 @@ export default function PurchaseOrdersPage() {
                   <Input value={remarks} onChange={e => setRemarks(e.target.value)} placeholder="Optional notes…" />
                 </div>
               </div>
+              {/* Discount */}
+              <div className="space-y-1.5">
+                <Label>Discount</Label>
+                <div className="flex gap-2">
+                  {(['none', '2', '5', 'custom'] as const).map(opt => (
+                    <button
+                      key={opt}
+                      type="button"
+                      onClick={() => setDiscountType(opt)}
+                      className={`px-3 py-1.5 text-sm rounded-md border font-medium transition-colors ${discountType === opt ? 'bg-red-600 text-white border-red-600' : 'bg-background text-muted-foreground hover:bg-muted border-input'}`}
+                    >
+                      {opt === 'none' ? 'None' : opt === 'custom' ? 'Custom' : `${opt}%`}
+                    </button>
+                  ))}
+                  {discountType === 'custom' && (
+                    <Input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step="0.1"
+                      placeholder="0.0"
+                      value={discountCustom}
+                      onChange={e => setDiscountCustom(e.target.value)}
+                      className="w-24 h-9"
+                    />
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Line items */}
@@ -485,8 +528,10 @@ export default function PurchaseOrdersPage() {
               <div className="flex justify-end">
                 <div className="space-y-1 text-sm min-w-[240px]">
                   <div className="flex justify-between"><span className="text-muted-foreground">Subtotal (VAT-inc.)</span><span>{fmt(subtotal)}</span></div>
+                  {discountRate > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Discount ({discountRate}%)</span><span className="text-orange-600">− {fmt(discountAmount)}</span></div>}
+                  {discountRate > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Net Subtotal</span><span>{fmt(netSubtotal)}</span></div>}
                   <div className="flex justify-between"><span className="text-muted-foreground">Input VAT (12%)</span><span className="text-blue-600">{fmt(vatAmount)}</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">EWT ({selectedSupplier?.ewt_rate ?? 2}%)</span><span className="text-red-700">− {fmt(ewtAmount)}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">{taxLabel} ({isClient ? 2 : (selectedSupplier?.ewt_rate ?? 2)}%)</span><span className="text-red-700">− {fmt(taxAmount)}</span></div>
                   <div className="flex justify-between border-t pt-1 font-semibold"><span>Net Payable</span><span className="text-red-600">{fmt(netPayable)}</span></div>
                 </div>
               </div>
@@ -577,8 +622,10 @@ export default function PurchaseOrdersPage() {
                   <div className="flex justify-end">
                     <div className="w-48 space-y-0.5">
                       <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span>₱{subtotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+                      {discountRate > 0 && <div className="flex justify-between"><span className="text-gray-500">Discount ({discountRate}%)</span><span className="text-orange-600">−₱{discountAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
+                      {discountRate > 0 && <div className="flex justify-between"><span className="text-gray-500">Net Subtotal</span><span>₱{netSubtotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
                       <div className="flex justify-between"><span className="text-gray-500">VAT (12%)</span><span className="text-blue-600">₱{vatAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
-                      <div className="flex justify-between"><span className="text-gray-500">EWT</span><span className="text-red-700">−₱{ewtAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+                      <div className="flex justify-between"><span className="text-gray-500">{taxLabel}</span><span className="text-red-700">−₱{taxAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
                       <div className="flex justify-between border-t pt-0.5 font-bold"><span>Net Payable</span><span className="text-red-700">₱{netPayable.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
                     </div>
                   </div>
