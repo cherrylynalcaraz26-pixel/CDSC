@@ -498,13 +498,12 @@ export default function PurchaseOrdersPage() {
               <div className="sticky top-0">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Live Preview</p>
                 <div className="border rounded-lg bg-white text-[11px] p-4 shadow-sm space-y-3 font-sans">
-                  {/* Header */}
+                  {/* Header: logo + company info | document title */}
                   <div className="flex justify-between items-start border-b pb-2">
                     <div className="flex items-center gap-2">
                       <img src="/cdsc-logo.jpg" alt="CDSC" className="h-10 w-10 rounded object-cover" />
                       <div>
                         <div className="text-base font-bold text-red-700">{companyInfo?.company_name || 'CDSC INDUSTRIAL'}</div>
-                        <div className="text-[10px] text-gray-500">PURCHASE ORDER</div>
                         {companyInfo?.address && <div className="text-[9px] text-gray-400">{companyInfo.address}</div>}
                         {(companyInfo?.phone || companyInfo?.email) && (
                           <div className="text-[9px] text-gray-400">
@@ -514,14 +513,12 @@ export default function PurchaseOrdersPage() {
                         {companyInfo?.tin && <div className="text-[9px] text-gray-400">TIN: {companyInfo.tin}</div>}
                       </div>
                     </div>
-                    <div className="text-right space-y-0.5">
-                      <div><span className="text-gray-500">PO No: </span><span className="font-mono font-bold">{poNumber || '—'}</span></div>
-                      <div><span className="text-gray-500">Date: </span><span>{new Date().toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</span></div>
-                      {deliveryDate && <div><span className="text-gray-500">Delivery: </span><span>{new Date(deliveryDate).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</span></div>}
+                    <div className="text-right">
+                      <div className="text-sm font-bold text-red-700 uppercase tracking-wide">Purchase Order</div>
                     </div>
                   </div>
 
-                  {/* Party info */}
+                  {/* Party info + PO No/Date on same row */}
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-0.5">
                       <div className="text-[9px] font-semibold uppercase text-gray-400">{supplierId ? 'Supplier' : clientId ? 'Client' : 'Supplier / Client'}</div>
@@ -532,10 +529,18 @@ export default function PurchaseOrdersPage() {
                           ? clients.find(c => c.id === clientId)?.company_name || '—'
                           : <span className="text-gray-400 italic">Not selected</span>}
                       </div>
-                    </div>
-                    <div className="space-y-0.5">
-                      <div className="text-[9px] font-semibold uppercase text-gray-400">Payment Terms</div>
+                      <div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5">Payment Terms</div>
                       <div className="font-semibold text-gray-800">{paymentTerms || '—'}</div>
+                    </div>
+                    <div className="space-y-0.5 text-right">
+                      <div className="text-[9px] font-semibold uppercase text-gray-400">PO Number</div>
+                      <div className="font-mono font-bold text-gray-800">{poNumber || '—'}</div>
+                      <div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5">Date</div>
+                      <div className="text-gray-800">{new Date().toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
+                      {deliveryDate && <>
+                        <div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5">Delivery Date</div>
+                        <div className="text-gray-800">{new Date(deliveryDate).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
+                      </>}
                     </div>
                   </div>
 

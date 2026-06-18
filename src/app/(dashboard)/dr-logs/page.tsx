@@ -672,13 +672,12 @@ export default function DRLogsPage() {
                 <div className="sticky top-0">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Live Preview</p>
                   <div className="border rounded-lg bg-white text-[11px] p-4 shadow-sm space-y-3 font-sans">
-                    {/* Header */}
+                    {/* Header: logo + company info | document title */}
                     <div className="flex justify-between items-start border-b pb-2">
                       <div className="flex items-center gap-2">
                         <img src="/cdsc-logo.jpg" alt="CDSC" className="h-10 w-10 rounded object-cover" />
                         <div>
                           <div className="text-base font-bold text-red-700">{companyInfo?.company_name || 'CDSC INDUSTRIAL'}</div>
-                          <div className="text-[10px] text-gray-500">DELIVERY RECEIPT</div>
                           {companyInfo?.address && <div className="text-[9px] text-gray-400">{companyInfo.address}</div>}
                           {(companyInfo?.phone || companyInfo?.email) && (
                             <div className="text-[9px] text-gray-400">
@@ -688,24 +687,27 @@ export default function DRLogsPage() {
                           {companyInfo?.tin && <div className="text-[9px] text-gray-400">TIN: {companyInfo.tin}</div>}
                         </div>
                       </div>
-                      <div className="text-right space-y-0.5">
-                        <div><span className="text-gray-500">DR No: </span><span className="font-mono font-bold">{form.dr_number || '—'}</span></div>
-                        <div><span className="text-gray-500">Date: </span><span>{form.dr_date ? new Date(form.dr_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</span></div>
+                      <div className="text-right">
+                        <div className="text-sm font-bold text-red-700 uppercase tracking-wide">Delivery Receipt</div>
                       </div>
                     </div>
 
-                    {/* Details */}
+                    {/* Details + DR No/Date on same row */}
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <div className="text-[9px] font-semibold uppercase text-gray-400 mb-0.5">Delivered To</div>
                         <div className="font-semibold text-gray-800">{form.supplier_name || <span className="text-gray-400 italic">—</span>}</div>
-                      </div>
-                      {form.po_number && (
-                        <div>
-                          <div className="text-[9px] font-semibold uppercase text-gray-400 mb-0.5">PO Reference</div>
+                        {form.po_number && <>
+                          <div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5 mb-0.5">PO Reference</div>
                           <div className="font-mono text-gray-800">{form.po_number}</div>
-                        </div>
-                      )}
+                        </>}
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[9px] font-semibold uppercase text-gray-400">DR Number</div>
+                        <div className="font-mono font-bold text-gray-800">{form.dr_number || '—'}</div>
+                        <div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5">Date</div>
+                        <div className="text-gray-800">{form.dr_date ? new Date(form.dr_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</div>
+                      </div>
                     </div>
 
                     {/* Items table */}
