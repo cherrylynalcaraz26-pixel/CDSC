@@ -287,7 +287,7 @@ function PullOutTab() {
                     {lineItems.map((line, idx) => (
                       <tr key={idx} className="border-t">
                         <td className="px-2 py-1.5">
-                          <Select value={line.item_id} onValueChange={v => updateLine(idx, 'item_id', v)}>
+                          <Select value={line.item_id} onValueChange={v => updateLine(idx, 'item_id', v ?? '')}>
                             <SelectTrigger className="h-8">
                               <SelectValue placeholder="Select item…" />
                             </SelectTrigger>
