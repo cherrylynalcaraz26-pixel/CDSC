@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Plus, MoreHorizontal, Loader2, Trash2, X, FileText, Printer, Mail, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSearchContext } from '@/context/search-context'
-import { sendEmailWithGmail } from '@/lib/gmail-send'
+import { sendEmailWithGmail, preloadGsi } from '@/lib/gmail-send'
 import Image from 'next/image'
 
 interface Client { id: string; company_name: string }
@@ -128,7 +128,7 @@ export default function QuotationPage() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load(); preloadGsi() }, [])
 
   function resetForm() {
     setQuoteNumber(''); setQuoteDate(today()); setValidUntil(''); setClientId('')
@@ -624,7 +624,7 @@ export default function QuotationPage() {
               <Button variant="outline" onClick={() => setShowEmailQ(false)}>Cancel</Button>
               <Button
                 className="bg-red-600 hover:bg-red-700 gap-1.5"
-                onClick={async () => {
+                onClick={() => {
                   if (!emailToQ) { toast.error('Please enter a recipient email address.'); return }
                   const el = printRef.current
                   const printHtml = el ? `<!DOCTYPE html><html><head><title>Quotation</title>
@@ -632,20 +632,16 @@ export default function QuotationPage() {
                     <style>body { font-family: Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; } @media print { body { margin: 0; } }</style>
                   </head><body class="p-6 text-[11px]">${el.innerHTML}</body></html>` : undefined
                   setShowEmailQ(false)
-                  toast.loading('Opening Google sign-in…', { id: 'email-send-q' })
-                  try {
-                    await sendEmailWithGmail({
-                      to: emailToQ,
-                      subject: emailSubjectQ,
-                      body: emailBodyQ,
-                      printHtml,
-                      pdfFilename: `Quotation-${quoteNumber || 'draft'}.pdf`,
-                    })
-                    toast.success('Email sent via Gmail!', { id: 'email-send-q' })
-                  } catch (err: unknown) {
-                    const msg = err instanceof Error ? err.message : 'Failed to send email'
-                    toast.error(msg, { id: 'email-send-q' })
-                  }
+                  toast.loading('Waiting for Google sign-in…', { id: 'email-send-q' })
+                  sendEmailWithGmail({
+                    to: emailToQ,
+                    subject: emailSubjectQ,
+                    body: emailBodyQ,
+                    printHtml,
+                    pdfFilename: `Quotation-${quoteNumber || 'draft'}.pdf`,
+                    onSuccess: () => toast.success('Email sent via Gmail!', { id: 'email-send-q' }),
+                    onError: (msg) => toast.error(msg, { id: 'email-send-q' }),
+                  })
                 }}
               >
                 <Send className="h-4 w-4" />Send in Gmail

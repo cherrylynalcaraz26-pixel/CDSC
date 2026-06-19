@@ -21,7 +21,7 @@ import {
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
-import { sendEmailWithGmail } from '@/lib/gmail-send'
+import { sendEmailWithGmail, preloadGsi } from '@/lib/gmail-send'
 
 interface ItemOption {
   item_code: string
@@ -141,7 +141,7 @@ export default function PurchaseOrdersPage() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load(); preloadGsi() }, [])
 
   // Computed totals
   const subtotal = lines.reduce((s, l) => s + (parseFloat(l.unit_price) || 0) * (parseFloat(l.quantity) || 0), 0)
@@ -244,7 +244,7 @@ export default function PurchaseOrdersPage() {
     setShowEmail(true)
   }
 
-  async function handleSendEmail() {
+  function handleSendEmail() {
     if (!emailTo) { toast.error('Please enter a recipient email address.'); return }
     const el = printRef.current
     const printHtml = el ? `<!DOCTYPE html><html><head><title>Purchase Order</title>
@@ -252,20 +252,16 @@ export default function PurchaseOrdersPage() {
       <style>body { font-family: Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; } @media print { body { margin: 0; } }</style>
     </head><body class="p-6 text-[11px]">${el.innerHTML}</body></html>` : undefined
     setShowEmail(false)
-    toast.loading('Opening Google sign-in…', { id: 'email-send' })
-    try {
-      await sendEmailWithGmail({
-        to: emailTo,
-        subject: emailSubject,
-        body: emailBody,
-        printHtml,
-        pdfFilename: `PO-${poNumber || 'draft'}.pdf`,
-      })
-      toast.success('Email sent via Gmail!', { id: 'email-send' })
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to send email'
-      toast.error(msg, { id: 'email-send' })
-    }
+    toast.loading('Waiting for Google sign-in…', { id: 'email-send' })
+    sendEmailWithGmail({
+      to: emailTo,
+      subject: emailSubject,
+      body: emailBody,
+      printHtml,
+      pdfFilename: `PO-${poNumber || 'draft'}.pdf`,
+      onSuccess: () => toast.success('Email sent via Gmail!', { id: 'email-send' }),
+      onError: (msg) => toast.error(msg, { id: 'email-send' }),
+    })
   }
 
   const fmt = (n: number) => `₱${n.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
