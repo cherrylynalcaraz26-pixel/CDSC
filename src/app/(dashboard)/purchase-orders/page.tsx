@@ -907,7 +907,13 @@ export default function PurchaseOrdersPage() {
                       onClick={() => {
                         if (itemSearchIdx !== null) {
                           setLines(p => p.map((l, idx) => idx === itemSearchIdx
-                            ? { ...l, item_name: it.item_name, unit: it.unit_of_measure }
+                            ? {
+                                ...l,
+                                item_name: it.item_name,
+                                unit: it.unit_of_measure,
+                                unit_price: it.cost != null ? String(it.cost) : l.unit_price,
+                                selling_price: it.selling_price != null ? String(it.selling_price) : l.selling_price,
+                              }
                             : l))
                         }
                         setItemSearchIdx(null)
