@@ -1,32 +1,47 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog'
 
 import {
   Plus, MoreHorizontal, Eye, Printer, Loader2,
   Trash2, CheckCircle2, XCircle, ArrowRightLeft, X,
+  Package, Search, Mail, Send,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 
-interface ItemOption { item_code: string; item_name: string; unit_of_measure: string }
+interface ItemOption {
+  item_code: string
+  item_name: string
+  unit_of_measure: string
+  status: string
+}
 
 type POStatus = 'open' | 'partially_delivered' | 'completed' | 'cancelled'
 
 const STATUS_CFG: Record<POStatus, { label: string; cls: string }> = {
-  open:                 { label: 'Open',             cls: 'bg-blue-100 text-blue-700' },
-  partially_delivered:  { label: 'Partial Delivery', cls: 'bg-yellow-100 text-yellow-700' },
-  completed:            { label: 'Completed',        cls: 'bg-green-100 text-green-700' },
-  cancelled:            { label: 'Cancelled',        cls: 'bg-red-100 text-red-700' },
+  open:                { label: 'Open',             cls: 'bg-blue-100 text-blue-700' },
+  partially_delivered: { label: 'Partial Delivery', cls: 'bg-yellow-100 text-yellow-700' },
+  completed:           { label: 'Completed',        cls: 'bg-green-100 text-green-700' },
+  cancelled:           { label: 'Cancelled',        cls: 'bg-red-100 text-red-700' },
+}
+
+const ITEM_STATUS_CFG: Record<string, { label: string; cls: string }> = {
+  active:      { label: 'Active',      cls: 'bg-green-100 text-green-700' },
+  inactive:    { label: 'Inactive',    cls: 'bg-gray-100 text-gray-500' },
+  low_stock:   { label: 'Low Stock',   cls: 'bg-yellow-100 text-yellow-700' },
+  out_of_stock:{ label: 'Out of Stock',cls: 'bg-red-100 text-red-700' },
 }
 
 interface PO {
@@ -47,8 +62,8 @@ interface PO {
 }
 
 interface Supplier { id: string; company_name: string; payment_terms: string | null; ewt_rate: number | null }
-interface Client { id: string; company_name: string; payment_terms: string | null }
-interface POLine { item_name: string; quantity: string; unit: string; unit_price: string }
+interface Client   { id: string; company_name: string; payment_terms: string | null }
+interface POLine   { item_name: string; quantity: string; unit: string; unit_price: string }
 const emptyLine = (): POLine => ({ item_name: '', quantity: '', unit: 'piece', unit_price: '' })
 
 export default function PurchaseOrdersPage() {
@@ -61,7 +76,9 @@ export default function PurchaseOrdersPage() {
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [activeTab, setActiveTab] = useState<'form' | 'preview'>('form')
-  const [companyInfo, setCompanyInfo] = useState<{ company_name: string; address: string; phone: string; email: string; tin: string } | null>(null)
+  const [companyInfo, setCompanyInfo] = useState<{
+    company_name: string; address: string; phone: string; email: string; tin: string
+  } | null>(null)
 
   // Form state
   const [supplierId, setSupplierId] = useState('')
@@ -75,6 +92,17 @@ export default function PurchaseOrdersPage() {
   const [discountCustom, setDiscountCustom] = useState('')
   const discountRate = discountType === 'none' ? 0 : discountType === 'custom' ? (parseFloat(discountCustom) || 0) : parseFloat(discountType)
 
+  // Item search modal
+  const [itemSearchIdx, setItemSearchIdx] = useState<number | null>(null)
+  const [itemQuery, setItemQuery] = useState('')
+
+  // Email modal
+  const [showEmail, setShowEmail] = useState(false)
+  const [emailTo, setEmailTo] = useState('')
+  const [emailNote, setEmailNote] = useState('')
+
+  const printRef = useRef<HTMLDivElement>(null)
+
   async function load() {
     setLoading(true)
     const [{ data: poData }, { data: supData }, { data: itemData }, { data: clientData }] = await Promise.all([
@@ -83,7 +111,7 @@ export default function PurchaseOrdersPage() {
         .select('*, supplier:suppliers(company_name), pr:purchase_requests(pr_number)')
         .order('created_at', { ascending: false }),
       supabase.from('suppliers').select('id, company_name, payment_terms, ewt_rate').eq('is_active', true).order('company_name'),
-      supabase.from('items').select('item_code, item_name, unit_of_measure').eq('status', 'active').order('item_name'),
+      supabase.from('items').select('item_code, item_name, unit_of_measure, status').order('item_name'),
       supabase.from('clients').select('id, company_name, payment_terms').eq('status', 'active').order('company_name'),
     ])
     setPOs((poData ?? []) as PO[])
@@ -105,7 +133,6 @@ export default function PurchaseOrdersPage() {
   const taxRate = isClient ? 0.02 : (selectedSupplier?.ewt_rate ?? 2) / 100
   const taxLabel = isClient ? 'CWT' : 'EWT'
 
-  // Discount
   const discountAmount = subtotal * (discountRate / 100)
   const netSubtotal = subtotal - discountAmount
   const vatAmount = netSubtotal * 0.12
@@ -114,15 +141,16 @@ export default function PurchaseOrdersPage() {
   const netPayable = totalAmount - taxAmount
 
   function resetForm() {
-    setSupplierId(''); setClientId(''); setPoNumber(''); setDeliveryDate(''); setPaymentTerms('30 days'); setRemarks(''); setLines([emptyLine()]); setActiveTab('form')
-    setDiscountType('none'); setDiscountCustom('')
+    setSupplierId(''); setClientId(''); setPoNumber(''); setDeliveryDate('')
+    setPaymentTerms('30 days'); setRemarks(''); setLines([emptyLine()])
+    setActiveTab('form'); setDiscountType('none'); setDiscountCustom('')
   }
 
   async function submitPO() {
     if (!supplierId && !clientId) { toast.error('Select a supplier or client'); return }
     setSaving(true)
-    const { data, error } = await supabase.from('purchase_orders').insert({
-      po_number: poNumber || null,   // if blank, trigger auto-generates
+    const { error } = await supabase.from('purchase_orders').insert({
+      po_number: poNumber || null,
       supplier_id: supplierId || null,
       client_id: clientId || null,
       delivery_date: deliveryDate || null,
@@ -150,13 +178,7 @@ export default function PurchaseOrdersPage() {
   async function updateStatus(id: string, status: POStatus) {
     const { error } = await supabase.from('purchase_orders').update({ status }).eq('id', id)
     if (error) { toast.error(error.message); return }
-
-    // When completed (received from supplier) → update stock levels
-    if (status === 'completed') {
-      toast.success('PO completed — stock will be updated on receiving')
-    } else {
-      toast.success(`Status → ${STATUS_CFG[status].label}`)
-    }
+    toast.success(status === 'completed' ? 'PO completed — stock will be updated on receiving' : `Status → ${STATUS_CFG[status].label}`)
     load()
   }
 
@@ -179,6 +201,51 @@ export default function PurchaseOrdersPage() {
     })
   }
 
+  function handlePrint() {
+    const el = printRef.current
+    if (!el) return
+    const win = window.open('', '_blank', 'width=900,height=700')
+    if (!win) return
+    win.document.write(`<!DOCTYPE html><html><head><title>Purchase Order</title>
+      <style>
+        body { font-family: Arial, sans-serif; font-size: 11px; margin: 0; padding: 24px; }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: #b91c1c; color: white; padding: 4px 6px; text-align: left; }
+        td { padding: 3px 6px; }
+        tr:nth-child(even) td { background: #f9f9f9; }
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+        .border-b { border-bottom: 1px solid #e5e7eb; }
+        .font-bold { font-weight: bold; }
+        .text-red { color: #b91c1c; }
+        .text-gray { color: #6b7280; }
+        .small { font-size: 9px; }
+        .totals { float: right; width: 220px; }
+        .totals div { display: flex; justify-content: space-between; padding: 1px 0; }
+        .sig-row { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 32px; }
+        .sig { text-align: center; }
+        .sig-line { border-bottom: 1px solid #9ca3af; margin-bottom: 4px; height: 32px; }
+      </style>
+    </head><body>${el.innerHTML}</body></html>`)
+    win.document.close()
+    win.focus()
+    win.print()
+    win.close()
+  }
+
+  function handleSendEmail() {
+    const partyName = supplierId
+      ? suppliers.find(s => s.id === supplierId)?.company_name
+      : clients.find(c => c.id === clientId)?.company_name
+    const subject = encodeURIComponent(`Purchase Order ${poNumber || '(draft)'}${partyName ? ` — ${partyName}` : ''}`)
+    const body = encodeURIComponent(
+      `Dear ${partyName ?? 'Sir/Madam'},\n\nPlease find the attached Purchase Order ${poNumber || '(draft)'}.\n\n${emailNote ? emailNote + '\n\n' : ''}Regards,\n${companyInfo?.company_name ?? 'CDSC Industrial Supply'}`
+    )
+    window.open(`mailto:${emailTo}?subject=${subject}&body=${body}`)
+    setShowEmail(false)
+    toast.success('Email client opened')
+  }
+
   const fmt = (n: number) => `₱${n.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
 
   const counts = {
@@ -187,6 +254,19 @@ export default function PurchaseOrdersPage() {
     completed: pos.filter(p => p.status === 'completed').length,
     total: pos.reduce((s, p) => s + (p.total_amount ?? 0), 0),
   }
+
+  const activeItems = items.filter(it => it.status === 'active')
+  const filteredSearchItems = itemQuery.trim()
+    ? items.filter(it =>
+        it.item_name.toLowerCase().includes(itemQuery.toLowerCase()) ||
+        it.item_code.toLowerCase().includes(itemQuery.toLowerCase())
+      )
+    : items
+
+  const todayStr = new Date().toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+  const deliveryStr = deliveryDate
+    ? new Date(deliveryDate + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+    : null
 
   return (
     <div className="space-y-6">
@@ -206,462 +286,641 @@ export default function PurchaseOrdersPage() {
         )}
       </div>
 
-      {open ? null : (
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card><CardContent className="pt-5 pb-4">
-          <div className="text-2xl font-bold">{loading ? '—' : fmt(counts.total)}</div>
-          <div className="text-sm text-muted-foreground">Total PO Value</div>
-        </CardContent></Card>
-        <Card><CardContent className="pt-5 pb-4">
-          <div className="text-2xl font-bold text-blue-600">{loading ? '—' : counts.open}</div>
-          <div className="text-sm text-muted-foreground">Open Orders</div>
-        </CardContent></Card>
-        <Card><CardContent className="pt-5 pb-4">
-          <div className="text-2xl font-bold text-yellow-600">{loading ? '—' : counts.partial}</div>
-          <div className="text-sm text-muted-foreground">Partial Delivery</div>
-        </CardContent></Card>
-        <Card><CardContent className="pt-5 pb-4">
-          <div className="text-2xl font-bold text-green-600">{loading ? '—' : counts.completed}</div>
-          <div className="text-sm text-muted-foreground">Completed</div>
-        </CardContent></Card>
-      </div>
+      {!open && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card><CardContent className="pt-5 pb-4">
+            <div className="text-2xl font-bold">{loading ? '—' : fmt(counts.total)}</div>
+            <div className="text-sm text-muted-foreground">Total PO Value</div>
+          </CardContent></Card>
+          <Card><CardContent className="pt-5 pb-4">
+            <div className="text-2xl font-bold text-blue-600">{loading ? '—' : counts.open}</div>
+            <div className="text-sm text-muted-foreground">Open Orders</div>
+          </CardContent></Card>
+          <Card><CardContent className="pt-5 pb-4">
+            <div className="text-2xl font-bold text-yellow-600">{loading ? '—' : counts.partial}</div>
+            <div className="text-sm text-muted-foreground">Partial Delivery</div>
+          </CardContent></Card>
+          <Card><CardContent className="pt-5 pb-4">
+            <div className="text-2xl font-bold text-green-600">{loading ? '—' : counts.completed}</div>
+            <div className="text-sm text-muted-foreground">Completed</div>
+          </CardContent></Card>
+        </div>
       )}
 
       {/* PO List */}
       {!open && (
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Purchase Order List</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0 overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>PO Number</TableHead>
-                <TableHead>PR Ref</TableHead>
-                <TableHead>Supplier</TableHead>
-                <TableHead>PO Date</TableHead>
-                <TableHead>Delivery Date</TableHead>
-                <TableHead className="text-right">Subtotal</TableHead>
-                <TableHead className="text-right">VAT 12%</TableHead>
-                <TableHead className="text-right">EWT</TableHead>
-                <TableHead className="text-right">Net Payable</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="w-10" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Purchase Order List</CardTitle>
+          </CardHeader>
+          <CardContent className="p-0 overflow-x-auto">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={11} className="text-center py-10">
-                    <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
-                  </TableCell>
+                  <TableHead>PO Number</TableHead>
+                  <TableHead>PR Ref</TableHead>
+                  <TableHead>Supplier</TableHead>
+                  <TableHead>PO Date</TableHead>
+                  <TableHead>Delivery Date</TableHead>
+                  <TableHead className="text-right">Subtotal</TableHead>
+                  <TableHead className="text-right">VAT 12%</TableHead>
+                  <TableHead className="text-right">EWT</TableHead>
+                  <TableHead className="text-right">Net Payable</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="w-10" />
                 </TableRow>
-              ) : pos.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={11} className="text-center py-12 text-muted-foreground">
-                    No purchase orders yet. Click <strong>Create PO</strong> to get started.
-                  </TableCell>
-                </TableRow>
-              ) : pos.map(po => {
-                const sCfg = STATUS_CFG[po.status] ?? STATUS_CFG.open
-                return (
-                  <TableRow key={po.id}>
-                    <TableCell className="font-mono text-xs font-semibold text-red-600">{po.po_number ?? '—'}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{(po.pr as any)?.pr_number ?? '—'}</TableCell>
-                    <TableCell className="font-medium text-sm">{(po.supplier as any)?.company_name ?? '—'}</TableCell>
-                    <TableCell className="text-sm whitespace-nowrap">
-                      {po.po_date ? format(new Date(po.po_date), 'MMM d, yyyy') : '—'}
-                    </TableCell>
-                    <TableCell className="text-sm whitespace-nowrap">
-                      {po.delivery_date ? format(new Date(po.delivery_date), 'MMM d, yyyy') : '—'}
-                    </TableCell>
-                    <TableCell className="text-right text-sm">{fmt(po.subtotal ?? 0)}</TableCell>
-                    <TableCell className="text-right text-sm text-blue-600">{fmt(po.vat_amount ?? 0)}</TableCell>
-                    <TableCell className="text-right text-sm text-red-700">{fmt(po.ewt_amount ?? 0)}</TableCell>
-                    <TableCell className="text-right font-semibold">{fmt(po.net_payable ?? 0)}</TableCell>
-                    <TableCell>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${sCfg.cls}`}>{sCfg.label}</span>
-                    </TableCell>
-                    <TableCell>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-52">
-                          <DropdownMenuItem onClick={() => toast.info(`PO: ${po.po_number}`)}>
-                            <Eye className="mr-2 h-4 w-4" />View PO
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => window.print()}>
-                            <Printer className="mr-2 h-4 w-4" />Print PO
-                          </DropdownMenuItem>
-                          {po.status === 'open' && (
-                            <DropdownMenuItem onClick={() => updateStatus(po.id, 'partially_delivered')} className="text-yellow-600">
-                              <ArrowRightLeft className="mr-2 h-4 w-4" />Mark Partial Delivery
-                            </DropdownMenuItem>
-                          )}
-                          {(po.status === 'open' || po.status === 'partially_delivered') && (
-                            <DropdownMenuItem onClick={() => updateStatus(po.id, 'completed')} className="text-green-600">
-                              <CheckCircle2 className="mr-2 h-4 w-4" />Mark Completed
-                            </DropdownMenuItem>
-                          )}
-                          {po.status !== 'cancelled' && po.status !== 'completed' && (
-                            <DropdownMenuItem onClick={() => updateStatus(po.id, 'cancelled')} className="text-destructive">
-                              <XCircle className="mr-2 h-4 w-4" />Cancel PO
-                            </DropdownMenuItem>
-                          )}
-                          <DropdownMenuItem onClick={() => deletePO(po.id)} className="text-destructive">
-                            <Trash2 className="mr-2 h-4 w-4" />Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+              </TableHeader>
+              <TableBody>
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={11} className="text-center py-10">
+                      <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                     </TableCell>
                   </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                ) : pos.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={11} className="text-center py-12 text-muted-foreground">
+                      No purchase orders yet. Click <strong>Create PO</strong> to get started.
+                    </TableCell>
+                  </TableRow>
+                ) : pos.map(po => {
+                  const sCfg = STATUS_CFG[po.status] ?? STATUS_CFG.open
+                  return (
+                    <TableRow key={po.id}>
+                      <TableCell className="font-mono text-xs font-semibold text-red-600">{po.po_number ?? '—'}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{(po.pr as any)?.pr_number ?? '—'}</TableCell>
+                      <TableCell className="font-medium text-sm">{(po.supplier as any)?.company_name ?? '—'}</TableCell>
+                      <TableCell className="text-sm whitespace-nowrap">
+                        {po.po_date ? format(new Date(po.po_date), 'MMM d, yyyy') : '—'}
+                      </TableCell>
+                      <TableCell className="text-sm whitespace-nowrap">
+                        {po.delivery_date ? format(new Date(po.delivery_date), 'MMM d, yyyy') : '—'}
+                      </TableCell>
+                      <TableCell className="text-right text-sm">{fmt(po.subtotal ?? 0)}</TableCell>
+                      <TableCell className="text-right text-sm text-blue-600">{fmt(po.vat_amount ?? 0)}</TableCell>
+                      <TableCell className="text-right text-sm text-red-700">{fmt(po.ewt_amount ?? 0)}</TableCell>
+                      <TableCell className="text-right font-semibold">{fmt(po.net_payable ?? 0)}</TableCell>
+                      <TableCell>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${sCfg.cls}`}>{sCfg.label}</span>
+                      </TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-52">
+                            <DropdownMenuItem onClick={() => toast.info(`PO: ${po.po_number}`)}>
+                              <Eye className="mr-2 h-4 w-4" />View PO
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => window.print()}>
+                              <Printer className="mr-2 h-4 w-4" />Print PO
+                            </DropdownMenuItem>
+                            {po.status === 'open' && (
+                              <DropdownMenuItem onClick={() => updateStatus(po.id, 'partially_delivered')} className="text-yellow-600">
+                                <ArrowRightLeft className="mr-2 h-4 w-4" />Mark Partial Delivery
+                              </DropdownMenuItem>
+                            )}
+                            {(po.status === 'open' || po.status === 'partially_delivered') && (
+                              <DropdownMenuItem onClick={() => updateStatus(po.id, 'completed')} className="text-green-600">
+                                <CheckCircle2 className="mr-2 h-4 w-4" />Mark Completed
+                              </DropdownMenuItem>
+                            )}
+                            {po.status !== 'cancelled' && po.status !== 'completed' && (
+                              <DropdownMenuItem onClick={() => updateStatus(po.id, 'cancelled')} className="text-destructive">
+                                <XCircle className="mr-2 h-4 w-4" />Cancel PO
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem onClick={() => deletePO(po.id)} className="text-destructive">
+                              <Trash2 className="mr-2 h-4 w-4" />Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
       )}
 
       {/* ── Inline Create PO Form ── */}
       {open && (
-      <Card>
-        <CardHeader className="pb-3 flex flex-row items-center justify-between">
-          <CardTitle className="text-base font-semibold">New Purchase Order</CardTitle>
-          <div className="flex rounded-md border overflow-hidden w-fit lg:hidden">
-            <button
-              onClick={() => setActiveTab('form')}
-              className={`px-4 py-1.5 text-sm font-medium ${activeTab === 'form' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
-            >
-              Form
-            </button>
-            <button
-              onClick={() => setActiveTab('preview')}
-              className={`px-4 py-1.5 text-sm font-medium border-l ${activeTab === 'preview' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
-            >
-              Preview
-            </button>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* LEFT: existing form */}
-            <div className={`space-y-5 ${activeTab === 'preview' ? 'hidden lg:block' : 'block'}`}>
-            {/* Header */}
-            <div className="space-y-3">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">PO Details</p>
-              {/* Row 1 */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label>PO Number</Label>
-                  <Input placeholder="Enter PO number" value={poNumber} onChange={e => setPoNumber(e.target.value)} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Delivery Date</Label>
-                  <Input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} />
-                </div>
-              </div>
-              {/* Row 2: Supplier | Client — mutually exclusive */}
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label className={clientId ? 'text-muted-foreground' : ''}>
-                    Supplier {!clientId && <span className="text-destructive">*</span>}
-                    {clientId && <span className="text-xs text-muted-foreground ml-1">(clear client first)</span>}
-                  </Label>
-                  <Select
-                    value={supplierId}
-                    onValueChange={v => {
-                      setSupplierId(v ?? '')
-                      setClientId('')
-                      const sup = suppliers.find(s => s.id === v)
-                      if (sup?.payment_terms) setPaymentTerms(sup.payment_terms)
-                    }}
-                    disabled={!!clientId}
-                  >
-                    <SelectTrigger className={clientId ? 'opacity-50' : ''}>
-                      <SelectValue placeholder="Select supplier…">
-                        {supplierId ? suppliers.find(s => s.id === supplierId)?.company_name : 'Select supplier…'}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.company_name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label className={supplierId ? 'text-muted-foreground' : ''}>
-                    Client {!supplierId && <span className="text-destructive">*</span>}
-                    {supplierId && <span className="text-xs text-muted-foreground ml-1">(clear supplier first)</span>}
-                  </Label>
-                  <Select
-                    value={clientId}
-                    onValueChange={v => {
-                      setClientId(v ?? '')
-                      setSupplierId('')
-                      const cli = clients.find(c => c.id === v)
-                      if (cli?.payment_terms) setPaymentTerms(cli.payment_terms)
-                    }}
-                    disabled={!!supplierId}
-                  >
-                    <SelectTrigger className={supplierId ? 'opacity-50' : ''}>
-                      <SelectValue placeholder="Select client…">
-                        {clientId ? clients.find(c => c.id === clientId)?.company_name : 'Select client…'}
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              {/* Row 3 */}
-              <div className="grid grid-cols-3 gap-3">
-                <div className="space-y-1.5">
-                  <Label>Payment Terms</Label>
-                  <Select value={paymentTerms} onValueChange={v => setPaymentTerms(v ?? '30 days')}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {['COD','7 days','15 days','30 days','45 days','60 days'].map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5 col-span-2">
-                  <Label>Remarks</Label>
-                  <Input value={remarks} onChange={e => setRemarks(e.target.value)} placeholder="Optional notes…" />
-                </div>
-              </div>
-              {/* Discount */}
-              <div className="space-y-1.5">
-                <Label>Discount</Label>
-                <div className="flex gap-2">
-                  {(['none', '2', '5', 'custom'] as const).map(opt => (
-                    <button
-                      key={opt}
-                      type="button"
-                      onClick={() => setDiscountType(opt)}
-                      className={`px-3 py-1.5 text-sm rounded-md border font-medium transition-colors ${discountType === opt ? 'bg-red-600 text-white border-red-600' : 'bg-background text-muted-foreground hover:bg-muted border-input'}`}
+        <Card>
+          <CardHeader className="pb-3 flex flex-row items-center justify-between">
+            <CardTitle className="text-base font-semibold">New Purchase Order</CardTitle>
+            <div className="flex rounded-md border overflow-hidden w-fit lg:hidden">
+              <button
+                onClick={() => setActiveTab('form')}
+                className={`px-4 py-1.5 text-sm font-medium ${activeTab === 'form' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
+              >
+                Form
+              </button>
+              <button
+                onClick={() => setActiveTab('preview')}
+                className={`px-4 py-1.5 text-sm font-medium border-l ${activeTab === 'preview' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
+              >
+                Preview
+              </button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+              {/* LEFT: Form */}
+              <div className={`space-y-5 ${activeTab === 'preview' ? 'hidden lg:block' : 'block'}`}>
+
+                {/* PO Details */}
+                <div className="space-y-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">PO Details</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label>PO Number</Label>
+                      <Input placeholder="Enter PO number" value={poNumber} onChange={e => setPoNumber(e.target.value)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Delivery Date</Label>
+                      <Input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} />
+                    </div>
+                  </div>
+
+                  {/* Supplier — full width */}
+                  <div className="space-y-1.5">
+                    <Label className={clientId ? 'text-muted-foreground' : ''}>
+                      Supplier {!clientId && <span className="text-destructive">*</span>}
+                      {clientId && <span className="text-xs text-muted-foreground ml-1">(clear client first)</span>}
+                    </Label>
+                    <Select
+                      value={supplierId}
+                      onValueChange={v => {
+                        setSupplierId(v ?? '')
+                        setClientId('')
+                        const sup = suppliers.find(s => s.id === v)
+                        if (sup?.payment_terms) setPaymentTerms(sup.payment_terms)
+                      }}
+                      disabled={!!clientId}
                     >
-                      {opt === 'none' ? 'None' : opt === 'custom' ? 'Custom' : `${opt}%`}
-                    </button>
-                  ))}
-                  {discountType === 'custom' && (
-                    <Input
-                      type="number"
-                      min={0}
-                      max={100}
-                      step="0.1"
-                      placeholder="0.0"
-                      value={discountCustom}
-                      onChange={e => setDiscountCustom(e.target.value)}
-                      className="w-24 h-9"
-                    />
-                  )}
-                </div>
-              </div>
-            </div>
+                      <SelectTrigger className={clientId ? 'opacity-50' : ''}>
+                        <SelectValue placeholder="Select supplier…">
+                          {supplierId ? suppliers.find(s => s.id === supplierId)?.company_name : 'Select supplier…'}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.company_name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-            {/* Line items */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pb-1">Items Ordered</p>
-                <Button type="button" variant="outline" size="sm" onClick={() => setLines(p => [...p, emptyLine()])}>
-                  <Plus className="h-3.5 w-3.5 mr-1" />Add Row
-                </Button>
-              </div>
-              <div className="border rounded-lg">
-                <div className="grid grid-cols-[1fr_80px_90px_130px_110px_36px] gap-2 px-3 py-2 bg-muted/50 border-b text-xs font-medium text-muted-foreground">
-                  <span>Item / Description</span>
-                  <span>Qty</span>
-                  <span>Unit</span>
-                  <span>Unit Price (₱)</span>
-                  <span className="text-right">Line Total</span>
-                  <span />
-                </div>
-                <div className="divide-y">
-                  {lines.map((line, i) => {
-                    const lineTotal = (parseFloat(line.unit_price) || 0) * (parseFloat(line.quantity) || 0)
-                    return (
-                      <div key={i} className="grid grid-cols-[1fr_80px_90px_130px_110px_36px] gap-2 items-center px-3 py-2">
-                        <Select
-                          value={line.item_name}
-                          onValueChange={val => {
-                            const selected = items.find(it => it.item_name === val)
-                            setLines(p => p.map((l, idx) => idx === i
-                              ? { ...l, item_name: val ?? '', unit: selected?.unit_of_measure || l.unit }
-                              : l))
-                          }}
+                  {/* Client — full width */}
+                  <div className="space-y-1.5">
+                    <Label className={supplierId ? 'text-muted-foreground' : ''}>
+                      Client {!supplierId && <span className="text-destructive">*</span>}
+                      {supplierId && <span className="text-xs text-muted-foreground ml-1">(clear supplier first)</span>}
+                    </Label>
+                    <Select
+                      value={clientId}
+                      onValueChange={v => {
+                        setClientId(v ?? '')
+                        setSupplierId('')
+                        const cli = clients.find(c => c.id === v)
+                        if (cli?.payment_terms) setPaymentTerms(cli.payment_terms)
+                      }}
+                      disabled={!!supplierId}
+                    >
+                      <SelectTrigger className={supplierId ? 'opacity-50' : ''}>
+                        <SelectValue placeholder="Select client…">
+                          {clientId ? clients.find(c => c.id === clientId)?.company_name : 'Select client…'}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Payment Terms + Remarks */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="space-y-1.5">
+                      <Label>Payment Terms</Label>
+                      <Select value={paymentTerms} onValueChange={v => setPaymentTerms(v ?? '30 days')}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {['COD', '7 days', '15 days', '30 days', '45 days', '60 days'].map(t =>
+                            <SelectItem key={t} value={t}>{t}</SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5 col-span-2">
+                      <Label>Remarks</Label>
+                      <Input value={remarks} onChange={e => setRemarks(e.target.value)} placeholder="Optional notes…" />
+                    </div>
+                  </div>
+
+                  {/* Discount */}
+                  <div className="space-y-1.5">
+                    <Label>Discount</Label>
+                    <div className="flex gap-2">
+                      {(['none', '2', '5', 'custom'] as const).map(opt => (
+                        <button
+                          key={opt}
+                          type="button"
+                          onClick={() => setDiscountType(opt)}
+                          className={`px-3 py-1.5 text-sm rounded-md border font-medium transition-colors ${discountType === opt ? 'bg-red-600 text-white border-red-600' : 'bg-background text-muted-foreground hover:bg-muted border-input'}`}
                         >
-                          <SelectTrigger className="h-8 text-sm">
-                            <SelectValue placeholder="Select item…" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {items.map(it => (
-                              <SelectItem key={it.item_code} value={it.item_name}>
-                                {it.item_name} <span className="text-xs text-muted-foreground ml-1">({it.unit_of_measure})</span>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Input type="number" min={1} className="h-8 text-sm" placeholder="1" value={line.quantity}
-                          onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, quantity: e.target.value } : l))} />
-                        <div className="h-8 flex items-center px-2 text-sm bg-muted/30 rounded border text-muted-foreground truncate">
-                          {line.unit || '—'}
+                          {opt === 'none' ? 'None' : opt === 'custom' ? 'Custom' : `${opt}%`}
+                        </button>
+                      ))}
+                      {discountType === 'custom' && (
+                        <Input
+                          type="number" min={0} max={100} step="0.1" placeholder="0.0"
+                          value={discountCustom} onChange={e => setDiscountCustom(e.target.value)}
+                          className="w-24 h-9"
+                        />
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Line items */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pb-1">Items Ordered</p>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setLines(p => [...p, emptyLine()])}>
+                      <Plus className="h-3.5 w-3.5 mr-1" />Add Row
+                    </Button>
+                  </div>
+                  <div className="border rounded-lg overflow-hidden">
+                    <div className="grid grid-cols-[1fr_36px_80px_90px_120px_100px_36px] gap-2 px-3 py-2 bg-muted/50 border-b text-xs font-medium text-muted-foreground">
+                      <span>Item / Description</span>
+                      <span />
+                      <span>Qty</span>
+                      <span>Unit</span>
+                      <span>Unit Price (₱)</span>
+                      <span className="text-right">Line Total</span>
+                      <span />
+                    </div>
+                    <div className="divide-y">
+                      {lines.map((line, i) => {
+                        const lineTotal = (parseFloat(line.unit_price) || 0) * (parseFloat(line.quantity) || 0)
+                        const itemMeta = items.find(it => it.item_name === line.item_name)
+                        const statusCfg = itemMeta ? (ITEM_STATUS_CFG[itemMeta.status] ?? ITEM_STATUS_CFG.active) : null
+                        return (
+                          <div key={i} className="space-y-0.5 px-3 py-2">
+                            <div className="grid grid-cols-[1fr_36px_80px_90px_120px_100px_36px] gap-2 items-center">
+                              <Select
+                                value={line.item_name}
+                                onValueChange={val => {
+                                  const selected = activeItems.find(it => it.item_name === val)
+                                  setLines(p => p.map((l, idx) => idx === i
+                                    ? { ...l, item_name: val ?? '', unit: selected?.unit_of_measure || l.unit }
+                                    : l))
+                                }}
+                              >
+                                <SelectTrigger className="h-8 text-sm">
+                                  <SelectValue placeholder="Select item…" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {activeItems.map(it => (
+                                    <SelectItem key={it.item_code} value={it.item_name}>
+                                      {it.item_name}
+                                      <span className="text-xs text-muted-foreground ml-1">({it.unit_of_measure})</span>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+
+                              {/* Inventory lookup button */}
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8 shrink-0"
+                                title="Search inventory"
+                                onClick={() => { setItemSearchIdx(i); setItemQuery('') }}
+                              >
+                                <Package className="h-3.5 w-3.5" />
+                              </Button>
+
+                              <Input type="number" min={1} className="h-8 text-sm" placeholder="1" value={line.quantity}
+                                onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, quantity: e.target.value } : l))} />
+                              <div className="h-8 flex items-center px-2 text-sm bg-muted/30 rounded border text-muted-foreground truncate">
+                                {line.unit || '—'}
+                              </div>
+                              <Input type="number" min={0} step="0.01" className="h-8 text-sm" placeholder="0.00" value={line.unit_price}
+                                onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, unit_price: e.target.value } : l))} />
+                              <div className="text-right text-sm font-medium pr-1 tabular-nums">
+                                ₱{lineTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                              </div>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
+                                onClick={() => setLines(p => p.filter((_, idx) => idx !== i))} disabled={lines.length === 1}>
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                            {statusCfg && (
+                              <div className="pl-0.5">
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${statusCfg.cls}`}>
+                                  {statusCfg.label}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Tax summary */}
+                  <div className="flex justify-end">
+                    <div className="space-y-1 text-sm min-w-[240px]">
+                      <div className="flex justify-between"><span className="text-muted-foreground">Subtotal (VAT-inc.)</span><span>{fmt(subtotal)}</span></div>
+                      {discountRate > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Discount ({discountRate}%)</span><span className="text-orange-600">− {fmt(discountAmount)}</span></div>}
+                      {discountRate > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Net Subtotal</span><span>{fmt(netSubtotal)}</span></div>}
+                      <div className="flex justify-between"><span className="text-muted-foreground">Input VAT (12%)</span><span className="text-blue-600">{fmt(vatAmount)}</span></div>
+                      <div className="flex justify-between"><span className="text-muted-foreground">{taxLabel} ({isClient ? 2 : (selectedSupplier?.ewt_rate ?? 2)}%)</span><span className="text-red-700">− {fmt(taxAmount)}</span></div>
+                      <div className="flex justify-between border-t pt-1 font-semibold"><span>Net Payable</span><span className="text-red-600">{fmt(netPayable)}</span></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* RIGHT: Live preview */}
+              <div className={`${activeTab === 'form' ? 'hidden lg:block' : 'block'}`}>
+                <div className="sticky top-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Live Preview</p>
+                    <div className="flex gap-1.5">
+                      <Button type="button" variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={handlePrint}>
+                        <Printer className="h-3.5 w-3.5" />Print
+                      </Button>
+                      <Button type="button" variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => setShowEmail(true)}>
+                        <Mail className="h-3.5 w-3.5" />Email
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div ref={printRef} className="border rounded-lg bg-white text-[11px] p-5 shadow-sm space-y-3 font-sans">
+                    {/* Header: PURCHASE ORDER (left) | Company details (right) */}
+                    <div className="flex justify-between items-start border-b pb-3">
+                      {/* Left: logo + document title */}
+                      <div className="flex items-center gap-3">
+                        <img src="/cdsc-logo.jpg" alt="CDSC" className="h-12 w-12 rounded object-cover shrink-0" />
+                        <div>
+                          <div className="text-[18px] font-extrabold text-red-700 uppercase tracking-widest leading-tight">
+                            Purchase Order
+                          </div>
+                          <div className="mt-1.5 space-y-0.5 text-[10px]">
+                            <div>
+                              <span className="text-gray-400 font-semibold uppercase text-[9px]">PO Number: </span>
+                              <span className="font-mono font-bold text-gray-800">{poNumber || <span className="text-gray-300 italic">—</span>}</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-400 font-semibold uppercase text-[9px]">Date: </span>
+                              <span className="text-gray-700">{todayStr}</span>
+                            </div>
+                            {deliveryStr && (
+                              <div>
+                                <span className="text-gray-400 font-semibold uppercase text-[9px]">Delivery: </span>
+                                <span className="text-gray-700">{deliveryStr}</span>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                        <Input type="number" min={0} step="0.01" className="h-8 text-sm" placeholder="0.00" value={line.unit_price}
-                          onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, unit_price: e.target.value } : l))} />
-                        <div className="text-right text-sm font-medium pr-1 tabular-nums">
-                          ₱{lineTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                        </div>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
-                          onClick={() => setLines(p => p.filter((_, idx) => idx !== i))} disabled={lines.length === 1}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
                       </div>
-                    )
-                  })}
-                </div>
-              </div>
 
-              {/* Tax summary */}
-              <div className="flex justify-end">
-                <div className="space-y-1 text-sm min-w-[240px]">
-                  <div className="flex justify-between"><span className="text-muted-foreground">Subtotal (VAT-inc.)</span><span>{fmt(subtotal)}</span></div>
-                  {discountRate > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Discount ({discountRate}%)</span><span className="text-orange-600">− {fmt(discountAmount)}</span></div>}
-                  {discountRate > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Net Subtotal</span><span>{fmt(netSubtotal)}</span></div>}
-                  <div className="flex justify-between"><span className="text-muted-foreground">Input VAT (12%)</span><span className="text-blue-600">{fmt(vatAmount)}</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">{taxLabel} ({isClient ? 2 : (selectedSupplier?.ewt_rate ?? 2)}%)</span><span className="text-red-700">− {fmt(taxAmount)}</span></div>
-                  <div className="flex justify-between border-t pt-1 font-semibold"><span>Net Payable</span><span className="text-red-600">{fmt(netPayable)}</span></div>
-                </div>
-              </div>
-            </div>
-            </div>
-
-            {/* RIGHT: live preview */}
-            <div className={`${activeTab === 'form' ? 'hidden lg:block' : 'block'}`}>
-              <div className="sticky top-0">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Live Preview</p>
-                <div className="border rounded-lg bg-white text-[11px] p-4 shadow-sm space-y-3 font-sans">
-                  {/* Header: logo + company info | document title */}
-                  <div className="flex justify-between items-start border-b pb-2">
-                    <div className="flex items-center gap-2">
-                      <img src="/cdsc-logo.jpg" alt="CDSC" className="h-10 w-10 rounded object-cover" />
-                      <div>
-                        <div className="text-base font-bold text-red-700">{companyInfo?.company_name || 'CDSC INDUSTRIAL'}</div>
-                        {companyInfo?.address && <div className="text-[9px] text-gray-400">{companyInfo.address}</div>}
+                      {/* Right: company details */}
+                      <div className="text-right shrink-0 max-w-[180px]">
+                        <div className="text-[13px] font-bold text-red-700 leading-tight">
+                          {companyInfo?.company_name || 'CDSC INDUSTRIAL'}
+                        </div>
+                        {companyInfo?.address && (
+                          <div className="text-[9px] text-gray-500 mt-0.5">{companyInfo.address}</div>
+                        )}
                         {(companyInfo?.phone || companyInfo?.email) && (
-                          <div className="text-[9px] text-gray-400">
+                          <div className="text-[9px] text-gray-500">
                             {companyInfo.phone}{companyInfo.phone && companyInfo.email ? ' | ' : ''}{companyInfo.email}
                           </div>
                         )}
-                        {companyInfo?.tin && <div className="text-[9px] text-gray-400">TIN: {companyInfo.tin}</div>}
+                        {companyInfo?.tin && (
+                          <div className="text-[9px] text-gray-500">TIN: {companyInfo.tin}</div>
+                        )}
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className="text-sm font-bold text-red-700 uppercase tracking-wide">Purchase Order</div>
-                    </div>
-                  </div>
 
-                  {/* Party info + PO No/Date on same row */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-0.5">
-                      <div className="text-[9px] font-semibold uppercase text-gray-400">{supplierId ? 'Supplier' : clientId ? 'Client' : 'Supplier / Client'}</div>
-                      <div className="font-semibold text-gray-800">
-                        {supplierId
-                          ? suppliers.find(s => s.id === supplierId)?.company_name || '—'
-                          : clientId
-                          ? clients.find(c => c.id === clientId)?.company_name || '—'
-                          : <span className="text-gray-400 italic">Not selected</span>}
+                    {/* Party + payment info */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-0.5">
+                        <div className="text-[9px] font-semibold uppercase text-gray-400">
+                          {supplierId ? 'Supplier' : clientId ? 'Client' : 'Supplier / Client'}
+                        </div>
+                        <div className="font-semibold text-gray-800 text-[11px]">
+                          {supplierId
+                            ? suppliers.find(s => s.id === supplierId)?.company_name || '—'
+                            : clientId
+                            ? clients.find(c => c.id === clientId)?.company_name || '—'
+                            : <span className="text-gray-400 italic font-normal">Not selected</span>}
+                        </div>
+                        <div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5">Payment Terms</div>
+                        <div className="text-gray-700">{paymentTerms || '—'}</div>
+                        {taxLabel && (
+                          <>
+                            <div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5">Tax Type</div>
+                            <div className="text-gray-700">{taxLabel} ({isClient ? 2 : (selectedSupplier?.ewt_rate ?? 2)}%)</div>
+                          </>
+                        )}
                       </div>
-                      <div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5">Payment Terms</div>
-                      <div className="font-semibold text-gray-800">{paymentTerms || '—'}</div>
+                      {remarks && (
+                        <div className="space-y-0.5">
+                          <div className="text-[9px] font-semibold uppercase text-gray-400">Remarks</div>
+                          <div className="text-gray-700 text-[10px]">{remarks}</div>
+                        </div>
+                      )}
                     </div>
-                    <div className="space-y-0.5 text-right">
-                      <div className="text-[9px] font-semibold uppercase text-gray-400">PO Number</div>
-                      <div className="font-mono font-bold text-gray-800">{poNumber || '—'}</div>
-                      <div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5">Date</div>
-                      <div className="text-gray-800">{new Date().toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
-                      {deliveryDate && <>
-                        <div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5">Delivery Date</div>
-                        <div className="text-gray-800">{new Date(deliveryDate).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
-                      </>}
-                    </div>
-                  </div>
 
-                  {/* Items table */}
-                  <table className="w-full border-collapse">
-                    <thead>
-                      <tr className="bg-red-700 text-white">
-                        <th className="text-left px-1.5 py-1">#</th>
-                        <th className="text-left px-1.5 py-1">Item Description</th>
-                        <th className="text-right px-1.5 py-1">Qty</th>
-                        <th className="text-left px-1.5 py-1">Unit</th>
-                        <th className="text-right px-1.5 py-1">Unit Price</th>
-                        <th className="text-right px-1.5 py-1">Total</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {lines.map((line, i) => {
-                        const total = (parseFloat(line.unit_price) || 0) * (parseFloat(line.quantity) || 0)
-                        return (
-                          <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                            <td className="px-1.5 py-1 text-gray-400">{i + 1}</td>
-                            <td className="px-1.5 py-1">{line.item_name || <span className="text-gray-300 italic">—</span>}</td>
-                            <td className="px-1.5 py-1 text-right">{line.quantity || '—'}</td>
-                            <td className="px-1.5 py-1 text-gray-500">{line.unit || '—'}</td>
-                            <td className="px-1.5 py-1 text-right">₱{(parseFloat(line.unit_price) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
-                            <td className="px-1.5 py-1 text-right font-medium">₱{total.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
+                    {/* Items table */}
+                    <table className="w-full border-collapse text-[10px]">
+                      <thead>
+                        <tr className="bg-red-700 text-white">
+                          <th className="text-left px-1.5 py-1 w-6">#</th>
+                          <th className="text-left px-1.5 py-1">Item Description</th>
+                          <th className="text-right px-1.5 py-1 w-12">Qty</th>
+                          <th className="text-left px-1.5 py-1 w-16">Unit</th>
+                          <th className="text-right px-1.5 py-1 w-20">Unit Price</th>
+                          <th className="text-right px-1.5 py-1 w-20">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {lines.map((line, i) => {
+                          const total = (parseFloat(line.unit_price) || 0) * (parseFloat(line.quantity) || 0)
+                          return (
+                            <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                              <td className="px-1.5 py-1 text-gray-400">{i + 1}</td>
+                              <td className="px-1.5 py-1">{line.item_name || <span className="text-gray-300 italic">—</span>}</td>
+                              <td className="px-1.5 py-1 text-right">{line.quantity || '—'}</td>
+                              <td className="px-1.5 py-1 text-gray-500">{line.unit || '—'}</td>
+                              <td className="px-1.5 py-1 text-right">₱{(parseFloat(line.unit_price) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+                              <td className="px-1.5 py-1 text-right font-medium">₱{total.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
 
-                  {/* Totals */}
-                  <div className="flex justify-end">
-                    <div className="w-48 space-y-0.5">
-                      <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span>₱{subtotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
-                      {discountRate > 0 && <div className="flex justify-between"><span className="text-gray-500">Discount ({discountRate}%)</span><span className="text-orange-600">−₱{discountAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
-                      {discountRate > 0 && <div className="flex justify-between"><span className="text-gray-500">Net Subtotal</span><span>₱{netSubtotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
-                      <div className="flex justify-between"><span className="text-gray-500">VAT (12%)</span><span className="text-blue-600">₱{vatAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
-                      <div className="flex justify-between"><span className="text-gray-500">{taxLabel}</span><span className="text-red-700">−₱{taxAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
-                      <div className="flex justify-between border-t pt-0.5 font-bold"><span>Net Payable</span><span className="text-red-700">₱{netPayable.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+                    {/* Totals */}
+                    <div className="flex justify-end">
+                      <div className="w-52 space-y-0.5 text-[10px]">
+                        <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span>₱{subtotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+                        {discountRate > 0 && <div className="flex justify-between"><span className="text-gray-500">Discount ({discountRate}%)</span><span className="text-orange-600">−₱{discountAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
+                        {discountRate > 0 && <div className="flex justify-between"><span className="text-gray-500">Net Subtotal</span><span>₱{netSubtotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
+                        <div className="flex justify-between"><span className="text-gray-500">VAT (12%)</span><span className="text-blue-600">₱{vatAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">{taxLabel}</span><span className="text-red-700">−₱{taxAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+                        <div className="flex justify-between border-t pt-0.5 font-bold text-[11px]"><span>Net Payable</span><span className="text-red-700">₱{netPayable.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+                      </div>
                     </div>
-                  </div>
 
-                  {/* Remarks */}
-                  {remarks && (
-                    <div className="border-t pt-2 text-[10px]">
-                      <span className="text-gray-400 font-semibold">Remarks: </span>{remarks}
-                    </div>
-                  )}
-
-                  {/* Signatures */}
-                  <div className="grid grid-cols-2 gap-4 border-t pt-3 mt-2">
-                    <div className="text-center">
-                      <div className="border-b border-gray-400 mb-1 h-6" />
-                      <div className="text-[9px] text-gray-400 uppercase">Prepared By</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="border-b border-gray-400 mb-1 h-6" />
-                      <div className="text-[9px] text-gray-400 uppercase">Approved By</div>
+                    {/* Signatures */}
+                    <div className="grid grid-cols-2 gap-6 border-t pt-4 mt-1">
+                      <div className="text-center">
+                        <div className="border-b border-gray-400 mb-1 h-8" />
+                        <div className="text-[9px] text-gray-400 uppercase tracking-wider">Prepared By</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="border-b border-gray-400 mb-1 h-8" />
+                        <div className="text-[9px] text-gray-400 uppercase tracking-wider">Approved By</div>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <div className="flex justify-end gap-2 pt-4 border-t mt-2">
-            <Button variant="outline" onClick={() => { setOpen(false); resetForm() }}>Cancel</Button>
-            <Button onClick={submitPO} disabled={saving} className="bg-red-600 hover:bg-red-700">
-              {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Creating…</> : 'Create Purchase Order'}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+            <div className="flex justify-end gap-2 pt-4 border-t mt-2">
+              <Button variant="outline" onClick={() => { setOpen(false); resetForm() }}>Cancel</Button>
+              <Button type="button" variant="outline" className="gap-1.5" onClick={handlePrint}>
+                <Printer className="h-4 w-4" />Print
+              </Button>
+              <Button type="button" variant="outline" className="gap-1.5" onClick={() => setShowEmail(true)}>
+                <Mail className="h-4 w-4" />Send Email
+              </Button>
+              <Button onClick={submitPO} disabled={saving} className="bg-red-600 hover:bg-red-700">
+                {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Creating…</> : 'Create Purchase Order'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       )}
+
+      {/* Item Search Dialog */}
+      <Dialog open={itemSearchIdx !== null} onOpenChange={o => { if (!o) setItemSearchIdx(null) }}>
+        <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Package className="h-4 w-4" />Item Inventory
+            </DialogTitle>
+          </DialogHeader>
+          <div className="relative mb-2">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              autoFocus
+              placeholder="Search by item name or code…"
+              className="pl-9"
+              value={itemQuery}
+              onChange={e => setItemQuery(e.target.value)}
+            />
+          </div>
+          <div className="flex-1 overflow-y-auto border rounded-lg">
+            <table className="w-full text-sm">
+              <thead className="sticky top-0 bg-muted">
+                <tr>
+                  <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Item</th>
+                  <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Code</th>
+                  <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Unit</th>
+                  <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {filteredSearchItems.length === 0 ? (
+                  <tr><td colSpan={4} className="text-center py-6 text-muted-foreground text-sm">No items found.</td></tr>
+                ) : filteredSearchItems.map(it => {
+                  const sCfg = ITEM_STATUS_CFG[it.status] ?? ITEM_STATUS_CFG.active
+                  return (
+                    <tr
+                      key={it.item_code}
+                      className="hover:bg-muted/50 cursor-pointer transition-colors"
+                      onClick={() => {
+                        if (itemSearchIdx !== null) {
+                          setLines(p => p.map((l, idx) => idx === itemSearchIdx
+                            ? { ...l, item_name: it.item_name, unit: it.unit_of_measure }
+                            : l))
+                        }
+                        setItemSearchIdx(null)
+                      }}
+                    >
+                      <td className="px-3 py-2 font-medium">{it.item_name}</td>
+                      <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{it.item_code}</td>
+                      <td className="px-3 py-2 text-muted-foreground">{it.unit_of_measure}</td>
+                      <td className="px-3 py-2">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${sCfg.cls}`}>{sCfg.label}</span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Send Email Dialog */}
+      <Dialog open={showEmail} onOpenChange={setShowEmail}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Mail className="h-4 w-4" />Send Purchase Order by Email
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <Label>To (email address)</Label>
+              <Input
+                type="email"
+                placeholder="supplier@example.com"
+                value={emailTo}
+                onChange={e => setEmailTo(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Subject</Label>
+              <Input
+                readOnly
+                value={`Purchase Order ${poNumber || '(draft)'}${
+                  supplierId
+                    ? ` — ${suppliers.find(s => s.id === supplierId)?.company_name ?? ''}`
+                    : clientId
+                    ? ` — ${clients.find(c => c.id === clientId)?.company_name ?? ''}`
+                    : ''
+                }`}
+                className="bg-muted text-muted-foreground"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Additional Note (optional)</Label>
+              <Input
+                placeholder="e.g. Please confirm receipt…"
+                value={emailNote}
+                onChange={e => setEmailNote(e.target.value)}
+              />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setShowEmail(false)}>Cancel</Button>
+              <Button onClick={handleSendEmail} className="bg-red-600 hover:bg-red-700 gap-1.5">
+                <Send className="h-4 w-4" />Open Email Client
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
