@@ -29,6 +29,7 @@ import { format, startOfMonth } from 'date-fns'
 interface Collection {
   id: string; or_number: string | null; collection_date: string | null
   client_name: string | null; amount: number; form_2307: number | null; status: string
+  payment_mode?: string | null
 }
 
 interface Disbursement {
