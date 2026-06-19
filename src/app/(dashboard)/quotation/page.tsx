@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Plus, MoreHorizontal, Loader2, Trash2, X, FileText, Printer, Mail, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSearchContext } from '@/context/search-context'
+import { sendEmailWithGmail } from '@/lib/gmail-send'
 import Image from 'next/image'
 
 interface Client { id: string; company_name: string }
@@ -617,18 +618,34 @@ export default function QuotationPage() {
               />
             </div>
             <p className="text-xs text-muted-foreground">
-              Clicking Send will generate the PDF and open Gmail. Attach the downloaded PDF before sending.
+              A Google sign-in popup will appear to authorize Gmail. The email will be sent with the PDF attached.
             </p>
             <div className="flex justify-end gap-2 pt-1">
               <Button variant="outline" onClick={() => setShowEmailQ(false)}>Cancel</Button>
               <Button
                 className="bg-red-600 hover:bg-red-700 gap-1.5"
-                onClick={() => {
-                  handlePrint()
-                  const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(emailToQ)}&su=${encodeURIComponent(emailSubjectQ)}&body=${encodeURIComponent(emailBodyQ)}`
-                  setTimeout(() => window.open(url, '_blank'), 500)
+                onClick={async () => {
+                  if (!emailToQ) { toast.error('Please enter a recipient email address.'); return }
+                  const el = printRef.current
+                  const printHtml = el ? `<!DOCTYPE html><html><head><title>Quotation</title>
+                    <script src="https://cdn.tailwindcss.com"><\/script>
+                    <style>body { font-family: Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; } @media print { body { margin: 0; } }</style>
+                  </head><body class="p-6 text-[11px]">${el.innerHTML}</body></html>` : undefined
                   setShowEmailQ(false)
-                  toast.success('PDF generated — attach it in Gmail then send.')
+                  toast.loading('Opening Google sign-in…', { id: 'email-send-q' })
+                  try {
+                    await sendEmailWithGmail({
+                      to: emailToQ,
+                      subject: emailSubjectQ,
+                      body: emailBodyQ,
+                      printHtml,
+                      pdfFilename: `Quotation-${quoteNumber || 'draft'}.pdf`,
+                    })
+                    toast.success('Email sent via Gmail!', { id: 'email-send-q' })
+                  } catch (err: unknown) {
+                    const msg = err instanceof Error ? err.message : 'Failed to send email'
+                    toast.error(msg, { id: 'email-send-q' })
+                  }
                 }}
               >
                 <Send className="h-4 w-4" />Send in Gmail

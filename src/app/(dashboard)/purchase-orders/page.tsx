@@ -21,6 +21,7 @@ import {
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
+import { sendEmailWithGmail } from '@/lib/gmail-send'
 
 interface ItemOption {
   item_code: string
@@ -243,13 +244,28 @@ export default function PurchaseOrdersPage() {
     setShowEmail(true)
   }
 
-  function handleSendEmail() {
-    // Generate PDF first then open Gmail
-    handlePrint()
-    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(emailTo)}&su=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`
-    setTimeout(() => { window.open(gmailUrl, '_blank') }, 500)
+  async function handleSendEmail() {
+    if (!emailTo) { toast.error('Please enter a recipient email address.'); return }
+    const el = printRef.current
+    const printHtml = el ? `<!DOCTYPE html><html><head><title>Purchase Order</title>
+      <script src="https://cdn.tailwindcss.com"><\/script>
+      <style>body { font-family: Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; } @media print { body { margin: 0; } }</style>
+    </head><body class="p-6 text-[11px]">${el.innerHTML}</body></html>` : undefined
     setShowEmail(false)
-    toast.success('PDF generated — attach it in Gmail then send.')
+    toast.loading('Opening Google sign-in…', { id: 'email-send' })
+    try {
+      await sendEmailWithGmail({
+        to: emailTo,
+        subject: emailSubject,
+        body: emailBody,
+        printHtml,
+        pdfFilename: `PO-${poNumber || 'draft'}.pdf`,
+      })
+      toast.success('Email sent via Gmail!', { id: 'email-send' })
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to send email'
+      toast.error(msg, { id: 'email-send' })
+    }
   }
 
   const fmt = (n: number) => `₱${n.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
@@ -931,7 +947,7 @@ export default function PurchaseOrdersPage() {
               />
             </div>
             <p className="text-xs text-muted-foreground">
-              Clicking Send will generate the PDF and open Gmail. Attach the downloaded PDF before sending.
+              A Google sign-in popup will appear to authorize Gmail. The email will be sent with the PDF attached.
             </p>
             <div className="flex justify-end gap-2 pt-1">
               <Button variant="outline" onClick={() => setShowEmail(false)}>Cancel</Button>
