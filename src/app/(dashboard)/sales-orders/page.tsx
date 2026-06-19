@@ -138,7 +138,7 @@ export default function SalesOrdersPage() {
   const displayedSOs = query.trim()
     ? sos.filter(s => {
         const q = query.toLowerCase()
-        return s.so_number.toLowerCase().includes(q) ||
+        return (s.so_number ?? '').toLowerCase().includes(q) ||
           (s.client_name ?? '').toLowerCase().includes(q) ||
           (s.client_po_number ?? '').toLowerCase().includes(q) ||
           (s.status ?? '').toLowerCase().includes(q)

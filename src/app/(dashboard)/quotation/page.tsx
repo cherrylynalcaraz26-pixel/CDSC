@@ -178,7 +178,7 @@ export default function QuotationPage() {
   const displayedQuotations = query.trim()
     ? quotations.filter(q => {
         const s = query.toLowerCase()
-        return q.quote_number.toLowerCase().includes(s) ||
+        return (q.quote_number ?? '').toLowerCase().includes(s) ||
           (q.client_name ?? '').toLowerCase().includes(s) ||
           (q.subject ?? '').toLowerCase().includes(s) ||
           (q.status ?? '').toLowerCase().includes(s)
