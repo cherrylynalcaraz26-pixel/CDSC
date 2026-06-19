@@ -90,14 +90,26 @@ const billingStatusColor: Record<string, string> = {
 
 // ─── Pull Out Tab ─────────────────────────────────────────────────────────────
 
+interface UnifiedRecord {
+  key: string
+  source: 'CSI' | 'DR' | 'PR'
+  ref_number: string
+  date: string
+  client_name: string
+  items_summary: string
+  amount?: number
+  status?: string
+}
+
 function PullOutTab() {
   const supabase = createClient()
-  const [records, setRecords] = useState<PullOutRecord[]>([])
+  const [unified, setUnified] = useState<UnifiedRecord[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [items, setItems] = useState<Item[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [sourceFilter, setSourceFilter] = useState<'all' | 'CSI' | 'DR' | 'PR'>('all')
 
   // Form state
   const [clientId, setClientId] = useState('')
@@ -112,11 +124,91 @@ function PullOutTab() {
   useEffect(() => {
     async function load() {
       setLoading(true)
-      const { data: rows } = await supabase
+      const result: UnifiedRecord[] = []
+
+      // Load CSI records grouped by si_number
+      const { data: csiRows } = await supabase
+        .from('csi_records')
+        .select('*')
+        .order('si_date', { ascending: false })
+      if (csiRows) {
+        const grouped = new Map<string, typeof csiRows>()
+        for (const row of csiRows) {
+          const key = row.si_number ?? row.id
+          if (!grouped.has(key)) grouped.set(key, [])
+          grouped.get(key)!.push(row)
+        }
+        for (const [si, rows] of grouped) {
+          const first = rows[0]
+          const summary = rows.map(r => `${r.item_name} ×${r.quantity}`).join(', ')
+          const total = rows.reduce((s, r) => s + (Number(r.amount) || 0), 0)
+          result.push({
+            key: 'csi-' + si,
+            source: 'CSI',
+            ref_number: si,
+            date: first.si_date ?? '',
+            client_name: first.client_name ?? '',
+            items_summary: summary,
+            amount: total,
+          })
+        }
+      }
+
+      // Load DR logs + items
+      const { data: drRows } = await supabase
+        .from('dr_logs')
+        .select('*')
+        .order('dr_date', { ascending: false })
+      const { data: drItemRows } = await supabase
+        .from('dr_log_items')
+        .select('*')
+      if (drRows) {
+        const itemsByDR = new Map<string, typeof drItemRows>()
+        for (const it of (drItemRows ?? [])) {
+          const k = it.dr_number
+          if (!itemsByDR.has(k)) itemsByDR.set(k, [])
+          itemsByDR.get(k)!.push(it)
+        }
+        for (const dr of drRows) {
+          const its = itemsByDR.get(dr.dr_number) ?? []
+          const summary = its.length > 0
+            ? its.map(i => `${i.item_name} ×${i.quantity}`).join(', ')
+            : '—'
+          result.push({
+            key: 'dr-' + dr.dr_number,
+            source: 'DR',
+            ref_number: dr.dr_number,
+            date: dr.dr_date ?? '',
+            client_name: dr.supplier_name ?? '',
+            items_summary: summary,
+            status: dr.status,
+          })
+        }
+      }
+
+      // Load manual pull out requests
+      const { data: prRows } = await supabase
         .from('pull_out_requests')
         .select('*')
         .order('created_at', { ascending: false })
-      if (rows) setRecords(rows as PullOutRecord[])
+      if (prRows) {
+        for (const pr of prRows) {
+          const its: PullOutItem[] = Array.isArray(pr.items) ? pr.items : []
+          result.push({
+            key: 'pr-' + pr.id,
+            source: 'PR',
+            ref_number: pr.pr_number,
+            date: pr.date ?? '',
+            client_name: pr.client_name ?? '',
+            items_summary: its.map(i => `${i.item_name} ×${i.qty}`).join(', ') || '—',
+            status: pr.status,
+          })
+        }
+      }
+
+      // Sort by date descending
+      result.sort((a, b) => (b.date > a.date ? 1 : b.date < a.date ? -1 : 0))
+      setUnified(result)
 
       const { data: cls } = await supabase.from('clients').select('id, name').order('name')
       if (cls) setClients(cls)
@@ -188,28 +280,48 @@ function PullOutTab() {
       return
     }
     toast.success('Pull out request saved!')
-    setRecords(prev => [{
-      id: crypto.randomUUID(),
-      ...payload,
+    setUnified(prev => [{
+      key: 'pr-' + crypto.randomUUID(),
+      source: 'PR',
+      ref_number: prNumber,
+      date,
+      client_name: clientName,
+      items_summary: lineItems.map(i => `${i.item_name} ×${i.qty}`).join(', '),
+      status,
     }, ...prev])
     setShowForm(false)
     resetForm()
   }
 
+  const displayed = sourceFilter === 'all' ? unified : unified.filter(r => r.source === sourceFilter)
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Pull Out Requests</h2>
-          <p className="text-sm text-muted-foreground">Items returned by clients or pulled for redelivery</p>
+          <h2 className="text-lg font-semibold">Pull Out Records</h2>
+          <p className="text-sm text-muted-foreground">Pull outs from CSI, DR Logs, and manual requests</p>
         </div>
-        <Button
-          className="bg-red-600 hover:bg-red-700 text-white gap-1.5"
-          onClick={() => { setShowForm(s => !s); if (showForm) resetForm() }}
-        >
-          <Plus className="h-4 w-4" />
-          New Pull Out
-        </Button>
+        <div className="flex items-center gap-2">
+          <Select value={sourceFilter} onValueChange={v => setSourceFilter(v as typeof sourceFilter)}>
+            <SelectTrigger className="h-9 w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Sources</SelectItem>
+              <SelectItem value="CSI">CSI Only</SelectItem>
+              <SelectItem value="DR">DR Only</SelectItem>
+              <SelectItem value="PR">Manual PR</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button
+            className="bg-red-600 hover:bg-red-700 text-white gap-1.5"
+            onClick={() => { setShowForm(s => !s); if (showForm) resetForm() }}
+          >
+            <Plus className="h-4 w-4" />
+            New Pull Out
+          </Button>
+        </div>
       </div>
 
       {showForm && (
@@ -355,45 +467,60 @@ function PullOutTab() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>PR#</TableHead>
+                  <TableHead className="w-20">Source</TableHead>
+                  <TableHead>Reference #</TableHead>
                   <TableHead>Date</TableHead>
-                  <TableHead>Client</TableHead>
+                  <TableHead>Client / Delivered To</TableHead>
                   <TableHead>Items</TableHead>
-                  <TableHead>Reason</TableHead>
+                  <TableHead>Amount</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="py-10 text-center">
+                    <TableCell colSpan={7} className="py-10 text-center">
                       <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                     </TableCell>
                   </TableRow>
-                ) : records.length === 0 ? (
+                ) : displayed.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="py-10 text-center text-muted-foreground text-sm">
-                      No pull out records yet. Click &quot;New Pull Out&quot; to create one.
+                    <TableCell colSpan={7} className="py-10 text-center text-muted-foreground text-sm">
+                      No records found.
                     </TableCell>
                   </TableRow>
                 ) : (
-                  records.map(r => (
-                    <TableRow key={r.id}>
-                      <TableCell className="font-mono text-sm font-medium">{r.pr_number}</TableCell>
+                  displayed.map(r => (
+                    <TableRow key={r.key}>
+                      <TableCell>
+                        <Badge
+                          variant="outline"
+                          className={`text-xs border font-semibold ${
+                            r.source === 'CSI' ? 'bg-purple-100 text-purple-800 border-purple-200' :
+                            r.source === 'DR'  ? 'bg-blue-100 text-blue-800 border-blue-200' :
+                            'bg-orange-100 text-orange-800 border-orange-200'
+                          }`}
+                        >
+                          {r.source}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-mono text-sm font-medium">{r.ref_number}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {r.date ? format(new Date(r.date), 'MMM d, yyyy') : '—'}
                       </TableCell>
-                      <TableCell className="font-medium">{r.client_name}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {Array.isArray(r.items)
-                          ? r.items.map((it: PullOutItem) => `${it.item_name} ×${it.qty}`).join(', ')
-                          : '—'}
+                      <TableCell className="font-medium">{r.client_name || '—'}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground max-w-[260px] truncate">
+                        {r.items_summary}
                       </TableCell>
-                      <TableCell className="text-sm max-w-[200px] truncate">{r.reason}</TableCell>
+                      <TableCell className="text-sm font-medium">
+                        {r.amount != null ? peso(r.amount) : '—'}
+                      </TableCell>
                       <TableCell>
-                        <Badge className={`text-xs border ${pullOutStatusColor[r.status] ?? ''}`} variant="outline">
-                          {r.status.charAt(0).toUpperCase() + r.status.slice(1)}
-                        </Badge>
+                        {r.status ? (
+                          <Badge className={`text-xs border ${pullOutStatusColor[r.status] ?? 'bg-gray-100 text-gray-600 border-gray-200'}`} variant="outline">
+                            {r.status.charAt(0).toUpperCase() + r.status.slice(1)}
+                          </Badge>
+                        ) : '—'}
                       </TableCell>
                     </TableRow>
                   ))
