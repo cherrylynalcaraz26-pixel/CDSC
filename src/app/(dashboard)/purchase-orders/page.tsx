@@ -673,39 +673,29 @@ export default function PurchaseOrdersPage() {
                   </div>
 
                   <div ref={printRef} className="border rounded-lg bg-white text-[11px] p-5 shadow-sm space-y-3 font-sans">
-                    {/* Header: Company info (left) | PURCHASE ORDER + PO# (right) */}
+                    {/* Header: Logo + Company Name (left) | Address / Phone / TIN (right) */}
                     <div className="flex justify-between items-start border-b pb-3">
-                      {/* Left: logo + company details */}
+                      {/* Left: logo + company name */}
                       <div className="flex items-center gap-2.5">
                         <img src="/cdsc-logo.jpg" alt="CDSC" className="h-12 w-12 rounded object-cover shrink-0" />
-                        <div>
-                          <div className="text-[13px] font-bold text-red-700 leading-tight">
-                            {companyInfo?.company_name || 'CDSC INDUSTRIAL'}
-                          </div>
-                          {companyInfo?.address && (
-                            <div className="text-[9px] text-gray-500 mt-0.5">{companyInfo.address}</div>
-                          )}
-                          {(companyInfo?.phone || companyInfo?.email) && (
-                            <div className="text-[9px] text-gray-500">
-                              {companyInfo.phone}{companyInfo.phone && companyInfo.email ? ' | ' : ''}{companyInfo.email}
-                            </div>
-                          )}
-                          {companyInfo?.tin && (
-                            <div className="text-[9px] text-gray-500">TIN: {companyInfo.tin}</div>
-                          )}
+                        <div className="text-[13px] font-bold text-red-700 leading-tight">
+                          {companyInfo?.company_name || 'CDSC INDUSTRIAL'}
                         </div>
                       </div>
 
-                      {/* Right: PURCHASE ORDER title only */}
-                      <div className="text-right shrink-0">
-                        <div className="text-[18px] font-extrabold text-red-700 uppercase tracking-widest leading-tight">
-                          Purchase Order
-                        </div>
+                      {/* Right: address / phone / TIN */}
+                      <div className="text-right text-[9px] text-gray-500 space-y-0.5">
+                        {companyInfo?.address && <div>{companyInfo.address}</div>}
+                        {(companyInfo?.phone || companyInfo?.email) && (
+                          <div>{companyInfo.phone}{companyInfo.phone && companyInfo.email ? ' | ' : ''}{companyInfo.email}</div>
+                        )}
+                        {companyInfo?.tin && <div>TIN: {companyInfo.tin}</div>}
                       </div>
                     </div>
 
-                    {/* Party + PO details row */}
-                    <div className="grid grid-cols-2 gap-4">
+                    {/* Party row: Supplier/Client (left) | PURCHASE ORDER (center) | PO# / Date (right) */}
+                    <div className="grid grid-cols-3 gap-3 border-b pb-3">
+                      {/* Left */}
                       <div className="space-y-0.5">
                         <div className="text-[9px] font-semibold uppercase text-gray-400">
                           {supplierId ? 'Supplier' : clientId ? 'Client' : 'Supplier / Client'}
@@ -726,6 +716,13 @@ export default function PurchaseOrdersPage() {
                           </div>
                         )}
                       </div>
+                      {/* Center: document title */}
+                      <div className="flex items-center justify-center">
+                        <div className="text-[16px] font-extrabold text-red-700 uppercase tracking-widest text-center leading-tight">
+                          Purchase<br />Order
+                        </div>
+                      </div>
+                      {/* Right: PO Number / Date */}
                       <div className="space-y-0.5 text-right">
                         <div className="text-[9px] font-semibold uppercase text-gray-400">PO Number</div>
                         <div className="font-mono font-bold text-gray-800">{poNumber || '—'}</div>
