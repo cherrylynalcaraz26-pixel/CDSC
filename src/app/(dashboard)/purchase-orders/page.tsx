@@ -474,10 +474,8 @@ export default function PurchaseOrdersPage() {
                         }}
                         disabled={!!clientId}
                       >
-                        <SelectTrigger className={clientId ? 'opacity-50' : ''}>
-                          <SelectValue placeholder="Select supplier…">
-                            {supplierId ? suppliers.find(s => s.id === supplierId)?.company_name : 'Select supplier…'}
-                          </SelectValue>
+                        <SelectTrigger className={`w-full ${clientId ? 'opacity-50' : ''}`}>
+                          <SelectValue placeholder="Select supplier…" />
                         </SelectTrigger>
                         <SelectContent>
                           {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.company_name}</SelectItem>)}
@@ -499,10 +497,8 @@ export default function PurchaseOrdersPage() {
                         }}
                         disabled={!!supplierId}
                       >
-                        <SelectTrigger className={supplierId ? 'opacity-50' : ''}>
-                          <SelectValue placeholder="Select client…">
-                            {clientId ? clients.find(c => c.id === clientId)?.company_name : 'Select client…'}
-                          </SelectValue>
+                        <SelectTrigger className={`w-full ${supplierId ? 'opacity-50' : ''}`}>
+                          <SelectValue placeholder="Select client…" />
                         </SelectTrigger>
                         <SelectContent>
                           {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
@@ -812,7 +808,7 @@ export default function PurchaseOrdersPage() {
 
       {/* Item Search Dialog */}
       <Dialog open={itemSearchIdx !== null} onOpenChange={o => { if (!o) setItemSearchIdx(null) }}>
-        <DialogContent className="sm:max-w-lg max-h-[85vh] flex flex-col">
+        <DialogContent className="w-[90vw] max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Package className="h-4 w-4" />Item Inventory
@@ -828,7 +824,7 @@ export default function PurchaseOrdersPage() {
               onChange={e => setItemQuery(e.target.value)}
             />
           </div>
-          <div className="flex-1 overflow-y-auto border rounded-lg">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden border rounded-lg">
             <table className="w-full text-sm">
               <thead className="sticky top-0 bg-muted">
                 <tr>
