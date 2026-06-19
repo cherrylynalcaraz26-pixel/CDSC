@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,7 +19,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
-import { Plus, Search, MoreHorizontal, Loader2, Truck, Trash2, ChevronDown, ChevronRight, LayoutGrid, List, X } from 'lucide-react'
+import { Plus, Search, MoreHorizontal, Loader2, Truck, Trash2, ChevronDown, ChevronRight, LayoutGrid, List, X, Printer } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
 
@@ -100,6 +100,22 @@ export default function DRLogsPage() {
   const [viewMode, setViewMode] = useState<'by-dr' | 'all-items'>('by-dr')
   const [drActiveTab, setDrActiveTab] = useState<'form' | 'preview'>('form')
   const [companyInfo, setCompanyInfo] = useState<{ company_name: string; address: string; phone: string; email: string; tin: string } | null>(null)
+  const printRef = useRef<HTMLDivElement>(null)
+
+  function handlePrint() {
+    const el = printRef.current
+    if (!el) return
+    const win = window.open('', '_blank', 'width=900,height=700')
+    if (!win) return
+    win.document.write(`<!DOCTYPE html><html><head><title>Delivery Receipt</title>
+    <script src="https://cdn.tailwindcss.com"><\/script>
+    <style>
+      body { font-family: Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    </style>
+  </head><body class="p-6 text-[11px]">${el.innerHTML}</body></html>`)
+    win.document.close()
+    setTimeout(() => { win.focus(); win.print(); win.close() }, 800)
+  }
 
   async function load() {
     setLoading(true)
@@ -670,30 +686,32 @@ export default function DRLogsPage() {
               {/* RIGHT column: live preview */}
               <div className={`${drActiveTab === 'form' ? 'hidden lg:block' : 'block'}`}>
                 <div className="sticky top-0">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Live Preview</p>
-                  <div className="border rounded-lg bg-white text-[11px] p-4 shadow-sm space-y-3 font-sans">
-                    {/* Header: logo + company info | document title */}
-                    <div className="flex justify-between items-start border-b pb-2">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Live Preview</p>
+                    <Button type="button" variant="outline" size="sm" onClick={handlePrint} className="h-7 px-2 text-xs gap-1">
+                      <Printer className="h-3.5 w-3.5" /> Print
+                    </Button>
+                  </div>
+                  <div ref={printRef} className="border rounded-lg bg-white text-[11px] p-4 shadow-sm space-y-3 font-sans">
+                    {/* Header: logo + company name LEFT | address/phone/email/TIN RIGHT */}
+                    <div className="flex justify-between items-start border-b pb-3">
                       <div className="flex items-center gap-2">
-                        <img src="/cdsc-logo.jpg" alt="CDSC" className="h-10 w-10 rounded object-cover" />
-                        <div>
-                          <div className="text-base font-bold text-red-700">{companyInfo?.company_name || 'CDSC INDUSTRIAL'}</div>
-                          {companyInfo?.address && <div className="text-[9px] text-gray-400">{companyInfo.address}</div>}
-                          {(companyInfo?.phone || companyInfo?.email) && (
-                            <div className="text-[9px] text-gray-400">
-                              {companyInfo.phone}{companyInfo.phone && companyInfo.email ? ' | ' : ''}{companyInfo.email}
-                            </div>
-                          )}
-                          {companyInfo?.tin && <div className="text-[9px] text-gray-400">TIN: {companyInfo.tin}</div>}
-                        </div>
+                        <img src="/cdsc-logo.jpg" alt="CDSC" className="h-12 w-12 rounded object-cover" />
+                        <div className="text-[13px] font-bold text-red-700">{companyInfo?.company_name || 'CDSC INDUSTRIAL'}</div>
                       </div>
                       <div className="text-right">
-                        <div className="text-sm font-bold text-red-700 uppercase tracking-wide">Delivery Receipt</div>
+                        {companyInfo?.address && <div className="text-[9px] text-gray-500">{companyInfo.address}</div>}
+                        {(companyInfo?.phone || companyInfo?.email) && (
+                          <div className="text-[9px] text-gray-500">
+                            {companyInfo.phone}{companyInfo.phone && companyInfo.email ? ' | ' : ''}{companyInfo.email}
+                          </div>
+                        )}
+                        {companyInfo?.tin && <div className="text-[9px] text-gray-500">TIN: {companyInfo.tin}</div>}
                       </div>
                     </div>
 
-                    {/* Details + DR No/Date on same row */}
-                    <div className="grid grid-cols-2 gap-3">
+                    {/* Party info: Delivered To | DELIVERY RECEIPT title | DR No/Date */}
+                    <div className="grid grid-cols-3 gap-3">
                       <div>
                         <div className="text-[9px] font-semibold uppercase text-gray-400 mb-0.5">Delivered To</div>
                         <div className="font-semibold text-gray-800">{form.supplier_name || <span className="text-gray-400 italic">—</span>}</div>
@@ -701,6 +719,9 @@ export default function DRLogsPage() {
                           <div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5 mb-0.5">PO Reference</div>
                           <div className="font-mono text-gray-800">{form.po_number}</div>
                         </>}
+                      </div>
+                      <div className="text-center flex items-center justify-center">
+                        <div className="text-[16px] font-extrabold text-red-700 uppercase tracking-widest">Delivery Receipt</div>
                       </div>
                       <div className="text-right">
                         <div className="text-[9px] font-semibold uppercase text-gray-400">DR Number</div>
