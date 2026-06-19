@@ -1103,34 +1103,38 @@ function ClientsTab() {
 interface ItemRow {
   id: string; item_code: string; item_name: string
   brand: string | null; unit_of_measure: string; cost: number
-  selling_price: number | null; status: string
+  selling_price: number | null; attribute: string | null; status: string
 }
 interface UOMOption { id: string; code: string; name: string }
 interface BrandOption { id: string; name: string }
+interface AttributeOption { id: string; name: string }
 
 function ItemListTab() {
   const supabase = createClient()
   const [rows, setRows] = useState<ItemRow[]>([])
   const [uomList, setUomList] = useState<UOMOption[]>([])
   const [brandList, setBrandList] = useState<BrandOption[]>([])
+  const [attributeList, setAttributeList] = useState<AttributeOption[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<ItemRow | null>(null)
-  const [form, setForm] = useState({ item_code: '', item_name: '', brand: '', unit_of_measure: '', cost: '', selling_price: '' })
+  const [form, setForm] = useState({ item_code: '', item_name: '', brand: '', unit_of_measure: '', cost: '', selling_price: '', attribute: '' })
   const [saving, setSaving] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
 
   async function load() {
     setLoading(true)
-    const [{ data: itemData }, { data: uomData }, { data: brandData }] = await Promise.all([
-      supabase.from('items').select('id, item_code, item_name, brand, unit_of_measure, cost, selling_price, status').order('item_name'),
+    const [{ data: itemData }, { data: uomData }, { data: brandData }, { data: attrData }] = await Promise.all([
+      supabase.from('items').select('id, item_code, item_name, brand, unit_of_measure, cost, selling_price, attribute, status').order('item_name'),
       supabase.from('uom_list').select('id, code, name').eq('is_active', true).order('code'),
       supabase.from('brands').select('id, name').eq('is_active', true).order('name'),
+      supabase.from('attributes').select('id, name').eq('is_active', true).order('name'),
     ])
     setRows(itemData ?? [])
     setUomList(uomData ?? [])
     setBrandList(brandData ?? [])
+    setAttributeList(attrData ?? [])
     setLoading(false)
   }
   useEffect(() => { load() }, [])
@@ -1141,10 +1145,10 @@ function ItemListTab() {
     (r.brand ?? '').toLowerCase().includes(search.toLowerCase())
   )
 
-  function openAdd() { setEditing(null); setForm({ item_code: '', item_name: '', brand: '', unit_of_measure: '', cost: '', selling_price: '' }); setOpen(true) }
+  function openAdd() { setEditing(null); setForm({ item_code: '', item_name: '', brand: '', unit_of_measure: '', cost: '', selling_price: '', attribute: '' }); setOpen(true) }
   function openEdit(r: ItemRow) {
     setEditing(r)
-    setForm({ item_code: r.item_code, item_name: r.item_name, brand: r.brand ?? '', unit_of_measure: r.unit_of_measure, cost: String(r.cost), selling_price: r.selling_price !== null ? String(r.selling_price) : '' })
+    setForm({ item_code: r.item_code, item_name: r.item_name, brand: r.brand ?? '', unit_of_measure: r.unit_of_measure, cost: String(r.cost), selling_price: r.selling_price !== null ? String(r.selling_price) : '', attribute: r.attribute ?? '' })
     setOpen(true)
   }
 
@@ -1158,6 +1162,7 @@ function ItemListTab() {
       unit_of_measure: form.unit_of_measure.trim(),
       cost: parseFloat(form.cost) || 0,
       selling_price: form.selling_price.trim() ? parseFloat(form.selling_price) : null,
+      attribute: form.attribute.trim() || null,
     }
     const { error } = editing
       ? await supabase.from('items').update(payload).eq('id', editing.id)
@@ -1184,8 +1189,8 @@ function ItemListTab() {
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <Input placeholder="Search items…" value={search} onChange={e => setSearch(e.target.value)} className="max-w-sm" />
-        <Button onClick={openAdd} size="sm" className="bg-red-600 hover:bg-red-700">
-          <Plus className="h-4 w-4 mr-1" />Add Item
+        <Button onClick={openAdd} className="bg-red-600 hover:bg-red-700 gap-1.5 ml-auto">
+          <Plus className="h-4 w-4" />Add New Item
         </Button>
       </div>
       <div className="text-xs text-muted-foreground">{filtered.length} items</div>
@@ -1196,6 +1201,7 @@ function ItemListTab() {
               <TableHead>Code</TableHead>
               <TableHead>Name</TableHead>
               <TableHead>Brand</TableHead>
+              <TableHead>Attribute</TableHead>
               <TableHead>Unit</TableHead>
               <TableHead className="text-right">Unit Cost</TableHead>
               <TableHead className="text-right">Selling Price</TableHead>
@@ -1205,14 +1211,15 @@ function ItemListTab() {
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={8} className="text-center py-6 text-muted-foreground">Loading…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={9} className="text-center py-6 text-muted-foreground">Loading…</TableCell></TableRow>
             ) : filtered.length === 0 ? (
-              <TableRow><TableCell colSpan={8} className="text-center py-6 text-muted-foreground">No items found</TableCell></TableRow>
+              <TableRow><TableCell colSpan={9} className="text-center py-6 text-muted-foreground">No items found</TableCell></TableRow>
             ) : filtered.map(r => (
               <TableRow key={r.id}>
                 <TableCell className="font-mono text-sm">{r.item_code}</TableCell>
                 <TableCell className="font-medium text-sm">{r.item_name}</TableCell>
                 <TableCell className="text-sm text-muted-foreground">{r.brand ?? '—'}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">{r.attribute ?? '—'}</TableCell>
                 <TableCell className="text-sm">{r.unit_of_measure}</TableCell>
                 <TableCell className="text-right text-sm">₱{r.cost.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</TableCell>
                 <TableCell className="text-right text-sm">
@@ -1268,15 +1275,27 @@ function ItemListTab() {
               <Label>Item Name <span className="text-destructive">*</span></Label>
               <Input placeholder="Item name" value={form.item_name} onChange={e => setForm(p => ({ ...p, item_name: e.target.value }))} />
             </div>
-            <div className="space-y-1.5">
-              <Label>Brand</Label>
-              <Select value={form.brand} onValueChange={v => setForm(p => ({ ...p, brand: v ?? '' }))}>
-                <SelectTrigger><SelectValue placeholder="Select brand…" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">— None —</SelectItem>
-                  {brandList.map(b => <SelectItem key={b.id} value={b.name}>{b.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Brand</Label>
+                <Select value={form.brand} onValueChange={v => setForm(p => ({ ...p, brand: v ?? '' }))}>
+                  <SelectTrigger><SelectValue placeholder="Select brand…" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">— None —</SelectItem>
+                    {brandList.map(b => <SelectItem key={b.id} value={b.name}>{b.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Attribute</Label>
+                <Select value={form.attribute} onValueChange={v => setForm(p => ({ ...p, attribute: v ?? '' }))}>
+                  <SelectTrigger><SelectValue placeholder="Select attribute…" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">— None —</SelectItem>
+                    {attributeList.map(a => <SelectItem key={a.id} value={a.name}>{a.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -1292,7 +1311,9 @@ function ItemListTab() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={save} disabled={saving} className="bg-red-600 hover:bg-red-700">{saving ? 'Saving…' : 'Save'}</Button>
+            <Button onClick={save} disabled={saving} className="bg-red-600 hover:bg-red-700 gap-1.5">
+              {saving ? 'Saving…' : (editing ? 'Update Item' : 'Add New Item')}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
