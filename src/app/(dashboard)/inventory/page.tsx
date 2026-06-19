@@ -16,7 +16,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
-import { Search, Loader2, ChevronRight, ChevronDown, Pencil, AlertTriangle, Plus } from 'lucide-react'
+import { Search, Loader2, ChevronRight, ChevronDown, Pencil, AlertTriangle, Plus, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSearchContext } from '@/context/search-context'
 
@@ -45,7 +45,10 @@ export default function InventoryPage() {
   const [rows, setRows] = useState<InventoryRow[]>([])
   const [loading, setLoading] = useState(true)
   const [clientFilter, setClientFilter] = useState('all')
+  const [itemFilter, setItemFilter] = useState('all')
+  const [itemSearch, setItemSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [viewMode, setViewMode] = useState<'by_client' | 'by_item'>('by_client')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
   const [editRow, setEditRow] = useState<InventoryRow | null>(null)
@@ -263,9 +266,14 @@ export default function InventoryPage() {
   }
 
   const clients = Array.from(new Set(rows.map(r => r.client))).sort()
+  const itemNames = Array.from(new Set(rows.map(r => r.item_name))).sort()
+  const filteredItemNames = itemSearch.trim()
+    ? itemNames.filter(n => n.toLowerCase().includes(itemSearch.toLowerCase()))
+    : itemNames
 
   const filtered = rows.filter(r => {
     const matchClient = clientFilter === 'all' || r.client === clientFilter
+    const matchItem = itemFilter === 'all' || r.item_name === itemFilter
     const q = search.toLowerCase()
     const matchSearch = !q || r.item_name.toLowerCase().includes(q) || r.client.toLowerCase().includes(q)
     const matchStatus =
@@ -273,8 +281,31 @@ export default function InventoryPage() {
       (statusFilter === 'in_stock' && r.balance > 0) ||
       (statusFilter === 'balanced' && r.balance === 0) ||
       (statusFilter === 'deficit' && r.balance < 0)
-    return matchClient && matchSearch && matchStatus
+    return matchClient && matchItem && matchSearch && matchStatus
   })
+
+  // Group by item for By Item view
+  interface ItemGroup {
+    item_name: string; unit: string
+    total_dr: number; total_ws: number; total_csi: number; total_balance: number
+    rows: InventoryRow[]
+  }
+  const byItemGroups: ItemGroup[] = []
+  if (viewMode === 'by_item') {
+    const map = new Map<string, ItemGroup>()
+    for (const r of filtered) {
+      if (!map.has(r.item_name)) {
+        map.set(r.item_name, { item_name: r.item_name, unit: r.unit, total_dr: 0, total_ws: 0, total_csi: 0, total_balance: 0, rows: [] })
+      }
+      const g = map.get(r.item_name)!
+      g.total_dr += Number(r.dr_qty)
+      g.total_ws += Number(r.ws_qty)
+      g.total_csi += Number(r.csi_qty)
+      g.total_balance += Number(r.balance)
+      g.rows.push(r)
+    }
+    byItemGroups.push(...Array.from(map.values()).sort((a, b) => a.item_name.localeCompare(b.item_name)))
+  }
 
   const totalItems = filtered.length
   const inStock  = filtered.filter(r => r.balance > 0).length
@@ -362,9 +393,63 @@ export default function InventoryPage() {
         </CardContent></Card>
       </div>
 
-      <div className="flex gap-3 flex-wrap">
+      {/* View toggle */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex border rounded-md overflow-hidden">
+          <button
+            className={`px-4 py-1.5 text-sm font-medium transition-colors ${viewMode === 'by_client' ? 'bg-red-600 text-white' : 'hover:bg-muted text-muted-foreground'}`}
+            onClick={() => setViewMode('by_client')}
+          >By Client</button>
+          <button
+            className={`px-4 py-1.5 text-sm font-medium transition-colors ${viewMode === 'by_item' ? 'bg-red-600 text-white' : 'hover:bg-muted text-muted-foreground'}`}
+            onClick={() => setViewMode('by_item')}
+          >By Item</button>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="flex gap-3 flex-wrap items-center">
+        {/* Item name searchable select */}
+        <div className="relative min-w-[240px] max-w-xs flex-1">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+            <input
+              className="w-full rounded-md border border-input bg-background pl-9 pr-8 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              placeholder={itemFilter !== 'all' ? itemFilter : 'Search item name…'}
+              value={itemSearch}
+              onChange={e => { setItemSearch(e.target.value); if (e.target.value) setItemFilter('all') }}
+            />
+            {(itemFilter !== 'all' || itemSearch) && (
+              <button
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                onClick={() => { setItemFilter('all'); setItemSearch('') }}
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          {itemSearch.trim() && (
+            <div className="absolute top-full left-0 right-0 mt-1 bg-popover border rounded-lg shadow-lg z-50 max-h-52 overflow-y-auto">
+              <button
+                className="w-full text-left px-3 py-2 text-sm hover:bg-muted text-muted-foreground"
+                onMouseDown={() => { setItemFilter('all'); setItemSearch('') }}
+              >All Items</button>
+              {filteredItemNames.slice(0, 50).map(n => (
+                <button
+                  key={n}
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-muted"
+                  onMouseDown={() => { setItemFilter(n); setItemSearch('') }}
+                >{n}</button>
+              ))}
+              {filteredItemNames.length === 0 && (
+                <div className="px-3 py-2 text-sm text-muted-foreground">No items match</div>
+              )}
+            </div>
+          )}
+        </div>
+
         <Select value={clientFilter} onValueChange={v => setClientFilter(v ?? 'all')}>
-          <SelectTrigger className="w-60">
+          <SelectTrigger className="w-56">
             <SelectValue placeholder="Filter by client" />
           </SelectTrigger>
           <SelectContent>
@@ -373,7 +458,7 @@ export default function InventoryPage() {
           </SelectContent>
         </Select>
         <Select value={statusFilter} onValueChange={v => setStatusFilter(v ?? 'all')}>
-          <SelectTrigger className="w-44">
+          <SelectTrigger className="w-40">
             <SelectValue placeholder="Filter by status" />
           </SelectTrigger>
           <SelectContent>
@@ -424,15 +509,17 @@ export default function InventoryPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-8" />
-                  <TableHead>Client</TableHead>
-                  <TableHead className="min-w-[280px] w-[30%]">Item Name</TableHead>
+                  {viewMode === 'by_client'
+                    ? <><TableHead className="w-40">Client</TableHead><TableHead className="min-w-[300px]">Item Name</TableHead></>
+                    : <><TableHead className="min-w-[300px]">Item Name</TableHead><TableHead className="w-40">Clients</TableHead></>
+                  }
                   <TableHead>Unit</TableHead>
                   <TableHead className="text-right">DR Qty</TableHead>
                   <TableHead className="text-right">WH Stock</TableHead>
                   <TableHead className="text-right">CSI Qty</TableHead>
                   <TableHead className="text-right">Balance</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="w-16">Action</TableHead>
+                  {viewMode === 'by_client' && <TableHead className="w-16">Action</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -442,6 +529,54 @@ export default function InventoryPage() {
                       <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                     </TableCell>
                   </TableRow>
+                ) : viewMode === 'by_item' ? (
+                  // ── By Item view ──────────────────────────────
+                  byItemGroups.length === 0 ? (
+                    <TableRow><TableCell colSpan={9} className="text-center py-12 text-muted-foreground">No inventory data found.</TableCell></TableRow>
+                  ) : byItemGroups.map(g => {
+                    const key = 'item||' + g.item_name
+                    const isOpen = expanded.has(key)
+                    const isDeficit = g.total_balance < 0
+                    return (
+                      <Fragment key={key}>
+                        <TableRow className="cursor-pointer hover:bg-muted/50" onClick={() => toggleRow(key)}>
+                          <TableCell className="text-muted-foreground">
+                            {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                          </TableCell>
+                          <TableCell className="font-medium text-sm">
+                            <span className="flex items-center gap-1.5">
+                              {isDeficit && <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />}
+                              <span className="break-words">{g.item_name}</span>
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{g.rows.length} client{g.rows.length !== 1 ? 's' : ''}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{g.unit}</TableCell>
+                          <TableCell className="text-right text-sm">{g.total_dr}</TableCell>
+                          <TableCell className="text-right text-sm">
+                            {g.total_ws > 0 ? <span className="text-green-600 font-medium">{g.total_ws}</span> : <span className="text-muted-foreground">—</span>}
+                          </TableCell>
+                          <TableCell className="text-right text-sm">{g.total_csi}</TableCell>
+                          <TableCell className={`text-right text-sm font-semibold ${g.total_balance > 0 ? 'text-green-600' : g.total_balance < 0 ? 'text-red-600' : 'text-gray-500'}`}>
+                            {g.total_balance}
+                          </TableCell>
+                          <TableCell>{balanceBadge(g.total_balance)}</TableCell>
+                        </TableRow>
+                        {isOpen && g.rows.map(r => (
+                          <TableRow key={r.client} className="bg-muted/20 text-xs">
+                            <TableCell />
+                            <TableCell className="pl-6 text-muted-foreground italic">{r.item_name}</TableCell>
+                            <TableCell className="font-medium">{r.client}</TableCell>
+                            <TableCell className="text-muted-foreground">{r.unit}</TableCell>
+                            <TableCell className="text-right">{Number(r.dr_qty)}</TableCell>
+                            <TableCell className="text-right">{r.ws_qty > 0 ? <span className="text-green-600">{Number(r.ws_qty)}</span> : '—'}</TableCell>
+                            <TableCell className="text-right">{Number(r.csi_qty)}</TableCell>
+                            <TableCell className={`text-right font-semibold ${r.balance > 0 ? 'text-green-600' : r.balance < 0 ? 'text-red-600' : 'text-gray-500'}`}>{Number(r.balance)}</TableCell>
+                            <TableCell>{balanceBadge(r.balance)}</TableCell>
+                          </TableRow>
+                        ))}
+                      </Fragment>
+                    )
+                  })
                 ) : filtered.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">No inventory data found.</TableCell>
