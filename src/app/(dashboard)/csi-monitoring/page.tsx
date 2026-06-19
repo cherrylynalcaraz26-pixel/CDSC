@@ -18,7 +18,7 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Plus, Search, MoreHorizontal, Loader2, FileText, LayoutGrid, List, ChevronDown, ChevronRight, Package, Trash2 } from 'lucide-react'
+import { Plus, X, Search, MoreHorizontal, Loader2, FileText, LayoutGrid, List, ChevronDown, ChevronRight, Package, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
 
@@ -224,11 +224,145 @@ export default function CSIMonitoringPage() {
           <h1 className="text-2xl font-semibold">CSI Monitoring</h1>
           <p className="text-muted-foreground text-sm">Charge Sales Invoice records</p>
         </div>
-        <Button onClick={openAdd} className="bg-red-600 hover:bg-red-700">
-          <Plus className="h-4 w-4 mr-2" /> New Record
-        </Button>
+        {open ? (
+          <Button variant="outline" onClick={() => { setOpen(false); setHeader(emptyHeader()); setItems([emptyItem()]); setEditingSiNumber(null) }}>
+            <X className="h-4 w-4 mr-2" />Cancel
+          </Button>
+        ) : (
+          <Button onClick={openAdd} className="bg-red-600 hover:bg-red-700">
+            <Plus className="h-4 w-4 mr-2" /> New Record
+          </Button>
+        )}
       </div>
 
+      {open && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base">
+              <FileText className="h-5 w-5 text-red-600" />
+              {editingSiNumber ? 'Edit CSI Record' : 'New CSI Record'}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Header fields */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Date <span className="text-destructive">*</span></Label>
+                <Input type="date" value={header.si_date}
+                  onChange={e => setHeader(h => ({ ...h, si_date: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>SI Number <span className="text-destructive">*</span></Label>
+                <Input placeholder="e.g. 00001" value={header.si_number}
+                  onChange={e => setHeader(h => ({ ...h, si_number: e.target.value }))} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Client</Label>
+                <Input placeholder="Client name" value={header.client_name}
+                  onChange={e => setHeader(h => ({ ...h, client_name: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>DR Number</Label>
+                <Input placeholder="e.g. 00001" value={header.dr_number}
+                  onChange={e => setHeader(h => ({ ...h, dr_number: e.target.value }))} />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>PO Number</Label>
+              <Input placeholder="e.g. PO-2025-00001" value={header.po_number}
+                onChange={e => setHeader(h => ({ ...h, po_number: e.target.value }))} />
+            </div>
+
+            {/* Items */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-semibold">Items <span className="text-destructive">*</span></Label>
+                <Button type="button" variant="outline" size="sm" onClick={() => setItems(prev => [...prev, emptyItem()])}>
+                  <Plus className="h-3.5 w-3.5 mr-1" />Add Item
+                </Button>
+              </div>
+              <div className="border rounded-lg">
+                <div className="grid grid-cols-[32px_1fr_80px_100px_110px_110px_36px] gap-2 px-3 py-2 bg-muted/50 border-b text-xs font-medium text-muted-foreground">
+                  <span />
+                  <span>Item Name</span>
+                  <span>Unit</span>
+                  <span>Qty</span>
+                  <span>Unit Price (₱)</span>
+                  <span className="text-right">Amount</span>
+                  <span />
+                </div>
+                <div className="divide-y">
+                  {items.map((item, i) => {
+                    const amt = (Number(item.quantity) || 0) * (Number(item.unit_price) || 0)
+                    return (
+                      <div key={i} className="grid grid-cols-[32px_1fr_80px_100px_110px_110px_36px] gap-2 items-center px-3 py-2">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-blue-600"
+                          title="View inventory"
+                          onClick={() => { setInventoryItem(item.item_name); setInventoryOpen(true) }}
+                        >
+                          <Package className="h-3.5 w-3.5" />
+                        </Button>
+                        <Select
+                          value={item.item_name}
+                          onValueChange={val => {
+                            const opt = itemOptions.find(o => o.item_name === (val ?? ''))
+                            setItems(prev => prev.map((it, idx) => idx === i
+                              ? { ...it, item_name: val ?? '', unit: opt?.unit_of_measure ?? it.unit }
+                              : it))
+                          }}
+                        >
+                          <SelectTrigger className="h-8 text-sm">
+                            <SelectValue placeholder="Select item…" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {itemOptions.map(opt => (
+                              <SelectItem key={opt.item_name} value={opt.item_name}>
+                                {opt.item_name} <span className="text-xs text-muted-foreground ml-1">({opt.unit_of_measure})</span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <div className="h-8 flex items-center px-2 text-sm bg-muted/30 rounded border text-muted-foreground truncate">
+                          {item.unit || '—'}
+                        </div>
+                        <Input type="number" min={0} className="h-8 text-sm" placeholder="0" value={item.quantity}
+                          onChange={e => setItems(prev => prev.map((it, idx) => idx === i ? { ...it, quantity: e.target.value } : it))} />
+                        <Input type="number" min={0} step="0.01" className="h-8 text-sm" placeholder="0.00" value={item.unit_price}
+                          onChange={e => setItems(prev => prev.map((it, idx) => idx === i ? { ...it, unit_price: e.target.value } : it))} />
+                        <div className="text-right text-sm font-medium pr-1 tabular-nums">
+                          ₱{amt.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                        </div>
+                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
+                          onClick={() => setItems(prev => prev.filter((_, idx) => idx !== i))} disabled={items.length === 1}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    )
+                  })}
+                </div>
+                <div className="flex justify-end px-3 py-2 bg-muted/20 border-t text-sm font-semibold">
+                  Total: ₱{totalItems.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => { setOpen(false); setHeader(emptyHeader()); setItems([emptyItem()]); setEditingSiNumber(null) }}>Cancel</Button>
+              <Button onClick={save} disabled={saving} className="bg-red-600 hover:bg-red-700">
+                {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : editingSiNumber ? 'Update' : 'Save'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {!open && (
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
         <Card>
           <CardContent className="pt-4 pb-3">
@@ -249,8 +383,9 @@ export default function CSIMonitoringPage() {
           </CardContent>
         </Card>
       </div>
+      )}
 
-      <div className="flex gap-3 items-center">
+      {!open && <div className="flex gap-3 items-center">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input className="pl-9" placeholder="Search SI#, client, item, DR#…" value={search} onChange={e => setSearch(e.target.value)} />
@@ -269,9 +404,9 @@ export default function CSIMonitoringPage() {
             <List className="h-3.5 w-3.5" /> All Items
           </button>
         </div>
-      </div>
+      </div>}
 
-      <Card>
+      {!open && <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-base flex items-center gap-2">
             <FileText className="h-4 w-4 text-red-600" /> Charge Sales Invoice Log
@@ -444,133 +579,7 @@ export default function CSIMonitoringPage() {
           </div>
         </CardContent>
       </Card>
-
-      {/* New/Edit Dialog */}
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-red-600" />
-              {editingSiNumber ? 'Edit CSI Record' : 'New CSI Record'}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            {/* Header fields */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>Date <span className="text-destructive">*</span></Label>
-                <Input type="date" value={header.si_date}
-                  onChange={e => setHeader(h => ({ ...h, si_date: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>SI Number <span className="text-destructive">*</span></Label>
-                <Input placeholder="e.g. 00001" value={header.si_number}
-                  onChange={e => setHeader(h => ({ ...h, si_number: e.target.value }))} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>Client</Label>
-                <Input placeholder="Client name" value={header.client_name}
-                  onChange={e => setHeader(h => ({ ...h, client_name: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>DR Number</Label>
-                <Input placeholder="e.g. 00001" value={header.dr_number}
-                  onChange={e => setHeader(h => ({ ...h, dr_number: e.target.value }))} />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label>PO Number</Label>
-              <Input placeholder="e.g. PO-2025-00001" value={header.po_number}
-                onChange={e => setHeader(h => ({ ...h, po_number: e.target.value }))} />
-            </div>
-
-            {/* Items */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-sm font-semibold">Items <span className="text-destructive">*</span></Label>
-                <Button type="button" variant="outline" size="sm" onClick={() => setItems(prev => [...prev, emptyItem()])}>
-                  <Plus className="h-3.5 w-3.5 mr-1" />Add Item
-                </Button>
-              </div>
-              <div className="border rounded-lg">
-                <div className="grid grid-cols-[32px_1fr_80px_100px_110px_110px_36px] gap-2 px-3 py-2 bg-muted/50 border-b text-xs font-medium text-muted-foreground">
-                  <span />
-                  <span>Item Name</span>
-                  <span>Unit</span>
-                  <span>Qty</span>
-                  <span>Unit Price (₱)</span>
-                  <span className="text-right">Amount</span>
-                  <span />
-                </div>
-                <div className="divide-y">
-                  {items.map((item, i) => {
-                    const amt = (Number(item.quantity) || 0) * (Number(item.unit_price) || 0)
-                    return (
-                      <div key={i} className="grid grid-cols-[32px_1fr_80px_100px_110px_110px_36px] gap-2 items-center px-3 py-2">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-blue-600"
-                          title="View inventory"
-                          onClick={() => { setInventoryItem(item.item_name); setInventoryOpen(true) }}
-                        >
-                          <Package className="h-3.5 w-3.5" />
-                        </Button>
-                        <Select
-                          value={item.item_name}
-                          onValueChange={val => {
-                            const opt = itemOptions.find(o => o.item_name === (val ?? ''))
-                            setItems(prev => prev.map((it, idx) => idx === i
-                              ? { ...it, item_name: val ?? '', unit: opt?.unit_of_measure ?? it.unit }
-                              : it))
-                          }}
-                        >
-                          <SelectTrigger className="h-8 text-sm">
-                            <SelectValue placeholder="Select item…" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {itemOptions.map(opt => (
-                              <SelectItem key={opt.item_name} value={opt.item_name}>
-                                {opt.item_name} <span className="text-xs text-muted-foreground ml-1">({opt.unit_of_measure})</span>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <div className="h-8 flex items-center px-2 text-sm bg-muted/30 rounded border text-muted-foreground truncate">
-                          {item.unit || '—'}
-                        </div>
-                        <Input type="number" min={0} className="h-8 text-sm" placeholder="0" value={item.quantity}
-                          onChange={e => setItems(prev => prev.map((it, idx) => idx === i ? { ...it, quantity: e.target.value } : it))} />
-                        <Input type="number" min={0} step="0.01" className="h-8 text-sm" placeholder="0.00" value={item.unit_price}
-                          onChange={e => setItems(prev => prev.map((it, idx) => idx === i ? { ...it, unit_price: e.target.value } : it))} />
-                        <div className="text-right text-sm font-medium pr-1 tabular-nums">
-                          ₱{amt.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                        </div>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
-                          onClick={() => setItems(prev => prev.filter((_, idx) => idx !== i))} disabled={items.length === 1}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    )
-                  })}
-                </div>
-                <div className="flex justify-end px-3 py-2 bg-muted/20 border-t text-sm font-semibold">
-                  Total: ₱{totalItems.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                </div>
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={save} disabled={saving} className="bg-red-600 hover:bg-red-700">
-              {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : editingSiNumber ? 'Update' : 'Save'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      }
 
       {/* Inventory Lookup Modal */}
       <Dialog open={inventoryOpen} onOpenChange={setInventoryOpen}>

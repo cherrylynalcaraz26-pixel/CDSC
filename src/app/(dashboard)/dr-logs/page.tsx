@@ -86,6 +86,7 @@ export default function DRLogsPage() {
   const [clients, setClients] = useState<Client[]>([])
   const [itemOptions, setItemOptions] = useState<ItemOption[]>([])
   const [poNumbers, setPoNumbers] = useState<string[]>([])
+  const [poItemsMap, setPoItemsMap] = useState<Record<string, { item_name: string; unit: string; quantity: number }[]>>({})
   const [allItems, setAllItems] = useState<DRItem[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -131,6 +132,21 @@ export default function DRLogsPage() {
     setClients(clientData ?? [])
     setItemOptions((itemData ?? []) as ItemOption[])
     setPoNumbers((poData ?? []).map((p: any) => p.po_number).filter(Boolean))
+
+    const { data: poItemsData } = await supabase
+      .from('po_items')
+      .select('item_name, unit_of_measure, quantity, purchase_orders!inner(po_number)')
+      .not('purchase_orders.po_number', 'is', null)
+    if (poItemsData) {
+      const map: Record<string, { item_name: string; unit: string; quantity: number }[]> = {}
+      for (const row of poItemsData as any[]) {
+        const poNum = row.purchase_orders?.po_number
+        if (!poNum) continue
+        if (!map[poNum]) map[poNum] = []
+        map[poNum].push({ item_name: row.item_name, unit: row.unit_of_measure, quantity: Number(row.quantity) })
+      }
+      setPoItemsMap(map)
+    }
 
     const drNumbers = (drData ?? []).map(d => d.dr_number)
     if (drNumbers.length > 0) {
@@ -604,6 +620,17 @@ export default function DRLogsPage() {
                           {poNumbers.map(po => <SelectItem key={po} value={po}>{po}</SelectItem>)}
                         </SelectContent>
                       </Select>
+                      {form.po_number && poItemsMap[form.po_number]?.length > 0 && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="w-full h-7 text-xs mt-1"
+                          onClick={() => setItems(poItemsMap[form.po_number].map(i => ({ dr_number: '', item_name: i.item_name, unit: i.unit, quantity: String(i.quantity) })))}
+                        >
+                          Load from PO
+                        </Button>
+                      )}
                     </div>
                     <div className="space-y-1.5">
                       <Label>Status</Label>
@@ -625,7 +652,7 @@ export default function DRLogsPage() {
                   </div>
                   <div className="space-y-1.5">
                     <Label>Remarks</Label>
-                    <Textarea rows={2} placeholder="Notes, discrepancies, condition of goods…" value={form.remarks}
+                    <Textarea rows={3} className="resize-y" placeholder="Notes, discrepancies, condition of goods…" value={form.remarks}
                       onChange={e => setForm(f => ({ ...f, remarks: e.target.value }))} />
                   </div>
                 </div>

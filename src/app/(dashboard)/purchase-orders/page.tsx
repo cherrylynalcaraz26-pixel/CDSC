@@ -239,7 +239,8 @@ export default function PurchaseOrdersPage() {
     const body = encodeURIComponent(
       `Dear ${partyName ?? 'Sir/Madam'},\n\nPlease find the attached Purchase Order ${poNumber || '(draft)'}.\n\n${emailNote ? emailNote + '\n\n' : ''}Regards,\n${companyInfo?.company_name ?? 'CDSC Industrial Supply'}`
     )
-    window.open(`mailto:${emailTo}?subject=${subject}&body=${body}`)
+    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(emailTo)}&su=${subject}&body=${body}`
+    window.open(gmailUrl, '_blank')
     setShowEmail(false)
     toast.success('Email client opened')
   }
@@ -494,11 +495,11 @@ export default function PurchaseOrdersPage() {
                   </div>
 
                   {/* Payment Terms + Remarks */}
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <Label>Payment Terms</Label>
                       <Select value={paymentTerms} onValueChange={v => setPaymentTerms(v ?? '30 days')}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           {['COD', '7 days', '15 days', '30 days', '45 days', '60 days'].map(t =>
                             <SelectItem key={t} value={t}>{t}</SelectItem>
@@ -506,9 +507,15 @@ export default function PurchaseOrdersPage() {
                         </SelectContent>
                       </Select>
                     </div>
-                    <div className="space-y-1.5 col-span-2">
+                    <div className="space-y-1.5">
                       <Label>Remarks</Label>
-                      <Input value={remarks} onChange={e => setRemarks(e.target.value)} placeholder="Optional notes…" />
+                      <textarea
+                        className="w-full min-h-[72px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
+                        rows={3}
+                        placeholder="Notes, special instructions…"
+                        value={remarks}
+                        onChange={e => setRemarks(e.target.value)}
+                      />
                     </div>
                   </div>
 

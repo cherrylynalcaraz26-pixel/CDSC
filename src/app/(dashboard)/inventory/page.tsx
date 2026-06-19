@@ -388,6 +388,38 @@ export default function InventoryPage() {
         </Select>
       </div>
 
+      {/* Client inventory summary box */}
+      {clientFilter !== 'all' && (
+        <Card className="border-blue-200 bg-blue-50/40">
+          <CardContent className="pt-4 pb-3">
+            <div className="flex items-center gap-2 mb-3">
+              <span className="text-sm font-semibold text-blue-800">Inventory Summary — {clientFilter}</span>
+              <span className="ml-auto text-xs text-blue-600">{filtered.length} item{filtered.length !== 1 ? 's' : ''}</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="bg-white rounded-lg border border-blue-100 px-3 py-2">
+                <div className="text-xs text-muted-foreground">Total DR Qty</div>
+                <div className="text-lg font-bold text-blue-700">{filtered.reduce((s, r) => s + r.dr_qty, 0)}</div>
+              </div>
+              <div className="bg-white rounded-lg border border-blue-100 px-3 py-2">
+                <div className="text-xs text-muted-foreground">WH Stock</div>
+                <div className="text-lg font-bold text-green-600">{filtered.reduce((s, r) => s + r.ws_qty, 0)}</div>
+              </div>
+              <div className="bg-white rounded-lg border border-blue-100 px-3 py-2">
+                <div className="text-xs text-muted-foreground">CSI Charged</div>
+                <div className="text-lg font-bold text-red-600">{filtered.reduce((s, r) => s + r.csi_qty, 0)}</div>
+              </div>
+              <div className="bg-white rounded-lg border border-blue-100 px-3 py-2">
+                <div className="text-xs text-muted-foreground">Net Balance</div>
+                <div className={`text-lg font-bold ${filtered.reduce((s, r) => s + r.balance, 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {filtered.reduce((s, r) => s + r.balance, 0)}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
@@ -396,7 +428,7 @@ export default function InventoryPage() {
                 <TableRow>
                   <TableHead className="w-8" />
                   <TableHead>Client</TableHead>
-                  <TableHead className="min-w-[200px]">Item Name</TableHead>
+                  <TableHead className="min-w-[280px] w-[30%]">Item Name</TableHead>
                   <TableHead>Unit</TableHead>
                   <TableHead className="text-right">DR Qty</TableHead>
                   <TableHead className="text-right">WH Stock</TableHead>

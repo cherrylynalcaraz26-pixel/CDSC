@@ -106,7 +106,7 @@ export function Header({ onMenuClick }: HeaderProps) {
         </div>
 
         {/* Center: search */}
-        <div className="flex-1 max-w-sm hidden md:block" ref={searchRef}>
+        <div className="flex-1 max-w-sm" ref={searchRef}>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input

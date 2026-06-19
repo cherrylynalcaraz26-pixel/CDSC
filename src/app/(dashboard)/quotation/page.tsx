@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { Plus, MoreHorizontal, Loader2, Trash2, X, FileText, Printer } from 'lucide-react'
+import { Plus, MoreHorizontal, Loader2, Trash2, X, FileText, Printer, Mail } from 'lucide-react'
 import { toast } from 'sonner'
 import Image from 'next/image'
 
@@ -69,6 +69,8 @@ export default function QuotationPage() {
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [mobileTab, setMobileTab] = useState<'form' | 'preview'>('form')
+  const [showEmailQ, setShowEmailQ] = useState(false)
+  const [emailToQ, setEmailToQ] = useState('')
 
   // Form state
   const [quoteNumber, setQuoteNumber] = useState('')
@@ -352,22 +354,21 @@ export default function QuotationPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label>Valid Until</Label>
-                      <Input type="date" value={validUntil} onChange={e => setValidUntil(e.target.value)} />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>Client <span className="text-destructive">*</span></Label>
-                      <Select value={clientId} onValueChange={v => setClientId(v ?? '')}>
-                        <SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger>
-                        <SelectContent>
-                          {clients.map(c => (
-                            <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                  <div className="space-y-1.5">
+                    <Label>Client <span className="text-destructive">*</span></Label>
+                    <Select value={clientId} onValueChange={v => setClientId(v ?? '')}>
+                      <SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger>
+                      <SelectContent>
+                        {clients.map(c => (
+                          <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label>Valid Until</Label>
+                    <Input type="date" value={validUntil} onChange={e => setValidUntil(e.target.value)} />
                   </div>
 
                   <div className="space-y-1.5">
@@ -382,10 +383,11 @@ export default function QuotationPage() {
                       <Table>
                         <TableHeader>
                           <TableRow className="bg-muted/40">
-                            <TableHead>Item</TableHead>
+                            <TableHead className="min-w-[180px]">Item Description</TableHead>
                             <TableHead className="w-20">Qty</TableHead>
                             <TableHead className="w-20">Unit</TableHead>
                             <TableHead className="w-28">Unit Price</TableHead>
+                            <TableHead className="w-28 text-right">Amount</TableHead>
                             <TableHead className="w-10"></TableHead>
                           </TableRow>
                         </TableHeader>
@@ -411,6 +413,7 @@ export default function QuotationPage() {
                               <TableCell className="py-1.5">
                                 <Input type="number" min="0" className="h-8 text-xs" value={line.unit_price} onChange={e => updateLine(idx, 'unit_price', e.target.value)} />
                               </TableCell>
+                              <TableCell className="py-1.5 text-right text-xs font-medium">{fmt((parseFloat(line.quantity)||0)*(parseFloat(line.unit_price)||0))}</TableCell>
                               <TableCell className="py-1.5">
                                 {lines.length > 1 && (
                                   <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
@@ -480,10 +483,34 @@ export default function QuotationPage() {
             <div className="sticky top-4">
               <div className="flex items-center justify-between mb-2">
                 <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Live Preview</div>
-                <Button size="sm" variant="outline" onClick={handlePrint} className="text-xs h-7 px-2">
-                  <Printer className="h-3.5 w-3.5 mr-1" />Print
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="outline" onClick={() => setShowEmailQ(v => !v)} className="text-xs h-7 px-2">
+                    <Mail className="h-3.5 w-3.5 mr-1" />Email
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={handlePrint} className="text-xs h-7 px-2">
+                    <Printer className="h-3.5 w-3.5 mr-1" />Print
+                  </Button>
+                </div>
               </div>
+              {showEmailQ && (
+                <div className="flex gap-2 mb-2">
+                  <Input
+                    type="email"
+                    placeholder="Recipient email"
+                    value={emailToQ}
+                    onChange={e => setEmailToQ(e.target.value)}
+                    className="h-8 text-xs"
+                  />
+                  <Button
+                    size="sm"
+                    className="h-8 px-3 text-xs bg-red-600 hover:bg-red-700 shrink-0"
+                    onClick={() => {
+                      const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(emailToQ)}&su=${encodeURIComponent('Quotation - ' + (quoteNumber || 'Draft'))}&body=${encodeURIComponent('Dear Sir/Madam,\n\nPlease find attached our quotation.\n\nRegards,\n' + (companyInfo?.company_name ?? 'CDSC Industrial Supply'))}`
+                      window.open(url, '_blank')
+                    }}
+                  >Send</Button>
+                </div>
+              )}
               <PreviewDoc />
             </div>
           </div>
