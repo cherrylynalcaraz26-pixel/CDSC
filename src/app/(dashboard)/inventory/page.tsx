@@ -16,7 +16,10 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
-import { Search, Loader2, ChevronRight, ChevronDown, Pencil, AlertTriangle, Plus, X } from 'lucide-react'
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { Search, Loader2, ChevronRight, ChevronDown, Pencil, AlertTriangle, Plus, X, MoreHorizontal, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSearchContext } from '@/context/search-context'
 
@@ -430,6 +433,36 @@ export default function InventoryPage() {
     setSaving(false)
   }
 
+  async function deleteRow(row: InventoryRow) {
+    if (!confirm(`Delete all DR and CSI records for "${row.item_name}" under "${row.client}"? This cannot be undone.`)) return
+    const { error: drErr } = await supabase
+      .from('dr_log_items')
+      .delete()
+      .eq('item_name', row.item_name)
+    const { error: csiErr } = await supabase
+      .from('csi_records')
+      .delete()
+      .eq('item_name', row.item_name)
+      .eq('client_name', row.client)
+    if (drErr || csiErr) {
+      toast.error((drErr || csiErr)!.message)
+    } else {
+      toast.success(`Deleted "${row.item_name}" records`)
+      load()
+    }
+  }
+
+  async function deleteWarehouseRow(id: string, item_name: string) {
+    if (!confirm(`Delete this warehouse stock entry for "${item_name}"? This cannot be undone.`)) return
+    const { error } = await supabase.from('warehouse_stock').delete().eq('id', id)
+    if (error) {
+      toast.error(error.message)
+    } else {
+      toast.success('Warehouse stock entry deleted')
+      load()
+    }
+  }
+
   function balanceBadge(balance: number) {
     if (balance > 0) return <Badge variant="outline" className="text-green-600 border-green-300 bg-green-50">In Stock</Badge>
     if (balance === 0) return <Badge variant="outline" className="text-gray-500 border-gray-300 bg-gray-50">Balanced</Badge>
@@ -634,12 +667,19 @@ export default function InventoryPage() {
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">{new Date(r.created_at).toLocaleDateString('en-PH')}</TableCell>
                         <TableCell>
-                          <button
-                            onClick={() => openWarehouseUpdate(r)}
-                            className="flex items-center gap-1 px-2 py-1 text-xs rounded border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100"
-                          >
-                            <Pencil className="h-3 w-3" /> Update
-                          </button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => openWarehouseUpdate(r)}>
+                                <Pencil className="h-3.5 w-3.5 mr-2 text-blue-600" /> Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => deleteWarehouseRow(r.id, r.item_name)} className="text-red-600 focus:text-red-600">
+                                <Trash2 className="h-3.5 w-3.5 mr-2" /> Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </TableCell>
                       </TableRow>
                     )
@@ -768,12 +808,19 @@ export default function InventoryPage() {
                         </TableCell>
                         <TableCell>{balanceBadge(row.balance)}</TableCell>
                         <TableCell onClick={e => e.stopPropagation()}>
-                          <button
-                            onClick={e => openEdit(e, row)}
-                            className="flex items-center gap-1 px-2 py-1 text-xs rounded border border-yellow-300 bg-yellow-50 text-yellow-700 hover:bg-yellow-100"
-                          >
-                            <Pencil className="h-3 w-3" /> Edit
-                          </button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={e => openEdit(e, row)}>
+                                <Pencil className="h-3.5 w-3.5 mr-2 text-yellow-600" /> Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => deleteRow(row)} className="text-red-600 focus:text-red-600">
+                                <Trash2 className="h-3.5 w-3.5 mr-2" /> Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </TableCell>
                       </TableRow>
 
