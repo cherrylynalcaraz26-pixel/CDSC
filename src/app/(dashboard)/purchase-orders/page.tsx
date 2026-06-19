@@ -844,7 +844,7 @@ export default function PurchaseOrdersPage() {
 
       {/* Item Search Dialog */}
       <Dialog open={itemSearchIdx !== null} onOpenChange={o => { if (!o) setItemSearchIdx(null) }}>
-        <DialogContent className="w-[95vw] max-w-4xl max-h-[85vh] flex flex-col overflow-hidden">
+        <DialogContent className="w-[98vw] max-w-6xl max-h-[85vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Package className="h-4 w-4" />Item Inventory
