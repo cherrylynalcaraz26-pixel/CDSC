@@ -293,6 +293,7 @@ export default function InventoryPage() {
   }
 
   useEffect(() => { load() }, [])
+  useEffect(() => { setPage(1) }, [clientFilter, itemFilter, statusFilter, search, viewMode])
 
   function uomName(code: string) { return uomMap[code] || code }
 
@@ -402,10 +403,23 @@ export default function InventoryPage() {
     byItemGroups.push(...Array.from(map.values()).sort((a, b) => a.item_name.localeCompare(b.item_name)))
   }
 
+  const PAGE_SIZE = 30
+  const [page, setPage] = useState(1)
+
   const totalItems = filtered.length
   const inStock  = filtered.filter(r => r.balance > 0).length
   const balanced = filtered.filter(r => r.balance === 0).length
   const negative = filtered.filter(r => r.balance < 0).length
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const pagedFiltered = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const pagedByItemGroups = byItemGroups.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const pagedWarehouseRows = warehouseRows
+    .filter(r => { const q = search.toLowerCase(); return !q || r.item_name.toLowerCase().includes(q) || (r.client_name ?? '').toLowerCase().includes(q) })
+    .slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const warehouseTotalPages = Math.max(1, Math.ceil(
+    warehouseRows.filter(r => { const q = search.toLowerCase(); return !q || r.item_name.toLowerCase().includes(q) || (r.client_name ?? '').toLowerCase().includes(q) }).length / PAGE_SIZE
+  ))
 
   function rowKey(r: InventoryRow) { return `${r.client}||${r.item_name}` }
 
@@ -654,10 +668,7 @@ export default function InventoryPage() {
                     <TableRow><TableCell colSpan={7} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
                   ) : warehouseRows.length === 0 ? (
                     <TableRow><TableCell colSpan={7} className="text-center py-12 text-muted-foreground">No warehouse stock records found.</TableCell></TableRow>
-                  ) : warehouseRows.filter(r => {
-                    const q = search.toLowerCase()
-                    return !q || r.item_name.toLowerCase().includes(q) || (r.client_name ?? '').toLowerCase().includes(q)
-                  }).map(r => {
+                  ) : pagedWarehouseRows.map(r => {
                     const noClientRecord = !r.hasClientRecord || !r.client_name
                     return (
                       <TableRow key={r.id} className={noClientRecord ? 'bg-amber-50/60' : ''}>
@@ -742,7 +753,7 @@ export default function InventoryPage() {
                   // ── By Item view ──────────────────────────────
                   byItemGroups.length === 0 ? (
                     <TableRow><TableCell colSpan={9} className="text-center py-12 text-muted-foreground">No inventory data found.</TableCell></TableRow>
-                  ) : byItemGroups.map(g => {
+                  ) : pagedByItemGroups.map(g => {
                     const key = 'item||' + g.item_name
                     const isOpen = expanded.has(key)
                     const isDeficit = g.total_balance < 0
@@ -790,7 +801,7 @@ export default function InventoryPage() {
                   <TableRow>
                     <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">No inventory data found.</TableCell>
                   </TableRow>
-                ) : filtered.map((row) => {
+                ) : pagedFiltered.map((row) => {
                   const key = rowKey(row)
                   const isOpen = expanded.has(key)
                   const isDeficit = row.balance < 0
@@ -959,6 +970,41 @@ export default function InventoryPage() {
           </div>
         </CardContent>
       </Card>}
+
+      {/* Pagination */}
+      {(() => {
+        const activeTotalPages = viewMode === 'by_warehouse' ? warehouseTotalPages : totalPages
+        const activeTotal = viewMode === 'by_warehouse'
+          ? warehouseRows.filter(r => { const q = search.toLowerCase(); return !q || r.item_name.toLowerCase().includes(q) || (r.client_name ?? '').toLowerCase().includes(q) }).length
+          : viewMode === 'by_item' ? byItemGroups.length : filtered.length
+        if (activeTotalPages <= 1) return null
+        return (
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">
+              Showing {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, activeTotal)} of {activeTotal}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="px-3 py-1.5 rounded-md border text-sm font-medium disabled:opacity-40 hover:bg-muted transition-colors"
+              >← Prev</button>
+              {Array.from({ length: activeTotalPages }, (_, i) => i + 1).map(p => (
+                <button
+                  key={p}
+                  onClick={() => setPage(p)}
+                  className={`w-8 h-8 rounded-md text-sm font-medium transition-colors ${p === page ? 'bg-red-600 text-white' : 'border hover:bg-muted'}`}
+                >{p}</button>
+              ))}
+              <button
+                onClick={() => setPage(p => Math.min(activeTotalPages, p + 1))}
+                disabled={page === activeTotalPages}
+                className="px-3 py-1.5 rounded-md border text-sm font-medium disabled:opacity-40 hover:bg-muted transition-colors"
+              >Next →</button>
+            </div>
+          </div>
+        )
+      })()}
 
       <Dialog open={warehouseUpdateOpen} onOpenChange={o => { if (!o) setWarehouseUpdateOpen(false) }}>
         <DialogContent className="sm:max-w-sm">
