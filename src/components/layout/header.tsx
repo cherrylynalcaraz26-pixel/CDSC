@@ -10,7 +10,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
+import { useSearchContext } from '@/context/search-context'
 
 interface HeaderProps {
   onMenuClick?: () => void
@@ -34,17 +35,27 @@ const SEARCH_ITEMS = [
   { label: 'Settings',              href: '/settings',                section: 'Settings' },
 ]
 
+// Pages that have searchable data — header search filters in-page data
+const DATA_PAGES = [
+  '/crm', '/purchase-orders', '/quotation', '/sales-orders',
+  '/receiving', '/inventory', '/dr-logs', '/csi-monitoring',
+  '/pull-out-billing', '/users',
+]
+
 export function Header({ onMenuClick }: HeaderProps) {
   const router = useRouter()
+  const pathname = usePathname()
   const supabase = createClient()
+  const { query, setQuery } = useSearchContext()
   const [userName, setUserName] = useState('User')
   const [userEmail, setUserEmail] = useState('')
   const [initials, setInitials] = useState('U')
-  const [query, setQuery] = useState('')
   const [showResults, setShowResults] = useState(false)
   const searchRef = useRef<HTMLDivElement>(null)
 
-  const results = query.trim().length > 0
+  const isDataPage = DATA_PAGES.some(p => pathname.startsWith(p))
+
+  const navResults = (!isDataPage && query.trim().length > 0)
     ? SEARCH_ITEMS.filter(item =>
         item.label.toLowerCase().includes(query.toLowerCase()) ||
         item.section.toLowerCase().includes(query.toLowerCase())
@@ -110,19 +121,19 @@ export function Header({ onMenuClick }: HeaderProps) {
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search pages…"
+              placeholder={isDataPage ? 'Search this page…' : 'Search pages…'}
               className="pl-9 h-9"
               value={query}
               onChange={e => { setQuery(e.target.value); setShowResults(true) }}
               onFocus={() => setShowResults(true)}
               onKeyDown={e => {
                 if (e.key === 'Escape') { setShowResults(false); setQuery('') }
-                if (e.key === 'Enter' && results.length > 0) navigateTo(results[0].href)
+                if (e.key === 'Enter' && navResults.length > 0) navigateTo(navResults[0].href)
               }}
             />
-            {showResults && results.length > 0 && (
+            {showResults && navResults.length > 0 && (
               <div className="absolute top-full left-0 right-0 mt-1 bg-popover border rounded-lg shadow-lg z-50 overflow-hidden">
-                {results.map(item => (
+                {navResults.map(item => (
                   <button
                     key={item.href}
                     onMouseDown={() => navigateTo(item.href)}

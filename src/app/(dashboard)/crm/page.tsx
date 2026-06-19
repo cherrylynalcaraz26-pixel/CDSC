@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { Plus, Search, Loader2, MoreHorizontal, Trophy, XCircle, LayoutGrid, List } from 'lucide-react'
+import { useSearchContext } from '@/context/search-context'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -113,11 +114,11 @@ const emptyForm: FormData = {
 
 export default function CRMPage() {
   const supabase = createClient()
+  const { query: search } = useSearchContext()
   const [leads, setLeads] = useState<CRMLead[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [view, setView] = useState<'table' | 'kanban'>('table')
-  const [search, setSearch] = useState('')
   const [stageFilter, setStageFilter] = useState<string>('all')
   const [priorityFilter, setPriorityFilter] = useState<string>('all')
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -267,15 +268,6 @@ export default function CRMPage() {
       </div>
 
       <div className="flex flex-wrap gap-3 items-center">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search company, contact, product..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-9"
-          />
-        </div>
         <Select value={stageFilter} onValueChange={v => setStageFilter(v ?? 'all')}>
           <SelectTrigger className="w-[160px]">
             <SelectValue placeholder="All Stages" />

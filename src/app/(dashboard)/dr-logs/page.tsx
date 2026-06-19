@@ -22,6 +22,7 @@ import {
 import { Plus, Search, MoreHorizontal, Loader2, Truck, Trash2, ChevronDown, ChevronRight, LayoutGrid, List, X, Printer } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
+import { useSearchContext } from '@/context/search-context'
 
 interface Supplier { id: string; company_name: string }
 interface Client { id: string; company_name: string }
@@ -88,8 +89,8 @@ export default function DRLogsPage() {
   const [poNumbers, setPoNumbers] = useState<string[]>([])
   const [poItemsMap, setPoItemsMap] = useState<Record<string, { item_name: string; unit: string; quantity: number }[]>>({})
   const [allItems, setAllItems] = useState<DRItem[]>([])
+  const { query: search } = useSearchContext()
   const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
@@ -357,10 +358,6 @@ export default function DRLogsPage() {
       </div>
 
       <div className="flex flex-wrap gap-3 items-center">
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input className="pl-9" placeholder="Search DR#, delivered to, PO…" value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
         <Select value={statusFilter} onValueChange={v => setStatusFilter(v ?? 'all')}>
           <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
           <SelectContent>

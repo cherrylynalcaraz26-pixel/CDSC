@@ -20,6 +20,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
+import { useSearchContext } from '@/context/search-context'
 
 interface ItemOption {
   item_code: string
@@ -70,6 +71,7 @@ const emptyLine = (): POLine => ({ item_name: '', quantity: '', unit: 'piece', u
 
 export default function PurchaseOrdersPage() {
   const supabase = createClient()
+  const { query } = useSearchContext()
   const [pos, setPOs] = useState<PO[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [clients, setClients] = useState<Client[]>([])
@@ -247,6 +249,16 @@ export default function PurchaseOrdersPage() {
 
   const fmt = (n: number) => `₱${n.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
 
+  const displayedPos = query.trim()
+    ? pos.filter(p => {
+        const q = query.toLowerCase()
+        return p.po_number.toLowerCase().includes(q) ||
+          (p.supplier?.company_name ?? '').toLowerCase().includes(q) ||
+          (p.pr?.pr_number ?? '').toLowerCase().includes(q) ||
+          (p.status ?? '').toLowerCase().includes(q)
+      })
+    : pos
+
   const counts = {
     open: pos.filter(p => p.status === 'open').length,
     partial: pos.filter(p => p.status === 'partially_delivered').length,
@@ -336,13 +348,13 @@ export default function PurchaseOrdersPage() {
                       <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                     </TableCell>
                   </TableRow>
-                ) : pos.length === 0 ? (
+                ) : displayedPos.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={11} className="text-center py-12 text-muted-foreground">
                       No purchase orders yet. Click <strong>Create PO</strong> to get started.
                     </TableCell>
                   </TableRow>
-                ) : pos.map(po => {
+                ) : displayedPos.map(po => {
                   const sCfg = STATUS_CFG[po.status] ?? STATUS_CFG.open
                   return (
                     <TableRow key={po.id}>

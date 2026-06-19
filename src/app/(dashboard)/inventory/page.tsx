@@ -18,6 +18,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Search, Loader2, ChevronRight, ChevronDown, Pencil, AlertTriangle, Plus } from 'lucide-react'
 import { toast } from 'sonner'
+import { useSearchContext } from '@/context/search-context'
 
 interface DrDetail  { dr_number: string; qty: number; unit: string; unit_price: number | null }
 interface CsiDetail { si_number: string; qty: number; unit: string; unit_price: number | null }
@@ -40,9 +41,9 @@ interface ItemOption { item_name: string; unit_of_measure: string }
 
 export default function InventoryPage() {
   const supabase = createClient()
+  const { query: search } = useSearchContext()
   const [rows, setRows] = useState<InventoryRow[]>([])
   const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
   const [clientFilter, setClientFilter] = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -362,10 +363,6 @@ export default function InventoryPage() {
       </div>
 
       <div className="flex gap-3 flex-wrap">
-        <div className="relative min-w-[200px] max-w-sm flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input className="pl-9" placeholder="Search item or client…" value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
         <Select value={clientFilter} onValueChange={v => setClientFilter(v ?? 'all')}>
           <SelectTrigger className="w-60">
             <SelectValue placeholder="Filter by client" />

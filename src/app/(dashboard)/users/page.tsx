@@ -21,6 +21,7 @@ import {
 import { UserPlus, MoreHorizontal, Search, Loader2, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
+import { useSearchContext } from '@/context/search-context'
 
 const ROLES = [
   { value: 'super_admin', label: 'Super-Admin', color: 'bg-red-100 text-red-800' },
@@ -52,9 +53,9 @@ interface Profile {
 
 export default function UsersPage() {
   const supabase = createClient()
+  const { query: search } = useSearchContext()
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
   const [filterRole, setFilterRole] = useState('')
   const [inviteOpen, setInviteOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
@@ -179,10 +180,6 @@ export default function UsersPage() {
 
       {/* Filters */}
       <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input className="pl-9" placeholder="Search name, email, department…" value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
         <Select value={filterRole || '_all'} onValueChange={v => setFilterRole(!v || v === '_all' ? '' : v)}>
           <SelectTrigger className="w-44 h-9"><SelectValue placeholder="All roles" /></SelectTrigger>
           <SelectContent>

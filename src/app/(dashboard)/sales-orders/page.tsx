@@ -14,6 +14,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Plus, MoreHorizontal, Eye, Printer, Trash2, CheckCircle2, XCircle, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
+import { useSearchContext } from '@/context/search-context'
 
 type SOStatus = 'draft' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'cancelled'
 
@@ -133,6 +134,17 @@ export default function SalesOrdersPage() {
     })
   }
 
+  const { query } = useSearchContext()
+  const displayedSOs = query.trim()
+    ? sos.filter(s => {
+        const q = query.toLowerCase()
+        return s.so_number.toLowerCase().includes(q) ||
+          (s.client_name ?? '').toLowerCase().includes(q) ||
+          (s.client_po_number ?? '').toLowerCase().includes(q) ||
+          (s.status ?? '').toLowerCase().includes(q)
+      })
+    : sos
+
   const counts = {
     draft:     sos.filter(s => s.status === 'draft').length,
     active:    sos.filter(s => ['confirmed','processing','shipped'].includes(s.status)).length,
@@ -193,11 +205,11 @@ export default function SalesOrdersPage() {
                 <TableRow><TableCell colSpan={7} className="text-center py-10">
                   <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                 </TableCell></TableRow>
-              ) : sos.length === 0 ? (
+              ) : displayedSOs.length === 0 ? (
                 <TableRow><TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
-                  No sales orders yet. Click <strong>New Sales Order</strong> to create one.
+                  No sales orders match your search.
                 </TableCell></TableRow>
-              ) : sos.map(so => {
+              ) : displayedSOs.map(so => {
                 const sCfg = STATUS_CFG[so.status] ?? STATUS_CFG.draft
                 return (
                   <TableRow key={so.id}>

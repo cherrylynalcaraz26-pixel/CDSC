@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
+import { useSearchContext } from '@/context/search-context'
 import {
   Plus, Trash2, Loader2, FileText, Package,
   ArrowLeftRight, Receipt,
@@ -103,6 +104,7 @@ interface UnifiedRecord {
 
 function PullOutTab() {
   const supabase = createClient()
+  const { query } = useSearchContext()
   const [unified, setUnified] = useState<UnifiedRecord[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [items, setItems] = useState<Item[]>([])
@@ -293,7 +295,15 @@ function PullOutTab() {
     resetForm()
   }
 
-  const displayed = sourceFilter === 'all' ? unified : unified.filter(r => r.source === sourceFilter)
+  const displayed = unified
+    .filter(r => sourceFilter === 'all' || r.source === sourceFilter)
+    .filter(r => {
+      if (!query.trim()) return true
+      const q = query.toLowerCase()
+      return r.ref_number.toLowerCase().includes(q) ||
+        (r.client_name ?? '').toLowerCase().includes(q) ||
+        (r.items_summary ?? '').toLowerCase().includes(q)
+    })
 
   return (
     <div className="space-y-4">

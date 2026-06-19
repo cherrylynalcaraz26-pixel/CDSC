@@ -21,6 +21,7 @@ import {
 import { Plus, X, Search, MoreHorizontal, Loader2, FileText, LayoutGrid, List, ChevronDown, ChevronRight, Package, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
+import { useSearchContext } from '@/context/search-context'
 
 interface ItemOption { item_name: string; unit_of_measure: string }
 
@@ -63,10 +64,10 @@ function formatPeso(val: number) {
 
 export default function CSIMonitoringPage() {
   const supabase = createClient()
+  const { query: search } = useSearchContext()
   const [records, setRecords] = useState<CSIRecord[]>([])
   const [itemOptions, setItemOptions] = useState<ItemOption[]>([])
   const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
   const [editingSiNumber, setEditingSiNumber] = useState<string | null>(null)
   const [header, setHeader] = useState(emptyHeader())
@@ -386,10 +387,6 @@ export default function CSIMonitoringPage() {
       )}
 
       {!open && <div className="flex gap-3 items-center">
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input className="pl-9" placeholder="Search SI#, client, item, DR#…" value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
         <div className="flex border rounded-md overflow-hidden">
           <button
             onClick={() => setViewMode('by-si')}

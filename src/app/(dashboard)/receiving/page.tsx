@@ -14,6 +14,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Plus, MoreHorizontal, CheckCircle2, Package, Loader2, Trash2, X } from 'lucide-react'
 import { toast } from 'sonner'
+import { useSearchContext } from '@/context/search-context'
 
 interface PO {
   id: string
@@ -59,6 +60,7 @@ const emptyReturnItem = (): ReturnItem => ({ item_name: '', unit: '', quantity: 
 
 export default function ReceivingPage() {
   const supabase = createClient()
+  const { query } = useSearchContext()
 
   // Receiving Reports state
   const [rrOpen, setRrOpen] = useState(false)
@@ -276,11 +278,25 @@ export default function ReceivingPage() {
                     <TableRow><TableCell colSpan={7} className="text-center py-10">
                       <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                     </TableCell></TableRow>
-                  ) : rrs.length === 0 ? (
+                  ) : rrs.filter(rr => {
+                      if (!query.trim()) return true
+                      const q = query.toLowerCase()
+                      return (rr.rr_number ?? '').toLowerCase().includes(q) ||
+                        (rr.po_number ?? '').toLowerCase().includes(q) ||
+                        (rr.supplier ?? '').toLowerCase().includes(q) ||
+                        (rr.status ?? '').toLowerCase().includes(q)
+                    }).length === 0 ? (
                     <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground">
-                      No receiving reports yet.
+                      No receiving reports match your search.
                     </TableCell></TableRow>
-                  ) : rrs.map(rr => (
+                  ) : rrs.filter(rr => {
+                      if (!query.trim()) return true
+                      const q = query.toLowerCase()
+                      return (rr.rr_number ?? '').toLowerCase().includes(q) ||
+                        (rr.po_number ?? '').toLowerCase().includes(q) ||
+                        (rr.supplier ?? '').toLowerCase().includes(q) ||
+                        (rr.status ?? '').toLowerCase().includes(q)
+                    }).map(rr => (
                     <TableRow key={rr.id}>
                       <TableCell className="font-mono text-xs font-semibold text-red-600">{rr.rr_number ?? '—'}</TableCell>
                       <TableCell className="text-xs font-mono">{rr.po_number}</TableCell>

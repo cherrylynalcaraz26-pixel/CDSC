@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Plus, MoreHorizontal, Loader2, Trash2, X, FileText, Printer, Mail } from 'lucide-react'
 import { toast } from 'sonner'
+import { useSearchContext } from '@/context/search-context'
 import Image from 'next/image'
 
 interface Client { id: string; company_name: string }
@@ -60,6 +61,7 @@ const STATUS_CFG: Record<string, { label: string; cls: string }> = {
 
 export default function QuotationPage() {
   const supabase = createClient()
+  const { query } = useSearchContext()
   const printRef = useRef<HTMLDivElement>(null)
   const [quotations, setQuotations] = useState<Quotation[]>([])
   const [clients, setClients] = useState<Client[]>([])
@@ -172,6 +174,16 @@ export default function QuotationPage() {
     toast.success(`Status updated to ${STATUS_CFG[status]?.label ?? status}`)
     load()
   }
+
+  const displayedQuotations = query.trim()
+    ? quotations.filter(q => {
+        const s = query.toLowerCase()
+        return q.quote_number.toLowerCase().includes(s) ||
+          (q.client_name ?? '').toLowerCase().includes(s) ||
+          (q.subject ?? '').toLowerCase().includes(s) ||
+          (q.status ?? '').toLowerCase().includes(s)
+      })
+    : quotations
 
   const counts = {
     total: quotations.length,
@@ -539,11 +551,11 @@ export default function QuotationPage() {
                   <TableRow><TableCell colSpan={8} className="text-center py-10">
                     <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                   </TableCell></TableRow>
-                ) : quotations.length === 0 ? (
+                ) : displayedQuotations.length === 0 ? (
                   <TableRow><TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
-                    No quotations yet. Click <strong>New Quotation</strong> to get started.
+                    No quotations match your search.
                   </TableCell></TableRow>
-                ) : quotations.map(q => {
+                ) : displayedQuotations.map(q => {
                   const cfg = STATUS_CFG[q.status] ?? { label: q.status, cls: 'bg-gray-100 text-gray-700' }
                   return (
                     <TableRow key={q.id}>
