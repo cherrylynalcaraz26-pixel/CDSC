@@ -197,98 +197,113 @@ export default function QuotationPage() {
   }
 
   const PreviewDoc = () => (
-    <div ref={printRef} className="bg-white text-black rounded-lg border shadow-sm p-8 text-sm font-sans" style={{ minHeight: 700 }}>
-      {/* Header */}
+    <div ref={printRef} className="border rounded-lg bg-white text-[11px] p-5 shadow-sm space-y-3 font-sans">
+      {/* Header: Logo + Company Name | Address / Phone / TIN */}
       <div className="flex justify-between items-start border-b pb-3">
-        <div className="flex items-center gap-2">
-          <img src="/cdsc-logo.jpg" alt="CDSC" className="h-12 w-12 rounded object-contain" />
-          <div className="text-[13px] font-bold text-red-700">{companyInfo?.company_name ?? 'CDSC Industrial Supply'}</div>
+        <div className="flex items-center gap-2.5">
+          <img src="/cdsc-logo.jpg" alt="CDSC" className="h-12 w-12 rounded object-cover shrink-0" />
+          <div className="text-[13px] font-bold text-red-700 leading-tight">
+            {companyInfo?.company_name ?? 'CDSC INDUSTRIAL'}
+          </div>
         </div>
-        <div className="text-[9px] text-gray-500 text-right">
-          <div>{companyInfo?.address}</div>
-          <div>{companyInfo?.phone} | {companyInfo?.email}</div>
-          <div>TIN: {companyInfo?.tin}</div>
+        <div className="text-right text-[9px] text-gray-500 space-y-0.5">
+          {companyInfo?.address && <div>{companyInfo.address}</div>}
+          {(companyInfo?.phone || companyInfo?.email) && (
+            <div>{companyInfo.phone}{companyInfo.phone && companyInfo.email ? ' | ' : ''}{companyInfo.email}</div>
+          )}
+          {companyInfo?.tin && <div>TIN: {companyInfo.tin}</div>}
         </div>
       </div>
 
-      {/* Party / Title row */}
-      <div className="grid grid-cols-3 items-start mt-4 mb-5">
-        <div>
-          <div className="text-[9px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Bill To</div>
-          <div className="text-[12px] font-semibold">{selectedClient?.company_name ?? '—'}</div>
-          {subject && <div className="text-[9px] text-gray-500 mt-0.5">{subject}</div>}
-        </div>
-        <div className="text-center">
-          <div className="text-[16px] font-extrabold text-red-700 uppercase tracking-widest">Quotation</div>
-        </div>
-        <div className="text-right">
-          <div className="text-[9px] text-gray-500">
-            No: <span className="font-mono font-semibold text-black">{quoteNumber || 'Auto-generated'}</span>
+      {/* Party row: Bill To (left) | QUOTATION (center) | Quote # / Date (right) */}
+      <div className="grid grid-cols-3 gap-3 border-b pb-3">
+        <div className="space-y-0.5">
+          <div className="text-[9px] font-semibold uppercase text-gray-400">Bill To</div>
+          <div className="font-semibold text-gray-800 text-[11px]">
+            {selectedClient?.company_name ?? <span className="text-gray-400 italic font-normal">Not selected</span>}
           </div>
-          <div className="text-[9px] text-gray-500">Date: {quoteDate}</div>
-          {validUntil && <div className="text-[9px] text-gray-500">Valid Until: {validUntil}</div>}
+          {subject && (
+            <div className="mt-1.5">
+              <div className="text-[9px] font-semibold uppercase text-gray-400">Subject</div>
+              <div className="text-gray-700 text-[10px]">{subject}</div>
+            </div>
+          )}
+        </div>
+        <div className="flex items-center justify-center">
+          <div className="text-[16px] font-extrabold text-red-700 uppercase tracking-widest text-center leading-tight">
+            Quotation
+          </div>
+        </div>
+        <div className="space-y-0.5 text-right">
+          <div className="text-[9px] font-semibold uppercase text-gray-400">Quote Number</div>
+          <div className="font-mono font-bold text-gray-800">{quoteNumber || 'Auto-generated'}</div>
+          <div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5">Date</div>
+          <div className="text-gray-700">{quoteDate}</div>
+          {validUntil && (
+            <>
+              <div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5">Valid Until</div>
+              <div className="text-gray-700">{validUntil}</div>
+            </>
+          )}
         </div>
       </div>
 
       {/* Items table */}
-      <table className="w-full text-xs mb-5 border-collapse">
+      <table className="w-full border-collapse text-[10px]">
         <thead>
-          <tr className="bg-gray-100">
-            <th className="text-left py-2 px-3 border border-gray-200 font-semibold">Item Description</th>
-            <th className="text-center py-2 px-3 border border-gray-200 font-semibold w-16">Qty</th>
-            <th className="text-center py-2 px-3 border border-gray-200 font-semibold w-16">Unit</th>
-            <th className="text-right py-2 px-3 border border-gray-200 font-semibold w-24">Unit Price</th>
-            <th className="text-right py-2 px-3 border border-gray-200 font-semibold w-24">Amount</th>
+          <tr className="bg-red-700 text-white">
+            <th className="text-left px-1.5 py-1 w-6">#</th>
+            <th className="text-left px-1.5 py-1">Item Description</th>
+            <th className="text-right px-1.5 py-1 w-12">Qty</th>
+            <th className="text-left px-1.5 py-1 w-16">Unit</th>
+            <th className="text-right px-1.5 py-1 w-20">Unit Price</th>
+            <th className="text-right px-1.5 py-1 w-20">Total</th>
           </tr>
         </thead>
         <tbody>
-          {lines.filter(l => l.item_name).map((line, i) => (
-            <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
-              <td className="py-2 px-3 border border-gray-200">{line.item_name}</td>
-              <td className="py-2 px-3 border border-gray-200 text-center">{line.quantity}</td>
-              <td className="py-2 px-3 border border-gray-200 text-center">{line.unit}</td>
-              <td className="py-2 px-3 border border-gray-200 text-right">{line.unit_price ? fmt(parseFloat(line.unit_price) || 0) : '—'}</td>
-              <td className="py-2 px-3 border border-gray-200 text-right font-medium">
-                {fmt((parseFloat(line.quantity) || 0) * (parseFloat(line.unit_price) || 0))}
-              </td>
-            </tr>
-          ))}
-          {lines.filter(l => l.item_name).length === 0 && (
-            <tr><td colSpan={5} className="py-3 px-3 text-center text-gray-400 border border-gray-200">No items added</td></tr>
-          )}
+          {lines.map((line, i) => {
+            const total = (parseFloat(line.unit_price) || 0) * (parseFloat(line.quantity) || 0)
+            return (
+              <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                <td className="px-1.5 py-1 text-gray-400">{i + 1}</td>
+                <td className="px-1.5 py-1">{line.item_name || <span className="text-gray-300 italic">—</span>}</td>
+                <td className="px-1.5 py-1 text-right">{line.quantity || '—'}</td>
+                <td className="px-1.5 py-1 text-gray-500">{line.unit || '—'}</td>
+                <td className="px-1.5 py-1 text-right">₱{(parseFloat(line.unit_price) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+                <td className="px-1.5 py-1 text-right font-medium">₱{total.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+              </tr>
+            )
+          })}
         </tbody>
       </table>
 
       {/* Totals */}
-      <div className="flex justify-end mb-6">
-        <div className="w-56 space-y-1 text-xs">
-          <div className="flex justify-between"><span className="text-gray-600">Subtotal</span><span className="font-medium">{fmt(subtotal)}</span></div>
-          {vatEnabled && <div className="flex justify-between"><span className="text-gray-600">VAT 12%</span><span>{fmt(vatAmount)}</span></div>}
-          {ewtEnabled && <div className="flex justify-between"><span className="text-gray-600">EWT 2%</span><span className="text-red-600">({fmt(ewtAmount)})</span></div>}
-          <div className="h-px bg-gray-300 my-1" />
-          <div className="flex justify-between font-bold text-sm"><span>TOTAL</span><span className="text-red-600">{fmt(totalAmount)}</span></div>
+      <div className="flex justify-end">
+        <div className="w-52 space-y-0.5 text-[10px]">
+          <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span>₱{subtotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+          {vatEnabled && <div className="flex justify-between"><span className="text-gray-500">VAT (12%)</span><span className="text-blue-600">₱{vatAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
+          {ewtEnabled && <div className="flex justify-between"><span className="text-gray-500">EWT (2%)</span><span className="text-red-700">−₱{ewtAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
+          <div className="flex justify-between border-t pt-0.5 font-bold text-[11px]"><span>Total</span><span className="text-red-700">₱{totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
         </div>
       </div>
 
       {/* Notes */}
       {notes && (
-        <div className="mb-6">
-          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Notes / Terms</div>
-          <div className="text-xs text-gray-700 whitespace-pre-wrap border-l-2 border-gray-200 pl-3">{notes}</div>
+        <div className="border-t pt-2">
+          <div className="text-[9px] font-semibold uppercase text-gray-400 mb-1">Notes / Terms</div>
+          <div className="text-[10px] text-gray-700 whitespace-pre-wrap">{notes}</div>
         </div>
       )}
 
       {/* Signatures */}
-      <div className="mt-10 grid grid-cols-2 gap-12">
-        <div>
-          <div className="h-px bg-gray-300 mb-1" />
-          <div className="text-xs text-gray-600">Prepared By</div>
-          <div className="text-xs text-gray-500 mt-0.5">Name / Signature / Date</div>
+      <div className="grid grid-cols-2 gap-6 border-t pt-4 mt-1">
+        <div className="text-center">
+          <div className="border-b border-gray-400 mb-1 h-8" />
+          <div className="text-[9px] text-gray-400 uppercase tracking-wider">Prepared By</div>
         </div>
-        <div>
-          <div className="h-px bg-gray-300 mb-1" />
-          <div className="text-xs text-gray-600">Accepted By</div>
-          <div className="text-xs text-gray-500 mt-0.5">Name / Signature / Date</div>
+        <div className="text-center">
+          <div className="border-b border-gray-400 mb-1 h-8" />
+          <div className="text-[9px] text-gray-400 uppercase tracking-wider">Accepted By</div>
         </div>
       </div>
     </div>
