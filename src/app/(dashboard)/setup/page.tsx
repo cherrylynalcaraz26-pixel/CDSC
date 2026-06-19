@@ -1106,11 +1106,13 @@ interface ItemRow {
   selling_price: number | null; status: string
 }
 interface UOMOption { id: string; code: string; name: string }
+interface BrandOption { id: string; name: string }
 
 function ItemListTab() {
   const supabase = createClient()
   const [rows, setRows] = useState<ItemRow[]>([])
   const [uomList, setUomList] = useState<UOMOption[]>([])
+  const [brandList, setBrandList] = useState<BrandOption[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
@@ -1121,12 +1123,14 @@ function ItemListTab() {
 
   async function load() {
     setLoading(true)
-    const [{ data: itemData }, { data: uomData }] = await Promise.all([
+    const [{ data: itemData }, { data: uomData }, { data: brandData }] = await Promise.all([
       supabase.from('items').select('id, item_code, item_name, brand, unit_of_measure, cost, selling_price, status').order('item_name'),
       supabase.from('uom_list').select('id, code, name').eq('is_active', true).order('code'),
+      supabase.from('brands').select('id, name').eq('is_active', true).order('name'),
     ])
     setRows(itemData ?? [])
     setUomList(uomData ?? [])
+    setBrandList(brandData ?? [])
     setLoading(false)
   }
   useEffect(() => { load() }, [])
@@ -1266,7 +1270,13 @@ function ItemListTab() {
             </div>
             <div className="space-y-1.5">
               <Label>Brand</Label>
-              <Input placeholder="e.g. Samsung, 3M" value={form.brand} onChange={e => setForm(p => ({ ...p, brand: e.target.value }))} />
+              <Select value={form.brand} onValueChange={v => setForm(p => ({ ...p, brand: v ?? '' }))}>
+                <SelectTrigger><SelectValue placeholder="Select brand…" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">— None —</SelectItem>
+                  {brandList.map(b => <SelectItem key={b.id} value={b.name}>{b.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
