@@ -696,31 +696,15 @@ export default function PurchaseOrdersPage() {
                         </div>
                       </div>
 
-                      {/* Right: PURCHASE ORDER title + PO details */}
+                      {/* Right: PURCHASE ORDER title only */}
                       <div className="text-right shrink-0">
                         <div className="text-[18px] font-extrabold text-red-700 uppercase tracking-widest leading-tight">
                           Purchase Order
                         </div>
-                        <div className="mt-1.5 space-y-0.5 text-[10px]">
-                          <div>
-                            <span className="text-gray-400 font-semibold uppercase text-[9px]">PO Number: </span>
-                            <span className="font-mono font-bold text-gray-800">{poNumber || '—'}</span>
-                          </div>
-                          <div>
-                            <span className="text-gray-400 font-semibold uppercase text-[9px]">Date: </span>
-                            <span className="text-gray-700">{todayStr}</span>
-                          </div>
-                          {deliveryStr && (
-                            <div>
-                              <span className="text-gray-400 font-semibold uppercase text-[9px]">Delivery: </span>
-                              <span className="text-gray-700">{deliveryStr}</span>
-                            </div>
-                          )}
-                        </div>
                       </div>
                     </div>
 
-                    {/* Party + payment info */}
+                    {/* Party + PO details row */}
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-0.5">
                         <div className="text-[9px] font-semibold uppercase text-gray-400">
@@ -735,13 +719,25 @@ export default function PurchaseOrdersPage() {
                         </div>
                         <div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5">Payment Terms</div>
                         <div className="text-gray-700">{paymentTerms || '—'}</div>
+                        {remarks && (
+                          <div className="mt-1.5">
+                            <div className="text-[9px] font-semibold uppercase text-gray-400">Remarks</div>
+                            <div className="text-gray-700 text-[10px]">{remarks}</div>
+                          </div>
+                        )}
                       </div>
-                      {remarks && (
-                        <div className="space-y-0.5">
-                          <div className="text-[9px] font-semibold uppercase text-gray-400">Remarks</div>
-                          <div className="text-gray-700 text-[10px]">{remarks}</div>
-                        </div>
-                      )}
+                      <div className="space-y-0.5 text-right">
+                        <div className="text-[9px] font-semibold uppercase text-gray-400">PO Number</div>
+                        <div className="font-mono font-bold text-gray-800">{poNumber || '—'}</div>
+                        <div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5">Date</div>
+                        <div className="text-gray-700">{todayStr}</div>
+                        {deliveryStr && (
+                          <>
+                            <div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5">Delivery Date</div>
+                            <div className="text-gray-700">{deliveryStr}</div>
+                          </>
+                        )}
+                      </div>
                     </div>
 
                     {/* Items table */}
