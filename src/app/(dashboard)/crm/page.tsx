@@ -3,11 +3,13 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
-import { Plus, Search, Loader2, MoreHorizontal, Trophy, XCircle, LayoutGrid, List, Link2, Copy, Pencil, Trash2 } from 'lucide-react'
+import {
+  Plus, Loader2, MoreHorizontal, Trophy, XCircle, LayoutGrid, List,
+  Link2, ExternalLink, Pencil, Trash2, Users, TrendingUp, Target,
+  Phone, Mail, Calendar, Tag, ChevronRight, Building2,
+} from 'lucide-react'
 import { useSearchContext } from '@/context/search-context'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
 } from '@/components/ui/dialog'
@@ -60,56 +62,36 @@ type FormData = {
   notes: string
 }
 
-const STAGE_LABELS: Record<Stage, string> = {
-  new_lead: 'New Lead',
-  contacted: 'Contacted',
-  proposal_sent: 'Proposal Sent',
-  negotiation: 'Negotiation',
-  won: 'Won',
-  lost: 'Lost',
+const STAGE_META: Record<Stage, { label: string; color: string; bg: string; border: string; dot: string }> = {
+  new_lead:      { label: 'New Lead',      color: 'text-blue-700',   bg: 'bg-blue-50',   border: 'border-blue-200',  dot: 'bg-blue-500'   },
+  contacted:     { label: 'Contacted',     color: 'text-amber-700',  bg: 'bg-amber-50',  border: 'border-amber-200', dot: 'bg-amber-500'  },
+  proposal_sent: { label: 'Proposal Sent', color: 'text-orange-700', bg: 'bg-orange-50', border: 'border-orange-200',dot: 'bg-orange-500' },
+  negotiation:   { label: 'Negotiation',   color: 'text-purple-700', bg: 'bg-purple-50', border: 'border-purple-200',dot: 'bg-purple-500' },
+  won:           { label: 'Won',           color: 'text-green-700',  bg: 'bg-green-50',  border: 'border-green-200', dot: 'bg-green-500'  },
+  lost:          { label: 'Lost',          color: 'text-slate-600',  bg: 'bg-slate-100', border: 'border-slate-200', dot: 'bg-slate-400'  },
 }
 
-const STAGE_COLORS: Record<Stage, string> = {
-  new_lead: 'bg-blue-100 text-blue-800',
-  contacted: 'bg-yellow-100 text-yellow-800',
-  proposal_sent: 'bg-orange-100 text-orange-800',
-  negotiation: 'bg-purple-100 text-purple-800',
-  won: 'bg-green-100 text-green-800',
-  lost: 'bg-gray-100 text-gray-800',
-}
-
-const PRIORITY_COLORS: Record<Priority, string> = {
-  low: 'bg-gray-100 text-gray-700',
-  medium: 'bg-blue-100 text-blue-700',
-  high: 'bg-orange-100 text-orange-700',
-  urgent: 'bg-red-100 text-red-700',
+const PRIORITY_META: Record<Priority, { label: string; color: string; bg: string }> = {
+  low:    { label: 'Low',    color: 'text-slate-600',  bg: 'bg-slate-100'  },
+  medium: { label: 'Medium', color: 'text-blue-700',   bg: 'bg-blue-50'    },
+  high:   { label: 'High',   color: 'text-orange-700', bg: 'bg-orange-50'  },
+  urgent: { label: 'Urgent', color: 'text-red-700',    bg: 'bg-red-50'     },
 }
 
 const PIPELINE_STAGES: Stage[] = ['new_lead', 'contacted', 'proposal_sent', 'negotiation', 'won', 'lost']
 const KANBAN_STAGES: Stage[] = ['new_lead', 'contacted', 'proposal_sent', 'negotiation']
 
-const STAGE_CARD_COLORS: Record<Stage, string> = {
-  new_lead: 'border-l-blue-500',
-  contacted: 'border-l-yellow-500',
-  proposal_sent: 'border-l-orange-500',
-  negotiation: 'border-l-purple-500',
-  won: 'border-l-green-500',
-  lost: 'border-l-gray-500',
+const KANBAN_COLORS: Record<string, string> = {
+  new_lead:      'border-t-blue-500',
+  contacted:     'border-t-amber-500',
+  proposal_sent: 'border-t-orange-500',
+  negotiation:   'border-t-purple-500',
 }
 
 const emptyForm: FormData = {
-  company_name: '',
-  contact_person: '',
-  contact_email: '',
-  contact_phone: '',
-  product_interest: '',
-  estimated_value: '',
-  stage: 'new_lead',
-  priority: 'medium',
-  source: '',
-  assigned_to: '',
-  follow_up_date: '',
-  notes: '',
+  company_name: '', contact_person: '', contact_email: '', contact_phone: '',
+  product_interest: '', estimated_value: '', stage: 'new_lead', priority: 'medium',
+  source: '', assigned_to: '', follow_up_date: '', notes: '',
 }
 
 export default function CRMPage() {
@@ -129,27 +111,15 @@ export default function CRMPage() {
 
   async function fetchLeads() {
     setLoading(true)
-    const { data, error } = await supabase
-      .from('crm_leads')
-      .select('*')
-      .order('created_at', { ascending: false })
-    if (error) {
-      toast.error('Failed to load leads')
-    } else {
-      setLeads(data as CRMLead[])
-    }
+    const { data, error } = await supabase.from('crm_leads').select('*').order('created_at', { ascending: false })
+    if (error) toast.error('Failed to load leads')
+    else setLeads(data as CRMLead[])
     setLoading(false)
   }
 
-  useEffect(() => {
-    fetchLeads()
-  }, [])
+  useEffect(() => { fetchLeads() }, [])
 
-  function openNew() {
-    setEditingLead(null)
-    setForm(emptyForm)
-    setDialogOpen(true)
-  }
+  function openNew() { setEditingLead(null); setForm(emptyForm); setDialogOpen(true) }
 
   function openEdit(lead: CRMLead) {
     setEditingLead(lead)
@@ -171,10 +141,7 @@ export default function CRMPage() {
   }
 
   async function handleSave() {
-    if (!form.company_name.trim()) {
-      toast.error('Company Name is required')
-      return
-    }
+    if (!form.company_name.trim()) { toast.error('Company Name is required'); return }
     setSaving(true)
     const payload = {
       company_name: form.company_name,
@@ -192,62 +159,36 @@ export default function CRMPage() {
     }
     if (editingLead) {
       const { error } = await supabase.from('crm_leads').update(payload).eq('id', editingLead.id)
-      if (error) {
-        toast.error('Failed to update lead')
-      } else {
-        toast.success('Lead updated')
-        setDialogOpen(false)
-        fetchLeads()
-      }
+      if (error) toast.error('Failed to update lead')
+      else { toast.success('Lead updated'); setDialogOpen(false); fetchLeads() }
     } else {
       const { error } = await supabase.from('crm_leads').insert(payload)
-      if (error) {
-        toast.error('Failed to create lead')
-      } else {
-        toast.success('Lead created')
-        setDialogOpen(false)
-        fetchLeads()
-      }
+      if (error) toast.error('Failed to create lead')
+      else { toast.success('Lead created'); setDialogOpen(false); fetchLeads() }
     }
     setSaving(false)
   }
 
-  function deleteLead(lead: CRMLead) {
-    setConfirmLead(lead)
-    setConfirmOpen(true)
-  }
+  function deleteLead(lead: CRMLead) { setConfirmLead(lead); setConfirmOpen(true) }
 
   async function confirmDeleteLead() {
     if (!confirmLead) return
     const { error } = await supabase.from('crm_leads').delete().eq('id', confirmLead.id)
-    if (error) {
-      toast.error('Failed to delete lead')
-    } else {
-      toast.success('Lead deleted')
-      fetchLeads()
-    }
-    setConfirmOpen(false)
-    setConfirmLead(null)
+    if (error) toast.error('Failed to delete lead')
+    else { toast.success('Lead deleted'); fetchLeads() }
+    setConfirmOpen(false); setConfirmLead(null)
   }
 
   async function markStage(lead: CRMLead, stage: 'won' | 'lost') {
     const today = new Date().toISOString().split('T')[0]
-    const { error } = await supabase
-      .from('crm_leads')
-      .update({ stage, closed_date: today })
-      .eq('id', lead.id)
-    if (error) {
-      toast.error(`Failed to mark as ${STAGE_LABELS[stage]}`)
-    } else {
-      toast.success(`Lead marked as ${STAGE_LABELS[stage]}`)
-      fetchLeads()
-    }
+    const { error } = await supabase.from('crm_leads').update({ stage, closed_date: today }).eq('id', lead.id)
+    if (error) toast.error(`Failed to mark as ${STAGE_META[stage].label}`)
+    else { toast.success(`Lead marked as ${STAGE_META[stage].label}`); fetchLeads() }
   }
 
-  const filtered = leads.filter((l) => {
+  const filtered = leads.filter(l => {
     const q = search.toLowerCase()
-    const matchSearch =
-      !q ||
+    const matchSearch = !q ||
       l.company_name.toLowerCase().includes(q) ||
       (l.contact_person ?? '').toLowerCase().includes(q) ||
       (l.product_interest ?? '').toLowerCase().includes(q)
@@ -257,218 +198,341 @@ export default function CRMPage() {
   })
 
   const stageCounts = PIPELINE_STAGES.reduce((acc, s) => {
-    acc[s] = leads.filter((l) => l.stage === s).length
+    acc[s] = leads.filter(l => l.stage === s).length
     return acc
   }, {} as Record<Stage, number>)
 
+  const totalValue = leads.filter(l => l.stage === 'won').reduce((s, l) => s + (l.estimated_value ?? 0), 0)
+  const pipelineValue = leads.filter(l => !['won','lost'].includes(l.stage)).reduce((s, l) => s + (l.estimated_value ?? 0), 0)
+
+  const fmt = (n: number) => `₱${n.toLocaleString('en-PH', { minimumFractionDigits: 0 })}`
+
   return (
-    <div className="p-6 space-y-6">
+    <div className="space-y-6">
+
+      {/* Header */}
       <div className="flex items-start justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Inquiry / CRM Leads & Pipeline</h1>
-          <p className="text-muted-foreground text-sm mt-1">Track inquiries, leads, and sales pipeline</p>
+          <h1 className="text-2xl font-bold tracking-tight">CRM & Leads Pipeline</h1>
+          <p className="text-muted-foreground text-sm mt-0.5">Track inquiries, leads, and sales pipeline</p>
         </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => {
               const url = `${window.location.origin}/inquiry`
               navigator.clipboard.writeText(url).then(() => {
-                const el = document.getElementById('copy-feedback')
+                const el = document.getElementById('copy-fb')
                 if (el) { el.textContent = 'Copied!'; setTimeout(() => { el.textContent = 'Copy Link' }, 2000) }
               })
             }}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-md border border-border text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
           >
             <Link2 className="w-4 h-4" />
-            <span id="copy-feedback">Copy Link</span>
+            <span id="copy-fb">Copy Link</span>
           </button>
           <a
             href="/inquiry"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-3 py-2 rounded-md border border-border text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
           >
-            <Copy className="w-4 h-4" />
+            <ExternalLink className="w-4 h-4" />
             Open Form
           </a>
-          <Button onClick={openNew} className="bg-red-600 hover:bg-red-700 text-white">
-            <Plus className="w-4 h-4 mr-2" />
-            New Lead
+          <Button onClick={openNew} className="bg-red-600 hover:bg-red-700 text-white gap-1.5">
+            <Plus className="w-4 h-4" /> New Lead
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        {PIPELINE_STAGES.map((s) => (
-          <Card key={s} className={`border-l-4 ${STAGE_CARD_COLORS[s]}`}>
-            <CardHeader className="p-3 pb-1">
-              <CardTitle className="text-xs font-medium text-muted-foreground">{STAGE_LABELS[s]}</CardTitle>
-            </CardHeader>
-            <CardContent className="p-3 pt-0">
-              <p className="text-2xl font-bold">{stageCounts[s]}</p>
-            </CardContent>
-          </Card>
-        ))}
+      {/* Summary cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="rounded-xl border bg-card p-4 space-y-1">
+          <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
+            <Users className="w-3.5 h-3.5" /> Total Leads
+          </div>
+          <div className="text-2xl font-bold">{leads.length}</div>
+          <div className="text-xs text-muted-foreground">{stageCounts.new_lead} new</div>
+        </div>
+        <div className="rounded-xl border bg-card p-4 space-y-1">
+          <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
+            <TrendingUp className="w-3.5 h-3.5" /> Pipeline Value
+          </div>
+          <div className="text-2xl font-bold text-blue-600">{fmt(pipelineValue)}</div>
+          <div className="text-xs text-muted-foreground">{leads.filter(l => !['won','lost'].includes(l.stage)).length} active leads</div>
+        </div>
+        <div className="rounded-xl border bg-card p-4 space-y-1">
+          <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
+            <Trophy className="w-3.5 h-3.5 text-green-600" /> Won
+          </div>
+          <div className="text-2xl font-bold text-green-600">{stageCounts.won}</div>
+          <div className="text-xs text-muted-foreground">{fmt(totalValue)} closed</div>
+        </div>
+        <div className="rounded-xl border bg-card p-4 space-y-1">
+          <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium">
+            <Target className="w-3.5 h-3.5 text-purple-600" /> In Negotiation
+          </div>
+          <div className="text-2xl font-bold text-purple-600">{stageCounts.negotiation}</div>
+          <div className="text-xs text-muted-foreground">{stageCounts.proposal_sent} proposals out</div>
+        </div>
       </div>
 
-      <div className="flex flex-wrap gap-3 items-center">
-        <Select value={stageFilter} onValueChange={v => setStageFilter(v ?? 'all')}>
-          <SelectTrigger className="w-[160px]">
-            <SelectValue placeholder="All Stages" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Stages</SelectItem>
-            {PIPELINE_STAGES.map((s) => (
-              <SelectItem key={s} value={s}>{STAGE_LABELS[s]}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      {/* Pipeline stage progress */}
+      <div className="rounded-xl border bg-card p-4">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Pipeline Stages</p>
+        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+          {PIPELINE_STAGES.map(s => {
+            const m = STAGE_META[s]
+            return (
+              <button
+                key={s}
+                onClick={() => setStageFilter(stageFilter === s ? 'all' : s)}
+                className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border transition-all ${
+                  stageFilter === s
+                    ? `${m.bg} ${m.border} shadow-sm`
+                    : 'border-border hover:bg-muted/50'
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full ${m.dot}`} />
+                <span className={`text-xl font-bold ${stageFilter === s ? m.color : ''}`}>{stageCounts[s]}</span>
+                <span className="text-[10px] text-muted-foreground font-medium leading-tight text-center">{m.label}</span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* Filters + view toggle */}
+      <div className="flex flex-wrap gap-2 items-center">
         <Select value={priorityFilter} onValueChange={v => setPriorityFilter(v ?? 'all')}>
-          <SelectTrigger className="w-[150px]">
-            <SelectValue placeholder="All Priorities" />
+          <SelectTrigger className="w-[140px] h-8 text-sm">
+            {priorityFilter === 'all'
+              ? <span className="text-muted-foreground">All Priorities</span>
+              : <span>{PRIORITY_META[priorityFilter as Priority]?.label}</span>}
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Priorities</SelectItem>
-            <SelectItem value="low">Low</SelectItem>
-            <SelectItem value="medium">Medium</SelectItem>
-            <SelectItem value="high">High</SelectItem>
-            <SelectItem value="urgent">Urgent</SelectItem>
+            {(['low','medium','high','urgent'] as Priority[]).map(p => (
+              <SelectItem key={p} value={p}>{PRIORITY_META[p].label}</SelectItem>
+            ))}
           </SelectContent>
         </Select>
-        <div className="flex border rounded-md overflow-hidden">
-          <Button
-            variant={view === 'table' ? 'default' : 'ghost'}
-            size="sm"
-            className="rounded-none"
+        <div className="ml-auto flex items-center border rounded-lg overflow-hidden">
+          <button
             onClick={() => setView('table')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors ${view === 'table' ? 'bg-red-600 text-white' : 'text-muted-foreground hover:bg-muted'}`}
           >
-            <List className="w-4 h-4" />
-          </Button>
-          <Button
-            variant={view === 'kanban' ? 'default' : 'ghost'}
-            size="sm"
-            className="rounded-none"
+            <List className="w-3.5 h-3.5" /> List
+          </button>
+          <button
             onClick={() => setView('kanban')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border-l transition-colors ${view === 'kanban' ? 'bg-red-600 text-white' : 'text-muted-foreground hover:bg-muted'}`}
           >
-            <LayoutGrid className="w-4 h-4" />
-          </Button>
+            <LayoutGrid className="w-3.5 h-3.5" /> Board
+          </button>
         </div>
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-12">
+        <div className="flex justify-center py-16">
           <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
         </div>
       ) : view === 'table' ? (
-        <div className="rounded-md border overflow-x-auto">
+
+        /* ── TABLE VIEW ── */
+        <div className="rounded-xl border overflow-hidden">
           <Table>
             <TableHeader>
-              <TableRow>
-                <TableHead>Lead #</TableHead>
-                <TableHead>Company</TableHead>
-                <TableHead>Contact Person</TableHead>
-                <TableHead>Product Interest</TableHead>
-                <TableHead>Est. Value (₱)</TableHead>
-                <TableHead>Stage</TableHead>
-                <TableHead>Priority</TableHead>
-                <TableHead>Follow-up Date</TableHead>
-                <TableHead className="w-[60px]">Actions</TableHead>
+              <TableRow className="bg-muted/40 hover:bg-muted/40">
+                <TableHead className="text-xs">Company</TableHead>
+                <TableHead className="text-xs">Contact</TableHead>
+                <TableHead className="text-xs">Product Interest</TableHead>
+                <TableHead className="text-xs">Stage</TableHead>
+                <TableHead className="text-xs">Priority</TableHead>
+                <TableHead className="text-xs text-right">Est. Value</TableHead>
+                <TableHead className="text-xs">Follow-up</TableHead>
+                <TableHead className="w-10" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
-                    No leads found
+                  <TableCell colSpan={8} className="text-center py-16">
+                    <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                      <Users className="w-10 h-10 opacity-20" />
+                      <div>
+                        <p className="font-medium text-sm">No leads found</p>
+                        <p className="text-xs mt-0.5">Add a new lead or adjust your filters</p>
+                      </div>
+                      <Button size="sm" onClick={openNew} className="bg-red-600 hover:bg-red-700 text-white mt-1">
+                        <Plus className="w-3.5 h-3.5 mr-1" /> New Lead
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
-              ) : (
-                filtered.map((lead) => (
-                  <TableRow key={lead.id}>
-                    <TableCell className="font-mono text-sm">{lead.lead_number}</TableCell>
-                    <TableCell className="font-medium">{lead.company_name}</TableCell>
-                    <TableCell>{lead.contact_person ?? '—'}</TableCell>
-                    <TableCell>{lead.product_interest ?? '—'}</TableCell>
+              ) : filtered.map(lead => {
+                const sm = STAGE_META[lead.stage]
+                const pm = PRIORITY_META[lead.priority]
+                return (
+                  <TableRow key={lead.id} className="group hover:bg-muted/30 cursor-pointer" onClick={() => openEdit(lead)}>
                     <TableCell>
-                      {lead.estimated_value != null
-                        ? `₱${lead.estimated_value.toLocaleString()}`
-                        : '—'}
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                          <Building2 className="w-4 h-4 text-muted-foreground" />
+                        </div>
+                        <div>
+                          <div className="font-semibold text-sm">{lead.company_name}</div>
+                          <div className="text-xs text-muted-foreground font-mono">{lead.lead_number}</div>
+                        </div>
+                      </div>
                     </TableCell>
                     <TableCell>
-                      <Badge className={STAGE_COLORS[lead.stage]}>
-                        {STAGE_LABELS[lead.stage]}
-                      </Badge>
+                      <div className="text-sm">{lead.contact_person ?? '—'}</div>
+                      {lead.contact_phone && (
+                        <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                          <Phone className="w-3 h-3" />{lead.contact_phone}
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground max-w-[180px] truncate">
+                      {lead.product_interest ?? '—'}
                     </TableCell>
                     <TableCell>
-                      <Badge className={PRIORITY_COLORS[lead.priority]}>
-                        {lead.priority.charAt(0).toUpperCase() + lead.priority.slice(1)}
-                      </Badge>
+                      <span className={`inline-flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full ${sm.bg} ${sm.color}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${sm.dot}`} />
+                        {sm.label}
+                      </span>
                     </TableCell>
-                    <TableCell>{lead.follow_up_date ?? '—'}</TableCell>
                     <TableCell>
+                      <span className={`text-xs font-medium px-2 py-1 rounded-full ${pm.bg} ${pm.color}`}>
+                        {pm.label}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-right text-sm font-medium">
+                      {lead.estimated_value != null ? fmt(lead.estimated_value) : '—'}
+                    </TableCell>
+                    <TableCell>
+                      {lead.follow_up_date ? (
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Calendar className="w-3 h-3" />
+                          {new Date(lead.follow_up_date + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}
+                        </div>
+                      ) : '—'}
+                    </TableCell>
+                    <TableCell onClick={e => e.stopPropagation()}>
                       <DropdownMenu>
-                        <DropdownMenuTrigger className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent">
+                        <DropdownMenuTrigger className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent opacity-0 group-hover:opacity-100 transition-opacity">
                           <MoreHorizontal className="w-4 h-4" />
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
+                        <DropdownMenuContent align="end" className="w-44">
                           <DropdownMenuItem onClick={() => openEdit(lead)}>
-                            <Pencil className="w-4 h-4 mr-2 text-yellow-600" />
-                            Edit
+                            <Pencil className="w-4 h-4 mr-2" /> Edit
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => markStage(lead, 'won')}>
-                            <Trophy className="w-4 h-4 mr-2 text-green-600" />
-                            Mark Won
+                          <DropdownMenuItem onClick={() => markStage(lead, 'won')} className="text-green-700">
+                            <Trophy className="w-4 h-4 mr-2" /> Mark Won
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => markStage(lead, 'lost')}>
-                            <XCircle className="w-4 h-4 mr-2 text-gray-500" />
-                            Mark Lost
+                          <DropdownMenuItem onClick={() => markStage(lead, 'lost')} className="text-slate-500">
+                            <XCircle className="w-4 h-4 mr-2" /> Mark Lost
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => deleteLead(lead)} className="text-red-600 focus:text-red-600">
-                            <Trash2 className="w-4 h-4 mr-2" />
-                            Delete
+                            <Trash2 className="w-4 h-4 mr-2" /> Delete
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
                   </TableRow>
-                ))
-              )}
+                )
+              })}
             </TableBody>
           </Table>
         </div>
+
       ) : (
+
+        /* ── KANBAN VIEW ── */
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {KANBAN_STAGES.map((stage) => {
-            const stageLeads = filtered.filter((l) => l.stage === stage)
+          {KANBAN_STAGES.map(stage => {
+            const m = STAGE_META[stage]
+            const stageLeads = filtered.filter(l => l.stage === stage)
             return (
-              <div key={stage} className="flex flex-col gap-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-semibold text-sm">{STAGE_LABELS[stage]}</h3>
-                  <Badge variant="secondary">{stageLeads.length}</Badge>
+              <div key={stage} className="flex flex-col gap-2">
+                <div className={`flex items-center justify-between px-3 py-2 rounded-lg border-t-4 ${KANBAN_COLORS[stage]} bg-muted/30 border border-border`}>
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full ${m.dot}`} />
+                    <span className="font-semibold text-sm">{m.label}</span>
+                  </div>
+                  <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${m.bg} ${m.color}`}>{stageLeads.length}</span>
                 </div>
-                <div className="flex flex-col gap-2 min-h-[100px]">
-                  {stageLeads.map((lead) => (
-                    <Card
-                      key={lead.id}
-                      className="cursor-pointer hover:shadow-md transition-shadow"
-                      onClick={() => openEdit(lead)}
-                    >
-                      <CardContent className="p-3 space-y-1">
-                        <p className="font-medium text-sm">{lead.company_name}</p>
+                <div className="flex flex-col gap-2 min-h-[120px]">
+                  {stageLeads.length === 0 && (
+                    <div className="flex items-center justify-center h-20 rounded-lg border border-dashed text-xs text-muted-foreground">
+                      No leads
+                    </div>
+                  )}
+                  {stageLeads.map(lead => {
+                    const pm = PRIORITY_META[lead.priority]
+                    return (
+                      <div
+                        key={lead.id}
+                        className="bg-card rounded-lg border p-3 space-y-2 cursor-pointer hover:shadow-md hover:border-muted-foreground/30 transition-all group"
+                        onClick={() => openEdit(lead)}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-semibold text-sm leading-tight">{lead.company_name}</p>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger
+                              onClick={e => e.stopPropagation()}
+                              className="shrink-0 inline-flex items-center justify-center h-6 w-6 rounded hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <MoreHorizontal className="w-3.5 h-3.5" />
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-40">
+                              <DropdownMenuItem onClick={e => { e.stopPropagation(); openEdit(lead) }}>
+                                <Pencil className="w-3.5 h-3.5 mr-2" /> Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={e => { e.stopPropagation(); markStage(lead, 'won') }} className="text-green-700">
+                                <Trophy className="w-3.5 h-3.5 mr-2" /> Won
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={e => { e.stopPropagation(); markStage(lead, 'lost') }} className="text-slate-500">
+                                <XCircle className="w-3.5 h-3.5 mr-2" /> Lost
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={e => { e.stopPropagation(); deleteLead(lead) }} className="text-red-600">
+                                <Trash2 className="w-3.5 h-3.5 mr-2" /> Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+
                         {lead.contact_person && (
-                          <p className="text-xs text-muted-foreground">{lead.contact_person}</p>
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Users className="w-3 h-3" />{lead.contact_person}
+                          </div>
                         )}
                         {lead.product_interest && (
-                          <p className="text-xs text-muted-foreground">{lead.product_interest}</p>
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Tag className="w-3 h-3" />
+                            <span className="truncate">{lead.product_interest}</span>
+                          </div>
                         )}
-                        {lead.estimated_value != null && (
-                          <p className="text-xs font-semibold text-green-700">
-                            ₱{lead.estimated_value.toLocaleString()}
-                          </p>
+
+                        <div className="flex items-center justify-between pt-1">
+                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${pm.bg} ${pm.color}`}>
+                            {pm.label}
+                          </span>
+                          {lead.estimated_value != null && (
+                            <span className="text-xs font-semibold text-green-700">{fmt(lead.estimated_value)}</span>
+                          )}
+                        </div>
+
+                        {lead.follow_up_date && (
+                          <div className="flex items-center gap-1 text-[10px] text-muted-foreground border-t pt-1.5">
+                            <Calendar className="w-3 h-3" />
+                            Follow-up: {new Date(lead.follow_up_date + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
+                          </div>
                         )}
-                      </CardContent>
-                    </Card>
-                  ))}
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             )
@@ -476,126 +540,83 @@ export default function CRMPage() {
         </div>
       )}
 
+      {/* Add/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="w-[95vw] max-w-3xl sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editingLead ? 'Edit Lead' : 'New Lead'}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              {editingLead ? <><Pencil className="w-4 h-4" /> Edit Lead</> : <><Plus className="w-4 h-4" /> New Lead</>}
+            </DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-2">
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <Label>Company Name <span className="text-red-500">*</span></Label>
-              <Input
-                value={form.company_name}
-                onChange={(e) => setForm({ ...form, company_name: e.target.value })}
-                placeholder="Company name"
-              />
+              <Input value={form.company_name} onChange={e => setForm({ ...form, company_name: e.target.value })} placeholder="Company name" />
             </div>
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <Label>Contact Person</Label>
-              <Input
-                value={form.contact_person}
-                onChange={(e) => setForm({ ...form, contact_person: e.target.value })}
-                placeholder="Contact person"
-              />
+              <Input value={form.contact_person} onChange={e => setForm({ ...form, contact_person: e.target.value })} placeholder="Full name" />
             </div>
-            <div className="space-y-1">
-              <Label>Contact Email</Label>
-              <Input
-                type="email"
-                value={form.contact_email}
-                onChange={(e) => setForm({ ...form, contact_email: e.target.value })}
-                placeholder="Email address"
-              />
+            <div className="space-y-1.5">
+              <Label>Email</Label>
+              <Input type="email" value={form.contact_email} onChange={e => setForm({ ...form, contact_email: e.target.value })} placeholder="email@company.com" />
             </div>
-            <div className="space-y-1">
-              <Label>Contact Phone</Label>
-              <Input
-                value={form.contact_phone}
-                onChange={(e) => setForm({ ...form, contact_phone: e.target.value })}
-                placeholder="Phone number"
-              />
+            <div className="space-y-1.5">
+              <Label>Phone</Label>
+              <Input value={form.contact_phone} onChange={e => setForm({ ...form, contact_phone: e.target.value })} placeholder="+63 9XX XXX XXXX" />
             </div>
-            <div className="space-y-1">
-              <Label>Product Interest</Label>
-              <Input
-                value={form.product_interest}
-                onChange={(e) => setForm({ ...form, product_interest: e.target.value })}
-                placeholder="Product or service"
-              />
+            <div className="space-y-1.5">
+              <Label>Product / Service Interest</Label>
+              <Input value={form.product_interest} onChange={e => setForm({ ...form, product_interest: e.target.value })} placeholder="Products they're interested in" />
             </div>
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <Label>Estimated Value (₱)</Label>
-              <Input
-                type="number"
-                value={form.estimated_value}
-                onChange={(e) => setForm({ ...form, estimated_value: e.target.value })}
-                placeholder="0.00"
-              />
+              <Input type="number" value={form.estimated_value} onChange={e => setForm({ ...form, estimated_value: e.target.value })} placeholder="0.00" />
             </div>
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <Label>Stage</Label>
-              <Select value={form.stage} onValueChange={(v) => setForm({ ...form, stage: v as Stage })}>
+              <Select value={form.stage} onValueChange={v => setForm({ ...form, stage: v as Stage })}>
                 <SelectTrigger>
-                  <SelectValue />
+                  {form.stage ? <span>{STAGE_META[form.stage].label}</span> : <span className="text-muted-foreground">Select stage</span>}
                 </SelectTrigger>
                 <SelectContent>
-                  {PIPELINE_STAGES.map((s) => (
-                    <SelectItem key={s} value={s}>{STAGE_LABELS[s]}</SelectItem>
+                  {PIPELINE_STAGES.map(s => <SelectItem key={s} value={s}>{STAGE_META[s].label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Priority</Label>
+              <Select value={form.priority} onValueChange={v => setForm({ ...form, priority: v as Priority })}>
+                <SelectTrigger>
+                  {form.priority ? <span>{PRIORITY_META[form.priority].label}</span> : <span className="text-muted-foreground">Select priority</span>}
+                </SelectTrigger>
+                <SelectContent>
+                  {(['low','medium','high','urgent'] as Priority[]).map(p => (
+                    <SelectItem key={p} value={p}>{PRIORITY_META[p].label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1">
-              <Label>Priority</Label>
-              <Select value={form.priority} onValueChange={(v) => setForm({ ...form, priority: v as Priority })}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="urgent">Urgent</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <Label>Source</Label>
-              <Input
-                value={form.source}
-                onChange={(e) => setForm({ ...form, source: e.target.value })}
-                placeholder="Referral, website, etc."
-              />
+              <Input value={form.source} onChange={e => setForm({ ...form, source: e.target.value })} placeholder="Referral, website, inquiry form…" />
             </div>
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <Label>Assigned To</Label>
-              <Input
-                value={form.assigned_to}
-                onChange={(e) => setForm({ ...form, assigned_to: e.target.value })}
-                placeholder="Assigned sales rep"
-              />
+              <Input value={form.assigned_to} onChange={e => setForm({ ...form, assigned_to: e.target.value })} placeholder="Sales rep name" />
             </div>
-            <div className="space-y-1 col-span-2">
+            <div className="space-y-1.5 col-span-2">
               <Label>Follow-up Date</Label>
-              <Input
-                type="date"
-                value={form.follow_up_date}
-                onChange={(e) => setForm({ ...form, follow_up_date: e.target.value })}
-              />
+              <Input type="date" value={form.follow_up_date} onChange={e => setForm({ ...form, follow_up_date: e.target.value })} />
             </div>
-            <div className="space-y-1 col-span-2">
+            <div className="space-y-1.5 col-span-2">
               <Label>Notes</Label>
-              <Textarea
-                value={form.notes}
-                onChange={(e) => setForm({ ...form, notes: e.target.value })}
-                placeholder="Additional notes..."
-                rows={3}
-              />
+              <Textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Additional notes…" rows={3} />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={saving}>
+            <Button onClick={handleSave} disabled={saving} className="bg-red-600 hover:bg-red-700 text-white">
               {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               {editingLead ? 'Save Changes' : 'Create Lead'}
             </Button>
@@ -603,16 +624,16 @@ export default function CRMPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Confirm Delete Dialog */}
+      {/* Confirm Delete */}
       <Dialog open={confirmOpen} onOpenChange={o => { if (!o) { setConfirmOpen(false); setConfirmLead(null) } }}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle className="text-base">Delete Lead</DialogTitle>
+            <DialogTitle>Delete Lead</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
             Are you sure you want to delete <span className="font-semibold text-foreground">{confirmLead?.company_name}</span>? This cannot be undone.
           </p>
-          <DialogFooter className="gap-2 sm:gap-0">
+          <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => { setConfirmOpen(false); setConfirmLead(null) }}>Cancel</Button>
             <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={confirmDeleteLead}>Delete</Button>
           </DialogFooter>

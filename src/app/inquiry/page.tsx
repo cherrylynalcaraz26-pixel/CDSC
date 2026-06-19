@@ -7,9 +7,9 @@ import { Loader2, CheckCircle2, Send, ArrowRight, Building2, Truck, Zap, Lock, P
 
 type ContactType = 'client' | 'supplier'
 
-const CONTACT_TYPES: { value: ContactType; label: string; icon: React.ReactNode }[] = [
-  { value: 'client',   label: 'Client / Customer', icon: <Building2 className="h-6 w-6 text-black" /> },
-  { value: 'supplier', label: 'Supplier / Vendor',  icon: <Truck className="h-6 w-6 text-black" /> },
+const CONTACT_TYPES: { value: ContactType; label: string; desc: string; icon: React.ReactNode }[] = [
+  { value: 'client',   label: 'Client / Customer', desc: 'I want to purchase products', icon: <Building2 className="h-6 w-6 text-black" /> },
+  { value: 'supplier', label: 'Supplier / Vendor',  desc: 'I want to supply products',  icon: <Truck className="h-6 w-6 text-black" /> },
 ]
 
 const EMPTY = {
@@ -36,6 +36,10 @@ export default function InquiryPage() {
     e.preventDefault()
     if (!form.company_name.trim() || !form.contact_person.trim()) return
     setSending(true)
+
+    const typeLabel = form.contact_type === 'client' ? 'Client' : form.contact_type === 'supplier' ? 'Supplier' : ''
+
+    // Always save to CRM leads
     await supabase.from('crm_leads').insert({
       company_name: form.company_name.trim(),
       contact_person: form.contact_person.trim() || null,
@@ -43,13 +47,41 @@ export default function InquiryPage() {
       contact_phone: form.contact_phone.trim() || null,
       product_interest: form.product_interest.trim() || null,
       notes: [
-        form.contact_type ? `Type: ${form.contact_type.charAt(0).toUpperCase() + form.contact_type.slice(1)}` : '',
+        typeLabel ? `Type: ${typeLabel}` : '',
         form.notes.trim(),
       ].filter(Boolean).join('\n') || null,
       stage: 'new_lead',
       priority: 'medium',
       source: 'Online Inquiry Form',
     })
+
+    // Also save into clients or suppliers table
+    if (form.contact_type === 'client') {
+      await supabase.from('clients').insert({
+        company_name: form.company_name.trim(),
+        contact_person: form.contact_person.trim() || null,
+        mobile_number: form.contact_phone.trim() || null,
+        email: form.contact_email.trim() || null,
+        product_interest: form.product_interest.trim() || null,
+        notes: form.notes.trim() || null,
+        status: 'active',
+      })
+    } else if (form.contact_type === 'supplier') {
+      const code = `INQ-${Date.now()}`
+      await supabase.from('suppliers').insert({
+        supplier_code: code,
+        company_name: form.company_name.trim(),
+        contact_person: form.contact_person.trim() || null,
+        mobile_number: form.contact_phone.trim() || null,
+        email: form.contact_email.trim() || null,
+        payment_terms: '30 days',
+        lead_time_days: 0,
+        vat_registered: false,
+        status: 'active',
+        is_active: true,
+      })
+    }
+
     setSending(false)
     setDone(true)
   }
@@ -106,7 +138,7 @@ export default function InquiryPage() {
               With Us
             </h1>
             <p className="text-slate-400 text-sm leading-relaxed mb-8">
-              Whether you&apos;re a client, buyer, or supplier — we&apos;d love to hear from you. Send us your details and we&apos;ll get back to you promptly.
+              Whether you&apos;re a client or supplier — we&apos;d love to hear from you. Send us your details and we&apos;ll get back to you promptly.
             </p>
 
             <div className="space-y-4">
@@ -138,20 +170,23 @@ export default function InquiryPage() {
                   <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
                     I am a <span className="text-red-500">*</span>
                   </p>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-3">
                     {CONTACT_TYPES.map(t => (
                       <button
                         key={t.value}
                         type="button"
                         onClick={() => set('contact_type', t.value)}
-                        className={`flex flex-col items-center gap-1.5 py-4 px-2 rounded-2xl border-2 text-center transition-all ${
+                        className={`flex flex-col items-center gap-2 py-5 px-3 rounded-2xl border-2 text-center transition-all ${
                           form.contact_type === t.value
-                            ? 'border-red-500 bg-red-50 text-red-700 shadow-sm shadow-red-100'
+                            ? 'border-red-500 bg-red-50 shadow-sm shadow-red-100'
                             : 'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200 hover:bg-white'
                         }`}
                       >
                         {t.icon}
-                        <span className="text-xs font-semibold leading-tight text-black">{t.label}</span>
+                        <div>
+                          <div className="text-xs font-semibold text-black">{t.label}</div>
+                          <div className="text-[11px] text-slate-400 mt-0.5">{t.desc}</div>
+                        </div>
                       </button>
                     ))}
                   </div>
@@ -202,12 +237,16 @@ export default function InquiryPage() {
                   />
                 </FormField>
 
-                {/* Product interest */}
-                <FormField label="Product / Service of Interest">
+                {/* Product interest — shown for both but labelled differently */}
+                <FormField label={form.contact_type === 'supplier' ? 'Products / Services You Supply' : 'Product / Service of Interest'}>
                   <input
                     value={form.product_interest}
                     onChange={e => set('product_interest', e.target.value)}
-                    placeholder="e.g. Industrial fasteners, safety equipment…"
+                    placeholder={
+                      form.contact_type === 'supplier'
+                        ? 'e.g. Safety equipment, fasteners, tools…'
+                        : 'e.g. Industrial fasteners, safety equipment…'
+                    }
                     className="w-full h-11 px-4 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 text-sm placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400 transition"
                   />
                 </FormField>
