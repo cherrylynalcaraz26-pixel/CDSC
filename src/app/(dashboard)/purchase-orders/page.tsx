@@ -560,9 +560,8 @@ export default function PurchaseOrdersPage() {
                     </Button>
                   </div>
                   <div className="border rounded-lg overflow-hidden">
-                    <div className="grid grid-cols-[1fr_36px_80px_90px_120px_100px_36px] gap-2 px-3 py-2 bg-muted/50 border-b text-xs font-medium text-muted-foreground">
+                    <div className="grid grid-cols-[2fr_70px_80px_120px_100px_36px] gap-2 px-3 py-2 bg-muted/50 border-b text-xs font-medium text-muted-foreground">
                       <span>Item / Description</span>
-                      <span />
                       <span>Qty</span>
                       <span>Unit</span>
                       <span>Unit Price (₱)</span>
@@ -576,40 +575,40 @@ export default function PurchaseOrdersPage() {
                         const statusCfg = itemMeta ? (ITEM_STATUS_CFG[itemMeta.status] ?? ITEM_STATUS_CFG.active) : null
                         return (
                           <div key={i} className="space-y-0.5 px-3 py-2">
-                            <div className="grid grid-cols-[1fr_36px_80px_90px_120px_100px_36px] gap-2 items-center">
-                              <Select
-                                value={line.item_name}
-                                onValueChange={val => {
-                                  const selected = activeItems.find(it => it.item_name === val)
-                                  setLines(p => p.map((l, idx) => idx === i
-                                    ? { ...l, item_name: val ?? '', unit: selected?.unit_of_measure || l.unit }
-                                    : l))
-                                }}
-                              >
-                                <SelectTrigger className="h-8 text-sm">
-                                  <SelectValue placeholder="Select item…" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {activeItems.map(it => (
-                                    <SelectItem key={it.item_code} value={it.item_name}>
-                                      {it.item_name}
-                                      <span className="text-xs text-muted-foreground ml-1">({it.unit_of_measure})</span>
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-
-                              {/* Inventory lookup button */}
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="icon"
-                                className="h-8 w-8 shrink-0"
-                                title="Search inventory"
-                                onClick={() => { setItemSearchIdx(i); setItemQuery('') }}
-                              >
-                                <Package className="h-3.5 w-3.5" />
-                              </Button>
+                            <div className="grid grid-cols-[2fr_70px_80px_120px_100px_36px] gap-2 items-center">
+                              {/* Item select + search button in one flex cell */}
+                              <div className="flex gap-1 min-w-0">
+                                <Select
+                                  value={line.item_name}
+                                  onValueChange={val => {
+                                    const selected = activeItems.find(it => it.item_name === val)
+                                    setLines(p => p.map((l, idx) => idx === i
+                                      ? { ...l, item_name: val ?? '', unit: selected?.unit_of_measure || l.unit }
+                                      : l))
+                                  }}
+                                >
+                                  <SelectTrigger className="h-8 text-sm min-w-0 flex-1">
+                                    <SelectValue placeholder="Select item…" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {activeItems.map(it => (
+                                      <SelectItem key={it.item_code} value={it.item_name}>
+                                        {it.item_name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="icon"
+                                  className="h-8 w-8 shrink-0"
+                                  title="Search inventory"
+                                  onClick={() => { setItemSearchIdx(i); setItemQuery('') }}
+                                >
+                                  <Package className="h-3.5 w-3.5" />
+                                </Button>
+                              </div>
 
                               <Input type="number" min={1} className="h-8 text-sm" placeholder="1" value={line.quantity}
                                 onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, quantity: e.target.value } : l))} />
@@ -808,7 +807,7 @@ export default function PurchaseOrdersPage() {
 
       {/* Item Search Dialog */}
       <Dialog open={itemSearchIdx !== null} onOpenChange={o => { if (!o) setItemSearchIdx(null) }}>
-        <DialogContent className="w-[90vw] max-w-3xl max-h-[85vh] flex flex-col overflow-hidden">
+        <DialogContent className="w-[95vw] max-w-5xl max-h-[85vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Package className="h-4 w-4" />Item Inventory
@@ -858,8 +857,8 @@ export default function PurchaseOrdersPage() {
                       <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{it.item_code}</td>
                       <td className="px-3 py-2 text-muted-foreground">{it.unit_of_measure}</td>
                       <td className="px-3 py-2 text-right">
-                        <span className={`font-semibold tabular-nums ${qty > 0 ? 'text-green-700' : 'text-red-500'}`}>
-                          {qty.toLocaleString()}
+                        <span className={`font-bold tabular-nums text-sm ${qty > 0 ? 'text-green-700' : 'text-red-500'}`}>
+                          {qty > 0 ? qty.toLocaleString() : '0'}
                         </span>
                         <span className="text-xs text-muted-foreground ml-1">{it.unit_of_measure}</span>
                       </td>
