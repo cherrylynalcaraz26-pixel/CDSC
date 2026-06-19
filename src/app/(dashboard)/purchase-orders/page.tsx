@@ -16,7 +16,7 @@ import {
 import {
   Plus, MoreHorizontal, Eye, Printer, Loader2,
   Trash2, CheckCircle2, XCircle, ArrowRightLeft, X,
-  Package, Search, Mail, Send,
+  Package, Search, Mail, Send, Pencil,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
@@ -162,6 +162,17 @@ export default function PurchaseOrdersPage() {
     setSupplierId(''); setClientId(''); setPoNumber(''); setDeliveryDate('')
     setPaymentTerms('30 days'); setRemarks(''); setLines([emptyLine()])
     setActiveTab('form'); setDiscountType('none'); setDiscountCustom('')
+  }
+
+  async function updateItemSellingPrice(itemName: string, newPrice: string) {
+    const price = parseFloat(newPrice)
+    if (!itemName || isNaN(price) || price <= 0) {
+      toast.error('Enter a valid selling price first')
+      return
+    }
+    const { error } = await supabase.from('items').update({ selling_price: price }).eq('item_name', itemName)
+    if (error) toast.error('Failed to update selling price')
+    else toast.success(`Selling price updated to ₱${price.toLocaleString('en-PH', { minimumFractionDigits: 2 })} — affects future records only`)
   }
 
   async function submitPO() {
@@ -586,7 +597,7 @@ export default function PurchaseOrdersPage() {
                     </Button>
                   </div>
                   <div className="border rounded-lg overflow-hidden">
-                    <div className="grid grid-cols-[2fr_60px_70px_110px_110px_100px_36px] gap-2 px-3 py-2 bg-muted/50 border-b text-xs font-medium text-muted-foreground">
+                    <div className="grid grid-cols-[2fr_60px_70px_110px_138px_100px_36px] gap-2 px-3 py-2 bg-muted/50 border-b text-xs font-medium text-muted-foreground">
                       <span>Item / Description</span>
                       <span>Qty</span>
                       <span>Unit</span>
@@ -602,7 +613,7 @@ export default function PurchaseOrdersPage() {
                         const statusCfg = itemMeta ? (ITEM_STATUS_CFG[itemMeta.status] ?? ITEM_STATUS_CFG.active) : null
                         return (
                           <div key={i} className="space-y-0.5 px-3 py-2">
-                            <div className="grid grid-cols-[2fr_60px_70px_110px_110px_100px_36px] gap-2 items-center">
+                            <div className="grid grid-cols-[2fr_60px_70px_110px_138px_100px_36px] gap-2 items-center">
                               {/* Item select + search button in one flex cell */}
                               <div className="flex gap-1 min-w-0">
                                 <Select
@@ -652,8 +663,18 @@ export default function PurchaseOrdersPage() {
                               </div>
                               <Input type="number" min={0} step="0.01" className="h-8 text-sm" placeholder="0.00" value={line.unit_price}
                                 onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, unit_price: e.target.value } : l))} />
-                              <Input type="number" min={0} step="0.01" className="h-8 text-sm" placeholder="0.00" value={line.selling_price}
-                                onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, selling_price: e.target.value } : l))} />
+                              <div className="flex gap-1 items-center">
+                                <Input type="number" min={0} step="0.01" className="h-8 text-sm flex-1 min-w-0" placeholder="0.00" value={line.selling_price}
+                                  onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, selling_price: e.target.value } : l))} />
+                                <Button
+                                  type="button" variant="ghost" size="icon"
+                                  className="h-8 w-8 shrink-0 text-muted-foreground hover:text-blue-600"
+                                  title="Update item default selling price (affects future records only)"
+                                  onClick={() => updateItemSellingPrice(line.item_name, line.selling_price)}
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                              </div>
                               <div className="text-right text-sm font-medium pr-1 tabular-nums">
                                 ₱{lineTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                               </div>
