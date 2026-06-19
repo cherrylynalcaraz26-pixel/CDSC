@@ -3,14 +3,14 @@
 import { useState } from 'react'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
-import { Loader2, CheckCircle2, Send, ArrowRight } from 'lucide-react'
+import { Loader2, CheckCircle2, Send, ArrowRight, Building2, ShoppingCart, Truck, Zap, Lock, Package } from 'lucide-react'
 
 type ContactType = 'client' | 'buyer' | 'supplier'
 
-const CONTACT_TYPES: { value: ContactType; label: string; emoji: string }[] = [
-  { value: 'client',   label: 'Client / Customer', emoji: '🏢' },
-  { value: 'buyer',    label: 'Buyer',              emoji: '🛒' },
-  { value: 'supplier', label: 'Supplier / Vendor',  emoji: '🚚' },
+const CONTACT_TYPES: { value: ContactType; label: string; icon: React.ReactNode }[] = [
+  { value: 'client',   label: 'Client / Customer', icon: <Building2 className="h-6 w-6 text-black" /> },
+  { value: 'buyer',    label: 'Buyer',              icon: <ShoppingCart className="h-6 w-6 text-black" /> },
+  { value: 'supplier', label: 'Supplier / Vendor',  icon: <Truck className="h-6 w-6 text-black" /> },
 ]
 
 const EMPTY = {
@@ -111,14 +111,14 @@ export default function InquiryPage() {
             </p>
 
             <div className="space-y-4">
-              {[
-                { icon: '⚡', label: 'Quick Response', sub: 'We reply within 24 hours' },
-                { icon: '🔒', label: 'Confidential', sub: 'Your data is kept private' },
-                { icon: '📦', label: 'Wide Product Range', sub: 'Industrial supplies & more' },
-              ].map(item => (
+              {([
+                { Icon: Zap,     label: 'Quick Response',    sub: 'We reply within 24 hours' },
+                { Icon: Lock,    label: 'Confidential',      sub: 'Your data is kept private' },
+                { Icon: Package, label: 'Wide Product Range', sub: 'Industrial supplies & more' },
+              ] as { Icon: React.ElementType; label: string; sub: string }[]).map(item => (
                 <div key={item.label} className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-white border border-slate-100 shadow-sm flex items-center justify-center text-base shrink-0">
-                    {item.icon}
+                  <div className="w-9 h-9 rounded-xl bg-white border border-slate-100 shadow-sm flex items-center justify-center shrink-0">
+                    <item.Icon className="h-4 w-4 text-black" />
                   </div>
                   <div>
                     <div className="text-sm font-semibold text-slate-700">{item.label}</div>
@@ -151,8 +151,8 @@ export default function InquiryPage() {
                             : 'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200 hover:bg-white'
                         }`}
                       >
-                        <span className="text-2xl">{t.emoji}</span>
-                        <span className="text-xs font-semibold leading-tight">{t.label}</span>
+                        {t.icon}
+                        <span className="text-xs font-semibold leading-tight text-black">{t.label}</span>
                       </button>
                     ))}
                   </div>
