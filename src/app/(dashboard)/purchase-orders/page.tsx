@@ -26,6 +26,8 @@ interface ItemOption {
   item_name: string
   unit_of_measure: string
   status: string
+  cost: number | null
+  selling_price: number | null
 }
 
 type POStatus = 'open' | 'partially_delivered' | 'completed' | 'cancelled'
@@ -63,8 +65,8 @@ interface PO {
 
 interface Supplier { id: string; company_name: string; payment_terms: string | null; ewt_rate: number | null }
 interface Client   { id: string; company_name: string; payment_terms: string | null }
-interface POLine   { item_name: string; quantity: string; unit: string; unit_price: string }
-const emptyLine = (): POLine => ({ item_name: '', quantity: '', unit: 'piece', unit_price: '' })
+interface POLine   { item_name: string; quantity: string; unit: string; unit_price: string; selling_price: string }
+const emptyLine = (): POLine => ({ item_name: '', quantity: '', unit: 'piece', unit_price: '', selling_price: '' })
 
 export default function PurchaseOrdersPage() {
   const supabase = createClient()
@@ -114,7 +116,7 @@ export default function PurchaseOrdersPage() {
         .select('*, supplier:suppliers(company_name), pr:purchase_requests(pr_number)')
         .order('created_at', { ascending: false }),
       supabase.from('suppliers').select('id, company_name, payment_terms, ewt_rate').eq('is_active', true).order('company_name'),
-      supabase.from('items').select('item_code, item_name, unit_of_measure, status').order('item_name'),
+      supabase.from('items').select('item_code, item_name, unit_of_measure, status, cost, selling_price').order('item_name'),
       // warehouse stock loaded separately below
       supabase.from('clients').select('id, company_name, payment_terms').eq('status', 'active').order('company_name'),
     ])
@@ -216,33 +218,17 @@ export default function PurchaseOrdersPage() {
   function handlePrint() {
     const el = printRef.current
     if (!el) return
-    const win = window.open('', '_blank', 'width=900,height=700')
+    const win = window.open('', '_blank', 'width=900,height=750')
     if (!win) return
     win.document.write(`<!DOCTYPE html><html><head><title>Purchase Order</title>
+      <script src="https://cdn.tailwindcss.com"><\/script>
       <style>
-        body { font-family: Arial, sans-serif; font-size: 11px; margin: 0; padding: 24px; }
-        table { width: 100%; border-collapse: collapse; }
-        th { background: #b91c1c; color: white; padding: 4px 6px; text-align: left; }
-        td { padding: 3px 6px; }
-        tr:nth-child(even) td { background: #f9f9f9; }
-        .text-right { text-align: right; }
-        .text-center { text-align: center; }
-        .border-b { border-bottom: 1px solid #e5e7eb; }
-        .font-bold { font-weight: bold; }
-        .text-red { color: #b91c1c; }
-        .text-gray { color: #6b7280; }
-        .small { font-size: 9px; }
-        .totals { float: right; width: 220px; }
-        .totals div { display: flex; justify-content: space-between; padding: 1px 0; }
-        .sig-row { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 32px; }
-        .sig { text-align: center; }
-        .sig-line { border-bottom: 1px solid #9ca3af; margin-bottom: 4px; height: 32px; }
+        body { font-family: Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        @media print { body { margin: 0; } }
       </style>
-    </head><body>${el.innerHTML}</body></html>`)
+    </head><body class="p-6 text-[11px]">${el.innerHTML}</body></html>`)
     win.document.close()
-    win.focus()
-    win.print()
-    win.close()
+    setTimeout(() => { win.focus(); win.print(); win.close() }, 800)
   }
 
   function handleSendEmail() {
@@ -560,11 +546,12 @@ export default function PurchaseOrdersPage() {
                     </Button>
                   </div>
                   <div className="border rounded-lg overflow-hidden">
-                    <div className="grid grid-cols-[2fr_70px_80px_120px_100px_36px] gap-2 px-3 py-2 bg-muted/50 border-b text-xs font-medium text-muted-foreground">
+                    <div className="grid grid-cols-[2fr_60px_70px_110px_110px_100px_36px] gap-2 px-3 py-2 bg-muted/50 border-b text-xs font-medium text-muted-foreground">
                       <span>Item / Description</span>
                       <span>Qty</span>
                       <span>Unit</span>
-                      <span>Unit Price (₱)</span>
+                      <span>Cost Price (₱)</span>
+                      <span>Selling Price (₱)</span>
                       <span className="text-right">Line Total</span>
                       <span />
                     </div>
@@ -575,16 +562,24 @@ export default function PurchaseOrdersPage() {
                         const statusCfg = itemMeta ? (ITEM_STATUS_CFG[itemMeta.status] ?? ITEM_STATUS_CFG.active) : null
                         return (
                           <div key={i} className="space-y-0.5 px-3 py-2">
-                            <div className="grid grid-cols-[2fr_70px_80px_120px_100px_36px] gap-2 items-center">
+                            <div className="grid grid-cols-[2fr_60px_70px_110px_110px_100px_36px] gap-2 items-center">
                               {/* Item select + search button in one flex cell */}
                               <div className="flex gap-1 min-w-0">
                                 <Select
                                   value={line.item_name}
                                   onValueChange={val => {
                                     const selected = activeItems.find(it => it.item_name === val)
-                                    setLines(p => p.map((l, idx) => idx === i
-                                      ? { ...l, item_name: val ?? '', unit: selected?.unit_of_measure || l.unit }
-                                      : l))
+                                    const autoPrice = isClient
+                                      ? (selected?.selling_price ?? selected?.cost ?? null)
+                                      : (selected?.cost ?? null)
+                                    const autoSell = selected?.selling_price ?? null
+                                    setLines(p => p.map((l, idx) => idx === i ? {
+                                      ...l,
+                                      item_name: val ?? '',
+                                      unit: selected?.unit_of_measure || l.unit,
+                                      unit_price: autoPrice !== null ? String(autoPrice) : l.unit_price,
+                                      selling_price: autoSell !== null ? String(autoSell) : l.selling_price,
+                                    } : l))
                                   }}
                                 >
                                   <SelectTrigger className="h-8 text-sm min-w-0 flex-1">
@@ -617,6 +612,8 @@ export default function PurchaseOrdersPage() {
                               </div>
                               <Input type="number" min={0} step="0.01" className="h-8 text-sm" placeholder="0.00" value={line.unit_price}
                                 onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, unit_price: e.target.value } : l))} />
+                              <Input type="number" min={0} step="0.01" className="h-8 text-sm" placeholder="0.00" value={line.selling_price}
+                                onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, selling_price: e.target.value } : l))} />
                               <div className="text-right text-sm font-medium pr-1 tabular-nums">
                                 ₱{lineTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                               </div>

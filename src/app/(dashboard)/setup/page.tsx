@@ -1102,7 +1102,8 @@ function ClientsTab() {
 /* ─── Item List Tab ───────────────────────────────────── */
 interface ItemRow {
   id: string; item_code: string; item_name: string
-  brand: string | null; unit_of_measure: string; cost: number; status: string
+  brand: string | null; unit_of_measure: string; cost: number
+  selling_price: number | null; status: string
 }
 interface UOMOption { id: string; code: string; name: string }
 
@@ -1114,14 +1115,14 @@ function ItemListTab() {
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<ItemRow | null>(null)
-  const [form, setForm] = useState({ item_code: '', item_name: '', brand: '', unit_of_measure: '', cost: '' })
+  const [form, setForm] = useState({ item_code: '', item_name: '', brand: '', unit_of_measure: '', cost: '', selling_price: '' })
   const [saving, setSaving] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
 
   async function load() {
     setLoading(true)
     const [{ data: itemData }, { data: uomData }] = await Promise.all([
-      supabase.from('items').select('id, item_code, item_name, brand, unit_of_measure, cost, status').order('item_name'),
+      supabase.from('items').select('id, item_code, item_name, brand, unit_of_measure, cost, selling_price, status').order('item_name'),
       supabase.from('uom_list').select('id, code, name').eq('is_active', true).order('code'),
     ])
     setRows(itemData ?? [])
@@ -1136,10 +1137,10 @@ function ItemListTab() {
     (r.brand ?? '').toLowerCase().includes(search.toLowerCase())
   )
 
-  function openAdd() { setEditing(null); setForm({ item_code: '', item_name: '', brand: '', unit_of_measure: '', cost: '' }); setOpen(true) }
+  function openAdd() { setEditing(null); setForm({ item_code: '', item_name: '', brand: '', unit_of_measure: '', cost: '', selling_price: '' }); setOpen(true) }
   function openEdit(r: ItemRow) {
     setEditing(r)
-    setForm({ item_code: r.item_code, item_name: r.item_name, brand: r.brand ?? '', unit_of_measure: r.unit_of_measure, cost: String(r.cost) })
+    setForm({ item_code: r.item_code, item_name: r.item_name, brand: r.brand ?? '', unit_of_measure: r.unit_of_measure, cost: String(r.cost), selling_price: r.selling_price !== null ? String(r.selling_price) : '' })
     setOpen(true)
   }
 
@@ -1152,6 +1153,7 @@ function ItemListTab() {
       brand: form.brand.trim() || null,
       unit_of_measure: form.unit_of_measure.trim(),
       cost: parseFloat(form.cost) || 0,
+      selling_price: form.selling_price.trim() ? parseFloat(form.selling_price) : null,
     }
     const { error } = editing
       ? await supabase.from('items').update(payload).eq('id', editing.id)
@@ -1192,15 +1194,16 @@ function ItemListTab() {
               <TableHead>Brand</TableHead>
               <TableHead>Unit</TableHead>
               <TableHead className="text-right">Unit Cost</TableHead>
+              <TableHead className="text-right">Selling Price</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="w-10" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={7} className="text-center py-6 text-muted-foreground">Loading…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={8} className="text-center py-6 text-muted-foreground">Loading…</TableCell></TableRow>
             ) : filtered.length === 0 ? (
-              <TableRow><TableCell colSpan={7} className="text-center py-6 text-muted-foreground">No items found</TableCell></TableRow>
+              <TableRow><TableCell colSpan={8} className="text-center py-6 text-muted-foreground">No items found</TableCell></TableRow>
             ) : filtered.map(r => (
               <TableRow key={r.id}>
                 <TableCell className="font-mono text-sm">{r.item_code}</TableCell>
@@ -1208,6 +1211,11 @@ function ItemListTab() {
                 <TableCell className="text-sm text-muted-foreground">{r.brand ?? '—'}</TableCell>
                 <TableCell className="text-sm">{r.unit_of_measure}</TableCell>
                 <TableCell className="text-right text-sm">₱{r.cost.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</TableCell>
+                <TableCell className="text-right text-sm">
+                  {r.selling_price !== null
+                    ? `₱${r.selling_price.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
+                    : <span className="text-muted-foreground">—</span>}
+                </TableCell>
                 <TableCell>
                   <button onClick={() => toggleStatus(r)}>
                     <Badge className={r.status === 'active' ? 'bg-green-100 text-green-800 cursor-pointer' : 'bg-gray-100 text-gray-600 cursor-pointer'}>
@@ -1256,14 +1264,19 @@ function ItemListTab() {
               <Label>Item Name <span className="text-destructive">*</span></Label>
               <Input placeholder="Item name" value={form.item_name} onChange={e => setForm(p => ({ ...p, item_name: e.target.value }))} />
             </div>
+            <div className="space-y-1.5">
+              <Label>Brand</Label>
+              <Input placeholder="e.g. Samsung, 3M" value={form.brand} onChange={e => setForm(p => ({ ...p, brand: e.target.value }))} />
+            </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Brand</Label>
-                <Input placeholder="e.g. Samsung, 3M" value={form.brand} onChange={e => setForm(p => ({ ...p, brand: e.target.value }))} />
-              </div>
               <div className="space-y-1.5">
                 <Label>Unit Cost (₱)</Label>
                 <Input type="number" min={0} step="0.01" placeholder="0.00" value={form.cost} onChange={e => setForm(p => ({ ...p, cost: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Selling Price (₱)</Label>
+                <Input type="number" min={0} step="0.01" placeholder="0.00" value={form.selling_price} onChange={e => setForm(p => ({ ...p, selling_price: e.target.value }))} />
+                <p className="text-[11px] text-muted-foreground">Won't affect past records</p>
               </div>
             </div>
           </div>
