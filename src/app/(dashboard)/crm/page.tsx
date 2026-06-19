@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
-import { Plus, Search, Loader2, MoreHorizontal, Trophy, XCircle, LayoutGrid, List } from 'lucide-react'
+import { Plus, Search, Loader2, MoreHorizontal, Trophy, XCircle, LayoutGrid, List, Link2, Copy } from 'lucide-react'
 import { useSearchContext } from '@/context/search-context'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -248,10 +248,34 @@ export default function CRMPage() {
           <h1 className="text-2xl font-bold">Inquiry / CRM Leads & Pipeline</h1>
           <p className="text-muted-foreground text-sm mt-1">Track inquiries, leads, and sales pipeline</p>
         </div>
-        <Button onClick={openNew} className="bg-red-600 hover:bg-red-700 text-white">
-          <Plus className="w-4 h-4 mr-2" />
-          New Lead
-        </Button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              const url = `${window.location.origin}/inquiry`
+              navigator.clipboard.writeText(url).then(() => {
+                const el = document.getElementById('copy-feedback')
+                if (el) { el.textContent = 'Copied!'; setTimeout(() => { el.textContent = 'Copy Link' }, 2000) }
+              })
+            }}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-md border border-border text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          >
+            <Link2 className="w-4 h-4" />
+            <span id="copy-feedback">Copy Link</span>
+          </button>
+          <a
+            href="/inquiry"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-md border border-border text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          >
+            <Copy className="w-4 h-4" />
+            Open Form
+          </a>
+          <Button onClick={openNew} className="bg-red-600 hover:bg-red-700 text-white">
+            <Plus className="w-4 h-4 mr-2" />
+            New Lead
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">

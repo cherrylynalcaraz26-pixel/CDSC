@@ -52,8 +52,15 @@ export default function InventoryPage() {
   const [itemFilter, setItemFilter] = useState('all')
   const [itemSearch, setItemSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
-  const [viewMode, setViewMode] = useState<'by_client' | 'by_item'>('by_client')
+  const [viewMode, setViewMode] = useState<'by_client' | 'by_item' | 'by_warehouse'>('by_client')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+
+  const [warehouseRows, setWarehouseRows] = useState<{id: string; client_name: string | null; item_name: string; unit: string; quantity: number; notes: string | null; created_at: string; hasClientRecord: boolean}[]>([])
+  const [warehouseUpdateOpen, setWarehouseUpdateOpen] = useState(false)
+  const [warehouseUpdateRow, setWarehouseUpdateRow] = useState<{id: string; item_name: string; unit: string; notes: string | null} | null>(null)
+  const [warehouseUpdateQty, setWarehouseUpdateQty] = useState('')
+  const [warehouseUpdateNotes, setWarehouseUpdateNotes] = useState('')
+  const [warehouseUpdateSaving, setWarehouseUpdateSaving] = useState(false)
 
   const [editRow, setEditRow] = useState<InventoryRow | null>(null)
   const [editName, setEditName] = useState('')
@@ -226,6 +233,34 @@ export default function InventoryPage() {
 
     result.sort((a, b) => a.client.localeCompare(b.client) || a.item_name.localeCompare(b.item_name))
     setRows(result)
+
+    // Build warehouse view rows — all warehouse_stock entries
+    const allItemsWithClientRecord = new Set(result.map(r => r.item_name))
+    const whRows: typeof warehouseRows = []
+    from = 0
+    while (true) {
+      const { data } = await supabase
+        .from('warehouse_stock')
+        .select('id, client_name, item_name, unit, quantity, notes, created_at')
+        .order('created_at', { ascending: false })
+        .range(from, from + PAGE - 1)
+      if (!data || data.length === 0) break
+      for (const rec of data) {
+        whRows.push({
+          id: rec.id,
+          client_name: rec.client_name ?? null,
+          item_name: rec.item_name,
+          unit: rec.unit ?? '',
+          quantity: Number(rec.quantity) || 0,
+          notes: rec.notes ?? null,
+          created_at: rec.created_at,
+          hasClientRecord: allItemsWithClientRecord.has(rec.item_name),
+        })
+      }
+      if (data.length < PAGE) break
+      from += PAGE
+    }
+    setWarehouseRows(whRows)
     setLoading(false)
   }
 
@@ -239,6 +274,30 @@ export default function InventoryPage() {
   }
 
   useEffect(() => { load() }, [])
+
+  function openWarehouseUpdate(row: typeof warehouseRows[0]) {
+    setWarehouseUpdateRow({ id: row.id, item_name: row.item_name, unit: row.unit, notes: row.notes })
+    setWarehouseUpdateQty(String(row.quantity))
+    setWarehouseUpdateNotes(row.notes ?? '')
+    setWarehouseUpdateOpen(true)
+  }
+
+  async function saveWarehouseUpdate() {
+    if (!warehouseUpdateRow) return
+    setWarehouseUpdateSaving(true)
+    const { error } = await supabase.from('warehouse_stock').update({
+      quantity: Number(warehouseUpdateQty),
+      notes: warehouseUpdateNotes.trim() || null,
+    }).eq('id', warehouseUpdateRow.id)
+    if (error) {
+      toast.error(error.message)
+    } else {
+      toast.success('Warehouse stock updated')
+      setWarehouseUpdateOpen(false)
+      load()
+    }
+    setWarehouseUpdateSaving(false)
+  }
 
   function openAddDialog() {
     setAddItemName('')
@@ -419,6 +478,10 @@ export default function InventoryPage() {
             className={`px-4 py-1.5 text-sm font-medium transition-colors ${viewMode === 'by_item' ? 'bg-red-600 text-white' : 'hover:bg-muted text-muted-foreground'}`}
             onClick={() => setViewMode('by_item')}
           >By Item</button>
+          <button
+            className={`px-4 py-1.5 text-sm font-medium transition-colors ${viewMode === 'by_warehouse' ? 'bg-red-600 text-white' : 'hover:bg-muted text-muted-foreground'}`}
+            onClick={() => setViewMode('by_warehouse')}
+          >By Warehouse</button>
         </div>
       </div>
 
@@ -517,7 +580,78 @@ export default function InventoryPage() {
         </Card>
       )}
 
-      <Card>
+      {viewMode === 'by_warehouse' && (
+        <Card>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-44">Client</TableHead>
+                    <TableHead className="min-w-[280px]">Item Name</TableHead>
+                    <TableHead>Unit</TableHead>
+                    <TableHead className="text-right">Qty</TableHead>
+                    <TableHead>Warehouse Note</TableHead>
+                    <TableHead>Date Added</TableHead>
+                    <TableHead className="w-28">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loading ? (
+                    <TableRow><TableCell colSpan={7} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
+                  ) : warehouseRows.length === 0 ? (
+                    <TableRow><TableCell colSpan={7} className="text-center py-12 text-muted-foreground">No warehouse stock records found.</TableCell></TableRow>
+                  ) : warehouseRows.filter(r => {
+                    const q = search.toLowerCase()
+                    return !q || r.item_name.toLowerCase().includes(q) || (r.client_name ?? '').toLowerCase().includes(q)
+                  }).map(r => {
+                    const noClientRecord = !r.hasClientRecord || !r.client_name
+                    return (
+                      <TableRow key={r.id} className={noClientRecord ? 'bg-amber-50/60' : ''}>
+                        <TableCell className="text-sm">
+                          {r.client_name ? (
+                            <span>{r.client_name}</span>
+                          ) : (
+                            <span className="text-muted-foreground italic text-xs">No Client</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-sm font-medium">
+                          <span className="flex items-center gap-1.5">
+                            {noClientRecord && <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" title="No client DR/CSI record — update stock" />}
+                            {r.item_name}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{r.unit || '—'}</TableCell>
+                        <TableCell className="text-right text-sm font-semibold text-green-700">{r.quantity}</TableCell>
+                        <TableCell className="text-sm max-w-[220px]">
+                          {noClientRecord ? (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 text-xs font-medium">
+                              {r.notes || 'No DR/CSI record — update stock'}
+                            </span>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">{r.notes || '—'}</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{new Date(r.created_at).toLocaleDateString('en-PH')}</TableCell>
+                        <TableCell>
+                          <button
+                            onClick={() => openWarehouseUpdate(r)}
+                            className="flex items-center gap-1 px-2 py-1 text-xs rounded border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                          >
+                            <Pencil className="h-3 w-3" /> Update
+                          </button>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {viewMode !== 'by_warehouse' && <Card>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <Table>
@@ -757,7 +891,40 @@ export default function InventoryPage() {
             </Table>
           </div>
         </CardContent>
-      </Card>
+      </Card>}
+
+      <Dialog open={warehouseUpdateOpen} onOpenChange={o => { if (!o) setWarehouseUpdateOpen(false) }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Pencil className="h-4 w-4 text-blue-600" /> Update Warehouse Stock
+            </DialogTitle>
+          </DialogHeader>
+          {warehouseUpdateRow && (
+            <div className="space-y-4 py-2">
+              <div className="rounded-md bg-muted/40 px-3 py-2 text-sm font-medium">{warehouseUpdateRow.item_name}</div>
+              <div className="space-y-1.5">
+                <Label>Quantity <span className="text-red-500">*</span></Label>
+                <Input type="number" min="0" value={warehouseUpdateQty} onChange={e => setWarehouseUpdateQty(e.target.value)} placeholder="0" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Warehouse Note</Label>
+                <Input value={warehouseUpdateNotes} onChange={e => setWarehouseUpdateNotes(e.target.value)} placeholder="Notes about this stock entry" />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setWarehouseUpdateOpen(false)}>Cancel</Button>
+            <Button
+              onClick={saveWarehouseUpdate}
+              disabled={warehouseUpdateSaving || !warehouseUpdateQty.trim()}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {warehouseUpdateSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : 'Update Stock'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!editRow} onOpenChange={o => { if (!o) setEditRow(null) }}>
         <DialogContent className="sm:max-w-md">
