@@ -100,7 +100,7 @@ export default function CRMPage() {
   const [leads, setLeads] = useState<CRMLead[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [view, setView] = useState<'table' | 'kanban'>('table')
+  const [view, setView] = useState<'table' | 'kanban'>('kanban')
   const [stageFilter, setStageFilter] = useState<string>('all')
   const [priorityFilter, setPriorityFilter] = useState<string>('all')
   const [dialogOpen, setDialogOpen] = useState(false)
