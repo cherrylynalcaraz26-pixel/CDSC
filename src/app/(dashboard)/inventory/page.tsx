@@ -37,7 +37,11 @@ interface InventoryRow {
   ws_details: WsDetail[]
 }
 
-interface ItemOption { item_name: string; unit_of_measure: string }
+interface ItemOption {
+  item_name: string; unit_of_measure: string; item_code: string
+  brand: string | null; attribute: string | null
+  cost: number | null; selling_price: number | null; status: string
+}
 
 export default function InventoryPage() {
   const supabase = createClient()
@@ -58,6 +62,9 @@ export default function InventoryPage() {
 
   const [addOpen, setAddOpen] = useState(false)
   const [addItemName, setAddItemName] = useState('')
+  const [addItemSearch, setAddItemSearch] = useState('')
+  const [addItemFocus, setAddItemFocus] = useState(false)
+  const [addSelectedItem, setAddSelectedItem] = useState<ItemOption | null>(null)
   const [addQty, setAddQty] = useState('')
   const [addUnit, setAddUnit] = useState('')
   const [addNotes, setAddNotes] = useState('')
@@ -223,7 +230,11 @@ export default function InventoryPage() {
   }
 
   async function loadItemOptions() {
-    const { data } = await supabase.from('items').select('item_name, unit_of_measure').order('item_name')
+    const { data } = await supabase
+      .from('items')
+      .select('item_name, unit_of_measure, item_code, brand, attribute, cost, selling_price, status')
+      .eq('status', 'active')
+      .order('item_name')
     if (data) setItemOptions(data)
   }
 
@@ -231,6 +242,9 @@ export default function InventoryPage() {
 
   function openAddDialog() {
     setAddItemName('')
+    setAddItemSearch('')
+    setAddItemFocus(false)
+    setAddSelectedItem(null)
     setAddQty('')
     setAddUnit('')
     setAddNotes('')
@@ -238,11 +252,12 @@ export default function InventoryPage() {
     setAddOpen(true)
   }
 
-  function handleAddItemSelect(value: string | null) {
-    if (!value) return
-    setAddItemName(value)
-    const found = itemOptions.find(o => o.item_name === value)
-    if (found) setAddUnit(found.unit_of_measure ?? '')
+  function handleAddItemSelect(opt: ItemOption) {
+    setAddItemName(opt.item_name)
+    setAddItemSearch('')
+    setAddItemFocus(false)
+    setAddSelectedItem(opt)
+    setAddUnit(opt.unit_of_measure ?? '')
   }
 
   async function saveAddStock() {
@@ -773,7 +788,7 @@ export default function InventoryPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={addOpen} onOpenChange={o => { if (!o) setAddOpen(false) }}>
+      <Dialog open={addOpen} onOpenChange={o => { if (!o) { setAddOpen(false); setAddItemFocus(false) } }}>
         <DialogContent className="w-[95vw] max-w-lg sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -781,27 +796,77 @@ export default function InventoryPage() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
+
+            {/* Item picker */}
             <div className="space-y-1.5">
               <Label>Item Name <span className="text-red-500">*</span></Label>
-              <Select value={addItemName} onValueChange={handleAddItemSelect}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select item…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {itemOptions.map(o => (
-                    <SelectItem key={o.item_name} value={o.item_name}>{o.item_name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <input
+                  className="w-full rounded-md border border-input bg-background pl-9 pr-8 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring placeholder:text-muted-foreground"
+                  placeholder={addItemName || 'Search and select item…'}
+                  value={addItemSearch}
+                  onChange={e => { setAddItemSearch(e.target.value); setAddItemFocus(true) }}
+                  onFocus={() => setAddItemFocus(true)}
+                  onBlur={() => setTimeout(() => setAddItemFocus(false), 150)}
+                />
+                {addItemName && (
+                  <button
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    onMouseDown={() => { setAddItemName(''); setAddSelectedItem(null); setAddUnit(''); setAddItemSearch('') }}
+                  ><X className="h-3.5 w-3.5" /></button>
+                )}
+                {addItemFocus && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-popover border rounded-lg shadow-lg z-50 max-h-56 overflow-y-auto">
+                    {(() => {
+                      const q = addItemSearch.toLowerCase()
+                      const matches = q
+                        ? itemOptions.filter(o => o.item_name.toLowerCase().includes(q) || (o.item_code ?? '').toLowerCase().includes(q) || (o.brand ?? '').toLowerCase().includes(q))
+                        : itemOptions
+                      if (matches.length === 0) return <div className="px-3 py-3 text-sm text-muted-foreground">No items found</div>
+                      return matches.map(o => (
+                        <button
+                          key={o.item_name}
+                          className="w-full text-left px-3 py-2.5 text-sm hover:bg-muted border-b last:border-0 flex flex-col gap-0.5"
+                          onMouseDown={() => handleAddItemSelect(o)}
+                        >
+                          <span className="font-medium">{o.item_name}</span>
+                          <span className="text-xs text-muted-foreground flex gap-2">
+                            {o.item_code && <span>{o.item_code}</span>}
+                            {o.brand && <span>· {o.brand}</span>}
+                            {o.attribute && <span>· {o.attribute}</span>}
+                            <span>· {o.unit_of_measure}</span>
+                          </span>
+                        </button>
+                      ))
+                    })()}
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="space-y-1.5">
-              <Label>Quantity <span className="text-red-500">*</span></Label>
-              <Input type="number" min="0" value={addQty} onChange={e => setAddQty(e.target.value)} placeholder="0" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Unit</Label>
-              <div className="h-9 flex items-center px-3 text-sm bg-muted/30 rounded border text-muted-foreground">
-                {addUnit || '— auto-filled from item —'}
+
+            {/* Selected item detail card */}
+            {addSelectedItem && (
+              <div className="rounded-lg border bg-muted/30 px-4 py-3 grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
+                <div><span className="text-muted-foreground text-xs">Item Code</span><div className="font-mono font-medium">{addSelectedItem.item_code || '—'}</div></div>
+                <div><span className="text-muted-foreground text-xs">Unit</span><div>{addSelectedItem.unit_of_measure || '—'}</div></div>
+                <div><span className="text-muted-foreground text-xs">Brand</span><div>{addSelectedItem.brand || '—'}</div></div>
+                <div><span className="text-muted-foreground text-xs">Attribute</span><div>{addSelectedItem.attribute || '—'}</div></div>
+                <div><span className="text-muted-foreground text-xs">Unit Cost</span><div className="font-medium">₱{(addSelectedItem.cost ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</div></div>
+                <div><span className="text-muted-foreground text-xs">Selling Price</span><div className="font-medium">{addSelectedItem.selling_price != null ? `₱${addSelectedItem.selling_price.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}</div></div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Quantity <span className="text-red-500">*</span></Label>
+                <Input type="number" min="0" value={addQty} onChange={e => setAddQty(e.target.value)} placeholder="0" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Unit</Label>
+                <div className="h-9 flex items-center px-3 text-sm bg-muted/30 rounded border text-muted-foreground">
+                  {addUnit || '— auto-filled —'}
+                </div>
               </div>
             </div>
             <div className="space-y-1.5">
@@ -814,9 +879,9 @@ export default function InventoryPage() {
             <Button
               onClick={saveAddStock}
               disabled={addSaving || !addItemName.trim() || !addQty.trim()}
-              className="bg-red-600 hover:bg-red-700 text-white"
+              className="bg-red-600 hover:bg-red-700 text-white gap-1.5"
             >
-              {addSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : 'Add Stock'}
+              {addSaving ? <><Loader2 className="h-4 w-4 animate-spin" />Saving…</> : <><Plus className="h-4 w-4" />Add Stock</>}
             </Button>
           </DialogFooter>
         </DialogContent>
