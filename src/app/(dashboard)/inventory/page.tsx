@@ -617,7 +617,7 @@ export default function InventoryPage() {
                         </TableCell>
                         <TableCell className="text-sm font-medium">
                           <span className="flex items-center gap-1.5">
-                            {noClientRecord && <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" title="No client DR/CSI record — update stock" />}
+                            {noClientRecord && <span title="No client DR/CSI record — update stock"><AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" /></span>}
                             {r.item_name}
                           </span>
                         </TableCell>
