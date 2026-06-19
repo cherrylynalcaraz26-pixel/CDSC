@@ -252,7 +252,7 @@ export default function PurchaseOrdersPage() {
   const displayedPos = query.trim()
     ? pos.filter(p => {
         const q = query.toLowerCase()
-        return p.po_number.toLowerCase().includes(q) ||
+        return (p.po_number ?? '').toLowerCase().includes(q) ||
           (p.supplier?.company_name ?? '').toLowerCase().includes(q) ||
           (p.pr?.pr_number ?? '').toLowerCase().includes(q) ||
           (p.status ?? '').toLowerCase().includes(q)
