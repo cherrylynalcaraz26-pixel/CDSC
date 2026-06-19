@@ -1145,7 +1145,24 @@ function ItemListTab() {
     (r.brand ?? '').toLowerCase().includes(search.toLowerCase())
   )
 
-  function openAdd() { setEditing(null); setForm({ item_code: '', item_name: '', brand: '', unit_of_measure: '', cost: '', selling_price: '', attribute: '' }); setOpen(true) }
+  async function openAdd() {
+    setEditing(null)
+    // Auto-generate next item code
+    const { data: last } = await supabase
+      .from('items')
+      .select('item_code')
+      .like('item_code', 'ITM-%')
+      .order('item_code', { ascending: false })
+      .limit(1)
+      .single()
+    let nextCode = 'ITM-001'
+    if (last?.item_code) {
+      const num = parseInt(last.item_code.replace('ITM-', ''), 10)
+      if (!isNaN(num)) nextCode = 'ITM-' + String(num + 1).padStart(3, '0')
+    }
+    setForm({ item_code: nextCode, item_name: '', brand: '', unit_of_measure: '', cost: '', selling_price: '', attribute: '' })
+    setOpen(true)
+  }
   function openEdit(r: ItemRow) {
     setEditing(r)
     setForm({ item_code: r.item_code, item_name: r.item_name, brand: r.brand ?? '', unit_of_measure: r.unit_of_measure, cost: String(r.cost), selling_price: r.selling_price !== null ? String(r.selling_price) : '', attribute: r.attribute ?? '' })
@@ -1256,8 +1273,16 @@ function ItemListTab() {
           <div className="space-y-3 py-2">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Item Code</Label>
-                <Input placeholder="e.g. ITM-001" value={form.item_code} onChange={e => setForm(p => ({ ...p, item_code: e.target.value }))} />
+                <Label className="flex items-center gap-1.5">
+                  Item Code
+                  {!editing && <span className="text-[10px] text-muted-foreground font-normal">auto-generated</span>}
+                </Label>
+                <Input
+                  placeholder="ITM-001"
+                  value={form.item_code}
+                  onChange={e => setForm(p => ({ ...p, item_code: e.target.value }))}
+                  className={!editing ? 'bg-muted/50 font-mono' : 'font-mono'}
+                />
               </div>
               <div className="space-y-1.5">
                 <Label>Unit of Measure</Label>
