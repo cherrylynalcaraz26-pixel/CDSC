@@ -106,7 +106,8 @@ export default function PurchaseOrdersPage() {
   // Email modal
   const [showEmail, setShowEmail] = useState(false)
   const [emailTo, setEmailTo] = useState('')
-  const [emailNote, setEmailNote] = useState('')
+  const [emailSubject, setEmailSubject] = useState('')
+  const [emailBody, setEmailBody] = useState('')
 
   const printRef = useRef<HTMLDivElement>(null)
 
@@ -233,18 +234,22 @@ export default function PurchaseOrdersPage() {
     setTimeout(() => { win.focus(); win.print(); win.close() }, 800)
   }
 
-  function handleSendEmail() {
+  function openEmailDialog() {
     const partyName = supplierId
       ? suppliers.find(s => s.id === supplierId)?.company_name
       : clients.find(c => c.id === clientId)?.company_name
-    const subject = encodeURIComponent(`Purchase Order ${poNumber || '(draft)'}${partyName ? ` — ${partyName}` : ''}`)
-    const body = encodeURIComponent(
-      `Dear ${partyName ?? 'Sir/Madam'},\n\nPlease find the attached Purchase Order ${poNumber || '(draft)'}.\n\n${emailNote ? emailNote + '\n\n' : ''}Regards,\n${companyInfo?.company_name ?? 'CDSC Industrial Supply'}`
-    )
-    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(emailTo)}&su=${subject}&body=${body}`
-    window.open(gmailUrl, '_blank')
+    setEmailSubject(`Purchase Order ${poNumber || '(draft)'}${partyName ? ` — ${partyName}` : ''}`)
+    setEmailBody(`Dear ${partyName ?? 'Sir/Madam'},\n\nPlease find attached the Purchase Order ${poNumber || '(draft)'}.\n\nKindly confirm receipt and advise on delivery schedule.\n\nBest regards,\n${companyInfo?.company_name ?? 'CDSC Industrial Supply'}`)
+    setShowEmail(true)
+  }
+
+  function handleSendEmail() {
+    // Generate PDF first then open Gmail
+    handlePrint()
+    const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(emailTo)}&su=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`
+    setTimeout(() => { window.open(gmailUrl, '_blank') }, 500)
     setShowEmail(false)
-    toast.success('Email client opened')
+    toast.success('PDF generated — attach it in Gmail then send.')
   }
 
   const fmt = (n: number) => `₱${n.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
@@ -677,7 +682,7 @@ export default function PurchaseOrdersPage() {
                       <Button type="button" variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={handlePrint}>
                         <Printer className="h-3.5 w-3.5" />Print
                       </Button>
-                      <Button type="button" variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => setShowEmail(true)}>
+                      <Button type="button" variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={openEmailDialog}>
                         <Mail className="h-3.5 w-3.5" />Email
                       </Button>
                     </div>
@@ -810,7 +815,7 @@ export default function PurchaseOrdersPage() {
               <Button type="button" variant="outline" className="gap-1.5" onClick={handlePrint}>
                 <Printer className="h-4 w-4" />Print
               </Button>
-              <Button type="button" variant="outline" className="gap-1.5" onClick={() => setShowEmail(true)}>
+              <Button type="button" variant="outline" className="gap-1.5" onClick={openEmailDialog}>
                 <Mail className="h-4 w-4" />Send Email
               </Button>
               <Button onClick={submitPO} disabled={saving} className="bg-red-600 hover:bg-red-700">
@@ -892,15 +897,15 @@ export default function PurchaseOrdersPage() {
 
       {/* Send Email Dialog */}
       <Dialog open={showEmail} onOpenChange={setShowEmail}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Mail className="h-4 w-4" />Send Purchase Order by Email
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 pt-2">
+          <div className="space-y-3 pt-2">
             <div className="space-y-1.5">
-              <Label>To (email address)</Label>
+              <Label>To</Label>
               <Input
                 type="email"
                 placeholder="supplier@example.com"
@@ -911,29 +916,27 @@ export default function PurchaseOrdersPage() {
             <div className="space-y-1.5">
               <Label>Subject</Label>
               <Input
-                readOnly
-                value={`Purchase Order ${poNumber || '(draft)'}${
-                  supplierId
-                    ? ` — ${suppliers.find(s => s.id === supplierId)?.company_name ?? ''}`
-                    : clientId
-                    ? ` — ${clients.find(c => c.id === clientId)?.company_name ?? ''}`
-                    : ''
-                }`}
-                className="bg-muted text-muted-foreground"
+                value={emailSubject}
+                onChange={e => setEmailSubject(e.target.value)}
+                placeholder="Subject…"
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Additional Note (optional)</Label>
-              <Input
-                placeholder="e.g. Please confirm receipt…"
-                value={emailNote}
-                onChange={e => setEmailNote(e.target.value)}
+              <Label>Body</Label>
+              <textarea
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
+                rows={7}
+                value={emailBody}
+                onChange={e => setEmailBody(e.target.value)}
               />
             </div>
-            <div className="flex justify-end gap-2 pt-2">
+            <p className="text-xs text-muted-foreground">
+              Clicking Send will generate the PDF and open Gmail. Attach the downloaded PDF before sending.
+            </p>
+            <div className="flex justify-end gap-2 pt-1">
               <Button variant="outline" onClick={() => setShowEmail(false)}>Cancel</Button>
               <Button onClick={handleSendEmail} className="bg-red-600 hover:bg-red-700 gap-1.5">
-                <Send className="h-4 w-4" />Open Email Client
+                <Send className="h-4 w-4" />Send in Gmail
               </Button>
             </div>
           </div>

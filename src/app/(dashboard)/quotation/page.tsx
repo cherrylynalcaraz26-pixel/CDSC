@@ -10,7 +10,8 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { Plus, MoreHorizontal, Loader2, Trash2, X, FileText, Printer, Mail } from 'lucide-react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Plus, MoreHorizontal, Loader2, Trash2, X, FileText, Printer, Mail, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSearchContext } from '@/context/search-context'
 import Image from 'next/image'
@@ -73,6 +74,8 @@ export default function QuotationPage() {
   const [mobileTab, setMobileTab] = useState<'form' | 'preview'>('form')
   const [showEmailQ, setShowEmailQ] = useState(false)
   const [emailToQ, setEmailToQ] = useState('')
+  const [emailSubjectQ, setEmailSubjectQ] = useState('')
+  const [emailBodyQ, setEmailBodyQ] = useState('')
 
   // Form state
   const [quoteNumber, setQuoteNumber] = useState('')
@@ -496,7 +499,12 @@ export default function QuotationPage() {
               <div className="flex items-center justify-between mb-2">
                 <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Live Preview</div>
                 <div className="flex items-center gap-2">
-                  <Button size="sm" variant="outline" onClick={() => setShowEmailQ(v => !v)} className="text-xs h-7 px-2">
+                  <Button size="sm" variant="outline" onClick={() => {
+                    const clientName = clientId ? clients.find(c => c.id === clientId)?.company_name : ''
+                    setEmailSubjectQ(`Quotation ${quoteNumber || '(draft)'}${clientName ? ` — ${clientName}` : ''}`)
+                    setEmailBodyQ(`Dear ${clientName ?? 'Sir/Madam'},\n\nPlease find attached our Quotation ${quoteNumber || '(draft)'}.\n\nThis quotation is valid as indicated. Kindly review and confirm at your earliest convenience.\n\nBest regards,\n${companyInfo?.company_name ?? 'CDSC Industrial Supply'}`)
+                    setShowEmailQ(true)
+                  }} className="text-xs h-7 px-2">
                     <Mail className="h-3.5 w-3.5 mr-1" />Email
                   </Button>
                   <Button size="sm" variant="outline" onClick={handlePrint} className="text-xs h-7 px-2">
@@ -504,25 +512,6 @@ export default function QuotationPage() {
                   </Button>
                 </div>
               </div>
-              {showEmailQ && (
-                <div className="flex gap-2 mb-2">
-                  <Input
-                    type="email"
-                    placeholder="Recipient email"
-                    value={emailToQ}
-                    onChange={e => setEmailToQ(e.target.value)}
-                    className="h-8 text-xs"
-                  />
-                  <Button
-                    size="sm"
-                    className="h-8 px-3 text-xs bg-red-600 hover:bg-red-700 shrink-0"
-                    onClick={() => {
-                      const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(emailToQ)}&su=${encodeURIComponent('Quotation - ' + (quoteNumber || 'Draft'))}&body=${encodeURIComponent('Dear Sir/Madam,\n\nPlease find attached our quotation.\n\nRegards,\n' + (companyInfo?.company_name ?? 'CDSC Industrial Supply'))}`
-                      window.open(url, '_blank')
-                    }}
-                  >Send</Button>
-                </div>
-              )}
               <PreviewDoc />
             </div>
           </div>
@@ -591,6 +580,63 @@ export default function QuotationPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Email Dialog */}
+      <Dialog open={showEmailQ} onOpenChange={setShowEmailQ}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Mail className="h-4 w-4" />Send Quotation by Email
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-2">
+            <div className="space-y-1.5">
+              <Label>To</Label>
+              <Input
+                type="email"
+                placeholder="client@example.com"
+                value={emailToQ}
+                onChange={e => setEmailToQ(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Subject</Label>
+              <Input
+                value={emailSubjectQ}
+                onChange={e => setEmailSubjectQ(e.target.value)}
+                placeholder="Subject…"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Body</Label>
+              <textarea
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
+                rows={7}
+                value={emailBodyQ}
+                onChange={e => setEmailBodyQ(e.target.value)}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Clicking Send will generate the PDF and open Gmail. Attach the downloaded PDF before sending.
+            </p>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="outline" onClick={() => setShowEmailQ(false)}>Cancel</Button>
+              <Button
+                className="bg-red-600 hover:bg-red-700 gap-1.5"
+                onClick={() => {
+                  handlePrint()
+                  const url = `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(emailToQ)}&su=${encodeURIComponent(emailSubjectQ)}&body=${encodeURIComponent(emailBodyQ)}`
+                  setTimeout(() => window.open(url, '_blank'), 500)
+                  setShowEmailQ(false)
+                  toast.success('PDF generated — attach it in Gmail then send.')
+                }}
+              >
+                <Send className="h-4 w-4" />Send in Gmail
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
