@@ -491,7 +491,9 @@ export default function PurchaseOrdersPage() {
                         disabled={!!clientId}
                       >
                         <SelectTrigger className={`w-full ${clientId ? 'opacity-50' : ''}`}>
-                          <SelectValue placeholder="Select supplier…" />
+                          {supplierId
+                            ? <span className="truncate text-sm">{suppliers.find(s => s.id === supplierId)?.company_name ?? supplierId}</span>
+                            : <span className="text-muted-foreground text-sm">Select supplier…</span>}
                         </SelectTrigger>
                         <SelectContent>
                           {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.company_name}</SelectItem>)}
@@ -514,7 +516,9 @@ export default function PurchaseOrdersPage() {
                         disabled={!!supplierId}
                       >
                         <SelectTrigger className={`w-full ${supplierId ? 'opacity-50' : ''}`}>
-                          <SelectValue placeholder="Select client…" />
+                          {clientId
+                            ? <span className="truncate text-sm">{clients.find(c => c.id === clientId)?.company_name ?? clientId}</span>
+                            : <span className="text-muted-foreground text-sm">Select client…</span>}
                         </SelectTrigger>
                         <SelectContent>
                           {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
