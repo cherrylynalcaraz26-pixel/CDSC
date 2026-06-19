@@ -144,7 +144,7 @@ export default function PurchaseOrdersPage() {
   useEffect(() => { load(); preloadGsi() }, [])
 
   // Computed totals
-  const subtotal = lines.reduce((s, l) => s + (parseFloat(l.unit_price) || 0) * (parseFloat(l.quantity) || 0), 0)
+  const subtotal = lines.reduce((s, l) => s + (parseFloat(l.selling_price) || 0) * (parseFloat(l.quantity) || 0), 0)
   const selectedSupplier = suppliers.find(s => s.id === supplierId)
   const isClient = !!clientId && !supplierId
   const taxType = isClient ? 'cwt' : 'ewt'
@@ -590,14 +590,14 @@ export default function PurchaseOrdersPage() {
                       <span>Item / Description</span>
                       <span>Qty</span>
                       <span>Unit</span>
-                      <span>Cost Price (₱)</span>
+                      <span>Unit Price (₱) <span class="font-normal opacity-60">(ref)</span></span>
                       <span>Selling Price (₱)</span>
                       <span className="text-right">Line Total</span>
                       <span />
                     </div>
                     <div className="divide-y">
                       {lines.map((line, i) => {
-                        const lineTotal = (parseFloat(line.unit_price) || 0) * (parseFloat(line.quantity) || 0)
+                        const lineTotal = (parseFloat(line.selling_price) || 0) * (parseFloat(line.quantity) || 0)
                         const itemMeta = items.find(it => it.item_name === line.item_name)
                         const statusCfg = itemMeta ? (ITEM_STATUS_CFG[itemMeta.status] ?? ITEM_STATUS_CFG.active) : null
                         return (
@@ -783,14 +783,14 @@ export default function PurchaseOrdersPage() {
                       </thead>
                       <tbody>
                         {lines.map((line, i) => {
-                          const total = (parseFloat(line.unit_price) || 0) * (parseFloat(line.quantity) || 0)
+                          const total = (parseFloat(line.selling_price) || 0) * (parseFloat(line.quantity) || 0)
                           return (
                             <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                               <td className="px-1.5 py-1 text-gray-400">{i + 1}</td>
                               <td className="px-1.5 py-1">{line.item_name || <span className="text-gray-300 italic">—</span>}</td>
                               <td className="px-1.5 py-1 text-right">{line.quantity || '—'}</td>
                               <td className="px-1.5 py-1 text-gray-500">{line.unit || '—'}</td>
-                              <td className="px-1.5 py-1 text-right">₱{(parseFloat(line.unit_price) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+                              <td className="px-1.5 py-1 text-right">₱{(parseFloat(line.selling_price) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
                               <td className="px-1.5 py-1 text-right font-medium">₱{total.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
                             </tr>
                           )
@@ -844,7 +844,7 @@ export default function PurchaseOrdersPage() {
 
       {/* Item Search Dialog */}
       <Dialog open={itemSearchIdx !== null} onOpenChange={o => { if (!o) setItemSearchIdx(null) }}>
-        <DialogContent className="w-[95vw] max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
+        <DialogContent className="w-[95vw] max-w-4xl max-h-[85vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Package className="h-4 w-4" />Item Inventory
@@ -860,20 +860,22 @@ export default function PurchaseOrdersPage() {
               onChange={e => setItemQuery(e.target.value)}
             />
           </div>
-          <div className="flex-1 overflow-y-auto overflow-x-hidden border rounded-lg">
-            <table className="w-full text-sm">
+          <div className="flex-1 overflow-y-auto overflow-x-auto border rounded-lg">
+            <table className="w-full text-sm min-w-[700px]">
               <thead className="sticky top-0 bg-muted">
                 <tr>
-                  <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Item</th>
-                  <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Code</th>
-                  <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Unit</th>
-                  <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">In Warehouse</th>
-                  <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Status</th>
+                  <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-[35%]">Item Name</th>
+                  <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-[15%]">Code</th>
+                  <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-[8%]">Unit</th>
+                  <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground w-[10%]">Cost</th>
+                  <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground w-[10%]">Selling</th>
+                  <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground w-[12%]">In Warehouse</th>
+                  <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-[10%]">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {filteredSearchItems.length === 0 ? (
-                  <tr><td colSpan={5} className="text-center py-6 text-muted-foreground text-sm">No items found.</td></tr>
+                  <tr><td colSpan={7} className="text-center py-6 text-muted-foreground text-sm">No items found.</td></tr>
                 ) : filteredSearchItems.map(it => {
                   const sCfg = ITEM_STATUS_CFG[it.status] ?? ITEM_STATUS_CFG.active
                   const qty = warehouseStock[it.item_name] ?? 0
@@ -893,6 +895,12 @@ export default function PurchaseOrdersPage() {
                       <td className="px-3 py-2 font-medium">{it.item_name}</td>
                       <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{it.item_code}</td>
                       <td className="px-3 py-2 text-muted-foreground">{it.unit_of_measure}</td>
+                      <td className="px-3 py-2 text-right text-muted-foreground">
+                        {it.cost != null ? `₱${Number(it.cost).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}
+                      </td>
+                      <td className="px-3 py-2 text-right font-medium text-green-700">
+                        {it.selling_price != null ? `₱${Number(it.selling_price).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}
+                      </td>
                       <td className="px-3 py-2 text-right">
                         <span className={`font-bold tabular-nums text-sm ${qty > 0 ? 'text-green-700' : 'text-red-500'}`}>
                           {qty > 0 ? qty.toLocaleString() : '0'}
