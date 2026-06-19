@@ -124,6 +124,8 @@ export default function CRMPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingLead, setEditingLead] = useState<CRMLead | null>(null)
   const [form, setForm] = useState<FormData>(emptyForm)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [confirmLead, setConfirmLead] = useState<CRMLead | null>(null)
 
   async function fetchLeads() {
     setLoading(true)
@@ -210,15 +212,22 @@ export default function CRMPage() {
     setSaving(false)
   }
 
-  async function deleteLead(lead: CRMLead) {
-    if (!confirm(`Delete lead "${lead.company_name}"? This cannot be undone.`)) return
-    const { error } = await supabase.from('crm_leads').delete().eq('id', lead.id)
+  function deleteLead(lead: CRMLead) {
+    setConfirmLead(lead)
+    setConfirmOpen(true)
+  }
+
+  async function confirmDeleteLead() {
+    if (!confirmLead) return
+    const { error } = await supabase.from('crm_leads').delete().eq('id', confirmLead.id)
     if (error) {
       toast.error('Failed to delete lead')
     } else {
       toast.success('Lead deleted')
       fetchLeads()
     }
+    setConfirmOpen(false)
+    setConfirmLead(null)
   }
 
   async function markStage(lead: CRMLead, stage: 'won' | 'lost') {
@@ -590,6 +599,22 @@ export default function CRMPage() {
               {saving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               {editingLead ? 'Save Changes' : 'Create Lead'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm Delete Dialog */}
+      <Dialog open={confirmOpen} onOpenChange={o => { if (!o) { setConfirmOpen(false); setConfirmLead(null) } }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base">Delete Lead</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to delete <span className="font-semibold text-foreground">{confirmLead?.company_name}</span>? This cannot be undone.
+          </p>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => { setConfirmOpen(false); setConfirmLead(null) }}>Cancel</Button>
+            <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={confirmDeleteLead}>Delete</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

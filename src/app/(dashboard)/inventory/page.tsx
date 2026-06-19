@@ -66,6 +66,16 @@ export default function InventoryPage() {
   const [warehouseUpdateNotes, setWarehouseUpdateNotes] = useState('')
   const [warehouseUpdateSaving, setWarehouseUpdateSaving] = useState(false)
 
+  const [confirmOpen, setConfirmOpen] = useState(false)
+  const [confirmMsg, setConfirmMsg] = useState('')
+  const [confirmAction, setConfirmAction] = useState<(() => void) | null>(null)
+
+  function askConfirm(msg: string, action: () => void) {
+    setConfirmMsg(msg)
+    setConfirmAction(() => action)
+    setConfirmOpen(true)
+  }
+
   const [editRow, setEditRow] = useState<InventoryRow | null>(null)
   const [editName, setEditName] = useState('')
   const [editUnit, setEditUnit] = useState('')
@@ -442,7 +452,7 @@ export default function InventoryPage() {
   }
 
   async function deleteRow(row: InventoryRow) {
-    if (!confirm(`Delete all DR and CSI records for "${row.item_name}" under "${row.client}"? This cannot be undone.`)) return
+    askConfirm(`Delete all DR and CSI records for "${row.item_name}" under "${row.client}"? This cannot be undone.`, async () => {
     const { error: drErr } = await supabase
       .from('dr_log_items')
       .delete()
@@ -458,17 +468,19 @@ export default function InventoryPage() {
       toast.success(`Deleted "${row.item_name}" records`)
       load()
     }
+    })
   }
 
-  async function deleteWarehouseRow(id: string, item_name: string) {
-    if (!confirm(`Delete this warehouse stock entry for "${item_name}"? This cannot be undone.`)) return
-    const { error } = await supabase.from('warehouse_stock').delete().eq('id', id)
-    if (error) {
-      toast.error(error.message)
-    } else {
-      toast.success('Warehouse stock entry deleted')
-      load()
-    }
+  function deleteWarehouseRow(id: string, item_name: string) {
+    askConfirm(`Delete this warehouse stock entry for "${item_name}"? This cannot be undone.`, async () => {
+      const { error } = await supabase.from('warehouse_stock').delete().eq('id', id)
+      if (error) {
+        toast.error(error.message)
+      } else {
+        toast.success('Warehouse stock entry deleted')
+        load()
+      }
+    })
   }
 
   function balanceBadge(balance: number) {
@@ -1104,6 +1116,25 @@ export default function InventoryPage() {
               className="bg-red-600 hover:bg-red-700 text-white gap-1.5"
             >
               {addSaving ? <><Loader2 className="h-4 w-4 animate-spin" />Saving…</> : <><Plus className="h-4 w-4" />Add Stock</>}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Confirm Dialog */}
+      <Dialog open={confirmOpen} onOpenChange={o => { if (!o) setConfirmOpen(false) }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-base">Confirm Delete</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">{confirmMsg}</p>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setConfirmOpen(false)}>Cancel</Button>
+            <Button
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => { confirmAction?.(); setConfirmOpen(false) }}
+            >
+              Delete
             </Button>
           </DialogFooter>
         </DialogContent>
