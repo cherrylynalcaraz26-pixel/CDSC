@@ -92,7 +92,7 @@ export default function InquiryPage() {
         <form onSubmit={handleSubmit} className="px-8 py-6 space-y-4">
           <div className="space-y-1">
             <Label>I am a <span className="text-red-500">*</span></Label>
-            <Select value={form.contact_type} onValueChange={v => set('contact_type', v)}>
+            <Select value={form.contact_type ?? ''} onValueChange={v => set('contact_type', v)}>
               <SelectTrigger>
                 <SelectValue placeholder="Select type…" />
               </SelectTrigger>
