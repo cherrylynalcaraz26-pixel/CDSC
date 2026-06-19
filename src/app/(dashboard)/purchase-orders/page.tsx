@@ -611,6 +611,8 @@ export default function PurchaseOrdersPage() {
                         const lineTotal = (parseFloat(line.selling_price) || 0) * (parseFloat(line.quantity) || 0)
                         const itemMeta = items.find(it => it.item_name === line.item_name)
                         const statusCfg = itemMeta ? (ITEM_STATUS_CFG[itemMeta.status] ?? ITEM_STATUS_CFG.active) : null
+                        const stockQty = line.item_name ? (warehouseStock[line.item_name] ?? 0) : null
+                        const needsToBuy = itemMeta && (itemMeta.status === 'low_stock' || itemMeta.status === 'out_of_stock')
                         return (
                           <div key={i} className="space-y-0.5 px-3 py-2">
                             <div className="grid grid-cols-[2fr_60px_70px_110px_138px_100px_36px] gap-2 items-center">
@@ -683,11 +685,23 @@ export default function PurchaseOrdersPage() {
                                 <Trash2 className="h-3.5 w-3.5" />
                               </Button>
                             </div>
-                            {statusCfg && (
-                              <div className="pl-0.5">
-                                <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${statusCfg.cls}`}>
-                                  {statusCfg.label}
-                                </span>
+                            {(statusCfg || stockQty !== null) && (
+                              <div className="pl-0.5 flex items-center flex-wrap gap-1.5">
+                                {statusCfg && (
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${statusCfg.cls}`}>
+                                    {statusCfg.label}
+                                  </span>
+                                )}
+                                {stockQty !== null && (
+                                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${stockQty > 0 ? 'bg-slate-100 text-slate-600' : 'bg-red-50 text-red-600'}`}>
+                                    {stockQty > 0 ? `${stockQty.toLocaleString()} in stock` : 'Out of stock'}
+                                  </span>
+                                )}
+                                {needsToBuy && (
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-orange-50 text-orange-700 border border-orange-200">
+                                    ⚠ Need to buy from Supplier
+                                  </span>
+                                )}
                               </div>
                             )}
                           </div>
