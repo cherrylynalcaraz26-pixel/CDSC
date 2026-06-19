@@ -590,7 +590,7 @@ export default function PurchaseOrdersPage() {
                       <span>Item / Description</span>
                       <span>Qty</span>
                       <span>Unit</span>
-                      <span>Unit Price (₱) <span class="font-normal opacity-60">(ref)</span></span>
+                      <span>Unit Price (₱) <span className="font-normal opacity-60">(ref)</span></span>
                       <span>Selling Price (₱)</span>
                       <span className="text-right">Line Total</span>
                       <span />
