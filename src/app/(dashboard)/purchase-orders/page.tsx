@@ -92,6 +92,9 @@ export default function PurchaseOrdersPage() {
   const [discountCustom, setDiscountCustom] = useState('')
   const discountRate = discountType === 'none' ? 0 : discountType === 'custom' ? (parseFloat(discountCustom) || 0) : parseFloat(discountType)
 
+  // Warehouse stock map: item_name → total qty
+  const [warehouseStock, setWarehouseStock] = useState<Record<string, number>>({})
+
   // Item search modal
   const [itemSearchIdx, setItemSearchIdx] = useState<number | null>(null)
   const [itemQuery, setItemQuery] = useState('')
@@ -112,6 +115,7 @@ export default function PurchaseOrdersPage() {
         .order('created_at', { ascending: false }),
       supabase.from('suppliers').select('id, company_name, payment_terms, ewt_rate').eq('is_active', true).order('company_name'),
       supabase.from('items').select('item_code, item_name, unit_of_measure, status').order('item_name'),
+      // warehouse stock loaded separately below
       supabase.from('clients').select('id, company_name, payment_terms').eq('status', 'active').order('company_name'),
     ])
     setPOs((poData ?? []) as PO[])
@@ -120,6 +124,14 @@ export default function PurchaseOrdersPage() {
     setClients(clientData ?? [])
     const { data: sysData } = await supabase.from('system_settings').select('company_name, address, phone, email, tin').single()
     if (sysData) setCompanyInfo(sysData)
+    const { data: wsData } = await supabase.from('warehouse_stock').select('item_name, quantity')
+    if (wsData) {
+      const map: Record<string, number> = {}
+      for (const r of wsData) {
+        map[r.item_name] = (map[r.item_name] ?? 0) + (Number(r.quantity) || 0)
+      }
+      setWarehouseStock(map)
+    }
     setLoading(false)
   }
 
@@ -445,58 +457,58 @@ export default function PurchaseOrdersPage() {
                     </div>
                   </div>
 
-                  {/* Supplier — full width */}
-                  <div className="space-y-1.5">
-                    <Label className={clientId ? 'text-muted-foreground' : ''}>
-                      Supplier {!clientId && <span className="text-destructive">*</span>}
-                      {clientId && <span className="text-xs text-muted-foreground ml-1">(clear client first)</span>}
-                    </Label>
-                    <Select
-                      value={supplierId}
-                      onValueChange={v => {
-                        setSupplierId(v ?? '')
-                        setClientId('')
-                        const sup = suppliers.find(s => s.id === v)
-                        if (sup?.payment_terms) setPaymentTerms(sup.payment_terms)
-                      }}
-                      disabled={!!clientId}
-                    >
-                      <SelectTrigger className={clientId ? 'opacity-50' : ''}>
-                        <SelectValue placeholder="Select supplier…">
-                          {supplierId ? suppliers.find(s => s.id === supplierId)?.company_name : 'Select supplier…'}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.company_name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  {/* Client — full width */}
-                  <div className="space-y-1.5">
-                    <Label className={supplierId ? 'text-muted-foreground' : ''}>
-                      Client {!supplierId && <span className="text-destructive">*</span>}
-                      {supplierId && <span className="text-xs text-muted-foreground ml-1">(clear supplier first)</span>}
-                    </Label>
-                    <Select
-                      value={clientId}
-                      onValueChange={v => {
-                        setClientId(v ?? '')
-                        setSupplierId('')
-                        const cli = clients.find(c => c.id === v)
-                        if (cli?.payment_terms) setPaymentTerms(cli.payment_terms)
-                      }}
-                      disabled={!!supplierId}
-                    >
-                      <SelectTrigger className={supplierId ? 'opacity-50' : ''}>
-                        <SelectValue placeholder="Select client…">
-                          {clientId ? clients.find(c => c.id === clientId)?.company_name : 'Select client…'}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                  {/* Supplier + Client — same row */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label className={clientId ? 'text-muted-foreground' : ''}>
+                        Supplier {!clientId && <span className="text-destructive">*</span>}
+                        {clientId && <span className="text-xs text-muted-foreground ml-1">(clear client first)</span>}
+                      </Label>
+                      <Select
+                        value={supplierId}
+                        onValueChange={v => {
+                          setSupplierId(v ?? '')
+                          setClientId('')
+                          const sup = suppliers.find(s => s.id === v)
+                          if (sup?.payment_terms) setPaymentTerms(sup.payment_terms)
+                        }}
+                        disabled={!!clientId}
+                      >
+                        <SelectTrigger className={clientId ? 'opacity-50' : ''}>
+                          <SelectValue placeholder="Select supplier…">
+                            {supplierId ? suppliers.find(s => s.id === supplierId)?.company_name : 'Select supplier…'}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.company_name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className={supplierId ? 'text-muted-foreground' : ''}>
+                        Client {!supplierId && <span className="text-destructive">*</span>}
+                        {supplierId && <span className="text-xs text-muted-foreground ml-1">(clear supplier first)</span>}
+                      </Label>
+                      <Select
+                        value={clientId}
+                        onValueChange={v => {
+                          setClientId(v ?? '')
+                          setSupplierId('')
+                          const cli = clients.find(c => c.id === v)
+                          if (cli?.payment_terms) setPaymentTerms(cli.payment_terms)
+                        }}
+                        disabled={!!supplierId}
+                      >
+                        <SelectTrigger className={supplierId ? 'opacity-50' : ''}>
+                          <SelectValue placeholder="Select client…">
+                            {clientId ? clients.find(c => c.id === clientId)?.company_name : 'Select client…'}
+                          </SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
 
                   {/* Payment Terms + Remarks */}
@@ -661,50 +673,50 @@ export default function PurchaseOrdersPage() {
                   </div>
 
                   <div ref={printRef} className="border rounded-lg bg-white text-[11px] p-5 shadow-sm space-y-3 font-sans">
-                    {/* Header: PURCHASE ORDER (left) | Company details (right) */}
+                    {/* Header: Company info (left) | PURCHASE ORDER + PO# (right) */}
                     <div className="flex justify-between items-start border-b pb-3">
-                      {/* Left: logo + document title */}
-                      <div className="flex items-center gap-3">
+                      {/* Left: logo + company details */}
+                      <div className="flex items-center gap-2.5">
                         <img src="/cdsc-logo.jpg" alt="CDSC" className="h-12 w-12 rounded object-cover shrink-0" />
                         <div>
-                          <div className="text-[18px] font-extrabold text-red-700 uppercase tracking-widest leading-tight">
-                            Purchase Order
+                          <div className="text-[13px] font-bold text-red-700 leading-tight">
+                            {companyInfo?.company_name || 'CDSC INDUSTRIAL'}
                           </div>
-                          <div className="mt-1.5 space-y-0.5 text-[10px]">
-                            <div>
-                              <span className="text-gray-400 font-semibold uppercase text-[9px]">PO Number: </span>
-                              <span className="font-mono font-bold text-gray-800">{poNumber || <span className="text-gray-300 italic">—</span>}</span>
+                          {companyInfo?.address && (
+                            <div className="text-[9px] text-gray-500 mt-0.5">{companyInfo.address}</div>
+                          )}
+                          {(companyInfo?.phone || companyInfo?.email) && (
+                            <div className="text-[9px] text-gray-500">
+                              {companyInfo.phone}{companyInfo.phone && companyInfo.email ? ' | ' : ''}{companyInfo.email}
                             </div>
-                            <div>
-                              <span className="text-gray-400 font-semibold uppercase text-[9px]">Date: </span>
-                              <span className="text-gray-700">{todayStr}</span>
-                            </div>
-                            {deliveryStr && (
-                              <div>
-                                <span className="text-gray-400 font-semibold uppercase text-[9px]">Delivery: </span>
-                                <span className="text-gray-700">{deliveryStr}</span>
-                              </div>
-                            )}
-                          </div>
+                          )}
+                          {companyInfo?.tin && (
+                            <div className="text-[9px] text-gray-500">TIN: {companyInfo.tin}</div>
+                          )}
                         </div>
                       </div>
 
-                      {/* Right: company details */}
-                      <div className="text-right shrink-0 max-w-[180px]">
-                        <div className="text-[13px] font-bold text-red-700 leading-tight">
-                          {companyInfo?.company_name || 'CDSC INDUSTRIAL'}
+                      {/* Right: PURCHASE ORDER title + PO details */}
+                      <div className="text-right shrink-0">
+                        <div className="text-[18px] font-extrabold text-red-700 uppercase tracking-widest leading-tight">
+                          Purchase Order
                         </div>
-                        {companyInfo?.address && (
-                          <div className="text-[9px] text-gray-500 mt-0.5">{companyInfo.address}</div>
-                        )}
-                        {(companyInfo?.phone || companyInfo?.email) && (
-                          <div className="text-[9px] text-gray-500">
-                            {companyInfo.phone}{companyInfo.phone && companyInfo.email ? ' | ' : ''}{companyInfo.email}
+                        <div className="mt-1.5 space-y-0.5 text-[10px]">
+                          <div>
+                            <span className="text-gray-400 font-semibold uppercase text-[9px]">PO Number: </span>
+                            <span className="font-mono font-bold text-gray-800">{poNumber || '—'}</span>
                           </div>
-                        )}
-                        {companyInfo?.tin && (
-                          <div className="text-[9px] text-gray-500">TIN: {companyInfo.tin}</div>
-                        )}
+                          <div>
+                            <span className="text-gray-400 font-semibold uppercase text-[9px]">Date: </span>
+                            <span className="text-gray-700">{todayStr}</span>
+                          </div>
+                          {deliveryStr && (
+                            <div>
+                              <span className="text-gray-400 font-semibold uppercase text-[9px]">Delivery: </span>
+                              <span className="text-gray-700">{deliveryStr}</span>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
 
@@ -723,12 +735,6 @@ export default function PurchaseOrdersPage() {
                         </div>
                         <div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5">Payment Terms</div>
                         <div className="text-gray-700">{paymentTerms || '—'}</div>
-                        {taxLabel && (
-                          <>
-                            <div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5">Tax Type</div>
-                            <div className="text-gray-700">{taxLabel} ({isClient ? 2 : (selectedSupplier?.ewt_rate ?? 2)}%)</div>
-                          </>
-                        )}
                       </div>
                       {remarks && (
                         <div className="space-y-0.5">
@@ -836,14 +842,16 @@ export default function PurchaseOrdersPage() {
                   <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Item</th>
                   <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Code</th>
                   <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Unit</th>
+                  <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground">In Warehouse</th>
                   <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {filteredSearchItems.length === 0 ? (
-                  <tr><td colSpan={4} className="text-center py-6 text-muted-foreground text-sm">No items found.</td></tr>
+                  <tr><td colSpan={5} className="text-center py-6 text-muted-foreground text-sm">No items found.</td></tr>
                 ) : filteredSearchItems.map(it => {
                   const sCfg = ITEM_STATUS_CFG[it.status] ?? ITEM_STATUS_CFG.active
+                  const qty = warehouseStock[it.item_name] ?? 0
                   return (
                     <tr
                       key={it.item_code}
@@ -860,6 +868,12 @@ export default function PurchaseOrdersPage() {
                       <td className="px-3 py-2 font-medium">{it.item_name}</td>
                       <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{it.item_code}</td>
                       <td className="px-3 py-2 text-muted-foreground">{it.unit_of_measure}</td>
+                      <td className="px-3 py-2 text-right">
+                        <span className={`font-semibold tabular-nums ${qty > 0 ? 'text-green-700' : 'text-red-500'}`}>
+                          {qty.toLocaleString()}
+                        </span>
+                        <span className="text-xs text-muted-foreground ml-1">{it.unit_of_measure}</span>
+                      </td>
                       <td className="px-3 py-2">
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${sCfg.cls}`}>{sCfg.label}</span>
                       </td>
