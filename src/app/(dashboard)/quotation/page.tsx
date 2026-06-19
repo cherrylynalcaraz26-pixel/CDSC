@@ -400,7 +400,11 @@ export default function QuotationPage() {
                   <div className="space-y-1.5">
                     <Label>Client <span className="text-destructive">*</span></Label>
                     <Select value={clientId} onValueChange={v => setClientId(v ?? '')}>
-                      <SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger>
+                      <SelectTrigger className="w-full">
+                        {clientId
+                          ? <span className="truncate text-sm">{clients.find(c => c.id === clientId)?.company_name}</span>
+                          : <span className="text-muted-foreground text-sm">Select client…</span>}
+                      </SelectTrigger>
                       <SelectContent>
                         {clients.map(c => (
                           <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>

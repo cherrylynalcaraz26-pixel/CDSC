@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
 
 type Stage = 'new_lead' | 'contacted' | 'proposal_sent' | 'negotiation' | 'won' | 'lost'
@@ -179,11 +179,30 @@ export default function CRMPage() {
     setConfirmOpen(false); setConfirmLead(null)
   }
 
-  async function markStage(lead: CRMLead, stage: 'won' | 'lost') {
+  async function markStage(lead: CRMLead, stage: Stage) {
     const today = new Date().toISOString().split('T')[0]
-    const { error } = await supabase.from('crm_leads').update({ stage, closed_date: today }).eq('id', lead.id)
-    if (error) toast.error(`Failed to mark as ${STAGE_META[stage].label}`)
-    else { toast.success(`Lead marked as ${STAGE_META[stage].label}`); fetchLeads() }
+    const closed = ['won', 'lost'].includes(stage) ? today : null
+    const { error } = await supabase.from('crm_leads').update({ stage, ...(closed ? { closed_date: closed } : {}) }).eq('id', lead.id)
+    if (error) toast.error(`Failed to update stage`)
+    else { toast.success(`Stage → ${STAGE_META[stage].label}`); fetchLeads() }
+  }
+
+  function StageMenu({ lead, align = 'end' }: { lead: CRMLead; align?: 'start' | 'end' }) {
+    return (
+      <>
+        <DropdownMenuSeparator />
+        <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Move to Stage</div>
+        {PIPELINE_STAGES.filter(s => s !== lead.stage).map(s => {
+          const m = STAGE_META[s]
+          return (
+            <DropdownMenuItem key={s} onClick={(e) => { e.stopPropagation(); markStage(lead, s) }}>
+              <span className={`w-2 h-2 rounded-full ${m.dot} mr-2 shrink-0`} />
+              {m.label}
+            </DropdownMenuItem>
+          )
+        })}
+      </>
+    )
   }
 
   const filtered = leads.filter(l => {
@@ -424,16 +443,12 @@ export default function CRMPage() {
                         <DropdownMenuTrigger className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent opacity-0 group-hover:opacity-100 transition-opacity">
                           <MoreHorizontal className="w-4 h-4" />
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-44">
+                        <DropdownMenuContent align="end" className="w-48">
                           <DropdownMenuItem onClick={() => openEdit(lead)}>
                             <Pencil className="w-4 h-4 mr-2" /> Edit
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => markStage(lead, 'won')} className="text-green-700">
-                            <Trophy className="w-4 h-4 mr-2" /> Mark Won
-                          </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => markStage(lead, 'lost')} className="text-slate-500">
-                            <XCircle className="w-4 h-4 mr-2" /> Mark Lost
-                          </DropdownMenuItem>
+                          <StageMenu lead={lead} />
+                          <DropdownMenuSeparator />
                           <DropdownMenuItem onClick={() => deleteLead(lead)} className="text-red-600 focus:text-red-600">
                             <Trash2 className="w-4 h-4 mr-2" /> Delete
                           </DropdownMenuItem>
@@ -486,16 +501,12 @@ export default function CRMPage() {
                             >
                               <MoreHorizontal className="w-3.5 h-3.5" />
                             </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-40">
+                            <DropdownMenuContent align="end" className="w-48">
                               <DropdownMenuItem onClick={e => { e.stopPropagation(); openEdit(lead) }}>
                                 <Pencil className="w-3.5 h-3.5 mr-2" /> Edit
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={e => { e.stopPropagation(); markStage(lead, 'won') }} className="text-green-700">
-                                <Trophy className="w-3.5 h-3.5 mr-2" /> Won
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={e => { e.stopPropagation(); markStage(lead, 'lost') }} className="text-slate-500">
-                                <XCircle className="w-3.5 h-3.5 mr-2" /> Lost
-                              </DropdownMenuItem>
+                              <StageMenu lead={lead} />
+                              <DropdownMenuSeparator />
                               <DropdownMenuItem onClick={e => { e.stopPropagation(); deleteLead(lead) }} className="text-red-600">
                                 <Trash2 className="w-3.5 h-3.5 mr-2" /> Delete
                               </DropdownMenuItem>
