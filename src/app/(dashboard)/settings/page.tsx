@@ -7,17 +7,16 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import {
   Building2, Upload, RotateCcw, Save, Shield, Briefcase,
   FileText, Database, User, Globe, Phone, Mail, MapPin,
-  CheckCircle2, Eye, EyeOff, Loader2,
-  Wrench, Package, Truck, Star, Plus, Trash2, X,
+  CheckCircle2, Eye, EyeOff, Loader2, Plus, Trash2, X,
 } from 'lucide-react'
 import Image from 'next/image'
 
@@ -26,6 +25,11 @@ const BUSINESS_TYPES = [
   'Manufacturing', 'Service Provider', 'Distributor', 'Retailer',
   'Wholesaler', 'Cooperative', 'Non-Profit', 'Government Agency',
 ]
+
+interface CoreService {
+  name: string
+  description: string
+}
 
 interface Settings {
   company_name: string
@@ -54,57 +58,59 @@ interface Settings {
   founded_year: string
   employees_count: string
   // Portfolio
-  about: string
-  services: string  // JSON array
+  about_company: string
+  core_services: CoreService[]
   key_clients: string
   certifications: string
-  years_of_experience: number
-  // Proposal templates
-  proposal_intro: string
-  proposal_executive_summary: string
-  proposal_scope: string
-  proposal_terms: string
-  proposal_payment_schedule: string
-  proposal_validity: string
+  years_of_experience: string
+  // Proposal
+  proposal_introduction: string
+  executive_summary: string
+  scope_of_work: string
+  terms_and_conditions: string
+  payment_schedule: string
+  validity_period: string
 }
 
-const defaultSettings: Settings = {
-  company_name: 'CDSC Industrial Supply',
-  company_short_name: 'CDSC',
-  legal_suffix: 'Corporation',
-  tagline: '',
-  business_type: 'Trading Corporation',
-  brand_positioning: '',
-  mission_statement: '',
-  sec_reg_no: '',
-  tin: '',
-  address: '',
-  city: '',
-  province: '',
-  zip_code: '',
-  phone: '',
-  mobile: '',
-  email: '',
-  website: '',
-  logo_url: '',
-  vat_registered: true,
-  default_vat_rate: 12,
-  ewt_default_rate: 2,
-  fiscal_year_start: '01-01',
-  industry: '',
-  founded_year: '',
-  employees_count: '',
-  about: '',
-  services: '[]',
-  key_clients: '',
-  certifications: '',
-  years_of_experience: 0,
-  proposal_intro: '',
-  proposal_executive_summary: '',
-  proposal_scope: '',
-  proposal_terms: '',
-  proposal_payment_schedule: '',
-  proposal_validity: '',
+function defaultSettings(): Settings {
+  return {
+    company_name: 'CDSC Industrial Supply',
+    company_short_name: 'CDSC',
+    legal_suffix: 'Corporation',
+    tagline: '',
+    business_type: 'Trading Corporation',
+    brand_positioning: '',
+    mission_statement: '',
+    sec_reg_no: '',
+    tin: '',
+    address: '',
+    city: '',
+    province: '',
+    zip_code: '',
+    phone: '',
+    mobile: '',
+    email: '',
+    website: '',
+    logo_url: '',
+    vat_registered: true,
+    default_vat_rate: 12,
+    ewt_default_rate: 2,
+    fiscal_year_start: '01-01',
+    industry: '',
+    founded_year: '',
+    employees_count: '',
+    about_company: '',
+    core_services: [],
+    key_clients: '',
+    certifications: '',
+    years_of_experience: '',
+    proposal_introduction: '',
+    executive_summary: '',
+    scope_of_work: '',
+    terms_and_conditions: '',
+    payment_schedule: '',
+    validity_period: '30 days',
+  }
 }
 
 type TabId = 'profile' | 'portfolio' | 'proposal' | 'database' | 'security'
@@ -214,9 +220,7 @@ function LivePreview({ s }: { s: Settings }) {
               )}
             </div>
             <div>
-              <div className="font-bold text-sm leading-tight">
-                {s.company_name || 'Company Name'}
-              </div>
+              <div className="font-bold text-sm leading-tight">{s.company_name || 'Company Name'}</div>
               {s.legal_suffix && <div className="text-white/50 text-[10px]">{s.legal_suffix}</div>}
             </div>
           </div>
@@ -232,12 +236,98 @@ function LivePreview({ s }: { s: Settings }) {
   )
 }
 
+// ── Proposal Live Preview ─────────────────────────────────────────────────────
+
+function ProposalPreview({ s }: { s: Settings }) {
+  return (
+    <div className="sticky top-4">
+      <div className="flex items-center gap-2 mb-3">
+        <Eye className="h-4 w-4 text-muted-foreground" />
+        <span className="text-sm font-medium text-muted-foreground">Proposal Preview</span>
+        <span className="ml-auto text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">● LIVE</span>
+      </div>
+
+      <div className="border rounded-xl overflow-hidden bg-white shadow-sm text-sm">
+        <div className="bg-gradient-to-r from-slate-800 to-slate-900 p-5">
+          <div className="flex items-start gap-3">
+            <div className="relative h-12 w-12 rounded-lg bg-white/10 flex items-center justify-center overflow-hidden shrink-0">
+              {s.logo_url ? (
+                <Image src={s.logo_url} alt="logo" fill className="object-contain p-1" />
+              ) : (
+                <Building2 className="h-6 w-6 text-white/50" />
+              )}
+            </div>
+            <div>
+              <div className="text-white font-bold text-base leading-tight">
+                {s.company_name || 'Company Name'}{s.legal_suffix ? ` ${s.legal_suffix}` : ''}
+              </div>
+              {s.tagline && <div className="text-white/50 text-xs italic mt-0.5">{s.tagline}</div>}
+              <div className="text-white/40 text-[11px] mt-1 space-x-3">
+                {s.phone && <span>{s.phone}</span>}
+                {s.email && <span>{s.email}</span>}
+              </div>
+            </div>
+          </div>
+          <div className="mt-4 border-t border-white/10 pt-3">
+            <div className="text-white/40 text-[10px] uppercase tracking-widest">Business Proposal</div>
+            <div className="text-white font-bold text-lg">PROPOSAL FOR SERVICES</div>
+            <div className="text-white/50 text-xs mt-0.5">
+              Date: {new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}
+              {s.validity_period && <span className="ml-3">Valid for: {s.validity_period}</span>}
+            </div>
+          </div>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {s.proposal_introduction && (
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Introduction</div>
+              <p className="text-xs text-slate-600 whitespace-pre-line leading-relaxed">{s.proposal_introduction}</p>
+            </div>
+          )}
+          {s.executive_summary && (
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Executive Summary</div>
+              <p className="text-xs text-slate-600 whitespace-pre-line leading-relaxed">{s.executive_summary}</p>
+            </div>
+          )}
+          {s.scope_of_work && (
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Scope of Work</div>
+              <p className="text-xs text-slate-600 whitespace-pre-line leading-relaxed">{s.scope_of_work}</p>
+            </div>
+          )}
+          {s.payment_schedule && (
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Payment Schedule</div>
+              <p className="text-xs text-slate-600 whitespace-pre-line leading-relaxed">{s.payment_schedule}</p>
+            </div>
+          )}
+          {s.terms_and_conditions && (
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Terms &amp; Conditions</div>
+              <p className="text-xs text-slate-600 whitespace-pre-line leading-relaxed">{s.terms_and_conditions}</p>
+            </div>
+          )}
+          {!s.proposal_introduction && !s.executive_summary && !s.scope_of_work && (
+            <div className="text-center py-8 text-muted-foreground text-xs">
+              Fill in the form fields to see your proposal preview
+            </div>
+          )}
+          <div className="border-t pt-3 text-[10px] text-slate-400 text-center">
+            {s.company_name}{s.legal_suffix ? ` ${s.legal_suffix}` : ''} · Confidential Business Proposal
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ── Security Tab ──────────────────────────────────────────────────────────────
 
 function SecurityTab() {
   const supabase = createClient()
   const [email, setEmail] = useState('')
-  const [currentPw, setCurrentPw] = useState('')
   const [newPw, setNewPw] = useState('')
   const [confirmPw, setConfirmPw] = useState('')
   const [showPw, setShowPw] = useState(false)
@@ -255,7 +345,7 @@ function SecurityTab() {
     setSaving(true)
     const { error } = await supabase.auth.updateUser({ password: newPw })
     if (error) toast.error(error.message)
-    else { toast.success('Password updated'); setCurrentPw(''); setNewPw(''); setConfirmPw('') }
+    else { toast.success('Password updated'); setNewPw(''); setConfirmPw('') }
     setSaving(false)
   }
 
@@ -330,51 +420,476 @@ function SecurityTab() {
   )
 }
 
-// ── Main Page ─────────────────────────────────────────────────────────────────
+// ── Portfolio Tab ─────────────────────────────────────────────────────────────
+
+interface PortfolioTabProps {
+  settings: Settings
+  setSettings: React.Dispatch<React.SetStateAction<Settings>>
+  onSave: () => Promise<void>
+  onReset: () => void
+  saving: boolean
+}
+
+function PortfolioTab({ settings, setSettings, onSave, onReset, saving }: PortfolioTabProps) {
+  function setField(field: keyof Settings, value: string | CoreService[]) {
+    setSettings(s => ({ ...s, [field]: value }))
+  }
+
+  function addService() {
+    setSettings(s => ({ ...s, core_services: [...s.core_services, { name: '', description: '' }] }))
+  }
+
+  function removeService(idx: number) {
+    setSettings(s => ({ ...s, core_services: s.core_services.filter((_, i) => i !== idx) }))
+  }
+
+  function updateService(idx: number, field: 'name' | 'description', value: string) {
+    setSettings(s => ({
+      ...s,
+      core_services: s.core_services.map((svc, i) => i === idx ? { ...svc, [field]: value } : svc),
+    }))
+  }
+
+  return (
+    <div className="space-y-0 max-w-3xl">
+      <div className="flex items-center justify-between mb-6 pb-4 border-b">
+        <h2 className="font-bold text-base uppercase tracking-wider text-slate-700">Company Portfolio</h2>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={onReset} className="gap-1.5">
+            <RotateCcw className="h-3.5 w-3.5" />Reset
+          </Button>
+          <Button size="sm" onClick={onSave} disabled={saving} className="bg-amber-500 hover:bg-amber-600 text-white gap-1.5">
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+            Save
+          </Button>
+        </div>
+      </div>
+
+      <div className="space-y-6">
+        <div className="space-y-1.5">
+          <Label className="font-semibold">About Company</Label>
+          <Textarea
+            rows={5}
+            placeholder="Describe your company — history, background, what you do, and what sets you apart…"
+            value={settings.about_company}
+            onChange={e => setField('about_company', e.target.value)}
+          />
+        </div>
+
+        <div className="space-y-1.5 max-w-xs">
+          <Label className="font-semibold">Years of Experience</Label>
+          <Input
+            type="number"
+            min={0}
+            placeholder="e.g. 10"
+            value={settings.years_of_experience}
+            onChange={e => setField('years_of_experience', e.target.value)}
+          />
+        </div>
+
+        <Separator />
+
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Label className="font-semibold">Core Services</Label>
+            <Button type="button" variant="outline" size="sm" onClick={addService} className="gap-1.5">
+              <Plus className="h-3.5 w-3.5" />Add Service
+            </Button>
+          </div>
+          {settings.core_services.length === 0 && (
+            <div className="text-sm text-muted-foreground border border-dashed rounded-lg p-6 text-center">
+              No services added yet. Click &quot;Add Service&quot; to begin.
+            </div>
+          )}
+          <div className="space-y-3">
+            {settings.core_services.map((svc, idx) => (
+              <div key={idx} className="border rounded-lg p-4 space-y-3 bg-muted/20 relative">
+                <button
+                  type="button"
+                  onClick={() => removeService(idx)}
+                  className="absolute right-3 top-3 text-muted-foreground hover:text-destructive transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+                <div className="space-y-1.5 pr-6">
+                  <Label className="text-xs text-muted-foreground">Service Name</Label>
+                  <Input
+                    placeholder="e.g. Industrial Supply & Distribution"
+                    value={svc.name}
+                    onChange={e => updateService(idx, 'name', e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">Description</Label>
+                  <Textarea
+                    rows={2}
+                    placeholder="Brief description of this service…"
+                    value={svc.description}
+                    onChange={e => updateService(idx, 'description', e.target.value)}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <Separator />
+
+        <div className="space-y-1.5">
+          <Label className="font-semibold">Key Clients</Label>
+          <Textarea
+            rows={3}
+            placeholder="List notable clients, one per line or comma-separated…"
+            value={settings.key_clients}
+            onChange={e => setField('key_clients', e.target.value)}
+          />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="font-semibold">Certifications &amp; Accreditations</Label>
+          <Textarea
+            rows={3}
+            placeholder="e.g. ISO 9001:2015, PhilGEPS Registered, PCAB Licensed…"
+            value={settings.certifications}
+            onChange={e => setField('certifications', e.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="pt-6 flex justify-end gap-2">
+        <Button variant="outline" onClick={onReset} className="gap-1.5">
+          <RotateCcw className="h-3.5 w-3.5" />Reset
+        </Button>
+        <Button onClick={onSave} disabled={saving} className="bg-amber-500 hover:bg-amber-600 text-white gap-1.5">
+          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+          Save Portfolio
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+// ── Proposal Tab ──────────────────────────────────────────────────────────────
+
+interface ProposalTabProps {
+  settings: Settings
+  setSettings: React.Dispatch<React.SetStateAction<Settings>>
+  onSave: () => Promise<void>
+  onReset: () => void
+  saving: boolean
+}
+
+function ProposalTab({ settings, setSettings, onSave, onReset, saving }: ProposalTabProps) {
+  function setField(field: keyof Settings, value: string) {
+    setSettings(s => ({ ...s, [field]: value }))
+  }
+
+  const fields: { key: keyof Settings; label: string; placeholder: string; rows?: number }[] = [
+    { key: 'proposal_introduction', label: 'Proposal Introduction', placeholder: 'Opening paragraph introducing your company and the purpose of this proposal…', rows: 4 },
+    { key: 'executive_summary', label: 'Executive Summary', placeholder: 'Concise overview of your proposal, key benefits, and value proposition…', rows: 5 },
+    { key: 'scope_of_work', label: 'Scope of Work', placeholder: 'Detailed description of what will be delivered, timelines, milestones…', rows: 6 },
+    { key: 'terms_and_conditions', label: 'Terms & Conditions', placeholder: 'Legal terms, warranties, liabilities, and conditions of the proposal…', rows: 5 },
+    { key: 'payment_schedule', label: 'Payment Schedule', placeholder: 'e.g. 50% upon signing, 50% upon completion…', rows: 3 },
+    { key: 'validity_period', label: 'Validity Period', placeholder: 'e.g. 30 days', rows: 1 },
+  ]
+
+  return (
+    <div className="grid grid-cols-1 xl:grid-cols-[1fr_420px] gap-8">
+      <div className="space-y-0">
+        <div className="flex items-center justify-between mb-6 pb-4 border-b">
+          <h2 className="font-bold text-base uppercase tracking-wider text-slate-700">Business Proposal Template</h2>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={onReset} className="gap-1.5">
+              <RotateCcw className="h-3.5 w-3.5" />Reset
+            </Button>
+            <Button size="sm" onClick={onSave} disabled={saving} className="bg-amber-500 hover:bg-amber-600 text-white gap-1.5">
+              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+              Save
+            </Button>
+          </div>
+        </div>
+
+        <div className="space-y-5">
+          {fields.map(f => (
+            <div key={String(f.key)} className="space-y-1.5">
+              <Label className="font-semibold">{f.label}</Label>
+              {f.rows === 1 ? (
+                <Input
+                  placeholder={f.placeholder}
+                  value={settings[f.key] as string}
+                  onChange={e => setField(f.key, e.target.value)}
+                />
+              ) : (
+                <Textarea
+                  rows={f.rows}
+                  placeholder={f.placeholder}
+                  value={settings[f.key] as string}
+                  onChange={e => setField(f.key, e.target.value)}
+                />
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="pt-6 flex justify-end gap-2">
+          <Button variant="outline" onClick={onReset} className="gap-1.5">
+            <RotateCcw className="h-3.5 w-3.5" />Reset
+          </Button>
+          <Button onClick={onSave} disabled={saving} className="bg-amber-500 hover:bg-amber-600 text-white gap-1.5">
+            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+            Save Template
+          </Button>
+        </div>
+      </div>
+
+      <div className="hidden xl:block">
+        <ProposalPreview s={settings} />
+      </div>
+    </div>
+  )
+}
+
+// ── Proposal Database Tab ─────────────────────────────────────────────────────
 
 interface Proposal {
-  id: string
+  id: number
+  proposal_number: string
   client: string
   title: string
-  description: string
+  date: string
   amount: number
   status: 'draft' | 'sent' | 'accepted' | 'rejected'
   created_at: string
 }
 
+const STATUS_STYLES: Record<string, string> = {
+  draft:    'bg-slate-100 text-slate-600',
+  sent:     'bg-blue-100 text-blue-700',
+  accepted: 'bg-green-100 text-green-700',
+  rejected: 'bg-red-100 text-red-600',
+}
+
+function ProposalDatabaseTab() {
+  const supabase = createClient()
+  const [proposals, setProposals] = useState<Proposal[]>([])
+  const [loading, setLoading] = useState(true)
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [form, setForm] = useState({
+    client: '',
+    title: '',
+    amount: '',
+    status: 'draft' as Proposal['status'],
+  })
+
+  async function loadProposals() {
+    setLoading(true)
+    const { data, error } = await supabase
+      .from('proposals')
+      .select('*')
+      .order('created_at', { ascending: false })
+    if (error) toast.error(error.message)
+    else setProposals(data ?? [])
+    setLoading(false)
+  }
+
+  useEffect(() => { loadProposals() }, [])
+
+  function openNew() {
+    setForm({ client: '', title: '', amount: '', status: 'draft' })
+    setDialogOpen(true)
+  }
+
+  async function submitProposal() {
+    if (!form.client.trim()) { toast.error('Client is required'); return }
+    if (!form.title.trim()) { toast.error('Title is required'); return }
+    setSubmitting(true)
+
+    const year = new Date().getFullYear()
+    const count = proposals.length + 1
+    const proposal_number = `PROP-${year}-${String(count).padStart(4, '0')}`
+
+    const { error } = await supabase.from('proposals').insert({
+      proposal_number,
+      client: form.client.trim(),
+      title: form.title.trim(),
+      amount: parseFloat(form.amount) || 0,
+      status: form.status,
+      date: new Date().toISOString().split('T')[0],
+    })
+
+    if (error) toast.error(error.message)
+    else {
+      toast.success('Proposal created')
+      setDialogOpen(false)
+      loadProposals()
+    }
+    setSubmitting(false)
+  }
+
+  async function deleteProposal(id: number) {
+    const { error } = await supabase.from('proposals').delete().eq('id', id)
+    if (error) toast.error(error.message)
+    else {
+      toast.success('Proposal deleted')
+      setProposals(ps => ps.filter(p => p.id !== id))
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between pb-4 border-b">
+        <div>
+          <h2 className="font-bold text-base uppercase tracking-wider text-slate-700">Proposal Database</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">{proposals.length} proposal{proposals.length !== 1 ? 's' : ''} on record</p>
+        </div>
+        <Button size="sm" onClick={openNew} className="bg-red-600 hover:bg-red-700 text-white gap-1.5">
+          <Plus className="h-3.5 w-3.5" />New Proposal
+        </Button>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : proposals.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-3">
+          <FileText className="h-10 w-10 opacity-20" />
+          <p className="text-sm">No proposals yet. Create your first one.</p>
+          <Button variant="outline" size="sm" onClick={openNew} className="gap-1.5">
+            <Plus className="h-3.5 w-3.5" />New Proposal
+          </Button>
+        </div>
+      ) : (
+        <div className="border rounded-xl overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-muted/40 border-b">
+                <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Proposal #</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Client</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Title</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Date</th>
+                <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Amount</th>
+                <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
+                <th className="px-4 py-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {proposals.map((p, i) => (
+                <tr key={p.id} className={`border-b last:border-0 hover:bg-muted/20 transition-colors ${i % 2 === 0 ? '' : 'bg-muted/10'}`}>
+                  <td className="px-4 py-3 font-mono text-xs font-semibold text-slate-600">{p.proposal_number}</td>
+                  <td className="px-4 py-3 font-medium">{p.client}</td>
+                  <td className="px-4 py-3 text-muted-foreground max-w-[200px] truncate">{p.title}</td>
+                  <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                    {p.date ? new Date(p.date).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) : '—'}
+                  </td>
+                  <td className="px-4 py-3 text-right font-semibold">
+                    {p.amount ? `₱${p.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}
+                  </td>
+                  <td className="px-4 py-3">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold capitalize ${STATUS_STYLES[p.status] ?? ''}`}>
+                      {p.status}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3">
+                    <button
+                      type="button"
+                      onClick={() => deleteProposal(p.id)}
+                      className="text-muted-foreground hover:text-destructive transition-colors"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>New Proposal</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Client <span className="text-destructive">*</span></Label>
+              <Input
+                placeholder="e.g. ABC Corporation"
+                value={form.client}
+                onChange={e => setForm(f => ({ ...f, client: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Title <span className="text-destructive">*</span></Label>
+              <Input
+                placeholder="e.g. Supply of Industrial Equipment"
+                value={form.title}
+                onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Amount (₱)</Label>
+              <Input
+                type="number"
+                min={0}
+                placeholder="0.00"
+                value={form.amount}
+                onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Status</Label>
+              <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v as Proposal['status'] }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="draft">Draft</SelectItem>
+                  <SelectItem value="sent">Sent</SelectItem>
+                  <SelectItem value="accepted">Accepted</SelectItem>
+                  <SelectItem value="rejected">Rejected</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+            <Button onClick={submitProposal} disabled={submitting} className="bg-red-600 hover:bg-red-700 text-white gap-1.5">
+              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+              Create Proposal
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
+// ── Main Page ─────────────────────────────────────────────────────────────────
+
 export default function SettingsPage() {
   const supabase = createClient()
   const fileRef = useRef<HTMLInputElement>(null)
   const [tab, setTab] = useState<TabId>('profile')
-  const [settings, setSettings] = useState<Settings>(defaultSettings)
-  const [original, setOriginal] = useState<Settings>(defaultSettings)
+  const [settings, setSettings] = useState<Settings>(defaultSettings())
+  const [original, setOriginal] = useState<Settings>(defaultSettings())
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
-  const [proposals, setProposals] = useState<Proposal[]>([])
-  const [proposalDialogOpen, setProposalDialogOpen] = useState(false)
-  const [newProposal, setNewProposal] = useState<Omit<Proposal, 'id' | 'created_at'>>({
-    client: '', title: '', description: '', amount: 0, status: 'draft'
-  })
-  const [proposalSaving, setProposalSaving] = useState(false)
 
   useEffect(() => {
     async function load() {
       const { data } = await supabase.from('system_settings').select('*').single()
       if (data) {
-        const merged = { ...defaultSettings, ...data }
+        const merged = {
+          ...defaultSettings(),
+          ...data,
+          core_services: Array.isArray(data.core_services) ? data.core_services : [],
+        }
         setSettings(merged)
         setOriginal(merged)
       }
     }
     load()
-  }, [])
-
-  useEffect(() => {
-    async function loadProposals() {
-      const { data } = await supabase.from('proposals').select('*').order('created_at', { ascending: false })
-      if (data) setProposals(data as Proposal[])
-    }
-    loadProposals()
   }, [])
 
   function set(field: keyof Settings, value: string | boolean | number) {
@@ -442,372 +957,26 @@ export default function SettingsPage() {
       {tab === 'security' && <SecurityTab />}
 
       {tab === 'portfolio' && (
-        <div className="space-y-6 max-w-3xl">
-          <div className="flex items-center justify-between pb-4 border-b">
-            <h2 className="font-bold text-base uppercase tracking-wider text-slate-700">Company Portfolio</h2>
-            <Button size="sm" onClick={save} disabled={saving} className="bg-red-600 hover:bg-red-700 text-white gap-1.5">
-              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-              Save
-            </Button>
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="font-semibold">About the Company</Label>
-            <Textarea rows={5} placeholder="Describe your company history, values, and what sets you apart…" {...S('about')} />
-          </div>
-
-          <div className="space-y-1.5 max-w-xs">
-            <Label className="font-semibold">Years of Experience</Label>
-            <Input type="number" min={0} value={settings.years_of_experience}
-              onChange={e => set('years_of_experience', parseInt(e.target.value) || 0)} />
-          </div>
-
-          <Separator />
-
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <Label className="font-semibold">Core Services / Products</Label>
-              <Button size="sm" variant="outline" className="gap-1.5" onClick={() => {
-                const arr = (() => { try { return JSON.parse(settings.services || '[]') } catch { return [] } })()
-                set('services', JSON.stringify([...arr, { name: '', description: '', icon: 'Wrench' }]))
-              }}>
-                <Plus className="h-3.5 w-3.5" />Add Service
-              </Button>
-            </div>
-            {(() => {
-              const SERVICE_ICONS: Record<string, React.ReactNode> = {
-                Wrench: <Wrench className="h-4 w-4" />,
-                Package: <Package className="h-4 w-4" />,
-                Truck: <Truck className="h-4 w-4" />,
-                Building2: <Building2 className="h-4 w-4" />,
-                Star: <Star className="h-4 w-4" />,
-              }
-              const arr: { name: string; description: string; icon: string }[] = (() => { try { return JSON.parse(settings.services || '[]') } catch { return [] } })()
-              if (arr.length === 0) return <p className="text-sm text-muted-foreground">No services added yet.</p>
-              return (
-                <div className="space-y-3">
-                  {arr.map((svc, i) => (
-                    <Card key={i}>
-                      <CardContent className="pt-4 space-y-3">
-                        <div className="flex items-start gap-3">
-                          <div className="grid grid-cols-2 gap-3 flex-1">
-                            <div className="space-y-1.5">
-                              <Label className="text-xs">Service Name</Label>
-                              <Input placeholder="e.g. Industrial Supply" value={svc.name} onChange={e => {
-                                const next = [...arr]; next[i] = { ...next[i], name: e.target.value }
-                                set('services', JSON.stringify(next))
-                              }} />
-                            </div>
-                            <div className="space-y-1.5">
-                              <Label className="text-xs">Icon</Label>
-                              <Select value={svc.icon} onValueChange={v => {
-                                const next = [...arr]; next[i] = { ...next[i], icon: v }
-                                set('services', JSON.stringify(next))
-                              }}>
-                                <SelectTrigger>
-                                  <SelectValue>
-                                    <span className="flex items-center gap-2">{SERVICE_ICONS[svc.icon]}{svc.icon}</span>
-                                  </SelectValue>
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {Object.keys(SERVICE_ICONS).map(k => (
-                                    <SelectItem key={k} value={k}>
-                                      <span className="flex items-center gap-2">{SERVICE_ICONS[k]}{k}</span>
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </div>
-                          <Button size="icon" variant="ghost" className="mt-5 text-destructive hover:text-destructive shrink-0" onClick={() => {
-                            const next = arr.filter((_, j) => j !== i)
-                            set('services', JSON.stringify(next))
-                          }}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-xs">Description</Label>
-                          <Textarea rows={2} placeholder="Brief description of this service…" value={svc.description} onChange={e => {
-                            const next = [...arr]; next[i] = { ...next[i], description: e.target.value }
-                            set('services', JSON.stringify(next))
-                          }} />
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )
-            })()}
-          </div>
-
-          <Separator />
-
-          <div className="space-y-1.5">
-            <Label className="font-semibold">Key Clients</Label>
-            <p className="text-xs text-muted-foreground">One client name per line</p>
-            <Textarea rows={5} placeholder={"ABC Corporation\nXYZ Trading\nDEF Industries"} {...S('key_clients')} />
-          </div>
-
-          <div className="space-y-1.5">
-            <Label className="font-semibold">Certifications &amp; Awards</Label>
-            <p className="text-xs text-muted-foreground">One certification or award per line</p>
-            <Textarea rows={4} placeholder={"ISO 9001:2015 Certified\nBest SME Award 2023"} {...S('certifications')} />
-          </div>
-
-          <div className="pt-2 flex justify-end">
-            <Button onClick={save} disabled={saving} className="bg-red-600 hover:bg-red-700 text-white gap-1.5">
-              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-              Save Portfolio
-            </Button>
-          </div>
-        </div>
+        <PortfolioTab
+          settings={settings}
+          setSettings={setSettings}
+          onSave={save}
+          onReset={reset}
+          saving={saving}
+        />
       )}
 
       {tab === 'proposal' && (
-        <div className="grid grid-cols-1 xl:grid-cols-[1fr_420px] gap-8">
-          <div className="space-y-5">
-            <div className="flex items-center justify-between pb-4 border-b">
-              <h2 className="font-bold text-base uppercase tracking-wider text-slate-700">Proposal Template</h2>
-              <Button size="sm" onClick={save} disabled={saving} className="bg-red-600 hover:bg-red-700 text-white gap-1.5">
-                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                Save
-              </Button>
-            </div>
-
-            <div className="space-y-1.5">
-              <Label className="font-semibold">Proposal Introduction</Label>
-              <Textarea rows={4} placeholder="Opening paragraph for your proposals…" {...S('proposal_intro')} />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="font-semibold">Executive Summary</Label>
-              <Textarea rows={4} placeholder="Brief overview of the proposal…" {...S('proposal_executive_summary')} />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="font-semibold">Scope of Work</Label>
-              <Textarea rows={5} placeholder="Detailed description of deliverables and scope…" {...S('proposal_scope')} />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="font-semibold">Terms and Conditions</Label>
-              <Textarea rows={5} placeholder="Legal terms, warranties, liabilities…" {...S('proposal_terms')} />
-            </div>
-            <div className="space-y-1.5">
-              <Label className="font-semibold">Payment Schedule</Label>
-              <Textarea rows={3} placeholder="e.g. 50% downpayment upon signing, 50% upon delivery" {...S('proposal_payment_schedule')} />
-            </div>
-            <div className="space-y-1.5 max-w-xs">
-              <Label className="font-semibold">Validity Period</Label>
-              <Input placeholder="e.g. 30 days" {...S('proposal_validity')} />
-            </div>
-
-            <div className="pt-2 flex justify-end">
-              <Button onClick={save} disabled={saving} className="bg-red-600 hover:bg-red-700 text-white gap-1.5">
-                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                Save Template
-              </Button>
-            </div>
-          </div>
-
-          <div className="hidden xl:block">
-            <div className="sticky top-4">
-              <div className="flex items-center gap-2 mb-3">
-                <Eye className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium text-muted-foreground">Proposal Preview</span>
-                <span className="ml-auto text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">● LIVE</span>
-              </div>
-              <div className="border rounded-xl overflow-hidden bg-white shadow-sm text-[11px]">
-                <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-4 flex items-start gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-white/10 flex items-center justify-center shrink-0">
-                    {settings.logo_url ? (
-                      <Image src={settings.logo_url} alt="logo" width={40} height={40} className="object-contain rounded-lg" />
-                    ) : (
-                      <Building2 className="h-5 w-5 text-white/60" />
-                    )}
-                  </div>
-                  <div>
-                    <div className="text-white font-bold text-sm">{settings.company_name || 'Company Name'}</div>
-                    <div className="text-white/50 text-[10px]">{[settings.address, settings.city].filter(Boolean).join(', ')}</div>
-                    <div className="text-white/50 text-[10px]">{settings.email}{settings.phone ? ` · ${settings.phone}` : ''}</div>
-                  </div>
-                </div>
-                <div className="p-5 space-y-4">
-                  <div className="text-center border-b pb-3">
-                    <div className="font-bold text-base text-slate-800">BUSINESS PROPOSAL</div>
-                    <div className="text-muted-foreground text-[10px] mt-0.5">Date: {new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
-                  </div>
-                  {settings.proposal_intro && (
-                    <div>
-                      <div className="font-semibold text-slate-700 mb-1 text-[10px] uppercase tracking-wide">Introduction</div>
-                      <p className="text-slate-600 leading-relaxed">{settings.proposal_intro}</p>
-                    </div>
-                  )}
-                  {settings.proposal_executive_summary && (
-                    <div>
-                      <div className="font-semibold text-slate-700 mb-1 text-[10px] uppercase tracking-wide">Executive Summary</div>
-                      <p className="text-slate-600 leading-relaxed">{settings.proposal_executive_summary}</p>
-                    </div>
-                  )}
-                  {settings.proposal_scope && (
-                    <div>
-                      <div className="font-semibold text-slate-700 mb-1 text-[10px] uppercase tracking-wide">Scope of Work</div>
-                      <p className="text-slate-600 leading-relaxed">{settings.proposal_scope}</p>
-                    </div>
-                  )}
-                  {settings.proposal_terms && (
-                    <div>
-                      <div className="font-semibold text-slate-700 mb-1 text-[10px] uppercase tracking-wide">Terms &amp; Conditions</div>
-                      <p className="text-slate-600 leading-relaxed">{settings.proposal_terms}</p>
-                    </div>
-                  )}
-                  {settings.proposal_payment_schedule && (
-                    <div>
-                      <div className="font-semibold text-slate-700 mb-1 text-[10px] uppercase tracking-wide">Payment Schedule</div>
-                      <p className="text-slate-600 leading-relaxed">{settings.proposal_payment_schedule}</p>
-                    </div>
-                  )}
-                  {settings.proposal_validity && (
-                    <div className="border-t pt-3 text-muted-foreground">
-                      Validity: <span className="font-medium text-slate-700">{settings.proposal_validity}</span>
-                    </div>
-                  )}
-                  {!settings.proposal_intro && !settings.proposal_executive_summary && !settings.proposal_scope && (
-                    <p className="text-muted-foreground text-center py-4">Fill in the fields on the left to preview your proposal template.</p>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ProposalTab
+          settings={settings}
+          setSettings={setSettings}
+          onSave={save}
+          onReset={reset}
+          saving={saving}
+        />
       )}
 
-      {tab === 'database' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between pb-4 border-b">
-            <h2 className="font-bold text-base uppercase tracking-wider text-slate-700">Proposal Database</h2>
-            <Button size="sm" onClick={() => { setNewProposal({ client: '', title: '', description: '', amount: 0, status: 'draft' }); setProposalDialogOpen(true) }} className="bg-red-600 hover:bg-red-700 text-white gap-1.5">
-              <Plus className="h-3.5 w-3.5" />New Proposal
-            </Button>
-          </div>
-
-          <Card>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-32">Proposal #</TableHead>
-                    <TableHead>Client</TableHead>
-                    <TableHead>Title</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="w-20">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {proposals.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={7} className="text-center text-muted-foreground py-12">
-                        No proposals yet. Click &quot;New Proposal&quot; to create one.
-                      </TableCell>
-                    </TableRow>
-                  ) : proposals.map((p, idx) => (
-                    <TableRow key={p.id}>
-                      <TableCell className="font-mono text-xs">PROP-{String(proposals.length - idx).padStart(4, '0')}</TableCell>
-                      <TableCell className="font-medium">{p.client}</TableCell>
-                      <TableCell className="text-muted-foreground">{p.title}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{new Date(p.created_at).toLocaleDateString('en-PH')}</TableCell>
-                      <TableCell>₱{Number(p.amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className={
-                          p.status === 'accepted' ? 'border-green-500 text-green-700 bg-green-50' :
-                          p.status === 'rejected' ? 'border-red-500 text-red-700 bg-red-50' :
-                          p.status === 'sent' ? 'border-blue-500 text-blue-700 bg-blue-50' :
-                          'border-slate-400 text-slate-600'
-                        }>{p.status}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={async () => {
-                          const prev = [...proposals]
-                          setProposals(proposals.filter(x => x.id !== p.id))
-                          const { error } = await supabase.from('proposals').delete().eq('id', p.id)
-                          if (error) {
-                            toast.error('Failed to delete: ' + error.message)
-                            setProposals(prev)
-                          } else {
-                            toast.success('Proposal deleted', {
-                              action: { label: 'Undo', onClick: async () => {
-                                const { error: e2 } = await supabase.from('proposals').insert([{ ...p }])
-                                if (!e2) setProposals(prev)
-                              }}
-                            })
-                          }
-                        }}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-
-          <Dialog open={proposalDialogOpen} onOpenChange={setProposalDialogOpen}>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>New Proposal</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-3 py-2">
-                <div className="space-y-1.5">
-                  <Label>Client</Label>
-                  <Input placeholder="Client name" value={newProposal.client} onChange={e => setNewProposal(p => ({ ...p, client: e.target.value }))} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Title</Label>
-                  <Input placeholder="Proposal title" value={newProposal.title} onChange={e => setNewProposal(p => ({ ...p, title: e.target.value }))} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Description</Label>
-                  <Textarea rows={3} placeholder="Brief description" value={newProposal.description} onChange={e => setNewProposal(p => ({ ...p, description: e.target.value }))} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Amount (₱)</Label>
-                  <Input type="number" min={0} placeholder="0.00" value={newProposal.amount || ''} onChange={e => setNewProposal(p => ({ ...p, amount: parseFloat(e.target.value) || 0 }))} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Status</Label>
-                  <Select value={newProposal.status} onValueChange={v => setNewProposal(p => ({ ...p, status: v as Proposal['status'] }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="draft">Draft</SelectItem>
-                      <SelectItem value="sent">Sent</SelectItem>
-                      <SelectItem value="accepted">Accepted</SelectItem>
-                      <SelectItem value="rejected">Rejected</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setProposalDialogOpen(false)}>Cancel</Button>
-                <Button disabled={proposalSaving || !newProposal.client || !newProposal.title} className="bg-red-600 hover:bg-red-700 text-white" onClick={async () => {
-                  setProposalSaving(true)
-                  const { data, error } = await supabase.from('proposals').insert([newProposal]).select().single()
-                  if (error) {
-                    toast.error(error.message)
-                  } else {
-                    setProposals(prev => [data as Proposal, ...prev])
-                    setProposalDialogOpen(false)
-                    toast.success('Proposal created')
-                  }
-                  setProposalSaving(false)
-                }}>
-                  {proposalSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : 'Create Proposal'}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
-      )}
+      {tab === 'database' && <ProposalDatabaseTab />}
 
       {tab === 'profile' && (
         <div className="grid grid-cols-1 xl:grid-cols-[1fr_420px] gap-8">
