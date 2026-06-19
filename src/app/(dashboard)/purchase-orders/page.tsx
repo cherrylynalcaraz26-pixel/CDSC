@@ -16,7 +16,7 @@ import {
 import {
   Plus, MoreHorizontal, Eye, Printer, Loader2,
   Trash2, CheckCircle2, XCircle, ArrowRightLeft, X,
-  Package, Search, Mail, Send, Pencil,
+  Package, Search, Mail, Send, Pencil, FileText,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
@@ -446,33 +446,30 @@ export default function PurchaseOrdersPage() {
 
       {/* ── Inline Create PO Form ── */}
       {open && (
-        <Card>
-          <CardHeader className="pb-3 flex flex-row items-center justify-between">
-            <CardTitle className="text-base font-semibold">New Purchase Order</CardTitle>
-            <div className="flex rounded-md border overflow-hidden w-fit lg:hidden">
-              <button
-                onClick={() => setActiveTab('form')}
-                className={`px-4 py-1.5 text-sm font-medium ${activeTab === 'form' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
-              >
-                Form
-              </button>
-              <button
-                onClick={() => setActiveTab('preview')}
-                className={`px-4 py-1.5 text-sm font-medium border-l ${activeTab === 'preview' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
-              >
-                Preview
-              </button>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+          {/* LEFT: Form */}
+          <div className="space-y-1">
+            {/* Mobile tab toggle */}
+            <div className="flex gap-2 lg:hidden mb-3">
+              <Button size="sm" variant={activeTab === 'form' ? 'default' : 'outline'}
+                className={activeTab === 'form' ? 'bg-red-600 hover:bg-red-700' : ''}
+                onClick={() => setActiveTab('form')}>Form</Button>
+              <Button size="sm" variant={activeTab === 'preview' ? 'default' : 'outline'}
+                className={activeTab === 'preview' ? 'bg-red-600 hover:bg-red-700' : ''}
+                onClick={() => setActiveTab('preview')}>Preview</Button>
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-              {/* LEFT: Form */}
-              <div className={`space-y-5 ${activeTab === 'preview' ? 'hidden lg:block' : 'block'}`}>
+            <div className={activeTab === 'preview' ? 'hidden lg:block' : 'block'}>
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <FileText className="h-4 w-4" />Purchase Order Details
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
 
-                {/* PO Details */}
-                <div className="space-y-3">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">PO Details</p>
+                  {/* PO Number + Delivery Date */}
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <Label>PO Number</Label>
@@ -484,245 +481,212 @@ export default function PurchaseOrdersPage() {
                     </div>
                   </div>
 
-                  {/* Supplier + Client — same row */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label className={clientId ? 'text-muted-foreground' : ''}>
-                        Supplier {!clientId && <span className="text-destructive">*</span>}
-                        {clientId && <span className="text-xs text-muted-foreground ml-1">(clear client first)</span>}
-                      </Label>
-                      <Select
-                        value={supplierId}
-                        onValueChange={v => {
-                          setSupplierId(v ?? '')
-                          setClientId('')
-                          const sup = suppliers.find(s => s.id === v)
-                          if (sup?.payment_terms) setPaymentTerms(sup.payment_terms)
-                        }}
-                        disabled={!!clientId}
-                      >
-                        <SelectTrigger className={`w-full ${clientId ? 'opacity-50' : ''}`}>
-                          {supplierId
-                            ? <span className="truncate text-sm">{suppliers.find(s => s.id === supplierId)?.company_name ?? supplierId}</span>
-                            : <span className="text-muted-foreground text-sm">Select supplier…</span>}
-                        </SelectTrigger>
-                        <SelectContent>
-                          {suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.company_name}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className={supplierId ? 'text-muted-foreground' : ''}>
-                        Client {!supplierId && <span className="text-destructive">*</span>}
-                        {supplierId && <span className="text-xs text-muted-foreground ml-1">(clear supplier first)</span>}
-                      </Label>
-                      <Select
-                        value={clientId}
-                        onValueChange={v => {
-                          setClientId(v ?? '')
-                          setSupplierId('')
-                          const cli = clients.find(c => c.id === v)
-                          if (cli?.payment_terms) setPaymentTerms(cli.payment_terms)
-                        }}
-                        disabled={!!supplierId}
-                      >
-                        <SelectTrigger className={`w-full ${supplierId ? 'opacity-50' : ''}`}>
-                          {clientId
-                            ? <span className="truncate text-sm">{clients.find(c => c.id === clientId)?.company_name ?? clientId}</span>
-                            : <span className="text-muted-foreground text-sm">Select client…</span>}
-                        </SelectTrigger>
-                        <SelectContent>
-                          {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                  {/* Supplier */}
+                  <div className="space-y-1.5">
+                    <Label className={clientId ? 'text-muted-foreground' : ''}>
+                      Supplier {!clientId && <span className="text-destructive">*</span>}
+                      {clientId && <span className="text-xs text-muted-foreground ml-1">(clear client first)</span>}
+                    </Label>
+                    <Select value={supplierId} onValueChange={v => {
+                      setSupplierId(v ?? ''); setClientId('')
+                      const sup = suppliers.find(s => s.id === v)
+                      if (sup?.payment_terms) setPaymentTerms(sup.payment_terms)
+                    }} disabled={!!clientId}>
+                      <SelectTrigger className={`w-full ${clientId ? 'opacity-50' : ''}`}>
+                        {supplierId
+                          ? <span className="truncate text-sm">{suppliers.find(s => s.id === supplierId)?.company_name ?? supplierId}</span>
+                          : <span className="text-muted-foreground text-sm">Select supplier…</span>}
+                      </SelectTrigger>
+                      <SelectContent>{suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.company_name}</SelectItem>)}</SelectContent>
+                    </Select>
                   </div>
 
-                  {/* Payment Terms + Remarks */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label>Payment Terms</Label>
-                      <Select value={paymentTerms} onValueChange={v => setPaymentTerms(v ?? '30 days')}>
-                        <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {['COD', '7 days', '15 days', '30 days', '45 days', '60 days'].map(t =>
-                            <SelectItem key={t} value={t}>{t}</SelectItem>
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>Remarks</Label>
-                      <textarea
-                        className="w-full min-h-[72px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
-                        rows={3}
-                        placeholder="Notes, special instructions…"
-                        value={remarks}
-                        onChange={e => setRemarks(e.target.value)}
-                      />
-                    </div>
+                  {/* Client */}
+                  <div className="space-y-1.5">
+                    <Label className={supplierId ? 'text-muted-foreground' : ''}>
+                      Client {!supplierId && <span className="text-destructive">*</span>}
+                      {supplierId && <span className="text-xs text-muted-foreground ml-1">(clear supplier first)</span>}
+                    </Label>
+                    <Select value={clientId} onValueChange={v => {
+                      setClientId(v ?? ''); setSupplierId('')
+                      const cli = clients.find(c => c.id === v)
+                      if (cli?.payment_terms) setPaymentTerms(cli.payment_terms)
+                    }} disabled={!!supplierId}>
+                      <SelectTrigger className={`w-full ${supplierId ? 'opacity-50' : ''}`}>
+                        {clientId
+                          ? <span className="truncate text-sm">{clients.find(c => c.id === clientId)?.company_name ?? clientId}</span>
+                          : <span className="text-muted-foreground text-sm">Select client…</span>}
+                      </SelectTrigger>
+                      <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Payment Terms */}
+                  <div className="space-y-1.5">
+                    <Label>Payment Terms</Label>
+                    <Select value={paymentTerms} onValueChange={v => setPaymentTerms(v ?? '30 days')}>
+                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {['COD', '7 days', '15 days', '30 days', '45 days', '60 days'].map(t =>
+                          <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Remarks */}
+                  <div className="space-y-1.5">
+                    <Label>Remarks / Notes</Label>
+                    <textarea
+                      className="w-full min-h-[72px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                      rows={2}
+                      placeholder="Notes, special instructions…"
+                      value={remarks}
+                      onChange={e => setRemarks(e.target.value)}
+                    />
                   </div>
 
                   {/* Discount */}
                   <div className="space-y-1.5">
                     <Label>Discount</Label>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 flex-wrap">
                       {(['none', '2', '5', 'custom'] as const).map(opt => (
-                        <button
-                          key={opt}
-                          type="button"
-                          onClick={() => setDiscountType(opt)}
-                          className={`px-3 py-1.5 text-sm rounded-md border font-medium transition-colors ${discountType === opt ? 'bg-red-600 text-white border-red-600' : 'bg-background text-muted-foreground hover:bg-muted border-input'}`}
-                        >
+                        <button key={opt} type="button" onClick={() => setDiscountType(opt)}
+                          className={`px-3 py-1.5 text-sm rounded-md border font-medium transition-colors ${discountType === opt ? 'bg-red-600 text-white border-red-600' : 'bg-background text-muted-foreground hover:bg-muted border-input'}`}>
                           {opt === 'none' ? 'None' : opt === 'custom' ? 'Custom' : `${opt}%`}
                         </button>
                       ))}
                       {discountType === 'custom' && (
-                        <Input
-                          type="number" min={0} max={100} step="0.1" placeholder="0.0"
-                          value={discountCustom} onChange={e => setDiscountCustom(e.target.value)}
-                          className="w-24 h-9"
-                        />
+                        <Input type="number" min={0} max={100} step="0.1" placeholder="0.0"
+                          value={discountCustom} onChange={e => setDiscountCustom(e.target.value)} className="w-24 h-9" />
                       )}
                     </div>
                   </div>
-                </div>
 
-                {/* Line items */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground pb-1">Items Ordered</p>
-                    <Button type="button" variant="outline" size="sm" onClick={() => setLines(p => [...p, emptyLine()])}>
-                      <Plus className="h-3.5 w-3.5 mr-1" />Add Row
+                  {/* Line Items */}
+                  <div className="space-y-2">
+                    <Label>Line Items</Label>
+                    <div className="border rounded-lg overflow-hidden">
+                      <Table>
+                        <TableHeader>
+                          <TableRow className="bg-muted/40">
+                            <TableHead className="min-w-[160px]">Item Description</TableHead>
+                            <TableHead className="w-16">Qty</TableHead>
+                            <TableHead className="w-16">Unit</TableHead>
+                            <TableHead className="w-28">Unit Price <span className="font-normal text-muted-foreground text-[10px]">(ref)</span></TableHead>
+                            <TableHead className="w-32">Selling Price</TableHead>
+                            <TableHead className="w-24 text-right">Amount</TableHead>
+                            <TableHead className="w-8"></TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {lines.map((line, i) => {
+                            const lineTotal = (parseFloat(line.selling_price) || 0) * (parseFloat(line.quantity) || 0)
+                            const itemMeta = items.find(it => it.item_name === line.item_name)
+                            const statusCfg = itemMeta ? (ITEM_STATUS_CFG[itemMeta.status] ?? ITEM_STATUS_CFG.active) : null
+                            const stockQty = line.item_name ? (warehouseStock[line.item_name] ?? 0) : null
+                            const needsToBuy = itemMeta && (itemMeta.status === 'low_stock' || itemMeta.status === 'out_of_stock')
+                            return (
+                              <TableRow key={i}>
+                                <TableCell className="py-1.5 align-top">
+                                  <div className="flex gap-1 min-w-0">
+                                    <Select value={line.item_name} onValueChange={val => {
+                                      const selected = activeItems.find(it => it.item_name === val)
+                                      const autoPrice = isClient ? (selected?.selling_price ?? selected?.cost ?? null) : (selected?.cost ?? null)
+                                      const autoSell = selected?.selling_price ?? null
+                                      setLines(p => p.map((l, idx) => idx === i ? {
+                                        ...l, item_name: val ?? '',
+                                        unit: selected?.unit_of_measure || l.unit,
+                                        unit_price: autoPrice !== null ? String(autoPrice) : l.unit_price,
+                                        selling_price: autoSell !== null ? String(autoSell) : l.selling_price,
+                                      } : l))
+                                    }}>
+                                      <SelectTrigger className="h-8 text-xs flex-1"><SelectValue placeholder="Select item…" /></SelectTrigger>
+                                      <SelectContent>
+                                        {activeItems.map(it => <SelectItem key={it.item_code} value={it.item_name}>{it.item_name}</SelectItem>)}
+                                      </SelectContent>
+                                    </Select>
+                                    <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" title="Search inventory"
+                                      onClick={() => { setItemSearchIdx(i); setItemQuery('') }}>
+                                      <Package className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </div>
+                                  {(statusCfg || stockQty !== null) && (
+                                    <div className="mt-1 flex flex-wrap gap-1">
+                                      {statusCfg && <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${statusCfg.cls}`}>{statusCfg.label}</span>}
+                                      {stockQty !== null && <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${stockQty > 0 ? 'bg-slate-100 text-slate-600' : 'bg-red-50 text-red-600'}`}>{stockQty > 0 ? `${stockQty.toLocaleString()} in stock` : 'Out of stock'}</span>}
+                                      {needsToBuy && <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-orange-50 text-orange-700 border border-orange-200">⚠ Need to buy from Supplier</span>}
+                                    </div>
+                                  )}
+                                </TableCell>
+                                <TableCell className="py-1.5">
+                                  <Input type="number" min={1} className="h-8 text-xs" placeholder="1" value={line.quantity}
+                                    onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, quantity: e.target.value } : l))} />
+                                </TableCell>
+                                <TableCell className="py-1.5">
+                                  <div className="h-8 flex items-center px-2 text-xs bg-muted/40 rounded border text-muted-foreground">{line.unit || '—'}</div>
+                                </TableCell>
+                                <TableCell className="py-1.5">
+                                  <Input type="number" min={0} step="0.01" className="h-8 text-xs" placeholder="0.00" value={line.unit_price}
+                                    onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, unit_price: e.target.value } : l))} />
+                                </TableCell>
+                                <TableCell className="py-1.5">
+                                  <div className="flex gap-1 items-center">
+                                    <Input type="number" min={0} step="0.01" className="h-8 text-xs flex-1 min-w-0" placeholder="0.00" value={line.selling_price}
+                                      onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, selling_price: e.target.value } : l))} />
+                                    <Button type="button" variant="ghost" size="icon" className="h-8 w-7 shrink-0 text-muted-foreground hover:text-blue-600"
+                                      title="Update item default selling price (affects future records only)"
+                                      onClick={() => updateItemSellingPrice(line.item_name, line.selling_price)}>
+                                      <Pencil className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="py-1.5 text-right text-xs font-medium">{fmt(lineTotal)}</TableCell>
+                                <TableCell className="py-1.5">
+                                  {lines.length > 1 && (
+                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                      onClick={() => setLines(p => p.filter((_, idx) => idx !== i))}>
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            )
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    <Button variant="outline" size="sm" onClick={() => setLines(p => [...p, emptyLine()])}>
+                      <Plus className="h-3.5 w-3.5 mr-1.5" />Add Item
                     </Button>
                   </div>
-                  <div className="border rounded-lg overflow-hidden">
-                    <div className="grid grid-cols-[2fr_60px_70px_110px_138px_100px_36px] gap-2 px-3 py-2 bg-muted/50 border-b text-xs font-medium text-muted-foreground">
-                      <span>Item / Description</span>
-                      <span>Qty</span>
-                      <span>Unit</span>
-                      <span>Unit Price (₱) <span className="font-normal opacity-60">(ref)</span></span>
-                      <span>Selling Price (₱)</span>
-                      <span className="text-right">Line Total</span>
-                      <span />
-                    </div>
-                    <div className="divide-y">
-                      {lines.map((line, i) => {
-                        const lineTotal = (parseFloat(line.selling_price) || 0) * (parseFloat(line.quantity) || 0)
-                        const itemMeta = items.find(it => it.item_name === line.item_name)
-                        const statusCfg = itemMeta ? (ITEM_STATUS_CFG[itemMeta.status] ?? ITEM_STATUS_CFG.active) : null
-                        const stockQty = line.item_name ? (warehouseStock[line.item_name] ?? 0) : null
-                        const needsToBuy = itemMeta && (itemMeta.status === 'low_stock' || itemMeta.status === 'out_of_stock')
-                        return (
-                          <div key={i} className="space-y-0.5 px-3 py-2">
-                            <div className="grid grid-cols-[2fr_60px_70px_110px_138px_100px_36px] gap-2 items-center">
-                              {/* Item select + search button in one flex cell */}
-                              <div className="flex gap-1 min-w-0">
-                                <Select
-                                  value={line.item_name}
-                                  onValueChange={val => {
-                                    const selected = activeItems.find(it => it.item_name === val)
-                                    const autoPrice = isClient
-                                      ? (selected?.selling_price ?? selected?.cost ?? null)
-                                      : (selected?.cost ?? null)
-                                    const autoSell = selected?.selling_price ?? null
-                                    setLines(p => p.map((l, idx) => idx === i ? {
-                                      ...l,
-                                      item_name: val ?? '',
-                                      unit: selected?.unit_of_measure || l.unit,
-                                      unit_price: autoPrice !== null ? String(autoPrice) : l.unit_price,
-                                      selling_price: autoSell !== null ? String(autoSell) : l.selling_price,
-                                    } : l))
-                                  }}
-                                >
-                                  <SelectTrigger className="h-8 text-sm min-w-0 flex-1">
-                                    <SelectValue placeholder="Select item…" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {activeItems.map(it => (
-                                      <SelectItem key={it.item_code} value={it.item_name}>
-                                        {it.item_name}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="icon"
-                                  className="h-8 w-8 shrink-0"
-                                  title="Search inventory"
-                                  onClick={() => { setItemSearchIdx(i); setItemQuery('') }}
-                                >
-                                  <Package className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
 
-                              <Input type="number" min={1} className="h-8 text-sm" placeholder="1" value={line.quantity}
-                                onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, quantity: e.target.value } : l))} />
-                              <div className="h-8 flex items-center px-2 text-sm bg-muted/30 rounded border text-muted-foreground truncate">
-                                {line.unit || '—'}
-                              </div>
-                              <Input type="number" min={0} step="0.01" className="h-8 text-sm" placeholder="0.00" value={line.unit_price}
-                                onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, unit_price: e.target.value } : l))} />
-                              <div className="flex gap-1 items-center">
-                                <Input type="number" min={0} step="0.01" className="h-8 text-sm flex-1 min-w-0" placeholder="0.00" value={line.selling_price}
-                                  onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, selling_price: e.target.value } : l))} />
-                                <Button
-                                  type="button" variant="ghost" size="icon"
-                                  className="h-8 w-8 shrink-0 text-muted-foreground hover:text-blue-600"
-                                  title="Update item default selling price (affects future records only)"
-                                  onClick={() => updateItemSellingPrice(line.item_name, line.selling_price)}
-                                >
-                                  <Pencil className="h-3 w-3" />
-                                </Button>
-                              </div>
-                              <div className="text-right text-sm font-medium pr-1 tabular-nums">
-                                ₱{lineTotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                              </div>
-                              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
-                                onClick={() => setLines(p => p.filter((_, idx) => idx !== i))} disabled={lines.length === 1}>
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
-                            {(statusCfg || stockQty !== null) && (
-                              <div className="pl-0.5 flex items-center flex-wrap gap-1.5">
-                                {statusCfg && (
-                                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${statusCfg.cls}`}>
-                                    {statusCfg.label}
-                                  </span>
-                                )}
-                                {stockQty !== null && (
-                                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${stockQty > 0 ? 'bg-slate-100 text-slate-600' : 'bg-red-50 text-red-600'}`}>
-                                    {stockQty > 0 ? `${stockQty.toLocaleString()} in stock` : 'Out of stock'}
-                                  </span>
-                                )}
-                                {needsToBuy && (
-                                  <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-orange-50 text-orange-700 border border-orange-200">
-                                    ⚠ Need to buy from Supplier
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
+                  {/* Totals summary */}
+                  <div className="rounded-lg bg-muted/30 p-4 space-y-1 text-sm">
+                    <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{fmt(subtotal)}</span></div>
+                    {discountRate > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Discount ({discountRate}%)</span><span className="text-orange-600">− {fmt(discountAmount)}</span></div>}
+                    {discountRate > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Net Subtotal</span><span>{fmt(netSubtotal)}</span></div>}
+                    <div className="flex justify-between"><span className="text-muted-foreground">Input VAT (12%)</span><span className="text-blue-600">{fmt(vatAmount)}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">{taxLabel} ({isClient ? 2 : (selectedSupplier?.ewt_rate ?? 2)}%)</span><span className="text-red-700">− {fmt(taxAmount)}</span></div>
+                    <div className="h-px bg-border my-1" />
+                    <div className="flex justify-between font-bold"><span>Net Payable</span><span className="text-red-600">{fmt(netPayable)}</span></div>
                   </div>
 
-                  {/* Tax summary */}
-                  <div className="flex justify-end">
-                    <div className="space-y-1 text-sm min-w-[240px]">
-                      <div className="flex justify-between"><span className="text-muted-foreground">Subtotal (VAT-inc.)</span><span>{fmt(subtotal)}</span></div>
-                      {discountRate > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Discount ({discountRate}%)</span><span className="text-orange-600">− {fmt(discountAmount)}</span></div>}
-                      {discountRate > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Net Subtotal</span><span>{fmt(netSubtotal)}</span></div>}
-                      <div className="flex justify-between"><span className="text-muted-foreground">Input VAT (12%)</span><span className="text-blue-600">{fmt(vatAmount)}</span></div>
-                      <div className="flex justify-between"><span className="text-muted-foreground">{taxLabel} ({isClient ? 2 : (selectedSupplier?.ewt_rate ?? 2)}%)</span><span className="text-red-700">− {fmt(taxAmount)}</span></div>
-                      <div className="flex justify-between border-t pt-1 font-semibold"><span>Net Payable</span><span className="text-red-600">{fmt(netPayable)}</span></div>
-                    </div>
+                  <div className="flex justify-end gap-2 pt-2">
+                    <Button variant="outline" onClick={() => { setOpen(false); resetForm() }}>Cancel</Button>
+                    <Button type="button" variant="outline" className="gap-1.5" onClick={handlePrint}>
+                      <Printer className="h-4 w-4" />Print
+                    </Button>
+                    <Button type="button" variant="outline" className="gap-1.5" onClick={openEmailDialog}>
+                      <Mail className="h-4 w-4" />Email
+                    </Button>
+                    <Button onClick={submitPO} disabled={saving} className="bg-red-600 hover:bg-red-700">
+                      {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Creating…</> : 'Create Purchase Order'}
+                    </Button>
                   </div>
-                </div>
-              </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
 
               {/* RIGHT: Live preview */}
               <div className={`${activeTab === 'form' ? 'hidden lg:block' : 'block'}`}>
@@ -861,20 +825,6 @@ export default function PurchaseOrdersPage() {
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-4 border-t mt-2">
-              <Button variant="outline" onClick={() => { setOpen(false); resetForm() }}>Cancel</Button>
-              <Button type="button" variant="outline" className="gap-1.5" onClick={handlePrint}>
-                <Printer className="h-4 w-4" />Print
-              </Button>
-              <Button type="button" variant="outline" className="gap-1.5" onClick={openEmailDialog}>
-                <Mail className="h-4 w-4" />Send Email
-              </Button>
-              <Button onClick={submitPO} disabled={saving} className="bg-red-600 hover:bg-red-700">
-                {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Creating…</> : 'Create Purchase Order'}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
       )}
 
       {/* Item Search Dialog */}
