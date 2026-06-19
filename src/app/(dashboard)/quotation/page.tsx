@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { Plus, MoreHorizontal, Loader2, Trash2, X, FileText } from 'lucide-react'
+import { Plus, MoreHorizontal, Loader2, Trash2, X, FileText, Printer } from 'lucide-react'
 import { toast } from 'sonner'
 import Image from 'next/image'
 
@@ -60,6 +60,7 @@ const STATUS_CFG: Record<string, { label: string; cls: string }> = {
 
 export default function QuotationPage() {
   const supabase = createClient()
+  const printRef = useRef<HTMLDivElement>(null)
   const [quotations, setQuotations] = useState<Quotation[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [items, setItems] = useState<ItemOption[]>([])
@@ -87,6 +88,22 @@ export default function QuotationPage() {
   const totalAmount = subtotal + vatAmount - ewtAmount
 
   const fmt = (n: number) => `₱${n.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
+
+  function handlePrint() {
+    const el = printRef.current
+    if (!el) return
+    const win = window.open('', '_blank', 'width=900,height=700')
+    if (!win) return
+    win.document.write(`<!DOCTYPE html><html><head><title>Quotation</title>
+      <script src="https://cdn.tailwindcss.com"><\/script>
+      <style>
+        body { font-family: Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        @media print { body { margin: 0; padding: 16px; } }
+      </style>
+    </head><body class="p-6 text-[11px]">${el.innerHTML}</body></html>`)
+    win.document.close()
+    setTimeout(() => { win.focus(); win.print(); win.close() }, 800)
+  }
 
   async function load() {
     setLoading(true)
@@ -162,44 +179,37 @@ export default function QuotationPage() {
   }
 
   const PreviewDoc = () => (
-    <div className="bg-white text-black rounded-lg border shadow-sm p-8 text-sm font-sans" style={{ minHeight: 700 }}>
+    <div ref={printRef} className="bg-white text-black rounded-lg border shadow-sm p-8 text-sm font-sans" style={{ minHeight: 700 }}>
       {/* Header */}
-      <div className="flex justify-between items-start mb-6">
-        <div className="flex items-start gap-3">
-          <div className="relative h-14 w-14 shrink-0">
-            <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="object-contain rounded" />
-          </div>
-          <div>
-            <div className="font-bold text-base">{companyInfo?.company_name ?? 'CDSC Industrial Supply'}</div>
-            <div className="text-xs text-gray-600 mt-0.5">{companyInfo?.address}</div>
-            <div className="text-xs text-gray-600">{companyInfo?.phone} | {companyInfo?.email}</div>
-            <div className="text-xs text-gray-600">TIN: {companyInfo?.tin}</div>
-          </div>
+      <div className="flex justify-between items-start border-b pb-3">
+        <div className="flex items-center gap-2">
+          <img src="/cdsc-logo.jpg" alt="CDSC" className="h-12 w-12 rounded object-contain" />
+          <div className="text-[13px] font-bold text-red-700">{companyInfo?.company_name ?? 'CDSC Industrial Supply'}</div>
         </div>
-        <div className="text-right">
-          <div className="text-2xl font-bold text-red-600 tracking-widest">QUOTATION</div>
-          <div className="text-xs text-gray-500 mt-1">
-            No: <span className="font-mono font-semibold text-black">{quoteNumber || 'Auto-generated'}</span>
-          </div>
-          <div className="text-xs text-gray-500">Date: {quoteDate}</div>
-          {validUntil && <div className="text-xs text-gray-500">Valid Until: {validUntil}</div>}
+        <div className="text-[9px] text-gray-500 text-right">
+          <div>{companyInfo?.address}</div>
+          <div>{companyInfo?.phone} | {companyInfo?.email}</div>
+          <div>TIN: {companyInfo?.tin}</div>
         </div>
       </div>
 
-      <div className="h-px bg-gray-200 mb-4" />
-
-      {/* Client + Details */}
-      <div className="flex justify-between mb-5">
+      {/* Party / Title row */}
+      <div className="grid grid-cols-3 items-start mt-4 mb-5">
         <div>
-          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Bill To</div>
-          <div className="font-semibold text-base">{selectedClient?.company_name ?? '—'}</div>
+          <div className="text-[9px] font-semibold text-gray-500 uppercase tracking-wider mb-1">Bill To</div>
+          <div className="text-[12px] font-semibold">{selectedClient?.company_name ?? '—'}</div>
+          {subject && <div className="text-[9px] text-gray-500 mt-0.5">{subject}</div>}
         </div>
-        {subject && (
-          <div className="text-right">
-            <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Subject</div>
-            <div className="font-medium">{subject}</div>
+        <div className="text-center">
+          <div className="text-[16px] font-extrabold text-red-700 uppercase tracking-widest">Quotation</div>
+        </div>
+        <div className="text-right">
+          <div className="text-[9px] text-gray-500">
+            No: <span className="font-mono font-semibold text-black">{quoteNumber || 'Auto-generated'}</span>
           </div>
-        )}
+          <div className="text-[9px] text-gray-500">Date: {quoteDate}</div>
+          {validUntil && <div className="text-[9px] text-gray-500">Valid Until: {validUntil}</div>}
+        </div>
       </div>
 
       {/* Items table */}
@@ -468,7 +478,12 @@ export default function QuotationPage() {
           {/* Right: Live Preview */}
           <div className={mobileTab === 'form' ? 'hidden lg:block' : 'block'}>
             <div className="sticky top-4">
-              <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Live Preview</div>
+              <div className="flex items-center justify-between mb-2">
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Live Preview</div>
+                <Button size="sm" variant="outline" onClick={handlePrint} className="text-xs h-7 px-2">
+                  <Printer className="h-3.5 w-3.5 mr-1" />Print
+                </Button>
+              </div>
               <PreviewDoc />
             </div>
           </div>
