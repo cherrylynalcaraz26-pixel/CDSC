@@ -26,6 +26,7 @@ const SEARCH_ITEMS = [
   { label: 'Inventory',             href: '/inventory',               section: 'Warehouse' },
   { label: 'DR Logs',               href: '/dr-logs',                 section: 'Warehouse' },
   { label: 'CSI Monitoring',        href: '/csi-monitoring',          section: 'Warehouse' },
+  { label: 'Pull Out & Billing',   href: '/pull-out-billing',        section: 'Warehouse' },
   { label: 'Accounting',            href: '/accounting',              section: 'Accounting' },
   { label: 'Reports',               href: '/reports',                 section: 'Setup' },
   { label: 'Configuration',         href: '/setup',                   section: 'Setup' },
