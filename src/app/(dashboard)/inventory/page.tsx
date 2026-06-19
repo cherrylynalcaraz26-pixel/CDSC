@@ -50,6 +50,7 @@ export default function InventoryPage() {
   const supabase = createClient()
   const { query: search } = useSearchContext()
   const [rows, setRows] = useState<InventoryRow[]>([])
+  const [uomMap, setUomMap] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [clientFilter, setClientFilter] = useState('all')
   const [itemFilter, setItemFilter] = useState('all')
@@ -84,6 +85,11 @@ export default function InventoryPage() {
   async function load() {
     setLoading(true)
     const PAGE = 1000
+
+    const { data: uomData } = await supabase.from('uom_list').select('code, name')
+    const uomLookup: Record<string, string> = {}
+    for (const u of uomData ?? []) uomLookup[u.code] = u.name
+    setUomMap(uomLookup)
 
     const itemCostMap: Record<string, number | null> = {}
     {
@@ -277,6 +283,8 @@ export default function InventoryPage() {
   }
 
   useEffect(() => { load() }, [])
+
+  function uomName(code: string) { return uomMap[code] || code }
 
   function openWarehouseUpdate(row: typeof warehouseRows[0]) {
     setWarehouseUpdateRow({ id: row.id, item_name: row.item_name, unit: row.unit, notes: row.notes })
@@ -654,7 +662,7 @@ export default function InventoryPage() {
                             {r.item_name}
                           </span>
                         </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{r.unit || '—'}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{r.unit ? uomName(r.unit) : '—'}</TableCell>
                         <TableCell className="text-right text-sm font-semibold text-green-700">{r.quantity}</TableCell>
                         <TableCell className="text-sm max-w-[220px]">
                           {noClientRecord ? (
@@ -739,7 +747,7 @@ export default function InventoryPage() {
                             </span>
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground">{g.rows.length} client{g.rows.length !== 1 ? 's' : ''}</TableCell>
-                          <TableCell className="text-sm text-muted-foreground">{g.unit}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{uomName(g.unit)}</TableCell>
                           <TableCell className="text-right text-sm">{g.total_dr}</TableCell>
                           <TableCell className="text-right text-sm">
                             {g.total_ws > 0 ? <span className="text-green-600 font-medium">{g.total_ws}</span> : <span className="text-muted-foreground">—</span>}
@@ -755,7 +763,7 @@ export default function InventoryPage() {
                             <TableCell />
                             <TableCell className="pl-6 text-muted-foreground italic">{r.item_name}</TableCell>
                             <TableCell className="font-medium">{r.client}</TableCell>
-                            <TableCell className="text-muted-foreground">{r.unit}</TableCell>
+                            <TableCell className="text-muted-foreground">{uomName(r.unit)}</TableCell>
                             <TableCell className="text-right">{Number(r.dr_qty)}</TableCell>
                             <TableCell className="text-right">{r.ws_qty > 0 ? <span className="text-green-600">{Number(r.ws_qty)}</span> : '—'}</TableCell>
                             <TableCell className="text-right">{Number(r.csi_qty)}</TableCell>
@@ -794,7 +802,7 @@ export default function InventoryPage() {
                             <span className="break-words">{row.item_name}</span>
                           </span>
                         </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{row.unit}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{uomName(row.unit)}</TableCell>
                         <TableCell className="text-right text-sm">{Number(row.dr_qty)}</TableCell>
                         <TableCell className="text-right text-sm">
                           {row.ws_qty > 0
@@ -850,7 +858,7 @@ export default function InventoryPage() {
                                           <tr key={j} className="border-b border-muted/30">
                                             <td className="py-1 font-mono text-blue-600">{d.dr_number}</td>
                                             <td className="py-1 text-right font-medium">{Number(d.qty)}</td>
-                                            <td className="py-1 pl-2 text-muted-foreground">{d.unit}</td>
+                                            <td className="py-1 pl-2 text-muted-foreground">{uomName(d.unit)}</td>
                                             <td className="py-1 text-right text-blue-600 font-medium">
                                               {d.unit_price != null ? `₱${Number(d.unit_price).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}
                                             </td>
@@ -884,7 +892,7 @@ export default function InventoryPage() {
                                           <td className="py-1 font-mono text-green-700">{new Date(d.created_at).toLocaleDateString('en-PH')}</td>
                                           <td className="py-1 pl-2 text-muted-foreground">{d.notes ?? '—'}</td>
                                           <td className="py-1 text-right font-medium text-green-600">{Number(d.qty)}</td>
-                                          <td className="py-1 pl-2 text-muted-foreground">{d.unit}</td>
+                                          <td className="py-1 pl-2 text-muted-foreground">{uomName(d.unit)}</td>
                                         </tr>
                                       ))}
                                     </tbody>
@@ -913,7 +921,7 @@ export default function InventoryPage() {
                                           <tr key={j} className="border-b border-muted/30">
                                             <td className="py-1 font-mono text-red-600">{d.si_number}</td>
                                             <td className="py-1 text-right font-medium">{Number(d.qty)}</td>
-                                            <td className="py-1 pl-2 text-muted-foreground">{d.unit}</td>
+                                            <td className="py-1 pl-2 text-muted-foreground">{uomName(d.unit)}</td>
                                             <td className="py-1 text-right text-blue-600 font-medium">
                                               {d.unit_price != null ? `₱${Number(d.unit_price).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}
                                             </td>

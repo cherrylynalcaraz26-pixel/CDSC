@@ -55,13 +55,14 @@ interface ItemForm {
   selling_price: string
   reorder_level: string
   barcode: string
+  attribute: string
 }
 
 interface AttrValue { attribute_id: string; value: string }
 
 const emptyForm = (): ItemForm => ({
   item_code: '', item_name: '', description: '', brand: '',
-  category_id: '', unit_of_measure: 'PCS', cost: '', selling_price: '', reorder_level: '10', barcode: '',
+  category_id: '', unit_of_measure: 'PCS', cost: '', selling_price: '', reorder_level: '10', barcode: '', attribute: '',
 })
 
 export default function ItemsPage() {
@@ -126,6 +127,7 @@ export default function ItemsPage() {
       selling_price: String(item.selling_price ?? ''),
       reorder_level: String(item.reorder_level ?? 10),
       barcode: '',
+      attribute: (item as any).attribute ?? '',
     })
     setAttrValues(item.item_attribute_values?.map(v => ({ attribute_id: v.attribute_id, value: v.value })) ?? [])
     setOpen(true)
@@ -160,6 +162,7 @@ export default function ItemsPage() {
       selling_price: form.selling_price ? Number(form.selling_price) : null,
       reorder_level: Number(form.reorder_level) || null,
       barcode: form.barcode || null,
+      attribute: form.attribute || null,
       status: 'active',
     }
 
@@ -361,6 +364,23 @@ export default function ItemsPage() {
                       ? uoms.map(u => <SelectItem key={u.id} value={u.code}>{u.code} — {u.name}</SelectItem>)
                       : ['PCS','BOX','SET','UNIT','KG','LTR','MTR'].map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)
                     }
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Attribute</Label>
+                <Select value={form.attribute} onValueChange={v => setForm(p => ({ ...p, attribute: v ?? '' }))}>
+                  <SelectTrigger><SelectValue placeholder="Select attribute / variant" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">— None —</SelectItem>
+                    {attributes.map(attr => (
+                      <div key={attr.id}>
+                        <div className="px-2 py-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">{attr.name}</div>
+                        {(attr.options ?? []).map(opt => (
+                          <SelectItem key={`${attr.id}-${opt}`} value={opt}>{opt}</SelectItem>
+                        ))}
+                      </div>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
