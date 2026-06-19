@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
-import { Plus, Search, Loader2, MoreHorizontal, Trophy, XCircle, LayoutGrid, List, Link2, Copy } from 'lucide-react'
+import { Plus, Search, Loader2, MoreHorizontal, Trophy, XCircle, LayoutGrid, List, Link2, Copy, Pencil, Trash2 } from 'lucide-react'
 import { useSearchContext } from '@/context/search-context'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -210,6 +210,17 @@ export default function CRMPage() {
     setSaving(false)
   }
 
+  async function deleteLead(lead: CRMLead) {
+    if (!confirm(`Delete lead "${lead.company_name}"? This cannot be undone.`)) return
+    const { error } = await supabase.from('crm_leads').delete().eq('id', lead.id)
+    if (error) {
+      toast.error('Failed to delete lead')
+    } else {
+      toast.success('Lead deleted')
+      fetchLeads()
+    }
+  }
+
   async function markStage(lead: CRMLead, stage: 'won' | 'lost') {
     const today = new Date().toISOString().split('T')[0]
     const { error } = await supabase
@@ -391,7 +402,10 @@ export default function CRMPage() {
                           <MoreHorizontal className="w-4 h-4" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => openEdit(lead)}>Edit</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openEdit(lead)}>
+                            <Pencil className="w-4 h-4 mr-2 text-yellow-600" />
+                            Edit
+                          </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => markStage(lead, 'won')}>
                             <Trophy className="w-4 h-4 mr-2 text-green-600" />
                             Mark Won
@@ -399,6 +413,10 @@ export default function CRMPage() {
                           <DropdownMenuItem onClick={() => markStage(lead, 'lost')}>
                             <XCircle className="w-4 h-4 mr-2 text-gray-500" />
                             Mark Lost
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => deleteLead(lead)} className="text-red-600 focus:text-red-600">
+                            <Trash2 className="w-4 h-4 mr-2" />
+                            Delete
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
