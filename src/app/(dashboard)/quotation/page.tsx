@@ -11,14 +11,14 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Plus, MoreHorizontal, Loader2, Trash2, X, FileText, Printer, Mail, Send } from 'lucide-react'
+import { Plus, MoreHorizontal, Loader2, Trash2, X, FileText, Printer, Mail, Send, Package, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSearchContext } from '@/context/search-context'
 import { sendEmailWithGmail, preloadGsi } from '@/lib/gmail-send'
 import Image from 'next/image'
 
 interface Client { id: string; company_name: string }
-interface ItemOption { item_name: string; unit_of_measure: string }
+interface ItemOption { item_name: string; unit_of_measure: string; cost: number | null; selling_price: number | null }
 interface SystemSettings {
   company_name: string
   address: string
@@ -77,6 +77,8 @@ export default function QuotationPage() {
   const [emailToQ, setEmailToQ] = useState('')
   const [emailSubjectQ, setEmailSubjectQ] = useState('')
   const [emailBodyQ, setEmailBodyQ] = useState('')
+  const [itemSearchIdx, setItemSearchIdx] = useState<number | null>(null)
+  const [itemQuery, setItemQuery] = useState('')
 
   // Form state
   const [quoteNumber, setQuoteNumber] = useState('')
@@ -118,7 +120,7 @@ export default function QuotationPage() {
     const [{ data: quoData }, { data: clientData }, { data: itemData }, { data: sysData }] = await Promise.all([
       supabase.from('quotations').select('*').order('created_at', { ascending: false }),
       supabase.from('clients').select('id, company_name').eq('status', 'active').order('company_name'),
-      supabase.from('items').select('item_name, unit_of_measure').eq('status', 'active').order('item_name'),
+      supabase.from('items').select('item_name, unit_of_measure, cost, selling_price').eq('status', 'active').order('item_name'),
       supabase.from('system_settings').select('company_name, address, phone, email, tin').single(),
     ])
     setQuotations((quoData ?? []) as Quotation[])
@@ -141,11 +143,21 @@ export default function QuotationPage() {
       if (i !== idx) return line
       if (field === 'item_name') {
         const found = items.find(it => it.item_name === value)
-        return { ...line, item_name: value, unit: found?.unit_of_measure ?? line.unit }
+        const autoPrice = found?.selling_price ?? found?.cost ?? null
+        return {
+          ...line,
+          item_name: value,
+          unit: found?.unit_of_measure ?? line.unit,
+          unit_price: autoPrice !== null ? String(autoPrice) : line.unit_price,
+        }
       }
       return { ...line, [field]: value }
     }))
   }
+
+  const filteredSearchItems = itemQuery.trim()
+    ? items.filter(it => it.item_name.toLowerCase().includes(itemQuery.toLowerCase()))
+    : items
 
   async function handleSave() {
     if (!clientId) { toast.error('Select a client'); return }
@@ -415,7 +427,7 @@ export default function QuotationPage() {
                         <TableHeader>
                           <TableRow className="bg-muted/40">
                             <TableHead className="min-w-[180px]">Item Description</TableHead>
-                            <TableHead className="w-20">Qty</TableHead>
+                            <TableHead className="w-16">Qty</TableHead>
                             <TableHead className="w-20">Unit</TableHead>
                             <TableHead className="w-28">Unit Price</TableHead>
                             <TableHead className="w-28 text-right">Amount</TableHead>
@@ -426,23 +438,29 @@ export default function QuotationPage() {
                           {lines.map((line, idx) => (
                             <TableRow key={idx}>
                               <TableCell className="py-1.5">
-                                <Select value={line.item_name} onValueChange={v => updateLine(idx, 'item_name', v ?? '')}>
-                                  <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Select" /></SelectTrigger>
-                                  <SelectContent>
-                                    {items.map(it => (
-                                      <SelectItem key={it.item_name} value={it.item_name}>{it.item_name}</SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
+                                <div className="flex gap-1 min-w-0">
+                                  <Select value={line.item_name} onValueChange={v => updateLine(idx, 'item_name', v ?? '')}>
+                                    <SelectTrigger className="h-8 text-xs flex-1"><SelectValue placeholder="Select item…" /></SelectTrigger>
+                                    <SelectContent>
+                                      {items.map(it => (
+                                        <SelectItem key={it.item_name} value={it.item_name}>{it.item_name}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                  <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" title="Search inventory"
+                                    onClick={() => { setItemSearchIdx(idx); setItemQuery('') }}>
+                                    <Package className="h-3.5 w-3.5" />
+                                  </Button>
+                                </div>
                               </TableCell>
                               <TableCell className="py-1.5">
-                                <Input type="number" min="0" className="h-8 text-xs" value={line.quantity} onChange={e => updateLine(idx, 'quantity', e.target.value)} />
+                                <Input type="number" min="0" className="h-8 text-xs w-full" value={line.quantity} onChange={e => updateLine(idx, 'quantity', e.target.value)} />
                               </TableCell>
                               <TableCell className="py-1.5">
-                                <Input className="h-8 text-xs bg-muted/30" value={line.unit} readOnly />
+                                <div className="h-8 flex items-center px-2 text-xs bg-muted/40 rounded border text-muted-foreground">{line.unit || '—'}</div>
                               </TableCell>
                               <TableCell className="py-1.5">
-                                <Input type="number" min="0" className="h-8 text-xs" value={line.unit_price} onChange={e => updateLine(idx, 'unit_price', e.target.value)} />
+                                <Input type="number" min="0" step="0.01" className="h-8 text-xs w-full" value={line.unit_price} onChange={e => updateLine(idx, 'unit_price', e.target.value)} />
                               </TableCell>
                               <TableCell className="py-1.5 text-right text-xs font-medium">{fmt((parseFloat(line.quantity)||0)*(parseFloat(line.unit_price)||0))}</TableCell>
                               <TableCell className="py-1.5">
@@ -662,6 +680,55 @@ export default function QuotationPage() {
                 <Send className="h-4 w-4" />Send in Gmail
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Item Search Dialog */}
+      <Dialog open={itemSearchIdx !== null} onOpenChange={o => { if (!o) setItemSearchIdx(null) }}>
+        <DialogContent className="w-[98vw] sm:!max-w-3xl max-h-[80vh] flex flex-col overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Package className="h-4 w-4" />Item Inventory</DialogTitle>
+          </DialogHeader>
+          <div className="relative mb-2">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input autoFocus placeholder="Search by item name…" className="pl-9" value={itemQuery} onChange={e => setItemQuery(e.target.value)} />
+          </div>
+          <div className="flex-1 overflow-y-auto overflow-x-auto border rounded-lg">
+            <table className="w-full text-sm min-w-[600px]">
+              <thead className="sticky top-0 bg-muted">
+                <tr>
+                  <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-[40%]">Item Name</th>
+                  <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-[10%]">Unit</th>
+                  <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground w-[15%]">Cost</th>
+                  <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground w-[15%]">Selling Price</th>
+                  <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-[20%]">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {filteredSearchItems.length === 0 ? (
+                  <tr><td colSpan={5} className="text-center py-6 text-muted-foreground text-sm">No items found.</td></tr>
+                ) : filteredSearchItems.map(it => (
+                  <tr key={it.item_name} className="hover:bg-muted/40 cursor-pointer" onClick={() => {
+                    if (itemSearchIdx === null) return
+                    const autoPrice = it.selling_price ?? it.cost ?? null
+                    setLines(p => p.map((l, i) => i === itemSearchIdx ? {
+                      ...l,
+                      item_name: it.item_name,
+                      unit: it.unit_of_measure || l.unit,
+                      unit_price: autoPrice !== null ? String(autoPrice) : l.unit_price,
+                    } : l))
+                    setItemSearchIdx(null)
+                  }}>
+                    <td className="px-3 py-2 font-medium">{it.item_name}</td>
+                    <td className="px-3 py-2 text-muted-foreground">{it.unit_of_measure || '—'}</td>
+                    <td className="px-3 py-2 text-right">{it.cost != null ? `₱${it.cost.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}</td>
+                    <td className="px-3 py-2 text-right font-medium text-green-700">{it.selling_price != null ? `₱${it.selling_price.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}</td>
+                    <td className="px-3 py-2"><span className="text-xs px-2 py-0.5 rounded bg-green-100 text-green-700">Active</span></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </DialogContent>
       </Dialog>

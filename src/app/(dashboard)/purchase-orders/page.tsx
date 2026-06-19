@@ -483,42 +483,50 @@ export default function PurchaseOrdersPage() {
 
                   {/* Supplier */}
                   <div className="space-y-1.5">
-                    <Label className={clientId ? 'text-muted-foreground' : ''}>
-                      Supplier {!clientId && <span className="text-destructive">*</span>}
-                      {clientId && <span className="text-xs text-muted-foreground ml-1">(clear client first)</span>}
-                    </Label>
-                    <Select value={supplierId} onValueChange={v => {
-                      setSupplierId(v ?? ''); setClientId('')
-                      const sup = suppliers.find(s => s.id === v)
-                      if (sup?.payment_terms) setPaymentTerms(sup.payment_terms)
-                    }} disabled={!!clientId}>
-                      <SelectTrigger className={`w-full ${clientId ? 'opacity-50' : ''}`}>
-                        {supplierId
-                          ? <span className="truncate text-sm">{suppliers.find(s => s.id === supplierId)?.company_name ?? supplierId}</span>
-                          : <span className="text-muted-foreground text-sm">Select supplier…</span>}
-                      </SelectTrigger>
-                      <SelectContent>{suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.company_name}</SelectItem>)}</SelectContent>
-                    </Select>
+                    <Label>Supplier {!clientId && !supplierId && <span className="text-destructive">*</span>}</Label>
+                    <div className="flex gap-1">
+                      <Select value={supplierId} onValueChange={v => {
+                        setSupplierId(v ?? ''); setClientId('')
+                        const sup = suppliers.find(s => s.id === v)
+                        if (sup?.payment_terms) setPaymentTerms(sup.payment_terms)
+                      }} disabled={!!clientId}>
+                        <SelectTrigger className={`flex-1 ${clientId ? 'opacity-40' : ''}`}>
+                          {supplierId
+                            ? <span className="truncate text-sm">{suppliers.find(s => s.id === supplierId)?.company_name}</span>
+                            : <span className="text-muted-foreground text-sm">Select supplier…</span>}
+                        </SelectTrigger>
+                        <SelectContent>{suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.company_name}</SelectItem>)}</SelectContent>
+                      </Select>
+                      {supplierId && (
+                        <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setSupplierId('')}>
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
 
                   {/* Client */}
                   <div className="space-y-1.5">
-                    <Label className={supplierId ? 'text-muted-foreground' : ''}>
-                      Client {!supplierId && <span className="text-destructive">*</span>}
-                      {supplierId && <span className="text-xs text-muted-foreground ml-1">(clear supplier first)</span>}
-                    </Label>
-                    <Select value={clientId} onValueChange={v => {
-                      setClientId(v ?? ''); setSupplierId('')
-                      const cli = clients.find(c => c.id === v)
-                      if (cli?.payment_terms) setPaymentTerms(cli.payment_terms)
-                    }} disabled={!!supplierId}>
-                      <SelectTrigger className={`w-full ${supplierId ? 'opacity-50' : ''}`}>
-                        {clientId
-                          ? <span className="truncate text-sm">{clients.find(c => c.id === clientId)?.company_name ?? clientId}</span>
-                          : <span className="text-muted-foreground text-sm">Select client…</span>}
-                      </SelectTrigger>
-                      <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}</SelectContent>
-                    </Select>
+                    <Label>Client {!clientId && !supplierId && <span className="text-destructive">*</span>}</Label>
+                    <div className="flex gap-1">
+                      <Select value={clientId} onValueChange={v => {
+                        setClientId(v ?? ''); setSupplierId('')
+                        const cli = clients.find(c => c.id === v)
+                        if (cli?.payment_terms) setPaymentTerms(cli.payment_terms)
+                      }} disabled={!!supplierId}>
+                        <SelectTrigger className={`flex-1 ${supplierId ? 'opacity-40' : ''}`}>
+                          {clientId
+                            ? <span className="truncate text-sm">{clients.find(c => c.id === clientId)?.company_name}</span>
+                            : <span className="text-muted-foreground text-sm">Select client…</span>}
+                        </SelectTrigger>
+                        <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}</SelectContent>
+                      </Select>
+                      {clientId && (
+                        <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setClientId('')}>
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
 
                   {/* Payment Terms */}
@@ -619,7 +627,7 @@ export default function PurchaseOrdersPage() {
                                   )}
                                 </TableCell>
                                 <TableCell className="py-1.5">
-                                  <Input type="number" min={1} className="h-8 text-xs" placeholder="1" value={line.quantity}
+                                  <Input type="number" min={1} className="h-8 text-xs w-full" placeholder="1" value={line.quantity}
                                     onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, quantity: e.target.value } : l))} />
                                 </TableCell>
                                 <TableCell className="py-1.5">
