@@ -3,13 +3,12 @@
 import { useState } from 'react'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
-import { Loader2, CheckCircle2, Send, ArrowRight, Building2, ShoppingCart, Truck, Zap, Lock, Package } from 'lucide-react'
+import { Loader2, CheckCircle2, Send, ArrowRight, Building2, Truck, Zap, Lock, Package } from 'lucide-react'
 
-type ContactType = 'client' | 'buyer' | 'supplier'
+type ContactType = 'client' | 'supplier'
 
 const CONTACT_TYPES: { value: ContactType; label: string; icon: React.ReactNode }[] = [
   { value: 'client',   label: 'Client / Customer', icon: <Building2 className="h-6 w-6 text-black" /> },
-  { value: 'buyer',    label: 'Buyer',              icon: <ShoppingCart className="h-6 w-6 text-black" /> },
   { value: 'supplier', label: 'Supplier / Vendor',  icon: <Truck className="h-6 w-6 text-black" /> },
 ]
 
@@ -139,7 +138,7 @@ export default function InquiryPage() {
                   <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
                     I am a <span className="text-red-500">*</span>
                   </p>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-2 gap-2">
                     {CONTACT_TYPES.map(t => (
                       <button
                         key={t.value}
