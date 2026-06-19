@@ -225,8 +225,8 @@ function PullOutTab() {
               <div className="space-y-1.5">
                 <Label>Client</Label>
                 <Select value={clientId} onValueChange={v => {
-                  setClientId(v)
-                  setClientName(clients.find(c => c.id === v)?.name ?? '')
+                  setClientId(v ?? '')
+                  setClientName(clients.find(c => c.id === (v ?? ''))?.name ?? '')
                 }}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select client…" />
@@ -548,8 +548,8 @@ function BillingTab() {
               <div className="space-y-1.5 md:col-span-2">
                 <Label>Client</Label>
                 <Select value={clientId} onValueChange={v => {
-                  setClientId(v)
-                  setClientName(clients.find(c => c.id === v)?.name ?? '')
+                  setClientId(v ?? '')
+                  setClientName(clients.find(c => c.id === (v ?? ''))?.name ?? '')
                 }}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select client…" />
