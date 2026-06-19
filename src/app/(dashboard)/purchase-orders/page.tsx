@@ -178,14 +178,17 @@ export default function PurchaseOrdersPage() {
   async function submitPO() {
     if (!supplierId && !clientId) { toast.error('Select a supplier or client'); return }
     setSaving(true)
+    const { data: { user } } = await supabase.auth.getUser()
     const { error } = await supabase.from('purchase_orders').insert({
       po_number: poNumber || null,
       supplier_id: supplierId || null,
       client_id: clientId || null,
+      po_date: new Date().toISOString().split('T')[0],
       delivery_date: deliveryDate || null,
       payment_terms: paymentTerms || null,
       remarks: remarks || null,
       status: 'open',
+      created_by: user?.id,
       subtotal,
       vat_amount: vatAmount,
       ewt_amount: isClient ? 0 : taxAmount,

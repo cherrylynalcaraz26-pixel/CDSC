@@ -212,11 +212,11 @@ function PullOutTab() {
       result.sort((a, b) => (b.date > a.date ? 1 : b.date < a.date ? -1 : 0))
       setUnified(result)
 
-      const { data: cls } = await supabase.from('clients').select('id, name').order('name')
-      if (cls) setClients(cls)
+      const { data: cls } = await supabase.from('clients').select('id, company_name').order('company_name')
+      if (cls) setClients(cls.map((c: any) => ({ ...c, name: c.company_name })))
 
-      const { data: itms } = await supabase.from('items').select('id, name, unit').order('name')
-      if (itms) setItems(itms)
+      const { data: itms } = await supabase.from('items').select('id, item_name, unit_of_measure').order('item_name')
+      if (itms) setItems(itms.map((i: any) => ({ ...i, name: i.item_name, unit: i.unit_of_measure })))
 
       setLoading(false)
     }
@@ -577,8 +577,8 @@ function BillingTab() {
         .order('created_at', { ascending: false })
       if (rows) setRecords(rows as BillingRecord[])
 
-      const { data: cls } = await supabase.from('clients').select('id, name').order('name')
-      if (cls) setClients(cls)
+      const { data: cls } = await supabase.from('clients').select('id, company_name').order('company_name')
+      if (cls) setClients(cls.map((c: any) => ({ ...c, name: c.company_name })))
 
       setLoading(false)
     }
