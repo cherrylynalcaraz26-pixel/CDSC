@@ -3,17 +3,25 @@
 import { useState } from 'react'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
-import { Loader2, CheckCircle2, Send, Building2, User, Phone, Mail, Package, MessageSquare, ChevronRight } from 'lucide-react'
+import { Loader2, CheckCircle2, Send, ArrowRight } from 'lucide-react'
 
 type ContactType = 'client' | 'buyer' | 'supplier'
 
-const CONTACT_TYPES: { value: ContactType; label: string; desc: string }[] = [
-  { value: 'client', label: 'Client / Customer', desc: 'I want to purchase products or services' },
-  { value: 'buyer', label: 'Buyer', desc: 'I am looking to source industrial supplies' },
-  { value: 'supplier', label: 'Supplier / Vendor', desc: 'I want to supply products to CDSC' },
+const CONTACT_TYPES: { value: ContactType; label: string; emoji: string }[] = [
+  { value: 'client',   label: 'Client / Customer', emoji: '🏢' },
+  { value: 'buyer',    label: 'Buyer',              emoji: '🛒' },
+  { value: 'supplier', label: 'Supplier / Vendor',  emoji: '🚚' },
 ]
 
-const EMPTY = { contact_type: '' as ContactType | '', company_name: '', contact_person: '', contact_email: '', contact_phone: '', product_interest: '', notes: '' }
+const EMPTY = {
+  contact_type: '' as ContactType | '',
+  company_name: '',
+  contact_person: '',
+  contact_email: '',
+  contact_phone: '',
+  product_interest: '',
+  notes: '',
+}
 
 export default function InquiryPage() {
   const supabase = createClient()
@@ -49,25 +57,20 @@ export default function InquiryPage() {
 
   if (done) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4" style={{ background: 'linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 50%, #111 100%)' }}>
-        <div className="text-center max-w-sm mx-auto space-y-6">
-          <div className="relative mx-auto w-24 h-24">
-            <div className="absolute inset-0 rounded-full bg-green-500/20 animate-ping" />
-            <div className="relative w-24 h-24 rounded-full bg-green-500/10 border border-green-500/30 flex items-center justify-center">
-              <CheckCircle2 className="h-12 w-12 text-green-400" />
-            </div>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-red-50 flex items-center justify-center p-6">
+        <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/80 border border-slate-100 p-12 max-w-md w-full text-center">
+          <div className="w-20 h-20 rounded-full bg-green-50 border-2 border-green-200 flex items-center justify-center mx-auto mb-6">
+            <CheckCircle2 className="h-10 w-10 text-green-500" />
           </div>
-          <div>
-            <h2 className="text-2xl font-bold text-white mb-2">Inquiry Sent!</h2>
-            <p className="text-white/50 text-sm leading-relaxed">
-              Thank you for reaching out. Our team will review your inquiry and get back to you as soon as possible.
-            </p>
-          </div>
+          <h2 className="text-2xl font-bold text-slate-800 mb-2">Inquiry Received!</h2>
+          <p className="text-slate-400 text-sm leading-relaxed mb-8">
+            Thank you for reaching out. Our team will review your details and contact you within 24 hours.
+          </p>
           <button
             onClick={() => { setDone(false); setForm(EMPTY) }}
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg border border-white/15 text-white/60 hover:text-white hover:border-white/30 text-sm transition-colors"
+            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-full bg-slate-900 text-white text-sm font-medium hover:bg-slate-700 transition-colors"
           >
-            Submit Another Inquiry <ChevronRight className="h-4 w-4" />
+            Submit Another <ArrowRight className="h-4 w-4" />
           </button>
         </div>
       </div>
@@ -75,190 +78,199 @@ export default function InquiryPage() {
   }
 
   return (
-    <div className="min-h-screen flex" style={{ background: 'linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 50%, #111 100%)' }}>
-      {/* Left panel */}
-      <div className="hidden lg:flex flex-col justify-between w-80 shrink-0 p-10 border-r border-white/8">
-        <div>
-          <div className="flex items-center gap-3 mb-12">
-            <div className="relative h-9 w-9 shrink-0">
-              <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="rounded-lg object-cover" />
-            </div>
-            <div>
-              <div className="text-white font-bold text-sm">CDSC Industrial</div>
-              <div className="text-white/35 text-xs">Supply Corporation</div>
-            </div>
-          </div>
-
-          <h1 className="text-3xl font-bold text-white leading-tight mb-3">
-            Let&apos;s work<br />together.
-          </h1>
-          <p className="text-white/40 text-sm leading-relaxed">
-            Fill out the form and our team will get back to you within 24 hours.
-          </p>
-
-          <div className="mt-10 space-y-5">
-            {[
-              { icon: '📦', title: 'Industrial Supplies', desc: 'Wide range of industrial products' },
-              { icon: '🚚', title: 'Fast Delivery', desc: 'Reliable logistics and warehouse' },
-              { icon: '🤝', title: 'Trusted Partners', desc: 'Serving clients across industries' },
-            ].map(item => (
-              <div key={item.title} className="flex items-start gap-3">
-                <div className="text-lg mt-0.5">{item.icon}</div>
-                <div>
-                  <div className="text-white/80 text-sm font-medium">{item.title}</div>
-                  <div className="text-white/35 text-xs">{item.desc}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="text-white/20 text-xs">© {new Date().getFullYear()} CDSC Industrial Supply</div>
-      </div>
-
-      {/* Right form panel */}
-      <div className="flex-1 flex items-center justify-center p-6 lg:p-12 overflow-y-auto">
-        <div className="w-full max-w-lg">
-          {/* Mobile header */}
-          <div className="flex items-center gap-3 mb-8 lg:hidden">
-            <div className="relative h-8 w-8 shrink-0">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-red-50">
+      {/* Top nav bar */}
+      <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-slate-100">
+        <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="relative h-7 w-7 shrink-0">
               <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="rounded-md object-cover" />
             </div>
-            <div>
-              <div className="text-white font-bold text-sm">CDSC Industrial Supply</div>
-              <div className="text-white/35 text-xs">Send us your inquiry</div>
-            </div>
+            <span className="font-bold text-slate-800 text-sm">CDSC Industrial Supply</span>
           </div>
+          <span className="text-xs text-slate-400 hidden sm:block">Inquiry Form</span>
+        </div>
+      </header>
 
-          <div className="mb-8 hidden lg:block">
-            <h2 className="text-xl font-semibold text-white">Send an Inquiry</h2>
-            <p className="text-white/40 text-sm mt-1">All fields marked * are required</p>
-          </div>
+      <div className="max-w-5xl mx-auto px-6 py-12 lg:py-16">
+        <div className="grid lg:grid-cols-5 gap-12 items-start">
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Type selector */}
-            <div>
-              <label className="block text-xs font-medium text-white/50 uppercase tracking-wider mb-2">I am a <span className="text-red-400">*</span></label>
-              <div className="grid grid-cols-3 gap-2">
-                {CONTACT_TYPES.map(t => (
-                  <button
-                    key={t.value}
-                    type="button"
-                    onClick={() => set('contact_type', t.value)}
-                    className={`relative p-3 rounded-xl border text-left transition-all ${
-                      form.contact_type === t.value
-                        ? 'border-red-500 bg-red-500/10 text-white'
-                        : 'border-white/10 bg-white/5 text-white/40 hover:border-white/20 hover:text-white/70'
-                    }`}
-                  >
-                    <div className="text-xs font-semibold leading-tight">{t.label}</div>
-                    <div className="text-[10px] mt-1 leading-tight opacity-60 hidden xl:block">{t.desc}</div>
-                    {form.contact_type === t.value && (
-                      <div className="absolute top-2 right-2 h-1.5 w-1.5 rounded-full bg-red-400" />
-                    )}
-                  </button>
-                ))}
-              </div>
+          {/* Left — headline */}
+          <div className="lg:col-span-2 lg:sticky lg:top-28">
+            <div className="inline-flex items-center gap-2 bg-red-50 border border-red-100 text-red-600 text-xs font-semibold px-3 py-1.5 rounded-full mb-6">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+              Now accepting inquiries
             </div>
-
-            {/* Fields */}
-            <div className="space-y-4">
-              <Field icon={<Building2 className="h-4 w-4" />} label="Company / Business Name" required>
-                <input
-                  value={form.company_name}
-                  onChange={e => set('company_name', e.target.value)}
-                  placeholder="Your company name"
-                  required
-                  className="w-full bg-transparent text-white placeholder-white/25 text-sm outline-none"
-                />
-              </Field>
-
-              <div className="grid grid-cols-2 gap-3">
-                <Field icon={<User className="h-4 w-4" />} label="Contact Person" required>
-                  <input
-                    value={form.contact_person}
-                    onChange={e => set('contact_person', e.target.value)}
-                    placeholder="Full name"
-                    required
-                    className="w-full bg-transparent text-white placeholder-white/25 text-sm outline-none"
-                  />
-                </Field>
-                <Field icon={<Phone className="h-4 w-4" />} label="Phone Number">
-                  <input
-                    value={form.contact_phone}
-                    onChange={e => set('contact_phone', e.target.value)}
-                    placeholder="+63 9XX XXX XXXX"
-                    className="w-full bg-transparent text-white placeholder-white/25 text-sm outline-none"
-                  />
-                </Field>
-              </div>
-
-              <Field icon={<Mail className="h-4 w-4" />} label="Email Address">
-                <input
-                  type="email"
-                  value={form.contact_email}
-                  onChange={e => set('contact_email', e.target.value)}
-                  placeholder="you@example.com"
-                  className="w-full bg-transparent text-white placeholder-white/25 text-sm outline-none"
-                />
-              </Field>
-
-              <Field icon={<Package className="h-4 w-4" />} label="Product / Service of Interest">
-                <input
-                  value={form.product_interest}
-                  onChange={e => set('product_interest', e.target.value)}
-                  placeholder="What are you looking for?"
-                  className="w-full bg-transparent text-white placeholder-white/25 text-sm outline-none"
-                />
-              </Field>
-
-              <Field icon={<MessageSquare className="h-4 w-4" />} label="Message / Details" multiline>
-                <textarea
-                  value={form.notes}
-                  onChange={e => set('notes', e.target.value)}
-                  placeholder="Tell us more about your needs…"
-                  rows={4}
-                  className="w-full bg-transparent text-white placeholder-white/25 text-sm outline-none resize-none"
-                />
-              </Field>
-            </div>
-
-            <button
-              type="submit"
-              disabled={sending || !form.company_name.trim() || !form.contact_person.trim()}
-              className="w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-red-600 hover:bg-red-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors"
-            >
-              {sending
-                ? <><Loader2 className="h-4 w-4 animate-spin" /> Sending…</>
-                : <><Send className="h-4 w-4" /> Send Inquiry</>}
-            </button>
-
-            <p className="text-center text-white/25 text-xs">
-              Your information is kept confidential and used only for business correspondence.
+            <h1 className="text-4xl font-extrabold text-slate-900 leading-tight mb-4">
+              Get in<br />
+              <span className="text-red-600">Touch</span><br />
+              With Us
+            </h1>
+            <p className="text-slate-400 text-sm leading-relaxed mb-8">
+              Whether you&apos;re a client, buyer, or supplier — we&apos;d love to hear from you. Send us your details and we&apos;ll get back to you promptly.
             </p>
-          </form>
+
+            <div className="space-y-4">
+              {[
+                { icon: '⚡', label: 'Quick Response', sub: 'We reply within 24 hours' },
+                { icon: '🔒', label: 'Confidential', sub: 'Your data is kept private' },
+                { icon: '📦', label: 'Wide Product Range', sub: 'Industrial supplies & more' },
+              ].map(item => (
+                <div key={item.label} className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-white border border-slate-100 shadow-sm flex items-center justify-center text-base shrink-0">
+                    {item.icon}
+                  </div>
+                  <div>
+                    <div className="text-sm font-semibold text-slate-700">{item.label}</div>
+                    <div className="text-xs text-slate-400">{item.sub}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Right — form */}
+          <div className="lg:col-span-3">
+            <div className="bg-white rounded-3xl shadow-xl shadow-slate-200/60 border border-slate-100 p-8">
+              <form onSubmit={handleSubmit} className="space-y-6">
+
+                {/* Type selection */}
+                <div>
+                  <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
+                    I am a <span className="text-red-500">*</span>
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {CONTACT_TYPES.map(t => (
+                      <button
+                        key={t.value}
+                        type="button"
+                        onClick={() => set('contact_type', t.value)}
+                        className={`flex flex-col items-center gap-1.5 py-4 px-2 rounded-2xl border-2 text-center transition-all ${
+                          form.contact_type === t.value
+                            ? 'border-red-500 bg-red-50 text-red-700 shadow-sm shadow-red-100'
+                            : 'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200 hover:bg-white'
+                        }`}
+                      >
+                        <span className="text-2xl">{t.emoji}</span>
+                        <span className="text-xs font-semibold leading-tight">{t.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <hr className="border-slate-100" />
+
+                {/* Company */}
+                <FormField label="Company / Business Name" required>
+                  <input
+                    value={form.company_name}
+                    onChange={e => set('company_name', e.target.value)}
+                    placeholder="e.g. Acme Corporation"
+                    required
+                    className="w-full h-11 px-4 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 text-sm placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400 transition"
+                  />
+                </FormField>
+
+                {/* Contact row */}
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField label="Contact Person" required>
+                    <input
+                      value={form.contact_person}
+                      onChange={e => set('contact_person', e.target.value)}
+                      placeholder="Full name"
+                      required
+                      className="w-full h-11 px-4 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 text-sm placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400 transition"
+                    />
+                  </FormField>
+                  <FormField label="Phone Number">
+                    <input
+                      value={form.contact_phone}
+                      onChange={e => set('contact_phone', e.target.value)}
+                      placeholder="+63 9XX XXX XXXX"
+                      className="w-full h-11 px-4 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 text-sm placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400 transition"
+                    />
+                  </FormField>
+                </div>
+
+                {/* Email */}
+                <FormField label="Email Address">
+                  <input
+                    type="email"
+                    value={form.contact_email}
+                    onChange={e => set('contact_email', e.target.value)}
+                    placeholder="you@company.com"
+                    className="w-full h-11 px-4 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 text-sm placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400 transition"
+                  />
+                </FormField>
+
+                {/* Product interest */}
+                <FormField label="Product / Service of Interest">
+                  <input
+                    value={form.product_interest}
+                    onChange={e => set('product_interest', e.target.value)}
+                    placeholder="e.g. Industrial fasteners, safety equipment…"
+                    className="w-full h-11 px-4 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 text-sm placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400 transition"
+                  />
+                </FormField>
+
+                {/* Message */}
+                <FormField label="Message / Additional Details">
+                  <textarea
+                    value={form.notes}
+                    onChange={e => set('notes', e.target.value)}
+                    placeholder="Tell us more about your requirements, expected quantity, timeline, or any other details…"
+                    rows={4}
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-800 text-sm placeholder-slate-300 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-400 transition resize-none"
+                  />
+                </FormField>
+
+                {/* Submit */}
+                <button
+                  type="submit"
+                  disabled={sending || !form.company_name.trim() || !form.contact_person.trim()}
+                  className="w-full h-12 flex items-center justify-center gap-2.5 rounded-xl bg-red-600 hover:bg-red-500 active:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-sm transition-colors shadow-lg shadow-red-200"
+                >
+                  {sending
+                    ? <><Loader2 className="h-4 w-4 animate-spin" /> Sending your inquiry…</>
+                    : <><Send className="h-4 w-4" /> Send Inquiry</>}
+                </button>
+
+                <p className="text-center text-slate-300 text-xs">
+                  By submitting this form you agree to our privacy policy. Your data will never be shared with third parties.
+                </p>
+              </form>
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* Footer */}
+      <footer className="border-t border-slate-100 mt-16">
+        <div className="max-w-5xl mx-auto px-6 py-6 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="relative h-5 w-5 shrink-0">
+              <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="rounded object-cover" />
+            </div>
+            <span className="text-xs text-slate-400">CDSC Industrial Supply</span>
+          </div>
+          <span className="text-xs text-slate-300">© {new Date().getFullYear()} All rights reserved</span>
+        </div>
+      </footer>
     </div>
   )
 }
 
-function Field({ icon, label, required, multiline, children }: {
-  icon: React.ReactNode
+function FormField({ label, required, children }: {
   label: string
   required?: boolean
-  multiline?: boolean
   children: React.ReactNode
 }) {
   return (
-    <div className={`flex gap-3 rounded-xl border border-white/10 bg-white/5 px-4 ${multiline ? 'pt-3.5 pb-2' : 'items-center py-3'} focus-within:border-white/25 transition-colors`}>
-      <div className="text-white/25 shrink-0 mt-0.5">{icon}</div>
-      <div className="flex-1 min-w-0">
-        <label className="block text-[10px] font-medium text-white/35 uppercase tracking-wider mb-0.5">
-          {label}{required && <span className="text-red-400 ml-0.5">*</span>}
-        </label>
-        {children}
-      </div>
+    <div className="space-y-1.5">
+      <label className="block text-xs font-semibold text-slate-500">
+        {label}{required && <span className="text-red-500 ml-0.5">*</span>}
+      </label>
+      {children}
     </div>
   )
 }
