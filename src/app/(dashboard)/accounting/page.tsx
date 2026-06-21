@@ -539,7 +539,7 @@ function SalesJournalTab({ collections }: { collections: Collection[] }) {
 
 // ── Disbursements sub-tab (CDJ) ───────────────────────────────────────────────
 
-function DisbursementsTab() {
+function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filterTo?: string }) {
   const supabase = createClient()
   const [disbs, setDisbs] = useState<Disbursement[]>([])
   const [loading, setLoading] = useState(true)
@@ -597,12 +597,18 @@ function DisbursementsTab() {
     else { toast.success('Deleted'); load() }
   }
 
-  const total = disbs.filter(d => d.status === 'posted').reduce((s, d) => s + d.amount, 0)
+  const filteredDisbs = disbs.filter(d => {
+    if (!d.disb_date) return true
+    if (filterFrom && d.disb_date < filterFrom) return false
+    if (filterTo && d.disb_date > filterTo) return false
+    return true
+  })
+  const total = filteredDisbs.filter(d => d.status === 'posted').reduce((s, d) => s + d.amount, 0)
 
   function exportCDJ() {
     exportCSV('CDJ_Disbursements.csv',
       ['Date','CDJ Number','Payee','Description','Expense Account','Amount','Payment Mode','Check Number'],
-      disbs.filter(d => d.status === 'posted').map(d => [
+      filteredDisbs.filter(d => d.status === 'posted').map(d => [
         d.disb_date, d.disb_number, d.payee, d.description ?? '',
         EXPENSE_ACCOUNTS.find(a => a.code === d.expense_account)?.name ?? d.expense_account,
         d.amount, d.payment_mode, d.check_number ?? '',
@@ -638,9 +644,9 @@ function DisbursementsTab() {
           <TableBody>
             {loading ? (
               <TableRow><TableCell colSpan={8} className="text-center py-8"><Loader2 className="h-4 w-4 animate-spin mx-auto" /></TableCell></TableRow>
-            ) : disbs.length === 0 ? (
-              <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No disbursements yet.</TableCell></TableRow>
-            ) : disbs.map(d => (
+            ) : filteredDisbs.length === 0 ? (
+              <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No disbursements for the selected period.</TableCell></TableRow>
+            ) : filteredDisbs.map(d => (
               <TableRow key={d.id}>
                 <TableCell className="text-sm whitespace-nowrap">{format(new Date(d.disb_date), 'MMM d, yyyy')}</TableCell>
                 <TableCell className="font-mono text-xs text-muted-foreground">{d.disb_number}</TableCell>
@@ -1060,6 +1066,42 @@ function BookkeepingTab() {
   const [jLines, setJLines] = useState<JournalLine[]>([])
   const [loading, setLoading] = useState(true)
 
+  // Date filter
+  const currentYear = new Date().getFullYear()
+  const [filterYear, setFilterYear] = useState<string>(String(currentYear))
+  const [filterQuarter, setFilterQuarter] = useState<string>('all')
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
+  const [useCustom, setUseCustom] = useState(false)
+
+  const { filterFrom, filterTo } = (() => {
+    if (useCustom) return { filterFrom: customFrom || undefined, filterTo: customTo || undefined }
+    if (filterYear === 'all') return { filterFrom: undefined, filterTo: undefined }
+    const y = parseInt(filterYear)
+    const qMap: Record<string, [string, string]> = {
+      Q1: [`${y}-01-01`, `${y}-03-31`],
+      Q2: [`${y}-04-01`, `${y}-06-30`],
+      Q3: [`${y}-07-01`, `${y}-09-30`],
+      Q4: [`${y}-10-01`, `${y}-12-31`],
+    }
+    if (filterQuarter !== 'all' && qMap[filterQuarter]) return { filterFrom: qMap[filterQuarter][0], filterTo: qMap[filterQuarter][1] }
+    return { filterFrom: `${y}-01-01`, filterTo: `${y}-12-31` }
+  })()
+
+  function applyDateFilter<T>(arr: T[], getDate: (item: T) => string | null | undefined) {
+    return arr.filter(item => {
+      const d = getDate(item)
+      if (!d) return true
+      if (filterFrom && d < filterFrom) return false
+      if (filterTo && d > filterTo) return false
+      return true
+    })
+  }
+
+  const filteredCollections = applyDateFilter(collections, c => (c as Collection).collection_date)
+  const filteredDisbursements = applyDateFilter(disbursements, d => (d as Disbursement).disb_date)
+  const filteredJLines = applyDateFilter(jLines, l => (l as JournalLine).journal_entries?.entry_date)
+
   const load = useCallback(async () => {
     setLoading(true)
     const [{ data: colData }, { data: disbData }, { data: coaData }, { data: jlData }] = await Promise.all([
@@ -1081,9 +1123,63 @@ function BookkeepingTab() {
     return <div className="flex items-center justify-center h-64"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
   }
 
+  const yearOptions = Array.from({ length: 5 }, (_, i) => String(currentYear - i))
+
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">Double-entry accounting books — BIR CAS ready</p>
+      <div className="flex flex-wrap items-end gap-3 p-3 rounded-lg bg-muted/30 border">
+        <div className="flex items-center gap-2">
+          <Label className="text-xs whitespace-nowrap">Filter by</Label>
+          <Select value={useCustom ? 'custom' : 'preset'} onValueChange={v => setUseCustom(v === 'custom')}>
+            <SelectTrigger className="h-8 text-xs w-24"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="preset">Preset</SelectItem>
+              <SelectItem value="custom">Custom</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {!useCustom ? (
+          <>
+            <div className="flex items-center gap-2">
+              <Label className="text-xs">Year</Label>
+              <Select value={filterYear} onValueChange={v => { setFilterYear(v); setFilterQuarter('all') }}>
+                <SelectTrigger className="h-8 text-xs w-24"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Years</SelectItem>
+                  {yearOptions.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-2">
+              <Label className="text-xs">Quarter</Label>
+              <Select value={filterQuarter} onValueChange={setFilterQuarter} disabled={filterYear === 'all'}>
+                <SelectTrigger className="h-8 text-xs w-24"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Quarters</SelectItem>
+                  <SelectItem value="Q1">Q1 (Jan–Mar)</SelectItem>
+                  <SelectItem value="Q2">Q2 (Apr–Jun)</SelectItem>
+                  <SelectItem value="Q3">Q3 (Jul–Sep)</SelectItem>
+                  <SelectItem value="Q4">Q4 (Oct–Dec)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="flex items-center gap-2">
+              <Label className="text-xs">From</Label>
+              <Input type="date" className="h-8 text-xs w-36" value={customFrom} onChange={e => setCustomFrom(e.target.value)} />
+            </div>
+            <div className="flex items-center gap-2">
+              <Label className="text-xs">To</Label>
+              <Input type="date" className="h-8 text-xs w-36" value={customTo} onChange={e => setCustomTo(e.target.value)} />
+            </div>
+          </>
+        )}
+        {(filterFrom || filterTo) && (
+          <span className="text-xs text-muted-foreground">{filterFrom ?? '—'} → {filterTo ?? '—'}</span>
+        )}
+      </div>
       <Tabs defaultValue="crj">
         <TabsList className="flex-wrap h-auto gap-1">
           <TabsTrigger value="crj" className="flex items-center gap-1.5"><BookOpen className="h-3.5 w-3.5" />Sales Journal</TabsTrigger>
@@ -1095,13 +1191,13 @@ function BookkeepingTab() {
           <TabsTrigger value="bir" className="flex items-center gap-1.5"><Download className="h-3.5 w-3.5" />BIR / CAS</TabsTrigger>
         </TabsList>
         <div className="mt-4">
-          <TabsContent value="crj"><SalesJournalTab collections={collections} /></TabsContent>
-          <TabsContent value="cdj"><DisbursementsTab /></TabsContent>
-          <TabsContent value="gl"><GeneralLedgerTab lines={jLines} /></TabsContent>
-          <TabsContent value="tb"><TrialBalanceTab lines={jLines} coa={coa} /></TabsContent>
-          <TabsContent value="is"><IncomeStatementTab lines={jLines} coa={coa} /></TabsContent>
-          <TabsContent value="bs"><BalanceSheetTab lines={jLines} coa={coa} /></TabsContent>
-          <TabsContent value="bir"><BIRExportTab collections={collections} disbursements={disbursements} /></TabsContent>
+          <TabsContent value="crj"><SalesJournalTab collections={filteredCollections} /></TabsContent>
+          <TabsContent value="cdj"><DisbursementsTab filterFrom={filterFrom} filterTo={filterTo} /></TabsContent>
+          <TabsContent value="gl"><GeneralLedgerTab lines={filteredJLines} /></TabsContent>
+          <TabsContent value="tb"><TrialBalanceTab lines={filteredJLines} coa={coa} /></TabsContent>
+          <TabsContent value="is"><IncomeStatementTab lines={filteredJLines} coa={coa} /></TabsContent>
+          <TabsContent value="bs"><BalanceSheetTab lines={filteredJLines} coa={coa} /></TabsContent>
+          <TabsContent value="bir"><BIRExportTab collections={filteredCollections} disbursements={filteredDisbursements} /></TabsContent>
         </div>
       </Tabs>
     </div>

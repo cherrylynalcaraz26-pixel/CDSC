@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Plus, MoreHorizontal, Loader2, Trash2, X, FileText, Printer, Mail, Send, Package, Search, Pencil } from 'lucide-react'
+import { Plus, MoreHorizontal, Loader2, Trash2, X, FileText, Printer, Mail, Send, Package, Search, Pencil, Eye, CheckCircle, XCircle, Clock, CheckCheck } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSearchContext } from '@/context/search-context'
 import { sendEmailWithGmail, preloadGsi } from '@/lib/gmail-send'
@@ -91,6 +91,9 @@ export default function QuotationPage() {
 
   // Edit
   const [editingId, setEditingId] = useState<string | null>(null)
+
+  // View
+  const [viewingQ, setViewingQ] = useState<Quotation | null>(null)
 
   // List email
   const [listEmailQ, setListEmailQ] = useState<Quotation | null>(null)
@@ -711,16 +714,27 @@ export default function QuotationPage() {
                             <MoreHorizontal className="h-4 w-4" />
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-52">
+                            <DropdownMenuItem onClick={() => setViewingQ(q)}>
+                              <Eye className="mr-2 h-4 w-4" />View
+                            </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => openEdit(q)}>
                               <Pencil className="mr-2 h-4 w-4" />Edit
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => openListEmail(q)}>
                               <Mail className="mr-2 h-4 w-4" />Send Email
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => updateStatus(q.id, 'sent')}>Mark as Sent</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => updateStatus(q.id, 'accepted')}>Mark as Accepted</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => updateStatus(q.id, 'declined')}>Mark as Declined</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => updateStatus(q.id, 'expired')}>Mark as Expired</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => updateStatus(q.id, 'sent')}>
+                              <Send className="mr-2 h-4 w-4" />Mark as Sent
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => updateStatus(q.id, 'accepted')}>
+                              <CheckCircle className="mr-2 h-4 w-4" />Mark as Accepted
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => updateStatus(q.id, 'declined')}>
+                              <XCircle className="mr-2 h-4 w-4" />Mark as Declined
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => updateStatus(q.id, 'expired')}>
+                              <Clock className="mr-2 h-4 w-4" />Mark as Expired
+                            </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => deleteQuotation(q.id)} className="text-destructive">
                               <Trash2 className="mr-2 h-4 w-4" />Delete
                             </DropdownMenuItem>
@@ -802,6 +816,36 @@ export default function QuotationPage() {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Quotation Dialog */}
+      <Dialog open={!!viewingQ} onOpenChange={o => { if (!o) setViewingQ(null) }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Eye className="h-4 w-4" />Quotation Details
+            </DialogTitle>
+          </DialogHeader>
+          {viewingQ && (
+            <div className="space-y-3 text-sm">
+              <div className="grid grid-cols-2 gap-2">
+                <div><span className="text-muted-foreground">Quote #:</span> <span className="font-medium">{viewingQ.quote_number}</span></div>
+                <div><span className="text-muted-foreground">Date:</span> <span className="font-medium">{viewingQ.quote_date}</span></div>
+                <div><span className="text-muted-foreground">Client:</span> <span className="font-medium">{viewingQ.client_name ?? '—'}</span></div>
+                <div><span className="text-muted-foreground">Valid Until:</span> <span className="font-medium">{viewingQ.valid_until ?? '—'}</span></div>
+                <div><span className="text-muted-foreground">Status:</span> <span className="font-medium capitalize">{viewingQ.status}</span></div>
+                <div><span className="text-muted-foreground">Subject:</span> <span className="font-medium">{viewingQ.subject ?? '—'}</span></div>
+              </div>
+              <div className="border-t pt-3 space-y-1">
+                <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>₱{viewingQ.subtotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+                {(viewingQ.vat_amount ?? 0) > 0 && <div className="flex justify-between"><span className="text-muted-foreground">VAT (12%)</span><span>₱{viewingQ.vat_amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
+                {(viewingQ.ewt_amount ?? 0) > 0 && <div className="flex justify-between"><span className="text-muted-foreground">EWT</span><span>-₱{viewingQ.ewt_amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
+                <div className="flex justify-between font-semibold border-t pt-1"><span>Total</span><span>₱{viewingQ.total_amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+              </div>
+              {viewingQ.notes && <div className="border-t pt-2"><span className="text-muted-foreground">Notes:</span> <p className="mt-1">{viewingQ.notes}</p></div>}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

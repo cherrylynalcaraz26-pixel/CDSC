@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -67,6 +68,7 @@ function StatCard({ title, value, icon: Icon, sub, color, href }: {
 
 export default function DashboardPage() {
   const supabase = createClient()
+  const router = useRouter()
   const [kpi, setKpi] = useState<KPI>({ totalItems: 0, activeSuppliers: 0, openPOs: 0, pendingPRs: 0, drLogsThisMonth: 0, csiThisMonth: 0, totalAssets: 0, totalDRs: 0 })
   const [monthlyData, setMonthlyData] = useState<MonthBar[]>([])
   const [recentDRs, setRecentDRs] = useState<RecentDR[]>([])
@@ -268,7 +270,7 @@ export default function DashboardPage() {
                     { done: hasOr,      label: hasOr ? 'Collected' : 'Pending' },
                   ]
                   return (
-                    <div key={po.id} className="grid grid-cols-5 text-center text-xs">
+                    <div key={po.id} className="grid grid-cols-5 text-center text-xs cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => router.push('/purchase-orders')}>
                       {stages.map((s, i) => (
                         <div key={i} className={`py-2.5 px-1 border-r last:border-r-0 ${s.done ? '' : 'opacity-40'}`}>
                           <div className={`inline-flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold mx-auto mb-0.5 ${s.done ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
@@ -330,7 +332,7 @@ export default function DashboardPage() {
                     { done: hasOr,          label: hasOr ? 'Collected' : 'Pending' },
                   ]
                   return (
-                    <div key={so.id} className="grid grid-cols-5 text-center text-xs">
+                    <div key={so.id} className="grid grid-cols-5 text-center text-xs cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => router.push('/sales-orders')}>
                       {stages.map((s, i) => (
                         <div key={i} className={`py-2.5 px-1 border-r last:border-r-0 ${s.done ? '' : 'opacity-40'}`}>
                           <div className={`inline-flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold mx-auto mb-0.5 ${s.done ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>

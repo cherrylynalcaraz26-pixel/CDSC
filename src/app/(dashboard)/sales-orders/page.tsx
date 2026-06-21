@@ -35,12 +35,12 @@ interface SO {
   status: SOStatus; total_amount: number; remarks: string | null
 }
 
-interface SOLine { item_name: string; quantity: string; unit: string; unit_price: string }
+interface SOLine { item_name: string; quantity: string; unit: string; unit_price: string; selling_price: string }
 interface ItemOption { item_code: string; item_name: string; unit_of_measure: string; cost: number | null; selling_price: number | null }
 interface ClientOption { id: string; company_name: string; payment_terms?: string | null }
 interface SystemSettings { company_name: string; address: string; phone: string; email: string; tin: string }
 
-const emptyLine = (): SOLine => ({ item_name: '', quantity: '', unit: '', unit_price: '' })
+const emptyLine = (): SOLine => ({ item_name: '', quantity: '', unit: '', unit_price: '', selling_price: '' })
 const today = () => new Date().toISOString().split('T')[0]
 
 export default function SalesOrdersPage() {
@@ -71,7 +71,10 @@ export default function SalesOrdersPage() {
   const [lines, setLines] = useState<SOLine[]>([emptyLine()])
 
   const selectedClient = clients.find(c => c.id === clientId)
-  const subtotal = lines.reduce((s, l) => s + (parseFloat(l.unit_price) || 0) * (parseFloat(l.quantity) || 0), 0)
+  const subtotal = lines.reduce((s, l) => s + (parseFloat(l.selling_price) || parseFloat(l.unit_price) || 0) * (parseFloat(l.quantity) || 0), 0)
+  const costTotal = lines.reduce((s, l) => s + (parseFloat(l.unit_price) || 0) * (parseFloat(l.quantity) || 0), 0)
+  const estimatedProfit = subtotal - costTotal
+  const profitMarginPct = subtotal > 0 ? (estimatedProfit / subtotal) * 100 : 0
   const fmt = (n: number) => `₱${n.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
 
   const filteredSearchItems = itemQuery.trim()
@@ -284,7 +287,8 @@ export default function SalesOrdersPage() {
                             <TableHead className="min-w-[160px]">Item Description</TableHead>
                             <TableHead className="w-16">Qty</TableHead>
                             <TableHead className="w-20">Unit</TableHead>
-                            <TableHead className="w-28">Unit Price</TableHead>
+                            <TableHead className="w-28">Cost Price</TableHead>
+                            <TableHead className="w-28">Selling Price</TableHead>
                             <TableHead className="w-24 text-right">Amount</TableHead>
                             <TableHead className="w-8"></TableHead>
                           </TableRow>
@@ -298,11 +302,12 @@ export default function SalesOrdersPage() {
                                   <div className="flex gap-1 min-w-0">
                                     <Select value={line.item_name} onValueChange={val => {
                                       const selected = items.find(it => it.item_name === val)
-                                      const autoPrice = selected?.selling_price ?? selected?.cost ?? null
                                       setLines(p => p.map((l, idx) => idx === i ? {
                                         ...l, item_name: val ?? '',
                                         unit: selected?.unit_of_measure || l.unit,
-                                        unit_price: autoPrice !== null ? String(autoPrice) : l.unit_price,
+                                        unit_price: selected?.cost !== null && selected?.cost !== undefined ? String(selected.cost) : l.unit_price,
+                                        selling_price: selected?.selling_price !== null && selected?.selling_price !== undefined ? String(selected.selling_price) : l.selling_price,
+                                        quantity: l.quantity || '1',
                                       } : l))
                                     }}>
                                       <SelectTrigger className="h-8 text-xs flex-1"><SelectValue placeholder="Select item…" /></SelectTrigger>
@@ -325,7 +330,11 @@ export default function SalesOrdersPage() {
                                   <Input type="number" min={0} step="0.01" className="h-8 text-xs w-full" placeholder="0.00" value={line.unit_price}
                                     onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, unit_price: e.target.value } : l))} />
                                 </TableCell>
-                                <TableCell className="py-1.5 text-right text-xs font-medium">{fmt(lineTotal)}</TableCell>
+                                <TableCell className="py-1.5">
+                                  <Input type="number" min={0} step="0.01" className="h-8 text-xs w-full" placeholder="0.00" value={line.selling_price}
+                                    onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, selling_price: e.target.value } : l))} />
+                                </TableCell>
+                                <TableCell className="py-1.5 text-right text-xs font-medium">{fmt((parseFloat(line.selling_price) || parseFloat(line.unit_price) || 0) * (parseFloat(line.quantity) || 0))}</TableCell>
                                 <TableCell className="py-1.5">
                                   {lines.length > 1 && (
                                     <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
@@ -358,9 +367,19 @@ export default function SalesOrdersPage() {
 
                   {/* Totals */}
                   <div className="rounded-lg bg-muted/30 p-4 space-y-1 text-sm">
-                    <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{fmt(subtotal)}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Cost Total</span><span>{fmt(costTotal)}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Selling Total</span><span>{fmt(subtotal)}</span></div>
                     <div className="h-px bg-border my-1" />
                     <div className="flex justify-between font-bold"><span>Total</span><span className="text-red-600">{fmt(subtotal)}</span></div>
+                    <div className="h-px bg-border my-1" />
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Estimated Profit</span>
+                      <span className={estimatedProfit >= 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>{fmt(estimatedProfit)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Profit Margin</span>
+                      <span className={profitMarginPct >= 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>{profitMarginPct.toFixed(1)}%</span>
+                    </div>
                   </div>
 
                   <div className="flex justify-end gap-2 pt-2">
@@ -679,12 +698,13 @@ export default function SalesOrdersPage() {
                 ) : filteredSearchItems.map(it => (
                   <tr key={it.item_name} className="hover:bg-muted/40 cursor-pointer" onClick={() => {
                     if (itemSearchIdx === null) return
-                    const autoPrice = it.selling_price ?? it.cost ?? null
                     setLines(p => p.map((l, i) => i === itemSearchIdx ? {
                       ...l,
                       item_name: it.item_name,
                       unit: it.unit_of_measure || l.unit,
-                      unit_price: autoPrice !== null ? String(autoPrice) : l.unit_price,
+                      unit_price: it.cost !== null && it.cost !== undefined ? String(it.cost) : l.unit_price,
+                      selling_price: it.selling_price !== null && it.selling_price !== undefined ? String(it.selling_price) : l.selling_price,
+                      quantity: l.quantity || '1',
                     } : l))
                     setItemSearchIdx(null)
                   }}>
