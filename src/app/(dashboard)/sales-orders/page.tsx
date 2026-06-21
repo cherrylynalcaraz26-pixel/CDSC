@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   Plus, MoreHorizontal, Eye, Printer, Trash2, CheckCircle2, XCircle,
-  Loader2, X, FileText, Package, Search, Mail,
+  Loader2, X, FileText, Package, Search, Mail, ChevronDown, ChevronUp,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
@@ -57,6 +57,10 @@ export default function SalesOrdersPage() {
   const [itemSearchIdx, setItemSearchIdx] = useState<number | null>(null)
   const [itemQuery, setItemQuery] = useState('')
 
+  // Pipeline
+  const [pipelineOpen, setPipelineOpen] = useState(true)
+  const [collectedClients, setCollectedClients] = useState<Set<string>>(new Set())
+
   // Form
   const [soNumber, setSoNumber] = useState('')
   const [soDate, setSoDate] = useState(today())
@@ -86,6 +90,10 @@ export default function SalesOrdersPage() {
     setItems((itemData ?? []) as ItemOption[])
     setClients((cliData ?? []) as ClientOption[])
     if (sysData) setCompanyInfo(sysData as SystemSettings)
+
+    const { data: colData } = await supabase.from('collections').select('client_name')
+    setCollectedClients(new Set((colData ?? []).map((r: any) => (r.client_name ?? '').trim()).filter(Boolean)))
+
     setLoading(false)
   }
 
@@ -487,6 +495,70 @@ export default function SalesOrdersPage() {
             </div>
           </div>
         </>
+      )}
+
+      {/* SO Pipeline */}
+      {!open && (
+        <Card>
+          <CardHeader className="pb-0 pt-4 px-4">
+            <button className="flex items-center justify-between w-full text-left" onClick={() => setPipelineOpen(o => !o)}>
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <FileText className="h-4 w-4 text-blue-600" />
+                Sales Order Pipeline — Next Actions
+              </CardTitle>
+              {pipelineOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+            </button>
+          </CardHeader>
+          {pipelineOpen && (
+            <CardContent className="p-0 mt-3">
+              <div className="grid grid-cols-5 text-center text-[10px] font-semibold uppercase tracking-wider border-b border-t">
+                {[
+                  { label: 'SO Created',  color: 'text-blue-600 bg-blue-50' },
+                  { label: 'Confirmed',   color: 'text-indigo-600 bg-indigo-50' },
+                  { label: 'Processing',  color: 'text-yellow-600 bg-yellow-50' },
+                  { label: 'Shipped',     color: 'text-orange-600 bg-orange-50' },
+                  { label: 'Collected',   color: 'text-green-600 bg-green-50' },
+                ].map(s => (
+                  <div key={s.label} className={`py-2 ${s.color}`}>{s.label}</div>
+                ))}
+              </div>
+              {loading ? (
+                <div className="text-center py-6"><Loader2 className="h-4 w-4 animate-spin mx-auto text-muted-foreground" /></div>
+              ) : sos.filter(s => !['cancelled', 'delivered'].includes(s.status)).length === 0 ? (
+                <div className="text-center py-6 text-xs text-muted-foreground">No active sales orders</div>
+              ) : (
+                <div className="divide-y max-h-64 overflow-y-auto">
+                  {sos.filter(s => !['cancelled', 'delivered'].includes(s.status)).map(so => {
+                    const statusOrder = ['draft', 'confirmed', 'processing', 'shipped', 'delivered']
+                    const stageIdx = statusOrder.indexOf(so.status)
+                    const clientName = (so.client_name ?? '').trim()
+                    const hasOr = collectedClients.has(clientName)
+                    const stages = [
+                      { done: true,          label: so.so_number ?? '—',           sub: so.client_name ?? '' },
+                      { done: stageIdx >= 1, label: stageIdx >= 1 ? 'Confirmed'  : 'Pending' },
+                      { done: stageIdx >= 2, label: stageIdx >= 2 ? 'Processing' : 'Pending' },
+                      { done: stageIdx >= 3, label: stageIdx >= 3 ? 'Shipped'    : 'Pending' },
+                      { done: hasOr,         label: hasOr          ? 'Collected'  : 'Pending' },
+                    ]
+                    return (
+                      <div key={so.id} className="grid grid-cols-5 text-center text-xs">
+                        {stages.map((s, i) => (
+                          <div key={i} className={`py-2.5 px-1 border-r last:border-r-0 ${s.done ? '' : 'opacity-40'}`}>
+                            <div className={`inline-flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold mx-auto mb-0.5 ${s.done ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+                              {s.done ? '✓' : (i + 1)}
+                            </div>
+                            <div className="font-medium truncate px-1">{s.label}</div>
+                            {s.sub && <div className="text-[10px] text-muted-foreground truncate px-1">{s.sub}</div>}
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </CardContent>
+          )}
+        </Card>
       )}
 
       {/* Sales Order List */}
