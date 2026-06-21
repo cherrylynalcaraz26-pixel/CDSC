@@ -116,6 +116,9 @@ export default function PurchaseOrdersPage() {
   // View PO modal
   const [viewPO, setViewPO] = useState<PO | null>(null)
 
+  // Edit
+  const [editingId, setEditingId] = useState<string | null>(null)
+
   // Pipeline
   const [pipelineOpen, setPipelineOpen] = useState(true)
   const [receivedPONums, setReceivedPONums] = useState<Set<string>>(new Set())
@@ -192,10 +195,22 @@ export default function PurchaseOrdersPage() {
   const netPayable = totalAmount - taxAmount
 
   function resetForm() {
+    setEditingId(null)
     setSupplierId(''); setPoNumber(''); setDeliveryDate('')
     setPaymentTerms('30 days'); setRemarks(''); setLines([emptyLine()])
     setActiveTab('form'); setDiscountType('none'); setDiscountCustom('')
     setEwtType('services'); setPreparedBy(''); setApprovedBy('')
+  }
+
+  function openEdit(po: PO) {
+    resetForm()
+    setEditingId(po.id)
+    setSupplierId((po.supplier as any)?.id ?? (po as any).supplier_id ?? '')
+    setPoNumber(po.po_number ?? '')
+    setDeliveryDate(po.delivery_date ?? '')
+    setPaymentTerms(po.payment_terms ?? '30 days')
+    setRemarks(po.remarks ?? '')
+    setOpen(true)
   }
 
   async function updateItemSellingPrice(itemName: string, newPrice: string) {
@@ -212,16 +227,12 @@ export default function PurchaseOrdersPage() {
   async function submitPO() {
     if (!supplierId) { toast.error('Select a supplier'); return }
     setSaving(true)
-    const { data: { user } } = await supabase.auth.getUser()
-    const { error } = await supabase.from('purchase_orders').insert({
+    const payload = {
       po_number: poNumber || null,
       supplier_id: supplierId || null,
-      po_date: new Date().toISOString().split('T')[0],
       delivery_date: deliveryDate || null,
       payment_terms: paymentTerms || null,
       remarks: remarks || null,
-      status: 'open',
-      created_by: user?.id,
       subtotal,
       vat_amount: vatAmount,
       ewt_amount: taxAmount,
@@ -230,9 +241,22 @@ export default function PurchaseOrdersPage() {
       tax_type: 'ewt',
       total_amount: totalAmount,
       net_payable: netPayable,
-    }).select('id').single()
+    }
+    let error
+    if (editingId) {
+      ;({ error } = await supabase.from('purchase_orders').update(payload).eq('id', editingId))
+    } else {
+      const { data: { user } } = await supabase.auth.getUser()
+      ;({ error } = await supabase.from('purchase_orders').insert({
+        ...payload,
+        po_date: new Date().toISOString().split('T')[0],
+        status: 'open',
+        created_by: user?.id,
+      }))
+    }
     if (error) { toast.error(error.message); setSaving(false); return }
-    toast.success('Purchase Order created')
+    toast.success(editingId ? 'Purchase Order updated' : 'Purchase Order created')
+    setEditingId(null)
     resetForm()
     setOpen(false)
     load()
@@ -588,6 +612,9 @@ export default function PurchaseOrdersPage() {
                           <DropdownMenuContent align="end" className="w-52">
                             <DropdownMenuItem onClick={() => setViewPO(po)}>
                               <Eye className="mr-2 h-4 w-4" />View PO
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openEdit(po)}>
+                              <Pencil className="mr-2 h-4 w-4" />Edit
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handlePrintPO(po)}>
                               <Printer className="mr-2 h-4 w-4" />Print PO
