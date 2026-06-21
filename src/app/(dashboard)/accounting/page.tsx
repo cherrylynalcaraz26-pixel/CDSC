@@ -1152,7 +1152,7 @@ function BookkeepingTab() {
             </div>
             <div className="flex items-center gap-2">
               <Label className="text-xs">Quarter</Label>
-              <Select value={filterQuarter} onValueChange={setFilterQuarter} disabled={filterYear === 'all'}>
+              <Select value={filterQuarter} onValueChange={v => setFilterQuarter(v ?? 'all')} disabled={filterYear === 'all'}>
                 <SelectTrigger className="h-8 text-xs w-24"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Quarters</SelectItem>
