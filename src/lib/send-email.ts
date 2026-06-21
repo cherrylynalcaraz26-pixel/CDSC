@@ -5,13 +5,10 @@ export interface SendEmailPayload {
   to: string
   subject: string
   body: string
-  /** Rendered HTML string of the document (e.g. from buildPOHtml or printRef.innerHTML) */
   printHtml?: string
   pdfFilename?: string
 }
 
-// Minimal safe CSS that replaces Tailwind utility classes with hex values,
-// avoiding lab()/oklch() colors that html2canvas cannot parse.
 const SAFE_CSS = `
   *, *::before, *::after { box-sizing: border-box; }
   body { font-family: Arial, sans-serif; font-size: 11px; color: #111827; background: #fff; margin: 0; padding: 24px; }
@@ -87,8 +84,6 @@ const SAFE_CSS = `
   .grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
   .border-collapse { border-collapse: collapse; }
   table { width: 100%; border-collapse: collapse; }
-  th, td { font-size: 10px; }
-  .\\[\\&_th\\]\\:text-white th { color: #fff; }
   .text-\\[13px\\] { font-size: 13px; }
   .text-\\[11px\\] { font-size: 11px; }
   .text-\\[10px\\] { font-size: 10px; }
@@ -100,33 +95,48 @@ const SAFE_CSS = `
   .object-cover { object-fit: cover; }
 `
 
-/** Renders an HTML string to a PDF and returns base64. */
+/**
+ * Renders an HTML string to PDF inside an isolated iframe so the main
+ * document's Tailwind v4 CSS (which uses lab()/oklch()) never touches
+ * the rendered content — avoiding the html2canvas parse error.
+ */
 async function htmlToPdfBase64(html: string): Promise<string> {
-  // Strip external scripts (Tailwind CDN etc) — html2canvas can't handle lab()/oklch() from Tailwind v4
+  // Strip any external scripts from the HTML
   const stripped = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
 
-  const container = document.createElement('div')
-  container.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;background:white;z-index:-1;overflow:hidden;'
+  // Build a self-contained document with only our safe hex CSS
+  const iframeDoc = `<!DOCTYPE html><html><head><meta charset="utf-8">
+    <style>${SAFE_CSS}</style>
+  </head><body>${stripped}</body></html>`
 
-  // Inject safe hex-based CSS instead of letting Tailwind CDN apply oklch/lab colors
-  const style = document.createElement('style')
-  style.textContent = SAFE_CSS
-  container.appendChild(style)
+  const iframe = document.createElement('iframe')
+  iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;height:1px;border:none;visibility:hidden;'
+  document.body.appendChild(iframe)
 
-  const inner = document.createElement('div')
-  inner.innerHTML = stripped
-  container.appendChild(inner)
+  await new Promise<void>(resolve => {
+    iframe.onload = () => resolve()
+    iframe.srcdoc = iframeDoc
+  })
 
-  document.body.appendChild(container)
-  await new Promise(r => setTimeout(r, 200))
+  // Let layout settle
+  await new Promise(r => setTimeout(r, 300))
+
+  const iBody = iframe.contentDocument?.body
+  if (!iBody) { document.body.removeChild(iframe); throw new Error('iframe body not found') }
+
+  // Size the iframe to full content height so nothing is cut off
+  const contentH = iBody.scrollHeight || 1000
+  iframe.style.height = contentH + 'px'
+  await new Promise(r => setTimeout(r, 100))
 
   try {
-    const canvas = await html2canvas(container, {
+    const canvas = await html2canvas(iBody, {
       scale: 2,
       useCORS: true,
       allowTaint: true,
       backgroundColor: '#ffffff',
       windowWidth: 794,
+      windowHeight: contentH,
       logging: false,
     })
 
@@ -139,7 +149,6 @@ async function htmlToPdfBase64(html: string): Promise<string> {
     if (imgH <= pageH) {
       pdf.addImage(imgData, 'PNG', 0, 0, pageW, imgH)
     } else {
-      // Multi-page: slice the canvas image across pages
       const totalPages = Math.ceil(imgH / pageH)
       for (let page = 0; page < totalPages; page++) {
         if (page > 0) pdf.addPage()
@@ -149,14 +158,10 @@ async function htmlToPdfBase64(html: string): Promise<string> {
 
     return pdf.output('datauristring').split(',')[1]
   } finally {
-    document.body.removeChild(container)
+    document.body.removeChild(iframe)
   }
 }
 
-/**
- * Sends an email via /api/send-email using CDSC's Gmail account.
- * If printHtml is provided it is rendered to PDF and attached.
- */
 export async function sendEmail(payload: SendEmailPayload): Promise<void> {
   let pdfBase64: string | undefined
   const pdfFilename = payload.pdfFilename ?? 'attachment.pdf'
@@ -168,13 +173,7 @@ export async function sendEmail(payload: SendEmailPayload): Promise<void> {
   const res = await fetch('/api/send-email', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      to: payload.to,
-      subject: payload.subject,
-      body: payload.body,
-      pdfBase64,
-      pdfFilename,
-    }),
+    body: JSON.stringify({ to: payload.to, subject: payload.subject, body: payload.body, pdfBase64, pdfFilename }),
   })
 
   if (!res.ok) {
