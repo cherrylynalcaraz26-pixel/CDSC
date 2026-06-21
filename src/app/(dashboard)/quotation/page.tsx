@@ -152,6 +152,7 @@ export default function QuotationPage() {
         return {
           ...line,
           item_name: value,
+          quantity: line.quantity || '1',
           unit: found?.unit_of_measure ?? line.unit,
           unit_price: autoPrice !== null ? String(autoPrice) : line.unit_price,
           selling_price: autoSell !== null ? String(autoSell) : line.selling_price,
@@ -274,8 +275,7 @@ export default function QuotationPage() {
             <th className="text-left px-1.5 py-1">Item Description</th>
             <th className="text-right px-1.5 py-1 w-14 font-bold">QTY</th>
             <th className="text-left px-1.5 py-1 w-16">Unit</th>
-            <th className="text-right px-1.5 py-1 w-20">Unit Price</th>
-            <th className="text-right px-1.5 py-1 w-20">Selling Price</th>
+            <th className="text-right px-1.5 py-1 w-24">Selling Price</th>
             <th className="text-right px-1.5 py-1 w-20">Total</th>
           </tr>
         </thead>
@@ -289,8 +289,7 @@ export default function QuotationPage() {
                 <td className="px-1.5 py-1">{line.item_name || <span className="text-gray-300 italic">—</span>}</td>
                 <td className="px-1.5 py-1 text-right font-bold text-gray-800">{line.quantity || '—'}</td>
                 <td className="px-1.5 py-1 text-gray-500">{line.unit || '—'}</td>
-                <td className="px-1.5 py-1 text-right">₱{(parseFloat(line.unit_price) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
-                <td className="px-1.5 py-1 text-right font-medium text-green-700">₱{(parseFloat(line.selling_price) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+                <td className="px-1.5 py-1 text-right font-medium">₱{effectivePrice.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
                 <td className="px-1.5 py-1 text-right font-medium">₱{total.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
               </tr>
             )
@@ -759,6 +758,7 @@ export default function QuotationPage() {
                     setLines(p => p.map((l, i) => i === itemSearchIdx ? {
                       ...l,
                       item_name: it.item_name,
+                      quantity: l.quantity || '1',
                       unit: it.unit_of_measure || l.unit,
                       unit_price: it.cost != null ? String(it.cost) : l.unit_price,
                       selling_price: it.selling_price != null ? String(it.selling_price) : l.selling_price,

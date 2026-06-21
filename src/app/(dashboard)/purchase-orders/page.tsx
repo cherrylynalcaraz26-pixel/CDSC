@@ -69,16 +69,14 @@ interface PO {
 }
 
 interface Supplier { id: string; company_name: string; payment_terms: string | null; ewt_rate: number | null }
-interface Client   { id: string; company_name: string; payment_terms: string | null }
 interface POLine   { item_name: string; quantity: string; unit: string; unit_price: string; selling_price: string }
-const emptyLine = (): POLine => ({ item_name: '', quantity: '', unit: 'piece', unit_price: '', selling_price: '' })
+const emptyLine = (): POLine => ({ item_name: '', quantity: '1', unit: 'piece', unit_price: '', selling_price: '' })
 
 export default function PurchaseOrdersPage() {
   const supabase = createClient()
   const { query } = useSearchContext()
   const [pos, setPOs] = useState<PO[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
-  const [clients, setClients] = useState<Client[]>([])
   const [items, setItems] = useState<ItemOption[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
@@ -90,7 +88,6 @@ export default function PurchaseOrdersPage() {
 
   // Form state
   const [supplierId, setSupplierId] = useState('')
-  const [clientId, setClientId] = useState('')
   const [poNumber, setPoNumber] = useState('')
   const [deliveryDate, setDeliveryDate] = useState('')
   const [paymentTerms, setPaymentTerms] = useState('30 days')
@@ -124,20 +121,17 @@ export default function PurchaseOrdersPage() {
 
   async function load() {
     setLoading(true)
-    const [{ data: poData }, { data: supData }, { data: itemData }, { data: clientData }] = await Promise.all([
+    const [{ data: poData }, { data: supData }, { data: itemData }] = await Promise.all([
       supabase
         .from('purchase_orders')
         .select('*, supplier:suppliers(company_name), pr:purchase_requests(pr_number)')
         .order('created_at', { ascending: false }),
       supabase.from('suppliers').select('id, company_name, payment_terms, ewt_rate').eq('is_active', true).order('company_name'),
       supabase.from('items').select('item_code, item_name, unit_of_measure, status, cost, selling_price').order('item_name'),
-      // warehouse stock loaded separately below
-      supabase.from('clients').select('id, company_name, payment_terms').eq('status', 'active').order('company_name'),
     ])
     setPOs((poData ?? []) as PO[])
     setSuppliers(supData ?? [])
     setItems((itemData ?? []) as ItemOption[])
-    setClients(clientData ?? [])
     const { data: sysData } = await supabase.from('system_settings').select('company_name, address, phone, email, tin').single()
     if (sysData) setCompanyInfo(sysData)
     const { data: wsData } = await supabase.from('warehouse_stock').select('item_name, quantity')
@@ -156,10 +150,8 @@ export default function PurchaseOrdersPage() {
   // Computed totals
   const subtotal = lines.reduce((s, l) => s + (parseFloat(l.selling_price) || 0) * (parseFloat(l.quantity) || 0), 0)
   const selectedSupplier = suppliers.find(s => s.id === supplierId)
-  const isClient = !!clientId && !supplierId
-  const taxType = isClient ? 'cwt' : 'ewt'
-  const taxRate = isClient ? 0.02 : (selectedSupplier?.ewt_rate ?? 2) / 100
-  const taxLabel = isClient ? 'CWT' : 'EWT'
+  const taxRate = (selectedSupplier?.ewt_rate ?? 2) / 100
+  const taxLabel = 'EWT'
 
   const discountAmount = subtotal * (discountRate / 100)
   const netSubtotal = subtotal - discountAmount
@@ -169,7 +161,7 @@ export default function PurchaseOrdersPage() {
   const netPayable = totalAmount - taxAmount
 
   function resetForm() {
-    setSupplierId(''); setClientId(''); setPoNumber(''); setDeliveryDate('')
+    setSupplierId(''); setPoNumber(''); setDeliveryDate('')
     setPaymentTerms('30 days'); setRemarks(''); setLines([emptyLine()])
     setActiveTab('form'); setDiscountType('none'); setDiscountCustom('')
     setPreparedBy(''); setApprovedBy('')
@@ -187,13 +179,12 @@ export default function PurchaseOrdersPage() {
   }
 
   async function submitPO() {
-    if (!supplierId && !clientId) { toast.error('Select a supplier or client'); return }
+    if (!supplierId) { toast.error('Select a supplier'); return }
     setSaving(true)
     const { data: { user } } = await supabase.auth.getUser()
     const { error } = await supabase.from('purchase_orders').insert({
       po_number: poNumber || null,
       supplier_id: supplierId || null,
-      client_id: clientId || null,
       po_date: new Date().toISOString().split('T')[0],
       delivery_date: deliveryDate || null,
       payment_terms: paymentTerms || null,
@@ -202,11 +193,10 @@ export default function PurchaseOrdersPage() {
       created_by: user?.id,
       subtotal,
       vat_amount: vatAmount,
-      ewt_amount: isClient ? 0 : taxAmount,
-      cwt_amount: isClient ? taxAmount : 0,
+      ewt_amount: taxAmount,
       discount_rate: discountRate,
       discount_amount: discountAmount,
-      tax_type: taxType,
+      tax_type: 'ewt',
       total_amount: totalAmount,
       net_payable: netPayable,
     }).select('id').single()
@@ -261,9 +251,7 @@ export default function PurchaseOrdersPage() {
   }
 
   function openEmailDialog() {
-    const partyName = supplierId
-      ? suppliers.find(s => s.id === supplierId)?.company_name
-      : clients.find(c => c.id === clientId)?.company_name
+    const partyName = suppliers.find(s => s.id === supplierId)?.company_name
     setEmailSubject(`Purchase Order ${poNumber || '(draft)'}${partyName ? ` — ${partyName}` : ''}`)
     setEmailBody(`Dear ${partyName ?? 'Sir/Madam'},\n\nPlease find attached the Purchase Order ${poNumber || '(draft)'}.\n\nKindly confirm receipt and advise on delivery schedule.\n\nBest regards,\n${companyInfo?.company_name ?? 'CDSC Industrial Supply'}`)
     setShowEmail(true)
@@ -425,7 +413,7 @@ export default function PurchaseOrdersPage() {
                             <DropdownMenuItem onClick={() => setViewPO(po)}>
                               <Eye className="mr-2 h-4 w-4" />View PO
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => window.print()}>
+                            <DropdownMenuItem onClick={handlePrint}>
                               <Printer className="mr-2 h-4 w-4" />Print PO
                             </DropdownMenuItem>
                             {po.status === 'open' && (
@@ -497,14 +485,14 @@ export default function PurchaseOrdersPage() {
 
                   {/* Supplier */}
                   <div className="space-y-1.5">
-                    <Label>Supplier {!clientId && !supplierId && <span className="text-destructive">*</span>}</Label>
+                    <Label>Supplier <span className="text-destructive">*</span></Label>
                     <div className="flex gap-1">
                       <Select value={supplierId} onValueChange={v => {
-                        setSupplierId(v ?? ''); setClientId('')
+                        setSupplierId(v ?? '')
                         const sup = suppliers.find(s => s.id === v)
                         if (sup?.payment_terms) setPaymentTerms(sup.payment_terms)
-                      }} disabled={!!clientId}>
-                        <SelectTrigger className={`flex-1 ${clientId ? 'opacity-40' : ''}`}>
+                      }}>
+                        <SelectTrigger className="flex-1">
                           {supplierId
                             ? <span className="truncate text-sm">{suppliers.find(s => s.id === supplierId)?.company_name}</span>
                             : <span className="text-muted-foreground text-sm">Select supplier…</span>}
@@ -513,30 +501,6 @@ export default function PurchaseOrdersPage() {
                       </Select>
                       {supplierId && (
                         <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setSupplierId('')}>
-                          <X className="h-3.5 w-3.5" />
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Client */}
-                  <div className="space-y-1.5">
-                    <Label>Client {!clientId && !supplierId && <span className="text-destructive">*</span>}</Label>
-                    <div className="flex gap-1">
-                      <Select value={clientId} onValueChange={v => {
-                        setClientId(v ?? ''); setSupplierId('')
-                        const cli = clients.find(c => c.id === v)
-                        if (cli?.payment_terms) setPaymentTerms(cli.payment_terms)
-                      }} disabled={!!supplierId}>
-                        <SelectTrigger className={`flex-1 ${supplierId ? 'opacity-40' : ''}`}>
-                          {clientId
-                            ? <span className="truncate text-sm">{clients.find(c => c.id === clientId)?.company_name}</span>
-                            : <span className="text-muted-foreground text-sm">Select client…</span>}
-                        </SelectTrigger>
-                        <SelectContent>{clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}</SelectContent>
-                      </Select>
-                      {clientId && (
-                        <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setClientId('')}>
                           <X className="h-3.5 w-3.5" />
                         </Button>
                       )}
@@ -637,12 +601,12 @@ export default function PurchaseOrdersPage() {
                                   <div className="flex gap-1 min-w-0">
                                     <Select value={line.item_name} onValueChange={val => {
                                       const selected = activeItems.find(it => it.item_name === val)
-                                      const autoPrice = isClient ? (selected?.selling_price ?? selected?.cost ?? null) : (selected?.cost ?? null)
                                       const autoSell = selected?.selling_price ?? null
                                       setLines(p => p.map((l, idx) => idx === i ? {
                                         ...l, item_name: val ?? '',
+                                        quantity: l.quantity || '1',
                                         unit: selected?.unit_of_measure || l.unit,
-                                        unit_price: autoPrice !== null ? String(autoPrice) : l.unit_price,
+                                        unit_price: selected?.cost != null ? String(selected.cost) : l.unit_price,
                                         selling_price: autoSell !== null ? String(autoSell) : l.selling_price,
                                       } : l))
                                     }}>
@@ -712,7 +676,7 @@ export default function PurchaseOrdersPage() {
                     {discountRate > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Discount ({discountRate}%)</span><span className="text-orange-600">− {fmt(discountAmount)}</span></div>}
                     {discountRate > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Net Subtotal</span><span>{fmt(netSubtotal)}</span></div>}
                     <div className="flex justify-between"><span className="text-muted-foreground">Input VAT (12%)</span><span className="text-blue-600">{fmt(vatAmount)}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">{taxLabel} ({isClient ? 2 : (selectedSupplier?.ewt_rate ?? 2)}%)</span><span className="text-red-700">− {fmt(taxAmount)}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">{taxLabel} ({selectedSupplier?.ewt_rate ?? 2}%)</span><span className="text-red-700">− {fmt(taxAmount)}</span></div>
                     <div className="h-px bg-border my-1" />
                     <div className="flex justify-between font-bold"><span>Net Payable</span><span className="text-red-600">{fmt(netPayable)}</span></div>
                   </div>
@@ -774,14 +738,10 @@ export default function PurchaseOrdersPage() {
                     <div className="grid grid-cols-3 gap-3 border-b pb-3">
                       {/* Left */}
                       <div className="space-y-0.5">
-                        <div className="text-[9px] font-semibold uppercase text-gray-400">
-                          {supplierId ? 'Supplier' : clientId ? 'Client' : 'Supplier / Client'}
-                        </div>
+                        <div className="text-[9px] font-semibold uppercase text-gray-400">Supplier</div>
                         <div className="font-semibold text-gray-800 text-[11px]">
                           {supplierId
                             ? suppliers.find(s => s.id === supplierId)?.company_name || '—'
-                            : clientId
-                            ? clients.find(c => c.id === clientId)?.company_name || '—'
                             : <span className="text-gray-400 italic font-normal">Not selected</span>}
                         </div>
                         <div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5">Payment Terms</div>
@@ -1016,6 +976,7 @@ export default function PurchaseOrdersPage() {
                             ? {
                                 ...l,
                                 item_name: it.item_name,
+                                quantity: l.quantity || '1',
                                 unit: it.unit_of_measure,
                                 unit_price: it.cost != null ? String(it.cost) : l.unit_price,
                                 selling_price: it.selling_price != null ? String(it.selling_price) : l.selling_price,
