@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Plus, MoreHorizontal, Loader2, Trash2, X, FileText, Printer, Mail, Send, Package, Search, Pencil, Eye, CheckCircle, XCircle, Clock, CheckCheck } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSearchContext } from '@/context/search-context'
-import { sendEmailWithGmail, preloadGsi } from '@/lib/gmail-send'
+import { sendEmail } from '@/lib/send-email'
 import Image from 'next/image'
 
 interface Client { id: string; company_name: string }
@@ -155,7 +155,7 @@ export default function QuotationPage() {
     setLoading(false)
   }
 
-  useEffect(() => { load(); preloadGsi() }, [])
+  useEffect(() => { load() }, [])
 
   function resetForm() {
     setQuoteNumber(''); setQuoteDate(today()); setValidUntil(''); setClientId('')
@@ -786,33 +786,43 @@ export default function QuotationPage() {
               />
             </div>
             <p className="text-xs text-muted-foreground">
-              A Google sign-in popup will appear to authorize Gmail. The email will be sent with the PDF attached.
+              The email will be sent from cdsc.gmot@gmail.com with the quotation attached as a PDF.
             </p>
             <div className="flex justify-end gap-2 pt-1">
               <Button variant="outline" onClick={() => setShowEmailQ(false)}>Cancel</Button>
               <Button
                 className="bg-red-600 hover:bg-red-700 gap-1.5"
-                onClick={() => {
+                onClick={async () => {
                   if (!emailToQ) { toast.error('Please enter a recipient email address.'); return }
-                  const el = printRef.current
-                  const printHtml = el ? `<!DOCTYPE html><html><head><title>Quotation</title>
-                    <script src="https://cdn.tailwindcss.com"><\/script>
-                    <style>body { font-family: Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; } @media print { body { margin: 0; } }</style>
-                  </head><body class="p-6 text-[11px]">${el.innerHTML}</body></html>` : undefined
                   setShowEmailQ(false)
-                  toast.loading('Waiting for Google sign-in…', { id: 'email-send-q' })
-                  sendEmailWithGmail({
-                    to: emailToQ,
-                    subject: emailSubjectQ,
-                    body: emailBodyQ,
-                    printHtml,
-                    pdfFilename: `Quotation-${quoteNumber || 'draft'}.pdf`,
-                    onSuccess: () => toast.success('Email sent via Gmail!', { id: 'email-send-q' }),
-                    onError: (msg) => toast.error(msg, { id: 'email-send-q' }),
-                  })
+                  toast.loading('Sending email…', { id: 'email-send-q' })
+                  try {
+                    await sendEmail({
+                      to: emailToQ,
+                      subject: emailSubjectQ,
+                      body: emailBodyQ,
+                      attachment: {
+                        pdfFilename: `Quotation-${quoteNumber || 'draft'}.pdf`,
+                        tableData: {
+                          title: `Quotation — ${quoteNumber || 'draft'}`,
+                          headers: ['Field', 'Value'],
+                          rows: [
+                            ['Quote Number', quoteNumber || '—'],
+                            ['Date', quoteDate || '—'],
+                            ['Subtotal', `₱${subtotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`],
+                            ['VAT (12%)', `₱${vatAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`],
+                            ['Total', `₱${totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`],
+                          ],
+                        },
+                      },
+                    })
+                    toast.success('Email sent successfully!', { id: 'email-send-q' })
+                  } catch (err: unknown) {
+                    toast.error(err instanceof Error ? err.message : 'Failed to send email', { id: 'email-send-q' })
+                  }
                 }}
               >
-                <Send className="h-4 w-4" />Send in Gmail
+                <Send className="h-4 w-4" />Send Email
               </Button>
             </div>
           </div>
@@ -875,30 +885,45 @@ export default function QuotationPage() {
                 onChange={e => setListEmailBody(e.target.value)}
               />
             </div>
-            <p className="text-xs text-muted-foreground">A Google sign-in popup will appear to authorize Gmail. The email will be sent and the quotation will be marked as Sent.</p>
+            <p className="text-xs text-muted-foreground">The email will be sent from cdsc.gmot@gmail.com and the quotation will be marked as Sent.</p>
             <div className="flex justify-end gap-2 pt-1">
               <Button variant="outline" onClick={() => setListEmailQ(null)}>Cancel</Button>
               <Button
                 className="bg-red-600 hover:bg-red-700 gap-1.5"
-                onClick={() => {
+                onClick={async () => {
                   if (!listEmailTo) { toast.error('Please enter a recipient email address.'); return }
                   const q = listEmailQ!
                   setListEmailQ(null)
-                  toast.loading('Waiting for Google sign-in…', { id: 'list-email-send' })
-                  sendEmailWithGmail({
-                    to: listEmailTo,
-                    subject: listEmailSubject,
-                    body: listEmailBody,
-                    pdfFilename: `Quotation-${q.quote_number ?? 'draft'}.pdf`,
-                    onSuccess: () => {
-                      toast.success('Email sent via Gmail!', { id: 'list-email-send' })
-                      updateStatus(q.id, 'sent')
-                    },
-                    onError: (msg) => toast.error(msg, { id: 'list-email-send' }),
-                  })
+                  toast.loading('Sending email…', { id: 'list-email-send' })
+                  try {
+                    await sendEmail({
+                      to: listEmailTo,
+                      subject: listEmailSubject,
+                      body: listEmailBody,
+                      attachment: {
+                        pdfFilename: `Quotation-${q.quote_number ?? 'draft'}.pdf`,
+                        tableData: {
+                          title: `Quotation — ${q.quote_number ?? 'draft'}`,
+                          headers: ['Field', 'Value'],
+                          rows: [
+                            ['Quote Number', q.quote_number ?? '—'],
+                            ['Date', q.quote_date ?? '—'],
+                            ['Client', q.client_name ?? '—'],
+                            ['Subtotal', `₱${(q.subtotal ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`],
+                            ['VAT (12%)', `₱${(q.vat_amount ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`],
+                            ['Total', `₱${(q.total_amount ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`],
+                          ],
+                        },
+                      },
+                    })
+                    toast.success('Email sent successfully!', { id: 'list-email-send' })
+                    updateStatus(q.id, 'sent')
+                  } catch (err: unknown) {
+                    toast.error(err instanceof Error ? err.message : 'Failed to send email', { id: 'list-email-send' })
+                  }
                 }}
               >
-                <Send className="h-4 w-4" />Send in Gmail
+                <Send className="h-4 w-4" />Send Email
               </Button>
             </div>
           </div>

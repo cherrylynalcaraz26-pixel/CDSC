@@ -22,7 +22,7 @@ import {
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
-import { sendEmailWithGmail, preloadGsi } from '@/lib/gmail-send'
+import { sendEmail } from '@/lib/send-email'
 
 interface ItemOption {
   item_code: string
@@ -178,7 +178,7 @@ export default function PurchaseOrdersPage() {
     setLoading(false)
   }
 
-  useEffect(() => { load(); preloadGsi() }, [])
+  useEffect(() => { load() }, [])
 
   // Computed totals
   const subtotal = lines.reduce((s, l) => s + (parseFloat(l.selling_price) || 0) * (parseFloat(l.quantity) || 0), 0)
@@ -384,30 +384,43 @@ export default function PurchaseOrdersPage() {
     setShowEmail(true)
   }
 
-  function handleSendEmail() {
+  async function handleSendEmail() {
     if (!emailTo) { toast.error('Please enter a recipient email address.'); return }
-    let printHtml: string | undefined
-    if (emailPO) {
-      printHtml = buildPOHtml(emailPO)
-    } else {
-      const el = printRef.current
-      printHtml = el ? `<!DOCTYPE html><html><head><title>Purchase Order</title>
-        <script src="https://cdn.tailwindcss.com"><\/script>
-        <style>body { font-family: Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; } @media print { body { margin: 0; } }</style>
-      </head><body class="p-6 text-[11px]">${el.innerHTML}</body></html>` : undefined
-    }
-    const filename = emailPO ? `PO-${emailPO.po_number ?? 'draft'}.pdf` : `PO-${poNumber || 'draft'}.pdf`
+    const po = emailPO
+    const poNum = po?.po_number ?? poNumber ?? 'draft'
+    const filename = `PO-${poNum}.pdf`
+    const fmt2 = (n: number) => `₱${(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
+    const pdfRows: (string | number)[][] = po ? [
+      ['Supplier', (po.supplier as any)?.company_name ?? '—', '', ''],
+      ['PO Number', po.po_number ?? '—', '', ''],
+      ['Date', po.po_date ?? '—', '', ''],
+      ['Delivery Date', po.delivery_date ?? '—', '', ''],
+      ['Payment Terms', po.payment_terms ?? '—', '', ''],
+      ['Subtotal', '', '', fmt2(po.subtotal)],
+      ['VAT (12%)', '', '', fmt2(po.vat_amount)],
+      ...(po.ewt_amount > 0 ? [['EWT', '', '', `−${fmt2(po.ewt_amount)}`] as (string | number)[]] : []),
+      ['Net Payable', '', '', fmt2(po.net_payable)],
+    ] : []
     setShowEmail(false)
-    toast.loading('Waiting for Google sign-in…', { id: 'email-send' })
-    sendEmailWithGmail({
-      to: emailTo,
-      subject: emailSubject,
-      body: emailBody,
-      printHtml,
-      pdfFilename: filename,
-      onSuccess: () => toast.success('Email sent via Gmail!', { id: 'email-send' }),
-      onError: (msg) => toast.error(msg, { id: 'email-send' }),
-    })
+    toast.loading('Sending email…', { id: 'email-send' })
+    try {
+      await sendEmail({
+        to: emailTo,
+        subject: emailSubject,
+        body: emailBody,
+        attachment: po ? {
+          pdfFilename: filename,
+          tableData: {
+            title: `Purchase Order — ${poNum}`,
+            headers: ['Field', 'Value', '', ''],
+            rows: pdfRows,
+          },
+        } : undefined,
+      })
+      toast.success('Email sent successfully!', { id: 'email-send' })
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to send email', { id: 'email-send' })
+    }
   }
 
   const fmt = (n: number) => `₱${n.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
@@ -1273,12 +1286,12 @@ export default function PurchaseOrdersPage() {
               />
             </div>
             <p className="text-xs text-muted-foreground">
-              A Google sign-in popup will appear to authorize Gmail. The email will be sent with the PDF attached.
+              The email will be sent from cdsc.gmot@gmail.com with the PO attached as a PDF.
             </p>
             <div className="flex justify-end gap-2 pt-1">
               <Button variant="outline" onClick={() => setShowEmail(false)}>Cancel</Button>
               <Button onClick={handleSendEmail} className="bg-red-600 hover:bg-red-700 gap-1.5">
-                <Send className="h-4 w-4" />Send in Gmail
+                <Send className="h-4 w-4" />Send Email
               </Button>
             </div>
           </div>
