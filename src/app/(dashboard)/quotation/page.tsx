@@ -250,6 +250,49 @@ export default function QuotationPage() {
     setSaving(false)
   }
 
+  function buildQuoteHtml(q: Quotation) {
+    const fmtAmt = (n: number) => `₱${(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
+    const hasVat = (q.vat_amount ?? 0) > 0
+    const hasEwt = (q.ewt_amount ?? 0) > 0
+    return `<!DOCTYPE html><html><head><title>Quotation</title>
+      <script src="https://cdn.tailwindcss.com"><\/script>
+      <style>body{font-family:Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact;}@media print{body{margin:0;}}</style>
+    </head><body class="p-6 text-[11px] font-sans">
+      <div class="space-y-3">
+        <div class="flex justify-between items-start border-b pb-3">
+          <div class="text-[13px] font-bold text-red-700">${companyInfo?.company_name ?? 'CDSC INDUSTRIAL'}</div>
+          <div class="text-right text-[9px] text-gray-500">${companyInfo?.address ?? ''}${companyInfo?.phone ? '<br/>' + companyInfo.phone : ''}${companyInfo?.tin ? '<br/>TIN: ' + companyInfo.tin : ''}</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;" class="border-b pb-3">
+          <div>
+            <div class="text-[9px] font-semibold uppercase text-gray-400">Bill To</div>
+            <div class="font-semibold text-gray-800">${q.client_name ?? '—'}</div>
+            ${q.subject ? `<div class="text-[9px] font-semibold uppercase text-gray-400 mt-1">Subject</div><div class="text-[10px] text-gray-700">${q.subject}</div>` : ''}
+          </div>
+          <div style="display:flex;align-items:center;justify-content:center;">
+            <div style="font-size:16px;font-weight:900;color:#b91c1c;text-align:center;letter-spacing:0.1em;">QUOTATION</div>
+          </div>
+          <div style="text-align:right;">
+            <div class="text-[9px] font-semibold uppercase text-gray-400">Quote Number</div>
+            <div class="font-mono font-bold">${q.quote_number ?? '—'}</div>
+            <div class="text-[9px] font-semibold uppercase text-gray-400 mt-1">Date</div>
+            <div>${q.quote_date ?? '—'}</div>
+            ${q.valid_until ? `<div class="text-[9px] font-semibold uppercase text-gray-400 mt-1">Valid Until</div><div>${q.valid_until}</div>` : ''}
+          </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;">
+          <div style="width:220px;font-size:10px;">
+            <div style="display:flex;justify-content:space-between;"><span style="color:#6b7280;">Subtotal</span><span>${fmtAmt(q.subtotal)}</span></div>
+            ${hasVat ? `<div style="display:flex;justify-content:space-between;"><span style="color:#6b7280;">VAT (12%)</span><span style="color:#2563eb;">${fmtAmt(q.vat_amount)}</span></div>` : ''}
+            ${hasEwt ? `<div style="display:flex;justify-content:space-between;"><span style="color:#6b7280;">EWT</span><span style="color:#b91c1c;">−${fmtAmt(q.ewt_amount)}</span></div>` : ''}
+            <div style="display:flex;justify-content:space-between;border-top:1px solid #e5e7eb;padding-top:4px;font-weight:700;font-size:11px;"><span>Total</span><span style="color:#b91c1c;">${fmtAmt(q.total_amount)}</span></div>
+          </div>
+        </div>
+        ${q.notes ? `<div class="border-t pt-2"><div class="text-[9px] font-semibold uppercase text-gray-400 mb-1">Notes / Terms</div><div class="text-[10px] text-gray-700">${q.notes}</div></div>` : ''}
+      </div>
+    </body></html>`
+  }
+
   async function updateStatus(id: string, status: string) {
     const { error } = await supabase.from('quotations').update({ status }).eq('id', id)
     if (error) { toast.error(error.message); return }
@@ -794,27 +837,20 @@ export default function QuotationPage() {
                 className="bg-red-600 hover:bg-red-700 gap-1.5"
                 onClick={async () => {
                   if (!emailToQ) { toast.error('Please enter a recipient email address.'); return }
+                  const el = printRef.current
+                  const printHtml = el ? `<!DOCTYPE html><html><head><title>Quotation</title>
+                    <script src="https://cdn.tailwindcss.com"><\/script>
+                    <style>body{font-family:Arial,sans-serif;}</style>
+                  </head><body class="p-6 text-[11px]">${el.innerHTML}</body></html>` : undefined
                   setShowEmailQ(false)
-                  toast.loading('Sending email…', { id: 'email-send-q' })
+                  toast.loading('Generating PDF…', { id: 'email-send-q' })
                   try {
                     await sendEmail({
                       to: emailToQ,
                       subject: emailSubjectQ,
                       body: emailBodyQ,
-                      attachment: {
-                        pdfFilename: `Quotation-${quoteNumber || 'draft'}.pdf`,
-                        tableData: {
-                          title: `Quotation — ${quoteNumber || 'draft'}`,
-                          headers: ['Field', 'Value'],
-                          rows: [
-                            ['Quote Number', quoteNumber || '—'],
-                            ['Date', quoteDate || '—'],
-                            ['Subtotal', `₱${subtotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`],
-                            ['VAT (12%)', `₱${vatAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`],
-                            ['Total', `₱${totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`],
-                          ],
-                        },
-                      },
+                      printHtml,
+                      pdfFilename: `Quotation-${quoteNumber || 'draft'}.pdf`,
                     })
                     toast.success('Email sent successfully!', { id: 'email-send-q' })
                   } catch (err: unknown) {
@@ -894,27 +930,14 @@ export default function QuotationPage() {
                   if (!listEmailTo) { toast.error('Please enter a recipient email address.'); return }
                   const q = listEmailQ!
                   setListEmailQ(null)
-                  toast.loading('Sending email…', { id: 'list-email-send' })
+                  toast.loading('Generating PDF…', { id: 'list-email-send' })
                   try {
                     await sendEmail({
                       to: listEmailTo,
                       subject: listEmailSubject,
                       body: listEmailBody,
-                      attachment: {
-                        pdfFilename: `Quotation-${q.quote_number ?? 'draft'}.pdf`,
-                        tableData: {
-                          title: `Quotation — ${q.quote_number ?? 'draft'}`,
-                          headers: ['Field', 'Value'],
-                          rows: [
-                            ['Quote Number', q.quote_number ?? '—'],
-                            ['Date', q.quote_date ?? '—'],
-                            ['Client', q.client_name ?? '—'],
-                            ['Subtotal', `₱${(q.subtotal ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`],
-                            ['VAT (12%)', `₱${(q.vat_amount ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`],
-                            ['Total', `₱${(q.total_amount ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`],
-                          ],
-                        },
-                      },
+                      printHtml: buildQuoteHtml(q),
+                      pdfFilename: `Quotation-${q.quote_number ?? 'draft'}.pdf`,
                     })
                     toast.success('Email sent successfully!', { id: 'list-email-send' })
                     updateStatus(q.id, 'sent')

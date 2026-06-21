@@ -389,34 +389,20 @@ export default function PurchaseOrdersPage() {
     const po = emailPO
     const poNum = po?.po_number ?? poNumber ?? 'draft'
     const filename = `PO-${poNum}.pdf`
-    const fmt2 = (n: number) => `₱${(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
-    const pdfRows: (string | number)[][] = po ? [
-      ['Supplier', (po.supplier as any)?.company_name ?? '—', '', ''],
-      ['PO Number', po.po_number ?? '—', '', ''],
-      ['Date', po.po_date ?? '—', '', ''],
-      ['Delivery Date', po.delivery_date ?? '—', '', ''],
-      ['Payment Terms', po.payment_terms ?? '—', '', ''],
-      ['Subtotal', '', '', fmt2(po.subtotal)],
-      ['VAT (12%)', '', '', fmt2(po.vat_amount)],
-      ...(po.ewt_amount > 0 ? [['EWT', '', '', `−${fmt2(po.ewt_amount)}`] as (string | number)[]] : []),
-      ['Net Payable', '', '', fmt2(po.net_payable)],
-    ] : []
+    let printHtml: string | undefined
+    if (po) {
+      printHtml = buildPOHtml(po)
+    } else {
+      const el = printRef.current
+      if (el) printHtml = `<!DOCTYPE html><html><head><title>PO</title>
+        <script src="https://cdn.tailwindcss.com"><\/script>
+        <style>body{font-family:Arial,sans-serif;}</style>
+      </head><body class="p-6 text-[11px]">${el.innerHTML}</body></html>`
+    }
     setShowEmail(false)
-    toast.loading('Sending email…', { id: 'email-send' })
+    toast.loading('Generating PDF…', { id: 'email-send' })
     try {
-      await sendEmail({
-        to: emailTo,
-        subject: emailSubject,
-        body: emailBody,
-        attachment: po ? {
-          pdfFilename: filename,
-          tableData: {
-            title: `Purchase Order — ${poNum}`,
-            headers: ['Field', 'Value', '', ''],
-            rows: pdfRows,
-          },
-        } : undefined,
-      })
+      await sendEmail({ to: emailTo, subject: emailSubject, body: emailBody, printHtml, pdfFilename: filename })
       toast.success('Email sent successfully!', { id: 'email-send' })
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to send email', { id: 'email-send' })

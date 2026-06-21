@@ -1,63 +1,70 @@
 import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
-
-export interface EmailAttachmentOptions {
-  /** Raw HTML string to render as PDF attachment */
-  htmlContent?: string
-  /** Structured data for table-based PDF (used if htmlContent is not set) */
-  tableData?: {
-    title: string
-    headers: string[]
-    rows: (string | number)[][]
-    footerRows?: (string | number)[][]
-  }
-  pdfFilename?: string
-}
+import html2canvas from 'html2canvas'
 
 export interface SendEmailPayload {
   to: string
   subject: string
   body: string
-  attachment?: EmailAttachmentOptions
+  /** Rendered HTML string of the document (e.g. from buildPOHtml or printRef.innerHTML) */
+  printHtml?: string
+  pdfFilename?: string
 }
 
-/** Generates a simple PDF from table data and returns base64 string. */
-function generateTablePdf(opts: NonNullable<EmailAttachmentOptions['tableData']>): string {
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'letter' })
-  const pageW = doc.internal.pageSize.getWidth()
+/** Renders an HTML string to a PDF and returns base64. */
+async function htmlToPdfBase64(html: string): Promise<string> {
+  const container = document.createElement('div')
+  container.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;background:white;padding:0;z-index:-1;'
+  container.innerHTML = html
+  document.body.appendChild(container)
 
-  doc.setFontSize(16)
-  doc.setTextColor(185, 28, 28)
-  doc.text('CDSC INDUSTRIAL', pageW / 2, 50, { align: 'center' })
+  // Wait for any images/fonts to settle
+  await new Promise(r => setTimeout(r, 300))
 
-  doc.setFontSize(13)
-  doc.setTextColor(40, 40, 40)
-  doc.text(opts.title, pageW / 2, 70, { align: 'center' })
+  try {
+    const canvas = await html2canvas(container, {
+      scale: 2,
+      useCORS: true,
+      allowTaint: true,
+      backgroundColor: '#ffffff',
+      windowWidth: 794,
+    })
 
-  autoTable(doc, {
-    startY: 90,
-    head: [opts.headers],
-    body: opts.rows.map(r => r.map(String)),
-    foot: opts.footerRows ? opts.footerRows.map(r => r.map(String)) : undefined,
-    styles: { fontSize: 9, cellPadding: 4 },
-    headStyles: { fillColor: [185, 28, 28], textColor: 255, fontStyle: 'bold' },
-    footStyles: { fillColor: [245, 245, 245], fontStyle: 'bold' },
-    alternateRowStyles: { fillColor: [252, 252, 252] },
-  })
+    const imgData = canvas.toDataURL('image/png')
+    const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' })
+    const pageW = pdf.internal.pageSize.getWidth()
+    const pageH = pdf.internal.pageSize.getHeight()
+    const ratio = canvas.width / canvas.height
+    const imgH = pageW / ratio
+    let posY = 0
 
-  return doc.output('datauristring').split(',')[1]
+    // If content is taller than one page, split across pages
+    if (imgH <= pageH) {
+      pdf.addImage(imgData, 'PNG', 0, 0, pageW, imgH)
+    } else {
+      const totalPages = Math.ceil(imgH / pageH)
+      for (let page = 0; page < totalPages; page++) {
+        if (page > 0) pdf.addPage()
+        pdf.addImage(imgData, 'PNG', 0, posY, pageW, imgH)
+        posY -= pageH
+      }
+    }
+
+    return pdf.output('datauristring').split(',')[1]
+  } finally {
+    document.body.removeChild(container)
+  }
 }
 
 /**
- * Sends an email via the /api/send-email route using CDSC's Gmail account.
- * Optionally attaches a generated PDF.
+ * Sends an email via /api/send-email using CDSC's Gmail account.
+ * If printHtml is provided it is rendered to PDF and attached.
  */
 export async function sendEmail(payload: SendEmailPayload): Promise<void> {
   let pdfBase64: string | undefined
-  const pdfFilename = payload.attachment?.pdfFilename ?? 'attachment.pdf'
+  const pdfFilename = payload.pdfFilename ?? 'attachment.pdf'
 
-  if (payload.attachment?.tableData) {
-    pdfBase64 = generateTablePdf(payload.attachment.tableData)
+  if (payload.printHtml) {
+    pdfBase64 = await htmlToPdfBase64(payload.printHtml)
   }
 
   const res = await fetch('/api/send-email', {
