@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Plus, MoreHorizontal, Loader2, Trash2, X, FileText, Printer, Mail, Send, Package, Search } from 'lucide-react'
+import { Plus, MoreHorizontal, Loader2, Trash2, X, FileText, Printer, Mail, Send, Package, Search, Pencil } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSearchContext } from '@/context/search-context'
 import { sendEmailWithGmail, preloadGsi } from '@/lib/gmail-send'
@@ -89,6 +89,15 @@ export default function QuotationPage() {
   const [itemSearchIdx, setItemSearchIdx] = useState<number | null>(null)
   const [itemQuery, setItemQuery] = useState('')
 
+  // Edit
+  const [editingId, setEditingId] = useState<string | null>(null)
+
+  // List email
+  const [listEmailQ, setListEmailQ] = useState<Quotation | null>(null)
+  const [listEmailTo, setListEmailTo] = useState('')
+  const [listEmailSubject, setListEmailSubject] = useState('')
+  const [listEmailBody, setListEmailBody] = useState('')
+
   // Form state
   const [quoteNumber, setQuoteNumber] = useState('')
   const [quoteDate, setQuoteDate] = useState(today())
@@ -148,8 +157,40 @@ export default function QuotationPage() {
   function resetForm() {
     setQuoteNumber(''); setQuoteDate(today()); setValidUntil(''); setClientId('')
     setSubject(''); setLines([emptyLine()]); setNotes(''); setVatEnabled(true); setEwtType('none')
-    setPreparedBy(''); setAcceptedBy('')
+    setPreparedBy(''); setAcceptedBy(''); setEditingId(null)
     setMobileTab('form')
+  }
+
+  function openEdit(q: Quotation) {
+    setEditingId(q.id)
+    setQuoteNumber(q.quote_number ?? '')
+    setQuoteDate(q.quote_date ?? today())
+    setValidUntil(q.valid_until ?? '')
+    setSubject(q.subject ?? '')
+    setNotes(q.notes ?? '')
+    setVatEnabled((q.vat_amount ?? 0) > 0)
+    setEwtType('none')
+    setLines([emptyLine()])
+    setPreparedBy(''); setAcceptedBy('')
+    // Try to match client by name
+    const matched = clients.find(c => c.company_name === q.client_name)
+    setClientId(matched?.id ?? '')
+    setOpen(true)
+    setMobileTab('form')
+  }
+
+  async function deleteQuotation(id: string) {
+    const { error } = await supabase.from('quotations').delete().eq('id', id)
+    if (error) { toast.error(error.message); return }
+    toast.success('Quotation deleted')
+    load()
+  }
+
+  function openListEmail(q: Quotation) {
+    setListEmailQ(q)
+    setListEmailTo('')
+    setListEmailSubject(`Quotation ${q.quote_number ?? '(draft)'}${q.client_name ? ` — ${q.client_name}` : ''}`)
+    setListEmailBody(`Dear ${q.client_name ?? 'Sir/Madam'},\n\nPlease find attached our Quotation ${q.quote_number ?? '(draft)'}.\n\nThis quotation is valid as indicated. Kindly review and confirm at your earliest convenience.\n\nBest regards,\n${companyInfo?.company_name ?? 'CDSC Industrial Supply'}`)
   }
 
   function updateLine(idx: number, field: keyof QuoteLine, value: string) {
@@ -179,7 +220,7 @@ export default function QuotationPage() {
   async function handleSave() {
     if (!clientId) { toast.error('Select a client'); return }
     setSaving(true)
-    const { error } = await supabase.from('quotations').insert({
+    const payload = {
       quote_number: quoteNumber || null,
       quote_date: quoteDate,
       valid_until: validUntil || null,
@@ -191,10 +232,15 @@ export default function QuotationPage() {
       ewt_amount: ewtAmount,
       total_amount: totalAmount,
       notes: notes || null,
-      status: 'draft',
-    })
+    }
+    let error
+    if (editingId) {
+      ;({ error } = await supabase.from('quotations').update(payload).eq('id', editingId))
+    } else {
+      ;({ error } = await supabase.from('quotations').insert({ ...payload, status: 'draft' }))
+    }
     if (error) { toast.error(error.message); setSaving(false); return }
-    toast.success('Quotation saved.')
+    toast.success(editingId ? 'Quotation updated.' : 'Quotation saved.')
     resetForm()
     setOpen(false)
     load()
@@ -585,7 +631,7 @@ export default function QuotationPage() {
                   <div className="flex justify-end gap-2 pt-2">
                     <Button variant="outline" onClick={() => { setOpen(false); resetForm() }}>Cancel</Button>
                     <Button onClick={handleSave} disabled={saving} className="bg-red-600 hover:bg-red-700">
-                      {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : 'Save Quotation'}
+                      {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />{editingId ? 'Updating…' : 'Saving…'}</> : editingId ? 'Update Quotation' : 'Save Quotation'}
                     </Button>
                   </div>
                 </CardContent>
@@ -664,11 +710,20 @@ export default function QuotationPage() {
                           <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-accent">
                             <MoreHorizontal className="h-4 w-4" />
                           </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
+                          <DropdownMenuContent align="end" className="w-52">
+                            <DropdownMenuItem onClick={() => openEdit(q)}>
+                              <Pencil className="mr-2 h-4 w-4" />Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openListEmail(q)}>
+                              <Mail className="mr-2 h-4 w-4" />Send Email
+                            </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => updateStatus(q.id, 'sent')}>Mark as Sent</DropdownMenuItem>
                             <DropdownMenuItem onClick={() => updateStatus(q.id, 'accepted')}>Mark as Accepted</DropdownMenuItem>
                             <DropdownMenuItem onClick={() => updateStatus(q.id, 'declined')}>Mark as Declined</DropdownMenuItem>
                             <DropdownMenuItem onClick={() => updateStatus(q.id, 'expired')}>Mark as Expired</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => deleteQuotation(q.id)} className="text-destructive">
+                              <Trash2 className="mr-2 h-4 w-4" />Delete
+                            </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </TableCell>
@@ -740,6 +795,62 @@ export default function QuotationPage() {
                     pdfFilename: `Quotation-${quoteNumber || 'draft'}.pdf`,
                     onSuccess: () => toast.success('Email sent via Gmail!', { id: 'email-send-q' }),
                     onError: (msg) => toast.error(msg, { id: 'email-send-q' }),
+                  })
+                }}
+              >
+                <Send className="h-4 w-4" />Send in Gmail
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* List Send Email Dialog */}
+      <Dialog open={!!listEmailQ} onOpenChange={o => { if (!o) setListEmailQ(null) }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Mail className="h-4 w-4" />Send Quotation by Email
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-2">
+            <div className="space-y-1.5">
+              <Label>To</Label>
+              <Input type="email" placeholder="client@example.com" value={listEmailTo} onChange={e => setListEmailTo(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Subject</Label>
+              <Input value={listEmailSubject} onChange={e => setListEmailSubject(e.target.value)} placeholder="Subject…" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Body</Label>
+              <textarea
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
+                rows={7}
+                value={listEmailBody}
+                onChange={e => setListEmailBody(e.target.value)}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">A Google sign-in popup will appear to authorize Gmail. The email will be sent and the quotation will be marked as Sent.</p>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="outline" onClick={() => setListEmailQ(null)}>Cancel</Button>
+              <Button
+                className="bg-red-600 hover:bg-red-700 gap-1.5"
+                onClick={() => {
+                  if (!listEmailTo) { toast.error('Please enter a recipient email address.'); return }
+                  const q = listEmailQ!
+                  setListEmailQ(null)
+                  toast.loading('Waiting for Google sign-in…', { id: 'list-email-send' })
+                  sendEmailWithGmail({
+                    to: listEmailTo,
+                    subject: listEmailSubject,
+                    body: listEmailBody,
+                    pdfFilename: `Quotation-${q.quote_number ?? 'draft'}.pdf`,
+                    onSuccess: () => {
+                      toast.success('Email sent via Gmail!', { id: 'list-email-send' })
+                      updateStatus(q.id, 'sent')
+                    },
+                    onError: (msg) => toast.error(msg, { id: 'list-email-send' }),
                   })
                 }}
               >

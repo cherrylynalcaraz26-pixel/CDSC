@@ -134,6 +134,7 @@ export default function PurchaseOrdersPage() {
   const [emailTo, setEmailTo] = useState('')
   const [emailSubject, setEmailSubject] = useState('')
   const [emailBody, setEmailBody] = useState('')
+  const [emailPO, setEmailPO] = useState<PO | null>(null)
 
   const printRef = useRef<HTMLDivElement>(null)
 
@@ -264,6 +265,61 @@ export default function PurchaseOrdersPage() {
     })
   }
 
+  function buildPOHtml(po: PO) {
+    const supplierName = (po.supplier as any)?.company_name ?? '—'
+    const poDate = po.po_date ? new Date(po.po_date + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'
+    const delDate = po.delivery_date ? new Date(po.delivery_date + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : null
+    const fmtAmt = (n: number) => `₱${(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
+    const sCfg = STATUS_CFG[po.status] ?? STATUS_CFG.open
+    const hasEwt = (po.ewt_amount ?? 0) > 0
+    const hasDiscount = (po.discount_rate ?? 0) > 0
+    const vNetSub = (po.subtotal ?? 0) - (po.discount_amount ?? 0)
+    return `<!DOCTYPE html><html><head><title>Purchase Order</title>
+      <script src="https://cdn.tailwindcss.com"><\/script>
+      <style>body{font-family:Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact;}@media print{body{margin:0;}}</style>
+    </head><body class="p-6 text-[11px] font-sans">
+      <div class="space-y-3">
+        <div class="flex justify-between items-start border-b pb-3">
+          <div><div class="text-[13px] font-bold text-red-700">${companyInfo?.company_name ?? 'CDSC INDUSTRIAL'}</div></div>
+          <div class="text-right text-[9px] text-gray-500">${companyInfo?.address ?? ''}<br/>${companyInfo?.phone ?? ''}${companyInfo?.phone && companyInfo?.email ? ' | ' : ''}${companyInfo?.email ?? ''}${companyInfo?.tin ? '<br/>TIN: ' + companyInfo.tin : ''}</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;" class="border-b pb-3">
+          <div>
+            <div class="text-[9px] font-semibold uppercase text-gray-400">Supplier</div>
+            <div class="font-semibold text-gray-800">${supplierName}</div>
+            <div class="text-[9px] font-semibold uppercase text-gray-400 mt-1">Payment Terms</div>
+            <div>${po.payment_terms ?? '—'}</div>
+            ${po.remarks ? `<div class="text-[9px] font-semibold uppercase text-gray-400 mt-1">Remarks</div><div class="text-[10px] text-gray-700">${po.remarks}</div>` : ''}
+          </div>
+          <div style="display:flex;align-items:center;justify-content:center;">
+            <div style="font-size:16px;font-weight:900;color:#b91c1c;text-align:center;letter-spacing:0.1em;">PURCHASE<br/>ORDER</div>
+          </div>
+          <div style="text-align:right;">
+            <div class="text-[9px] font-semibold uppercase text-gray-400">PO Number</div>
+            <div class="font-mono font-bold">${po.po_number ?? '—'}</div>
+            <div class="text-[9px] font-semibold uppercase text-gray-400 mt-1">Date</div>
+            <div>${poDate}</div>
+            ${delDate ? `<div class="text-[9px] font-semibold uppercase text-gray-400 mt-1">Delivery Date</div><div>${delDate}</div>` : ''}
+            <div class="mt-1"><span style="font-size:9px;padding:2px 6px;border-radius:999px;background:${sCfg.cls.includes('blue') ? '#dbeafe' : sCfg.cls.includes('green') ? '#dcfce7' : sCfg.cls.includes('yellow') ? '#fef9c3' : '#fee2e2'};color:${sCfg.cls.includes('blue') ? '#1d4ed8' : sCfg.cls.includes('green') ? '#15803d' : sCfg.cls.includes('yellow') ? '#a16207' : '#b91c1c'};">${sCfg.label}</span></div>
+          </div>
+        </div>
+        <div style="display:flex;justify-content:flex-end;">
+          <div style="width:220px;font-size:10px;">
+            <div style="display:flex;justify-content:space-between;"><span style="color:#6b7280;">Subtotal</span><span>${fmtAmt(po.subtotal)}</span></div>
+            ${hasDiscount ? `<div style="display:flex;justify-content:space-between;"><span style="color:#6b7280;">Discount (${po.discount_rate}%)</span><span style="color:#ea580c;">−${fmtAmt(po.discount_amount)}</span></div><div style="display:flex;justify-content:space-between;"><span style="color:#6b7280;">Net Subtotal</span><span>${fmtAmt(vNetSub)}</span></div>` : ''}
+            <div style="display:flex;justify-content:space-between;"><span style="color:#6b7280;">VAT (12%)</span><span style="color:#2563eb;">${fmtAmt(po.vat_amount)}</span></div>
+            ${hasEwt ? `<div style="display:flex;justify-content:space-between;"><span style="color:#6b7280;">EWT</span><span style="color:#b91c1c;">−${fmtAmt(po.ewt_amount)}</span></div>` : ''}
+            <div style="display:flex;justify-content:space-between;border-top:1px solid #e5e7eb;padding-top:4px;font-weight:700;font-size:11px;"><span>Net Payable</span><span style="color:#b91c1c;">${fmtAmt(po.net_payable)}</span></div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;border-top:1px solid #e5e7eb;padding-top:16px;margin-top:4px;">
+          <div style="text-align:center;"><div style="border-bottom:1px solid #9ca3af;height:32px;"></div><div style="font-size:9px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;">Prepared By</div></div>
+          <div style="text-align:center;"><div style="border-bottom:1px solid #9ca3af;height:32px;"></div><div style="font-size:9px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;">Approved By</div></div>
+        </div>
+      </div>
+    </body></html>`
+  }
+
   function handlePrint() {
     const el = printRef.current
     if (!el) return
@@ -280,20 +336,43 @@ export default function PurchaseOrdersPage() {
     setTimeout(() => { win.focus(); win.print(); win.close() }, 800)
   }
 
-  function openEmailDialog() {
-    const partyName = suppliers.find(s => s.id === supplierId)?.company_name
-    setEmailSubject(`Purchase Order ${poNumber || '(draft)'}${partyName ? ` — ${partyName}` : ''}`)
-    setEmailBody(`Dear ${partyName ?? 'Sir/Madam'},\n\nPlease find attached the Purchase Order ${poNumber || '(draft)'}.\n\nKindly confirm receipt and advise on delivery schedule.\n\nBest regards,\n${companyInfo?.company_name ?? 'CDSC Industrial Supply'}`)
+  function handlePrintPO(po: PO) {
+    const win = window.open('', '_blank', 'width=900,height=750')
+    if (!win) return
+    win.document.write(buildPOHtml(po))
+    win.document.close()
+    setTimeout(() => { win.focus(); win.print(); win.close() }, 800)
+  }
+
+  function openEmailDialog(po?: PO) {
+    if (po) {
+      const supplierName = (po.supplier as any)?.company_name ?? 'Sir/Madam'
+      setEmailPO(po)
+      setEmailSubject(`Purchase Order ${po.po_number ?? '(draft)'}${supplierName !== 'Sir/Madam' ? ` — ${supplierName}` : ''}`)
+      setEmailBody(`Dear ${supplierName},\n\nPlease find attached the Purchase Order ${po.po_number ?? '(draft)'}.\n\nKindly confirm receipt and advise on delivery schedule.\n\nBest regards,\n${companyInfo?.company_name ?? 'CDSC Industrial Supply'}`)
+    } else {
+      const partyName = suppliers.find(s => s.id === supplierId)?.company_name
+      setEmailPO(null)
+      setEmailSubject(`Purchase Order ${poNumber || '(draft)'}${partyName ? ` — ${partyName}` : ''}`)
+      setEmailBody(`Dear ${partyName ?? 'Sir/Madam'},\n\nPlease find attached the Purchase Order ${poNumber || '(draft)'}.\n\nKindly confirm receipt and advise on delivery schedule.\n\nBest regards,\n${companyInfo?.company_name ?? 'CDSC Industrial Supply'}`)
+    }
+    setEmailTo('')
     setShowEmail(true)
   }
 
   function handleSendEmail() {
     if (!emailTo) { toast.error('Please enter a recipient email address.'); return }
-    const el = printRef.current
-    const printHtml = el ? `<!DOCTYPE html><html><head><title>Purchase Order</title>
-      <script src="https://cdn.tailwindcss.com"><\/script>
-      <style>body { font-family: Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; } @media print { body { margin: 0; } }</style>
-    </head><body class="p-6 text-[11px]">${el.innerHTML}</body></html>` : undefined
+    let printHtml: string | undefined
+    if (emailPO) {
+      printHtml = buildPOHtml(emailPO)
+    } else {
+      const el = printRef.current
+      printHtml = el ? `<!DOCTYPE html><html><head><title>Purchase Order</title>
+        <script src="https://cdn.tailwindcss.com"><\/script>
+        <style>body { font-family: Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; } @media print { body { margin: 0; } }</style>
+      </head><body class="p-6 text-[11px]">${el.innerHTML}</body></html>` : undefined
+    }
+    const filename = emailPO ? `PO-${emailPO.po_number ?? 'draft'}.pdf` : `PO-${poNumber || 'draft'}.pdf`
     setShowEmail(false)
     toast.loading('Waiting for Google sign-in…', { id: 'email-send' })
     sendEmailWithGmail({
@@ -301,7 +380,7 @@ export default function PurchaseOrdersPage() {
       subject: emailSubject,
       body: emailBody,
       printHtml,
-      pdfFilename: `PO-${poNumber || 'draft'}.pdf`,
+      pdfFilename: filename,
       onSuccess: () => toast.success('Email sent via Gmail!', { id: 'email-send' }),
       onError: (msg) => toast.error(msg, { id: 'email-send' }),
     })
@@ -510,8 +589,11 @@ export default function PurchaseOrdersPage() {
                             <DropdownMenuItem onClick={() => setViewPO(po)}>
                               <Eye className="mr-2 h-4 w-4" />View PO
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={handlePrint}>
+                            <DropdownMenuItem onClick={() => handlePrintPO(po)}>
                               <Printer className="mr-2 h-4 w-4" />Print PO
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openEmailDialog(po)}>
+                              <Mail className="mr-2 h-4 w-4" />Send Email
                             </DropdownMenuItem>
                             {po.status === 'open' && (
                               <DropdownMenuItem onClick={() => updateStatus(po.id, 'partially_delivered')} className="text-yellow-600">
@@ -791,7 +873,7 @@ export default function PurchaseOrdersPage() {
                     {discountRate > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Discount ({discountRate}%)</span><span className="text-orange-600">− {fmt(discountAmount)}</span></div>}
                     {discountRate > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Net Subtotal</span><span>{fmt(netSubtotal)}</span></div>}
                     <div className="flex justify-between"><span className="text-muted-foreground">Input VAT (12%)</span><span className="text-blue-600">{fmt(vatAmount)}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">{taxLabel}{ewtType !== 'none' ? ` (${ewtCfg.rate * 100}%)` : ''}</span><span className="text-red-700">− {fmt(taxAmount)}</span></div>
+                    {ewtType !== 'none' && <div className="flex justify-between"><span className="text-muted-foreground">{taxLabel} ({ewtCfg.rate * 100}%)</span><span className="text-red-700">− {fmt(taxAmount)}</span></div>}
                     <div className="h-px bg-border my-1" />
                     <div className="flex justify-between font-bold"><span>Net Payable</span><span className="text-red-600">{fmt(netPayable)}</span></div>
                   </div>
@@ -801,7 +883,7 @@ export default function PurchaseOrdersPage() {
                     <Button type="button" variant="outline" className="gap-1.5" onClick={handlePrint}>
                       <Printer className="h-4 w-4" />Print
                     </Button>
-                    <Button type="button" variant="outline" className="gap-1.5" onClick={openEmailDialog}>
+                    <Button type="button" variant="outline" className="gap-1.5" onClick={() => openEmailDialog()}>
                       <Mail className="h-4 w-4" />Email
                     </Button>
                     <Button onClick={submitPO} disabled={saving} className="bg-red-600 hover:bg-red-700">
@@ -822,7 +904,7 @@ export default function PurchaseOrdersPage() {
                       <Button type="button" variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={handlePrint}>
                         <Printer className="h-3.5 w-3.5" />Print
                       </Button>
-                      <Button type="button" variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={openEmailDialog}>
+                      <Button type="button" variant="outline" size="sm" className="h-7 text-xs gap-1" onClick={() => openEmailDialog()}>
                         <Mail className="h-3.5 w-3.5" />Email
                       </Button>
                     </div>
@@ -925,7 +1007,7 @@ export default function PurchaseOrdersPage() {
                         {discountRate > 0 && <div className="flex justify-between"><span className="text-gray-500">Discount ({discountRate}%)</span><span className="text-orange-600">−₱{discountAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
                         {discountRate > 0 && <div className="flex justify-between"><span className="text-gray-500">Net Subtotal</span><span>₱{netSubtotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
                         <div className="flex justify-between"><span className="text-gray-500">VAT (12%)</span><span className="text-blue-600">₱{vatAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
-                        <div className="flex justify-between"><span className="text-gray-500">{taxLabel}</span><span className="text-red-700">−₱{taxAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+                        {ewtType !== 'none' && <div className="flex justify-between"><span className="text-gray-500">{taxLabel}</span><span className="text-red-700">−₱{taxAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
                         <div className="flex justify-between border-t pt-0.5 font-bold text-[11px]"><span>Net Payable</span><span className="text-red-700">₱{netPayable.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
                       </div>
                     </div>
