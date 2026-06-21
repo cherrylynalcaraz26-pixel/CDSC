@@ -965,7 +965,7 @@ export default function PullOutBillingPage() {
                 <Label className="text-xs font-semibold text-gray-600">{f.label}</Label>
                 <input type={f.type} step={f.type === 'number' ? '1' : undefined}
                   value={(pulloutForm as any)[f.key]}
-                  list={f.list}
+                  list={'list' in f ? f.list : undefined}
                   required={f.label.includes('*')}
                   onChange={e => setPulloutForm(p => ({ ...p, [f.key]: e.target.value }))}
                   className="w-full mt-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-400 bg-gray-50" />
