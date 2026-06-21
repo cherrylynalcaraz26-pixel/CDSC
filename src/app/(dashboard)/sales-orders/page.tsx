@@ -320,7 +320,7 @@ export default function SalesOrdersPage() {
                                   </div>
                                 </TableCell>
                                 <TableCell className="py-1.5">
-                                  <Input type="number" min={1} className="h-8 text-xs w-full" placeholder="1" value={line.quantity}
+                                  <Input type="number" min={1} className="h-8 text-xs w-full min-w-[64px]" placeholder="1" value={line.quantity}
                                     onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, quantity: e.target.value } : l))} />
                                 </TableCell>
                                 <TableCell className="py-1.5">
