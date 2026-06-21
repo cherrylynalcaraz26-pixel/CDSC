@@ -67,7 +67,7 @@ interface PulloutRequest {
   client_name: string
   items: PulloutRequestItem[]
   reason: string
-  status: 'pending' | 'approved' | 'completed' | 'cancelled'
+  status: 'pending' | 'approved' | 'completed' | 'cancelled' | 'rejected'
 }
 
 interface ItemOption {
@@ -403,7 +403,7 @@ export default function PullOutBillingPage() {
     await supabase.from('pull_out_requests').update({ status: 'rejected' }).eq('id', id)
     toast.success('Request rejected')
     await loadData()
-    if (viewReq?.id === id) setViewReq(prev => prev ? { ...prev, status: 'rejected' as const } : null)
+    if (viewReq?.id === id) setViewReq(prev => prev ? { ...prev, status: 'rejected' as PulloutRequest['status'] } : null)
   }
 
   async function handleReqComplete(id: string) {
