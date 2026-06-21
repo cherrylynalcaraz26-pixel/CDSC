@@ -57,8 +57,11 @@ interface PO {
   subtotal: number
   vat_amount: number
   ewt_amount: number
+  cwt_amount: number
   net_payable: number
   total_amount: number
+  discount_rate: number
+  discount_amount: number
   payment_terms: string | null
   remarks: string | null
   supplier?: { company_name: string } | null
@@ -103,6 +106,13 @@ export default function PurchaseOrdersPage() {
   // Item search modal
   const [itemSearchIdx, setItemSearchIdx] = useState<number | null>(null)
   const [itemQuery, setItemQuery] = useState('')
+
+  // View PO modal
+  const [viewPO, setViewPO] = useState<PO | null>(null)
+
+  // Prepared By / Approved By
+  const [preparedBy, setPreparedBy] = useState('')
+  const [approvedBy, setApprovedBy] = useState('')
 
   // Email modal
   const [showEmail, setShowEmail] = useState(false)
@@ -162,6 +172,7 @@ export default function PurchaseOrdersPage() {
     setSupplierId(''); setClientId(''); setPoNumber(''); setDeliveryDate('')
     setPaymentTerms('30 days'); setRemarks(''); setLines([emptyLine()])
     setActiveTab('form'); setDiscountType('none'); setDiscountCustom('')
+    setPreparedBy(''); setApprovedBy('')
   }
 
   async function updateItemSellingPrice(itemName: string, newPrice: string) {
@@ -411,7 +422,7 @@ export default function PurchaseOrdersPage() {
                             <MoreHorizontal className="h-4 w-4" />
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-52">
-                            <DropdownMenuItem onClick={() => toast.info(`PO: ${po.po_number}`)}>
+                            <DropdownMenuItem onClick={() => setViewPO(po)}>
                               <Eye className="mr-2 h-4 w-4" />View PO
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => window.print()}>
@@ -554,6 +565,30 @@ export default function PurchaseOrdersPage() {
                       value={remarks}
                       onChange={e => setRemarks(e.target.value)}
                     />
+                  </div>
+
+                  {/* Prepared By / Approved By */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label>Prepared By</Label>
+                      <textarea
+                        className="w-full min-h-[60px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                        rows={2}
+                        placeholder="Name / Position"
+                        value={preparedBy}
+                        onChange={e => setPreparedBy(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Approved By</Label>
+                      <textarea
+                        className="w-full min-h-[60px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                        rows={2}
+                        placeholder="Name / Position"
+                        value={approvedBy}
+                        onChange={e => setApprovedBy(e.target.value)}
+                      />
+                    </div>
                   </div>
 
                   {/* Discount */}
@@ -785,7 +820,7 @@ export default function PurchaseOrdersPage() {
                         <tr className="bg-red-700 text-white">
                           <th className="text-left px-1.5 py-1 w-6">#</th>
                           <th className="text-left px-1.5 py-1">Item Description</th>
-                          <th className="text-right px-1.5 py-1 w-12">Qty</th>
+                          <th className="text-right px-1.5 py-1 w-14 font-bold">QTY</th>
                           <th className="text-left px-1.5 py-1 w-16">Unit</th>
                           <th className="text-right px-1.5 py-1 w-20">Unit Price</th>
                           <th className="text-right px-1.5 py-1 w-20">Total</th>
@@ -798,7 +833,7 @@ export default function PurchaseOrdersPage() {
                             <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                               <td className="px-1.5 py-1 text-gray-400">{i + 1}</td>
                               <td className="px-1.5 py-1">{line.item_name || <span className="text-gray-300 italic">—</span>}</td>
-                              <td className="px-1.5 py-1 text-right">{line.quantity || '—'}</td>
+                              <td className="px-1.5 py-1 text-right font-bold text-gray-800">{line.quantity || '—'}</td>
                               <td className="px-1.5 py-1 text-gray-500">{line.unit || '—'}</td>
                               <td className="px-1.5 py-1 text-right">₱{(parseFloat(line.selling_price) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
                               <td className="px-1.5 py-1 text-right font-medium">₱{total.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
@@ -823,11 +858,15 @@ export default function PurchaseOrdersPage() {
                     {/* Signatures */}
                     <div className="grid grid-cols-2 gap-6 border-t pt-4 mt-1">
                       <div className="text-center">
-                        <div className="border-b border-gray-400 mb-1 h-8" />
+                        <div className="border-b border-gray-400 mb-1 h-8 flex items-end justify-center pb-0.5">
+                          {preparedBy && <span className="text-[10px] font-medium text-gray-700">{preparedBy}</span>}
+                        </div>
                         <div className="text-[9px] text-gray-400 uppercase tracking-wider">Prepared By</div>
                       </div>
                       <div className="text-center">
-                        <div className="border-b border-gray-400 mb-1 h-8" />
+                        <div className="border-b border-gray-400 mb-1 h-8 flex items-end justify-center pb-0.5">
+                          {approvedBy && <span className="text-[10px] font-medium text-gray-700">{approvedBy}</span>}
+                        </div>
                         <div className="text-[9px] text-gray-400 uppercase tracking-wider">Approved By</div>
                       </div>
                     </div>
@@ -837,6 +876,98 @@ export default function PurchaseOrdersPage() {
             </div>
 
       )}
+
+      {/* View PO Dialog */}
+      <Dialog open={!!viewPO} onOpenChange={o => { if (!o) setViewPO(null) }}>
+        <DialogContent className="w-[98vw] sm:!max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />Purchase Order — {viewPO?.po_number ?? '—'}
+            </DialogTitle>
+          </DialogHeader>
+          {viewPO && (() => {
+            const vSupplier = (viewPO.supplier as any)?.company_name ?? null
+            const vDiscount = viewPO.discount_rate ?? 0
+            const vDiscountAmt = viewPO.discount_amount ?? 0
+            const vNetSub = viewPO.subtotal - vDiscountAmt
+            const vTaxAmt = (viewPO.ewt_amount ?? 0) > 0 ? viewPO.ewt_amount : (viewPO.cwt_amount ?? 0)
+            const vTaxLabel = (viewPO.ewt_amount ?? 0) > 0 ? 'EWT' : 'CWT'
+            const vPoDate = viewPO.po_date ? new Date(viewPO.po_date + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : null
+            const vDelDate = viewPO.delivery_date ? new Date(viewPO.delivery_date + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : null
+            const sCfg = STATUS_CFG[viewPO.status] ?? STATUS_CFG.open
+            return (
+              <div className="border rounded-lg bg-white text-[11px] p-5 shadow-sm space-y-3 font-sans">
+                {/* Header */}
+                <div className="flex justify-between items-start border-b pb-3">
+                  <div className="flex items-center gap-2.5">
+                    <img src="/cdsc-logo.jpg" alt="CDSC" className="h-12 w-12 rounded object-cover shrink-0" />
+                    <div className="text-[13px] font-bold text-red-700 leading-tight">
+                      {companyInfo?.company_name || 'CDSC INDUSTRIAL'}
+                    </div>
+                  </div>
+                  <div className="text-right text-[9px] text-gray-500 space-y-0.5">
+                    {companyInfo?.address && <div>{companyInfo.address}</div>}
+                    {(companyInfo?.phone || companyInfo?.email) && (
+                      <div>{companyInfo.phone}{companyInfo.phone && companyInfo.email ? ' | ' : ''}{companyInfo.email}</div>
+                    )}
+                    {companyInfo?.tin && <div>TIN: {companyInfo.tin}</div>}
+                  </div>
+                </div>
+
+                {/* Party / Title / Meta */}
+                <div className="grid grid-cols-3 gap-3 border-b pb-3">
+                  <div className="space-y-0.5">
+                    <div className="text-[9px] font-semibold uppercase text-gray-400">Supplier / Client</div>
+                    <div className="font-semibold text-gray-800 text-[11px]">{vSupplier ?? '—'}</div>
+                    <div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5">Payment Terms</div>
+                    <div className="text-gray-700">{viewPO.payment_terms || '—'}</div>
+                    {viewPO.remarks && (
+                      <div className="mt-1.5">
+                        <div className="text-[9px] font-semibold uppercase text-gray-400">Remarks</div>
+                        <div className="text-gray-700 text-[10px]">{viewPO.remarks}</div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-col items-center justify-center gap-1">
+                    <div className="text-[16px] font-extrabold text-red-700 uppercase tracking-widest text-center leading-tight">Purchase<br />Order</div>
+                    <span className={`text-[9px] px-2 py-0.5 rounded-full font-medium ${sCfg.cls}`}>{sCfg.label}</span>
+                  </div>
+                  <div className="space-y-0.5 text-right">
+                    <div className="text-[9px] font-semibold uppercase text-gray-400">PO Number</div>
+                    <div className="font-mono font-bold text-gray-800">{viewPO.po_number || '—'}</div>
+                    {vPoDate && <><div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5">Date</div><div className="text-gray-700">{vPoDate}</div></>}
+                    {vDelDate && <><div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5">Delivery Date</div><div className="text-gray-700">{vDelDate}</div></>}
+                  </div>
+                </div>
+
+                {/* Totals */}
+                <div className="flex justify-end">
+                  <div className="w-56 space-y-0.5 text-[10px]">
+                    <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span>₱{(viewPO.subtotal ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+                    {vDiscount > 0 && <div className="flex justify-between"><span className="text-gray-500">Discount ({vDiscount}%)</span><span className="text-orange-600">−₱{vDiscountAmt.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
+                    {vDiscount > 0 && <div className="flex justify-between"><span className="text-gray-500">Net Subtotal</span><span>₱{vNetSub.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
+                    <div className="flex justify-between"><span className="text-gray-500">VAT (12%)</span><span className="text-blue-600">₱{(viewPO.vat_amount ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+                    <div className="flex justify-between"><span className="text-gray-500">{vTaxLabel}</span><span className="text-red-700">−₱{(vTaxAmt ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+                    <div className="flex justify-between border-t pt-0.5 font-bold text-[11px]"><span>Net Payable</span><span className="text-red-700">₱{(viewPO.net_payable ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+                  </div>
+                </div>
+
+                {/* Signatures */}
+                <div className="grid grid-cols-2 gap-6 border-t pt-4 mt-1">
+                  <div className="text-center">
+                    <div className="border-b border-gray-400 mb-1 h-8" />
+                    <div className="text-[9px] text-gray-400 uppercase tracking-wider">Prepared By</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="border-b border-gray-400 mb-1 h-8" />
+                    <div className="text-[9px] text-gray-400 uppercase tracking-wider">Approved By</div>
+                  </div>
+                </div>
+              </div>
+            )
+          })()}
+        </DialogContent>
+      </Dialog>
 
       {/* Item Search Dialog */}
       <Dialog open={itemSearchIdx !== null} onOpenChange={o => { if (!o) setItemSearchIdx(null) }}>

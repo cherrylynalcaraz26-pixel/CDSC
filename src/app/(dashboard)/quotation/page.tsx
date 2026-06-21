@@ -32,6 +32,7 @@ interface QuoteLine {
   quantity: string
   unit: string
   unit_price: string
+  selling_price: string
 }
 
 interface Quotation {
@@ -50,7 +51,7 @@ interface Quotation {
   created_at: string
 }
 
-const emptyLine = (): QuoteLine => ({ item_name: '', quantity: '', unit: '', unit_price: '' })
+const emptyLine = (): QuoteLine => ({ item_name: '', quantity: '', unit: '', unit_price: '', selling_price: '' })
 const today = () => new Date().toISOString().split('T')[0]
 
 const STATUS_CFG: Record<string, { label: string; cls: string }> = {
@@ -90,9 +91,11 @@ export default function QuotationPage() {
   const [notes, setNotes] = useState('')
   const [vatEnabled, setVatEnabled] = useState(true)
   const [ewtEnabled, setEwtEnabled] = useState(false)
+  const [preparedBy, setPreparedBy] = useState('')
+  const [acceptedBy, setAcceptedBy] = useState('')
 
   const selectedClient = clients.find(c => c.id === clientId)
-  const subtotal = lines.reduce((s, l) => s + (parseFloat(l.unit_price) || 0) * (parseFloat(l.quantity) || 0), 0)
+  const subtotal = lines.reduce((s, l) => s + (parseFloat(l.selling_price) || parseFloat(l.unit_price) || 0) * (parseFloat(l.quantity) || 0), 0)
   const vatAmount = vatEnabled ? subtotal * 0.12 : 0
   const ewtAmount = ewtEnabled ? (subtotal / 1.12) * 0.02 : 0
   const totalAmount = subtotal + vatAmount - ewtAmount
@@ -135,6 +138,7 @@ export default function QuotationPage() {
   function resetForm() {
     setQuoteNumber(''); setQuoteDate(today()); setValidUntil(''); setClientId('')
     setSubject(''); setLines([emptyLine()]); setNotes(''); setVatEnabled(true); setEwtEnabled(false)
+    setPreparedBy(''); setAcceptedBy('')
     setMobileTab('form')
   }
 
@@ -143,12 +147,14 @@ export default function QuotationPage() {
       if (i !== idx) return line
       if (field === 'item_name') {
         const found = items.find(it => it.item_name === value)
-        const autoPrice = found?.selling_price ?? found?.cost ?? null
+        const autoPrice = found?.cost ?? null
+        const autoSell = found?.selling_price ?? null
         return {
           ...line,
           item_name: value,
           unit: found?.unit_of_measure ?? line.unit,
           unit_price: autoPrice !== null ? String(autoPrice) : line.unit_price,
+          selling_price: autoSell !== null ? String(autoSell) : line.selling_price,
         }
       }
       return { ...line, [field]: value }
@@ -266,22 +272,25 @@ export default function QuotationPage() {
           <tr className="bg-red-700 text-white">
             <th className="text-left px-1.5 py-1 w-6">#</th>
             <th className="text-left px-1.5 py-1">Item Description</th>
-            <th className="text-right px-1.5 py-1 w-12">Qty</th>
+            <th className="text-right px-1.5 py-1 w-14 font-bold">QTY</th>
             <th className="text-left px-1.5 py-1 w-16">Unit</th>
             <th className="text-right px-1.5 py-1 w-20">Unit Price</th>
+            <th className="text-right px-1.5 py-1 w-20">Selling Price</th>
             <th className="text-right px-1.5 py-1 w-20">Total</th>
           </tr>
         </thead>
         <tbody>
           {lines.map((line, i) => {
-            const total = (parseFloat(line.unit_price) || 0) * (parseFloat(line.quantity) || 0)
+            const effectivePrice = parseFloat(line.selling_price) || parseFloat(line.unit_price) || 0
+            const total = effectivePrice * (parseFloat(line.quantity) || 0)
             return (
               <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                 <td className="px-1.5 py-1 text-gray-400">{i + 1}</td>
                 <td className="px-1.5 py-1">{line.item_name || <span className="text-gray-300 italic">—</span>}</td>
-                <td className="px-1.5 py-1 text-right">{line.quantity || '—'}</td>
+                <td className="px-1.5 py-1 text-right font-bold text-gray-800">{line.quantity || '—'}</td>
                 <td className="px-1.5 py-1 text-gray-500">{line.unit || '—'}</td>
                 <td className="px-1.5 py-1 text-right">₱{(parseFloat(line.unit_price) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+                <td className="px-1.5 py-1 text-right font-medium text-green-700">₱{(parseFloat(line.selling_price) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
                 <td className="px-1.5 py-1 text-right font-medium">₱{total.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
               </tr>
             )
@@ -310,11 +319,15 @@ export default function QuotationPage() {
       {/* Signatures */}
       <div className="grid grid-cols-2 gap-6 border-t pt-4 mt-1">
         <div className="text-center">
-          <div className="border-b border-gray-400 mb-1 h-8" />
+          <div className="border-b border-gray-400 mb-1 h-8 flex items-end justify-center pb-0.5">
+            {preparedBy && <span className="text-[10px] font-medium text-gray-700">{preparedBy}</span>}
+          </div>
           <div className="text-[9px] text-gray-400 uppercase tracking-wider">Prepared By</div>
         </div>
         <div className="text-center">
-          <div className="border-b border-gray-400 mb-1 h-8" />
+          <div className="border-b border-gray-400 mb-1 h-8 flex items-end justify-center pb-0.5">
+            {acceptedBy && <span className="text-[10px] font-medium text-gray-700">{acceptedBy}</span>}
+          </div>
           <div className="text-[9px] text-gray-400 uppercase tracking-wider">Accepted By</div>
         </div>
       </div>
@@ -433,7 +446,8 @@ export default function QuotationPage() {
                             <TableHead className="min-w-[180px]">Item Description</TableHead>
                             <TableHead className="w-16">Qty</TableHead>
                             <TableHead className="w-20">Unit</TableHead>
-                            <TableHead className="w-28">Unit Price</TableHead>
+                            <TableHead className="w-28">Unit Price <span className="font-normal text-muted-foreground text-[10px]">(cost)</span></TableHead>
+                            <TableHead className="w-28">Selling Price</TableHead>
                             <TableHead className="w-28 text-right">Amount</TableHead>
                             <TableHead className="w-10"></TableHead>
                           </TableRow>
@@ -466,7 +480,10 @@ export default function QuotationPage() {
                               <TableCell className="py-1.5">
                                 <Input type="number" min="0" step="0.01" className="h-8 text-xs w-full" value={line.unit_price} onChange={e => updateLine(idx, 'unit_price', e.target.value)} />
                               </TableCell>
-                              <TableCell className="py-1.5 text-right text-xs font-medium">{fmt((parseFloat(line.quantity)||0)*(parseFloat(line.unit_price)||0))}</TableCell>
+                              <TableCell className="py-1.5">
+                                <Input type="number" min="0" step="0.01" className="h-8 text-xs w-full" value={line.selling_price} onChange={e => updateLine(idx, 'selling_price', e.target.value)} />
+                              </TableCell>
+                              <TableCell className="py-1.5 text-right text-xs font-medium">{fmt((parseFloat(line.quantity)||0)*(parseFloat(line.selling_price)||parseFloat(line.unit_price)||0))}</TableCell>
                               <TableCell className="py-1.5">
                                 {lines.length > 1 && (
                                   <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
@@ -494,6 +511,30 @@ export default function QuotationPage() {
                       value={notes}
                       onChange={e => setNotes(e.target.value)}
                     />
+                  </div>
+
+                  {/* Prepared By / Accepted By */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <Label>Prepared By</Label>
+                      <textarea
+                        className="w-full min-h-[60px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                        rows={2}
+                        placeholder="Name / Position"
+                        value={preparedBy}
+                        onChange={e => setPreparedBy(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Accepted By</Label>
+                      <textarea
+                        className="w-full min-h-[60px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                        rows={2}
+                        placeholder="Name / Position"
+                        value={acceptedBy}
+                        onChange={e => setAcceptedBy(e.target.value)}
+                      />
+                    </div>
                   </div>
 
                   {/* Tax toggles */}
@@ -715,12 +756,12 @@ export default function QuotationPage() {
                 ) : filteredSearchItems.map(it => (
                   <tr key={it.item_name} className="hover:bg-muted/40 cursor-pointer" onClick={() => {
                     if (itemSearchIdx === null) return
-                    const autoPrice = it.selling_price ?? it.cost ?? null
                     setLines(p => p.map((l, i) => i === itemSearchIdx ? {
                       ...l,
                       item_name: it.item_name,
                       unit: it.unit_of_measure || l.unit,
-                      unit_price: autoPrice !== null ? String(autoPrice) : l.unit_price,
+                      unit_price: it.cost != null ? String(it.cost) : l.unit_price,
+                      selling_price: it.selling_price != null ? String(it.selling_price) : l.selling_price,
                     } : l))
                     setItemSearchIdx(null)
                   }}>
