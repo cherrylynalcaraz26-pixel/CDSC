@@ -17,6 +17,7 @@ import {
   Plus, MoreHorizontal, Eye, Printer, Loader2,
   Trash2, CheckCircle2, XCircle, ArrowRightLeft, X,
   Package, Search, Mail, Send, Pencil, FileText,
+  ChevronDown, ChevronUp,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
@@ -72,6 +73,14 @@ interface Supplier { id: string; company_name: string; payment_terms: string | n
 interface POLine   { item_name: string; quantity: string; unit: string; unit_price: string; selling_price: string }
 const emptyLine = (): POLine => ({ item_name: '', quantity: '1', unit: 'piece', unit_price: '', selling_price: '' })
 
+type EWTType = 'none' | 'goods' | 'services' | 'rental'
+const EWT_CFG: Record<EWTType, { label: string; rate: number; atc: string; desc: string }> = {
+  none:     { label: 'None',     rate: 0,    atc: '',      desc: '' },
+  goods:    { label: 'Goods',    rate: 0.01, atc: 'WC158', desc: 'Purchase of Goods' },
+  services: { label: 'Services', rate: 0.02, atc: 'WC157', desc: 'Purchase of Services' },
+  rental:   { label: 'Rental',   rate: 0.05, atc: 'WC160', desc: 'Rental' },
+}
+
 export default function PurchaseOrdersPage() {
   const supabase = createClient()
   const { query } = useSearchContext()
@@ -106,6 +115,15 @@ export default function PurchaseOrdersPage() {
 
   // View PO modal
   const [viewPO, setViewPO] = useState<PO | null>(null)
+
+  // Pipeline
+  const [pipelineOpen, setPipelineOpen] = useState(true)
+  const [receivedPONums, setReceivedPONums] = useState<Set<string>>(new Set())
+  const [csiSuppliers, setCsiSuppliers] = useState<Set<string>>(new Set())
+  const [collectedSuppliers, setCollectedSuppliers] = useState<Set<string>>(new Set())
+
+  // EWT
+  const [ewtType, setEwtType] = useState<EWTType>('services')
 
   // Prepared By / Approved By
   const [preparedBy, setPreparedBy] = useState('')
@@ -142,6 +160,17 @@ export default function PurchaseOrdersPage() {
       }
       setWarehouseStock(map)
     }
+
+    // Pipeline data
+    const [{ data: rrData }, { data: csiData }, { data: colData }] = await Promise.all([
+      supabase.from('receiving_reports').select('po_number'),
+      supabase.from('csi_records').select('client_name'),
+      supabase.from('collections').select('client_name'),
+    ])
+    setReceivedPONums(new Set((rrData ?? []).map((r: any) => r.po_number).filter(Boolean)))
+    setCsiSuppliers(new Set((csiData ?? []).map((r: any) => (r.client_name ?? '').trim()).filter(Boolean)))
+    setCollectedSuppliers(new Set((colData ?? []).map((r: any) => (r.client_name ?? '').trim()).filter(Boolean)))
+
     setLoading(false)
   }
 
@@ -150,8 +179,9 @@ export default function PurchaseOrdersPage() {
   // Computed totals
   const subtotal = lines.reduce((s, l) => s + (parseFloat(l.selling_price) || 0) * (parseFloat(l.quantity) || 0), 0)
   const selectedSupplier = suppliers.find(s => s.id === supplierId)
-  const taxRate = (selectedSupplier?.ewt_rate ?? 2) / 100
-  const taxLabel = 'EWT'
+  const ewtCfg = EWT_CFG[ewtType]
+  const taxRate = ewtCfg.rate
+  const taxLabel = ewtType !== 'none' ? `EWT — ${ewtCfg.atc}` : 'EWT'
 
   const discountAmount = subtotal * (discountRate / 100)
   const netSubtotal = subtotal - discountAmount
@@ -164,7 +194,7 @@ export default function PurchaseOrdersPage() {
     setSupplierId(''); setPoNumber(''); setDeliveryDate('')
     setPaymentTerms('30 days'); setRemarks(''); setLines([emptyLine()])
     setActiveTab('form'); setDiscountType('none'); setDiscountCustom('')
-    setPreparedBy(''); setApprovedBy('')
+    setEwtType('services'); setPreparedBy(''); setApprovedBy('')
   }
 
   async function updateItemSellingPrice(itemName: string, newPrice: string) {
@@ -346,6 +376,73 @@ export default function PurchaseOrdersPage() {
             <div className="text-sm text-muted-foreground">Completed</div>
           </CardContent></Card>
         </div>
+      )}
+
+      {/* PO Pipeline */}
+      {!open && (
+        <Card>
+          <CardHeader className="pb-0 pt-4 px-4">
+            <button
+              className="flex items-center justify-between w-full text-left"
+              onClick={() => setPipelineOpen(o => !o)}
+            >
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <FileText className="h-4 w-4 text-red-600" />
+                Purchase Order Pipeline — Next Actions
+              </CardTitle>
+              {pipelineOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+            </button>
+          </CardHeader>
+          {pipelineOpen && (
+            <CardContent className="p-0 mt-3">
+              <div className="grid grid-cols-5 text-center text-[10px] font-semibold uppercase tracking-wider border-b border-t">
+                {[
+                  { label: 'PO Created',  color: 'text-blue-600 bg-blue-50' },
+                  { label: 'Receiving',   color: 'text-yellow-600 bg-yellow-50' },
+                  { label: 'DR Logged',   color: 'text-orange-600 bg-orange-50' },
+                  { label: 'CSI Issued',  color: 'text-purple-600 bg-purple-50' },
+                  { label: 'Collected',   color: 'text-green-600 bg-green-50' },
+                ].map(s => (
+                  <div key={s.label} className={`py-2 ${s.color}`}>{s.label}</div>
+                ))}
+              </div>
+              {loading ? (
+                <div className="text-center py-6"><Loader2 className="h-4 w-4 animate-spin mx-auto text-muted-foreground" /></div>
+              ) : pos.filter(p => p.status === 'open' || p.status === 'partially_delivered').length === 0 ? (
+                <div className="text-center py-6 text-xs text-muted-foreground">No open purchase orders</div>
+              ) : (
+                <div className="divide-y max-h-64 overflow-y-auto">
+                  {pos.filter(p => p.status === 'open' || p.status === 'partially_delivered').map(po => {
+                    const supplierName = (po.supplier as any)?.company_name ?? ''
+                    const isReceived = receivedPONums.has(po.po_number ?? '')
+                    const hasCsi = csiSuppliers.has(supplierName)
+                    const hasOr = collectedSuppliers.has(supplierName)
+                    const stages = [
+                      { done: true,       label: po.po_number ?? '—', sub: STATUS_CFG[po.status]?.label ?? po.status },
+                      { done: isReceived, label: isReceived ? 'Received' : 'Pending' },
+                      { done: isReceived, label: isReceived ? 'Expected' : '—' },
+                      { done: hasCsi,     label: hasCsi ? 'Issued' : 'Pending' },
+                      { done: hasOr,      label: hasOr  ? 'Collected' : 'Pending' },
+                    ]
+                    return (
+                      <div key={po.id} className="grid grid-cols-5 text-center text-xs">
+                        {stages.map((s, i) => (
+                          <div key={i} className={`py-2 px-1 border-r last:border-r-0 ${s.done ? '' : 'opacity-40'}`}>
+                            <div className={`inline-flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold mx-auto mb-0.5 ${s.done ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+                              {s.done ? '✓' : (i + 1)}
+                            </div>
+                            <div className="font-medium truncate px-1">{s.label}</div>
+                            {s.sub && <div className="text-[10px] text-muted-foreground">{s.sub}</div>}
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </CardContent>
+          )}
+        </Card>
       )}
 
       {/* PO List */}
@@ -572,6 +669,24 @@ export default function PurchaseOrdersPage() {
                     </div>
                   </div>
 
+                  {/* EWT */}
+                  <div className="space-y-1.5">
+                    <Label>EWT (Expanded Withholding Tax)</Label>
+                    <div className="flex gap-2 flex-wrap">
+                      {(['none', 'goods', 'services', 'rental'] as EWTType[]).map(opt => (
+                        <button key={opt} type="button" onClick={() => setEwtType(opt)}
+                          className={`px-3 py-1.5 text-sm rounded-md border font-medium transition-colors ${ewtType === opt ? 'bg-red-600 text-white border-red-600' : 'bg-background text-muted-foreground hover:bg-muted border-input'}`}>
+                          {opt === 'none' ? 'None' : `${EWT_CFG[opt].label} (${EWT_CFG[opt].rate * 100}%)`}
+                        </button>
+                      ))}
+                    </div>
+                    {ewtType !== 'none' && (
+                      <p className="text-xs text-muted-foreground">
+                        ATC: <span className="font-semibold text-foreground">{ewtCfg.atc}</span> — {ewtCfg.desc} @ {ewtCfg.rate * 100}%
+                      </p>
+                    )}
+                  </div>
+
                   {/* Line Items */}
                   <div className="space-y-2">
                     <Label>Line Items</Label>
@@ -676,7 +791,7 @@ export default function PurchaseOrdersPage() {
                     {discountRate > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Discount ({discountRate}%)</span><span className="text-orange-600">− {fmt(discountAmount)}</span></div>}
                     {discountRate > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Net Subtotal</span><span>{fmt(netSubtotal)}</span></div>}
                     <div className="flex justify-between"><span className="text-muted-foreground">Input VAT (12%)</span><span className="text-blue-600">{fmt(vatAmount)}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">{taxLabel} ({selectedSupplier?.ewt_rate ?? 2}%)</span><span className="text-red-700">− {fmt(taxAmount)}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">{taxLabel}{ewtType !== 'none' ? ` (${ewtCfg.rate * 100}%)` : ''}</span><span className="text-red-700">− {fmt(taxAmount)}</span></div>
                     <div className="h-px bg-border my-1" />
                     <div className="flex justify-between font-bold"><span>Net Payable</span><span className="text-red-600">{fmt(netPayable)}</span></div>
                   </div>

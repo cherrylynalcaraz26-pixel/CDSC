@@ -54,6 +54,14 @@ interface Quotation {
 const emptyLine = (): QuoteLine => ({ item_name: '', quantity: '', unit: '', unit_price: '', selling_price: '' })
 const today = () => new Date().toISOString().split('T')[0]
 
+type EWTType = 'none' | 'goods' | 'services' | 'rental'
+const EWT_CFG: Record<EWTType, { label: string; rate: number; atc: string; desc: string }> = {
+  none:     { label: 'None',     rate: 0,    atc: '',      desc: '' },
+  goods:    { label: 'Goods',    rate: 0.01, atc: 'WC158', desc: 'Purchase of Goods' },
+  services: { label: 'Services', rate: 0.02, atc: 'WC157', desc: 'Purchase of Services' },
+  rental:   { label: 'Rental',   rate: 0.05, atc: 'WC160', desc: 'Rental' },
+}
+
 const STATUS_CFG: Record<string, { label: string; cls: string }> = {
   draft:    { label: 'Draft',    cls: 'bg-gray-100 text-gray-700' },
   sent:     { label: 'Sent',     cls: 'bg-blue-100 text-blue-700' },
@@ -90,14 +98,16 @@ export default function QuotationPage() {
   const [lines, setLines] = useState<QuoteLine[]>([emptyLine()])
   const [notes, setNotes] = useState('')
   const [vatEnabled, setVatEnabled] = useState(true)
-  const [ewtEnabled, setEwtEnabled] = useState(false)
+  const [ewtType, setEwtType] = useState<EWTType>('none')
   const [preparedBy, setPreparedBy] = useState('')
   const [acceptedBy, setAcceptedBy] = useState('')
 
   const selectedClient = clients.find(c => c.id === clientId)
   const subtotal = lines.reduce((s, l) => s + (parseFloat(l.selling_price) || parseFloat(l.unit_price) || 0) * (parseFloat(l.quantity) || 0), 0)
   const vatAmount = vatEnabled ? subtotal * 0.12 : 0
-  const ewtAmount = ewtEnabled ? (subtotal / 1.12) * 0.02 : 0
+  const ewtCfg = EWT_CFG[ewtType]
+  const ewtAmount = ewtType !== 'none' ? (subtotal / 1.12) * ewtCfg.rate : 0
+  const ewtLabel = ewtType !== 'none' ? `EWT — ${ewtCfg.atc}` : 'EWT'
   const totalAmount = subtotal + vatAmount - ewtAmount
 
   const fmt = (n: number) => `₱${n.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
@@ -137,7 +147,7 @@ export default function QuotationPage() {
 
   function resetForm() {
     setQuoteNumber(''); setQuoteDate(today()); setValidUntil(''); setClientId('')
-    setSubject(''); setLines([emptyLine()]); setNotes(''); setVatEnabled(true); setEwtEnabled(false)
+    setSubject(''); setLines([emptyLine()]); setNotes(''); setVatEnabled(true); setEwtType('none')
     setPreparedBy(''); setAcceptedBy('')
     setMobileTab('form')
   }
@@ -302,7 +312,7 @@ export default function QuotationPage() {
         <div className="w-52 space-y-0.5 text-[10px]">
           <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span>₱{subtotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
           {vatEnabled && <div className="flex justify-between"><span className="text-gray-500">VAT (12%)</span><span className="text-blue-600">₱{vatAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
-          {ewtEnabled && <div className="flex justify-between"><span className="text-gray-500">EWT (2%)</span><span className="text-red-700">−₱{ewtAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
+          {ewtType !== 'none' && <div className="flex justify-between"><span className="text-gray-500">{ewtLabel} ({ewtCfg.rate * 100}%)</span><span className="text-red-700">−₱{ewtAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
           <div className="flex justify-between border-t pt-0.5 font-bold text-[11px]"><span>Total</span><span className="text-red-700">₱{totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
         </div>
       </div>
@@ -536,26 +546,38 @@ export default function QuotationPage() {
                     </div>
                   </div>
 
-                  {/* Tax toggles */}
+                  {/* Tax */}
                   <div className="space-y-2">
                     <Label>Tax</Label>
-                    <div className="flex gap-4">
-                      <label className="flex items-center gap-2 text-sm cursor-pointer">
-                        <input type="checkbox" className="rounded" checked={vatEnabled} onChange={e => setVatEnabled(e.target.checked)} />
-                        VAT 12%
-                      </label>
-                      <label className="flex items-center gap-2 text-sm cursor-pointer">
-                        <input type="checkbox" className="rounded" checked={ewtEnabled} onChange={e => setEwtEnabled(e.target.checked)} />
-                        EWT 2%
-                      </label>
+                    <label className="flex items-center gap-2 text-sm cursor-pointer">
+                      <input type="checkbox" className="rounded" checked={vatEnabled} onChange={e => setVatEnabled(e.target.checked)} />
+                      VAT 12%
+                    </label>
+                  </div>
+
+                  {/* EWT */}
+                  <div className="space-y-1.5">
+                    <Label>EWT (Expanded Withholding Tax)</Label>
+                    <div className="flex gap-2 flex-wrap">
+                      {(['none', 'goods', 'services', 'rental'] as EWTType[]).map(opt => (
+                        <button key={opt} type="button" onClick={() => setEwtType(opt)}
+                          className={`px-3 py-1.5 text-sm rounded-md border font-medium transition-colors ${ewtType === opt ? 'bg-red-600 text-white border-red-600' : 'bg-background text-muted-foreground hover:bg-muted border-input'}`}>
+                          {opt === 'none' ? 'None' : `${EWT_CFG[opt].label} (${EWT_CFG[opt].rate * 100}%)`}
+                        </button>
+                      ))}
                     </div>
+                    {ewtType !== 'none' && (
+                      <p className="text-xs text-muted-foreground">
+                        ATC: <span className="font-semibold text-foreground">{ewtCfg.atc}</span> — {ewtCfg.desc} @ {ewtCfg.rate * 100}%
+                      </p>
+                    )}
                   </div>
 
                   {/* Totals summary */}
                   <div className="rounded-lg bg-muted/30 p-4 space-y-1 text-sm">
                     <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{fmt(subtotal)}</span></div>
                     {vatEnabled && <div className="flex justify-between"><span className="text-muted-foreground">VAT 12%</span><span>{fmt(vatAmount)}</span></div>}
-                    {ewtEnabled && <div className="flex justify-between text-red-600"><span>EWT 2%</span><span>({fmt(ewtAmount)})</span></div>}
+                    {ewtType !== 'none' && <div className="flex justify-between"><span className="text-muted-foreground">{ewtLabel} ({ewtCfg.rate * 100}%)</span><span className="text-red-700">− {fmt(ewtAmount)}</span></div>}
                     <div className="h-px bg-border my-1" />
                     <div className="flex justify-between font-bold"><span>Total</span><span className="text-red-600">{fmt(totalAmount)}</span></div>
                   </div>

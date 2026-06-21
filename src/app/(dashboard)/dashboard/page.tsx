@@ -11,7 +11,7 @@ import {
 } from 'recharts'
 import {
   Package, ShoppingCart, Truck, FileText, ClipboardList,
-  TrendingUp, Cpu, Users, ArrowRight, Loader2,
+  TrendingUp, Cpu, Users, ArrowRight, Loader2, ChevronDown, ChevronUp,
 } from 'lucide-react'
 import Link from 'next/link'
 import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns'
@@ -73,6 +73,10 @@ export default function DashboardPage() {
   const [recentPRs, setRecentPRs] = useState<RecentPR[]>([])
   const [pipelinePOs, setPipelinePOs] = useState<any[]>([])
   const [receivedPONumbers, setReceivedPONumbers] = useState<Set<string>>(new Set())
+  const [pipelineSOs, setPipelineSOs] = useState<any[]>([])
+  const [collectedClients, setCollectedClients] = useState<Set<string>>(new Set())
+  const [poPipelineOpen, setPoPipelineOpen] = useState(true)
+  const [soPipelineOpen, setSoPipelineOpen] = useState(true)
   const [orRows, setOrRows] = useState<ORClientRow[]>([])
   const [csiRows, setCsiRows] = useState<CSIClientRow[]>([])
   const [reconRows, setReconRows] = useState<ReconRow[]>([])
@@ -185,6 +189,12 @@ export default function DashboardPage() {
       setPipelinePOs(openPOsData.data ?? [])
       setReceivedPONumbers(new Set((rrData.data ?? []).map((r: any) => r.po_number).filter(Boolean)))
 
+      // --- SO Pipeline ---
+      const openSOsData = await supabase.from('sales_orders').select('id, so_number, status, client_name').not('status', 'in', '("cancelled","delivered")').order('created_at', { ascending: false }).limit(10)
+      const colClientsData = await supabase.from('collections').select('client_name')
+      setPipelineSOs(openSOsData.data ?? [])
+      setCollectedClients(new Set((colClientsData.data ?? []).map((r: any) => (r.client_name ?? '').trim()).filter(Boolean)))
+
       setMonthlyData(bars)
       setRecentDRs((recentDRData.data ?? []) as RecentDR[])
       setRecentPRs((recentPRData.data ?? []) as RecentPR[])
@@ -217,63 +227,126 @@ export default function DashboardPage() {
 
       {/* PO Pipeline */}
       <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-medium flex items-center gap-2">
-            <ShoppingCart className="h-4 w-4 text-red-600" />
-            Purchase Order Pipeline — Next Actions
-          </CardTitle>
+        <CardHeader className="pb-0 pt-4 px-4">
+          <button className="flex items-center justify-between w-full text-left" onClick={() => setPoPipelineOpen(o => !o)}>
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <ShoppingCart className="h-4 w-4 text-red-600" />
+              Purchase Order Pipeline — Next Actions
+            </CardTitle>
+            {poPipelineOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+          </button>
         </CardHeader>
-        <CardContent className="p-0">
-          {/* Pipeline stage header */}
-          <div className="grid grid-cols-5 text-center text-[10px] font-semibold uppercase tracking-wider border-b">
-            {[
-              { label: 'PO Created', color: 'text-blue-600 bg-blue-50' },
-              { label: 'Receiving', color: 'text-yellow-600 bg-yellow-50' },
-              { label: 'DR Logged', color: 'text-orange-600 bg-orange-50' },
-              { label: 'CSI Issued', color: 'text-purple-600 bg-purple-50' },
-              { label: 'Collected', color: 'text-green-600 bg-green-50' },
-            ].map(s => (
-              <div key={s.label} className={`py-2 ${s.color}`}>{s.label}</div>
-            ))}
-          </div>
-
-          {loading ? (
-            <div className="text-center py-6"><Loader2 className="h-4 w-4 animate-spin mx-auto text-muted-foreground" /></div>
-          ) : pipelinePOs.length === 0 ? (
-            <div className="text-center py-6 text-xs text-muted-foreground">No open purchase orders</div>
-          ) : (
-            <div className="divide-y">
-              {pipelinePOs.map(po => {
-                const isReceived = receivedPONumbers.has(po.po_number ?? '')
-                const supplierName = (po.supplier as any)?.company_name ?? ''
-                const hasCsi = csiRows.some(r => r.client === supplierName)
-                const hasOr = orRows.some(r => r.client === supplierName)
-
-                const stages = [
-                  { done: true,       label: po.po_number ?? '—', sub: STATUS_COLORS[po.status as any] ? po.status : po.status },
-                  { done: isReceived, label: isReceived ? 'Received' : 'Pending',  sub: '' },
-                  { done: isReceived, label: isReceived ? 'DR Expected' : '—',     sub: '' },
-                  { done: hasCsi,     label: hasCsi ? 'Issued' : 'Pending',        sub: '' },
-                  { done: hasOr,      label: hasOr ? 'Collected' : 'Pending',      sub: '' },
-                ]
-
-                return (
-                  <div key={po.id} className="grid grid-cols-5 text-center text-xs">
-                    {stages.map((s, i) => (
-                      <div key={i} className={`py-2.5 px-1 border-r last:border-r-0 ${s.done ? '' : 'opacity-40'}`}>
-                        <div className={`inline-flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold mx-auto mb-0.5 ${s.done ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
-                          {s.done ? '✓' : (i + 1)}
-                        </div>
-                        <div className="font-medium truncate px-1">{s.label}</div>
-                        {s.sub && <div className="text-[10px] text-muted-foreground">{s.sub}</div>}
-                      </div>
-                    ))}
-                  </div>
-                )
-              })}
+        {poPipelineOpen && (
+          <CardContent className="p-0 mt-3">
+            <div className="grid grid-cols-5 text-center text-[10px] font-semibold uppercase tracking-wider border-b border-t">
+              {[
+                { label: 'PO Created', color: 'text-blue-600 bg-blue-50' },
+                { label: 'Receiving',  color: 'text-yellow-600 bg-yellow-50' },
+                { label: 'DR Logged',  color: 'text-orange-600 bg-orange-50' },
+                { label: 'CSI Issued', color: 'text-purple-600 bg-purple-50' },
+                { label: 'Collected',  color: 'text-green-600 bg-green-50' },
+              ].map(s => (
+                <div key={s.label} className={`py-2 ${s.color}`}>{s.label}</div>
+              ))}
             </div>
-          )}
-        </CardContent>
+            {loading ? (
+              <div className="text-center py-6"><Loader2 className="h-4 w-4 animate-spin mx-auto text-muted-foreground" /></div>
+            ) : pipelinePOs.length === 0 ? (
+              <div className="text-center py-6 text-xs text-muted-foreground">No open purchase orders</div>
+            ) : (
+              <div className="divide-y">
+                {pipelinePOs.map(po => {
+                  const isReceived = receivedPONumbers.has(po.po_number ?? '')
+                  const supplierName = (po.supplier as any)?.company_name ?? ''
+                  const hasCsi = csiRows.some(r => r.client === supplierName)
+                  const hasOr = orRows.some(r => r.client === supplierName)
+                  const stages = [
+                    { done: true,       label: po.po_number ?? '—', sub: STATUS_COLORS[po.status as any] ? po.status : po.status },
+                    { done: isReceived, label: isReceived ? 'Received' : 'Pending' },
+                    { done: isReceived, label: isReceived ? 'DR Expected' : '—' },
+                    { done: hasCsi,     label: hasCsi ? 'Issued' : 'Pending' },
+                    { done: hasOr,      label: hasOr ? 'Collected' : 'Pending' },
+                  ]
+                  return (
+                    <div key={po.id} className="grid grid-cols-5 text-center text-xs">
+                      {stages.map((s, i) => (
+                        <div key={i} className={`py-2.5 px-1 border-r last:border-r-0 ${s.done ? '' : 'opacity-40'}`}>
+                          <div className={`inline-flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold mx-auto mb-0.5 ${s.done ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+                            {s.done ? '✓' : (i + 1)}
+                          </div>
+                          <div className="font-medium truncate px-1">{s.label}</div>
+                          {s.sub && <div className="text-[10px] text-muted-foreground">{s.sub}</div>}
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </CardContent>
+        )}
+      </Card>
+
+      {/* SO Pipeline */}
+      <Card>
+        <CardHeader className="pb-0 pt-4 px-4">
+          <button className="flex items-center justify-between w-full text-left" onClick={() => setSoPipelineOpen(o => !o)}>
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <FileText className="h-4 w-4 text-blue-600" />
+              Sales Order Pipeline — Next Actions
+            </CardTitle>
+            {soPipelineOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+          </button>
+        </CardHeader>
+        {soPipelineOpen && (
+          <CardContent className="p-0 mt-3">
+            <div className="grid grid-cols-5 text-center text-[10px] font-semibold uppercase tracking-wider border-b border-t">
+              {[
+                { label: 'SO Created',  color: 'text-blue-600 bg-blue-50' },
+                { label: 'Confirmed',   color: 'text-indigo-600 bg-indigo-50' },
+                { label: 'Processing',  color: 'text-yellow-600 bg-yellow-50' },
+                { label: 'Shipped',     color: 'text-orange-600 bg-orange-50' },
+                { label: 'Collected',   color: 'text-green-600 bg-green-50' },
+              ].map(s => (
+                <div key={s.label} className={`py-2 ${s.color}`}>{s.label}</div>
+              ))}
+            </div>
+            {loading ? (
+              <div className="text-center py-6"><Loader2 className="h-4 w-4 animate-spin mx-auto text-muted-foreground" /></div>
+            ) : pipelineSOs.length === 0 ? (
+              <div className="text-center py-6 text-xs text-muted-foreground">No active sales orders</div>
+            ) : (
+              <div className="divide-y">
+                {pipelineSOs.map(so => {
+                  const statusOrder = ['draft', 'confirmed', 'processing', 'shipped', 'delivered']
+                  const stageIdx = statusOrder.indexOf(so.status)
+                  const clientName = (so.client_name ?? '').trim()
+                  const hasOr = collectedClients.has(clientName)
+                  const stages = [
+                    { done: true,           label: so.so_number ?? '—',          sub: so.client_name ?? '' },
+                    { done: stageIdx >= 1,  label: stageIdx >= 1 ? 'Confirmed' : 'Pending' },
+                    { done: stageIdx >= 2,  label: stageIdx >= 2 ? 'Processing' : 'Pending' },
+                    { done: stageIdx >= 3,  label: stageIdx >= 3 ? 'Shipped' : 'Pending' },
+                    { done: hasOr,          label: hasOr ? 'Collected' : 'Pending' },
+                  ]
+                  return (
+                    <div key={so.id} className="grid grid-cols-5 text-center text-xs">
+                      {stages.map((s, i) => (
+                        <div key={i} className={`py-2.5 px-1 border-r last:border-r-0 ${s.done ? '' : 'opacity-40'}`}>
+                          <div className={`inline-flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold mx-auto mb-0.5 ${s.done ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+                            {s.done ? '✓' : (i + 1)}
+                          </div>
+                          <div className="font-medium truncate px-1">{s.label}</div>
+                          {s.sub && <div className="text-[10px] text-muted-foreground truncate px-1">{s.sub}</div>}
+                        </div>
+                      ))}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </CardContent>
+        )}
       </Card>
 
       {/* Charts + Activity */}
