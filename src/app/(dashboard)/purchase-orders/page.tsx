@@ -202,7 +202,7 @@ export default function PurchaseOrdersPage() {
     setEwtType('services'); setPreparedBy(''); setApprovedBy('')
   }
 
-  function openEdit(po: PO) {
+  async function openEdit(po: PO) {
     resetForm()
     setEditingId(po.id)
     setSupplierId((po.supplier as any)?.id ?? (po as any).supplier_id ?? '')
@@ -210,6 +210,23 @@ export default function PurchaseOrdersPage() {
     setDeliveryDate(po.delivery_date ?? '')
     setPaymentTerms(po.payment_terms ?? '30 days')
     setRemarks(po.remarks ?? '')
+
+    // Load existing line items
+    const { data: poItems } = await supabase
+      .from('po_items')
+      .select('item_name, quantity, unit_of_measure, unit_cost')
+      .eq('po_id', po.id)
+      .order('created_at')
+    if (poItems && poItems.length > 0) {
+      setLines(poItems.map(r => ({
+        item_name: r.item_name ?? '',
+        quantity: String(r.quantity ?? 1),
+        unit: r.unit_of_measure ?? '',
+        unit_price: String(r.unit_cost ?? ''),
+        selling_price: '',
+      })))
+    }
+
     setOpen(true)
   }
 
@@ -243,18 +260,40 @@ export default function PurchaseOrdersPage() {
       net_payable: netPayable,
     }
     let error
+    let savedPoId = editingId
+
     if (editingId) {
       ;({ error } = await supabase.from('purchase_orders').update(payload).eq('id', editingId))
     } else {
       const { data: { user } } = await supabase.auth.getUser()
-      ;({ error } = await supabase.from('purchase_orders').insert({
+      const { data: inserted, error: insErr } = await supabase.from('purchase_orders').insert({
         ...payload,
         po_date: new Date().toISOString().split('T')[0],
         status: 'open',
         created_by: user?.id,
-      }))
+      }).select('id').single()
+      error = insErr
+      savedPoId = inserted?.id ?? null
     }
     if (error) { toast.error(error.message); setSaving(false); return }
+
+    // Save line items to po_items
+    if (savedPoId) {
+      await supabase.from('po_items').delete().eq('po_id', savedPoId)
+      const validLines = lines.filter(l => l.item_name.trim())
+      if (validLines.length > 0) {
+        const itemRows = validLines.map(l => ({
+          po_id: savedPoId,
+          item_name: l.item_name,
+          quantity: parseFloat(l.quantity) || 1,
+          unit_of_measure: l.unit || null,
+          unit_cost: parseFloat(l.unit_price) || 0,
+          total_cost: (parseFloat(l.unit_price) || 0) * (parseFloat(l.quantity) || 1),
+        }))
+        await supabase.from('po_items').insert(itemRows)
+      }
+    }
+
     toast.success(editingId ? 'Purchase Order updated' : 'Purchase Order created')
     setEditingId(null)
     resetForm()
