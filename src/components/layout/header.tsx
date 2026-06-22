@@ -31,6 +31,7 @@ const SEARCH_ITEMS = [
   { label: 'Accounting',            href: '/accounting',              section: 'Accounting' },
   { label: 'Reports',               href: '/reports',                 section: 'Setup' },
   { label: 'Configuration',         href: '/setup',                   section: 'Setup' },
+  { label: 'Clients',               href: '/clients',                 section: 'Setup' },
   { label: 'Users',                 href: '/users',                   section: 'Setup' },
   { label: 'Settings',              href: '/settings',                section: 'Settings' },
 ]
@@ -39,7 +40,7 @@ const SEARCH_ITEMS = [
 const DATA_PAGES = [
   '/crm', '/purchase-orders', '/quotation', '/sales-orders',
   '/receiving', '/inventory', '/dr-logs', '/csi-monitoring',
-  '/pull-out-billing', '/users',
+  '/pull-out-billing', '/users', '/clients',
 ]
 
 export function Header({ onMenuClick }: HeaderProps) {
