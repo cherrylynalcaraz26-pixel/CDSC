@@ -13,6 +13,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
+import { useCompany } from '@/context/company-context'
 import {
   Building2, Upload, RotateCcw, Save, Shield, Briefcase,
   FileText, Database, User, Globe, Phone, Mail, MapPin,
@@ -869,6 +870,7 @@ function ProposalDatabaseTab() {
 
 export default function SettingsPage() {
   const supabase = createClient()
+  const { reload: reloadCompany } = useCompany()
   const fileRef = useRef<HTMLInputElement>(null)
   const [tab, setTab] = useState<TabId>('profile')
   const [settings, setSettings] = useState<Settings>(defaultSettings())
@@ -905,7 +907,7 @@ export default function SettingsPage() {
     setSaving(true)
     const { error } = await supabase.from('system_settings').upsert({ id: 1, ...settings })
     if (error) toast.error(error.message)
-    else { toast.success('Settings saved'); setOriginal(settings) }
+    else { toast.success('Settings saved'); setOriginal(settings); await reloadCompany() }
     setSaving(false)
   }
 
@@ -918,7 +920,10 @@ export default function SettingsPage() {
     if (upErr) { toast.error(upErr.message); setUploading(false); return }
     const { data: { publicUrl } } = supabase.storage.from('company-assets').getPublicUrl(path)
     set('logo_url', publicUrl)
-    toast.success('Logo uploaded')
+    // Also persist immediately so sidebar updates
+    await supabase.from('system_settings').upsert({ id: 1, ...settings, logo_url: publicUrl })
+    await reloadCompany()
+    toast.success('Logo uploaded — sidebar and previews updated')
     setUploading(false)
   }
 

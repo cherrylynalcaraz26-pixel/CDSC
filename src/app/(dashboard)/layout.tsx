@@ -4,12 +4,13 @@ import { useState } from 'react'
 import { Sidebar, MobileSidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { SearchProvider } from '@/context/search-context'
+import { CompanyProvider } from '@/context/company-context'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false)
 
   return (
-    <SearchProvider>
+    <CompanyProvider><SearchProvider>
       <div className="flex h-screen overflow-hidden bg-muted/30">
         {/* Desktop sidebar */}
         <Sidebar />
@@ -24,6 +25,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </main>
         </div>
       </div>
-    </SearchProvider>
+    </SearchProvider></CompanyProvider>
   )
 }

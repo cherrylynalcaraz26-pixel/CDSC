@@ -25,6 +25,7 @@ interface SystemSettings {
   phone: string
   email: string
   tin: string
+  logo_url?: string
 }
 
 interface QuoteLine {
@@ -149,7 +150,7 @@ export default function QuotationPage() {
       supabase.from('quotations').select('*').order('created_at', { ascending: false }),
       supabase.from('clients').select('id, company_name, email').eq('status', 'active').order('company_name'),
       supabase.from('items').select('item_name, unit_of_measure, cost, selling_price').eq('status', 'active').order('item_name'),
-      supabase.from('system_settings').select('company_name, address, phone, email, tin').single(),
+      supabase.from('system_settings').select('company_name, address, phone, email, tin, logo_url').single(),
     ])
     setQuotations((quoData ?? []) as Quotation[])
     setClients(clientData ?? [])
@@ -294,7 +295,8 @@ export default function QuotationPage() {
   async function buildQuotePdfData(q: Quotation, items: { item_name: string; quantity: number; unit: string | null; unit_price: number; selling_price: number | null; total_amount: number }[]): Promise<QuotationPdfData> {
     let logoDataUrl: string | undefined
     try {
-      const resp = await fetch('/cdsc-logo.jpg')
+      const logoSrc = companyInfo?.logo_url || '/cdsc-logo.jpg'
+      const resp = await fetch(logoSrc)
       const blob = await resp.blob()
       logoDataUrl = await new Promise<string>(resolve => {
         const reader = new FileReader()
@@ -354,7 +356,7 @@ export default function QuotationPage() {
           }).join('')}
         </tbody>
       </table>` : ''
-    const logoUrl = typeof window !== 'undefined' ? `${window.location.origin}/cdsc-logo.jpg` : '/cdsc-logo.jpg'
+    const logoUrl = companyInfo?.logo_url || (typeof window !== 'undefined' ? `${window.location.origin}/cdsc-logo.jpg` : '/cdsc-logo.jpg')
     return `<!DOCTYPE html><html><head><title>Quotation</title>
       <style>body{font-family:Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;padding:24px;font-size:11px;}@media print{body{margin:0;}}</style>
     </head><body>
@@ -436,7 +438,7 @@ export default function QuotationPage() {
       {/* Header: Logo + Company Name | Address / Phone / TIN */}
       <div className="flex justify-between items-start border-b pb-3">
         <div className="flex items-center gap-2.5">
-          <img src="/cdsc-logo.jpg" alt="CDSC" className="h-12 w-12 rounded object-cover shrink-0" />
+          <img src={companyInfo?.logo_url || '/cdsc-logo.jpg'} alt={companyInfo?.company_name || 'CDSC'} className="h-12 w-12 rounded object-cover shrink-0" />
           <div className="text-[13px] font-bold text-red-700 leading-tight">
             {companyInfo?.company_name ?? 'CDSC INDUSTRIAL'}
           </div>

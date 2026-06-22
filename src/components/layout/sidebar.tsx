@@ -15,6 +15,7 @@ import {
   TrendingUp,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
+import { useCompany } from '@/context/company-context'
 
 interface NavItem {
   label: string
@@ -183,6 +184,10 @@ function SidebarContent({
   onNavigate?: () => void
 }) {
   const router = useRouter()
+  const { company } = useCompany()
+  const logoSrc = company.logo_url || '/cdsc-logo.jpg'
+  const displayName = company.company_short_name || company.company_name || 'CDSC'
+
   async function handleSignOut() {
     const supabase = createClient()
     await supabase.auth.signOut()
@@ -194,16 +199,16 @@ function SidebarContent({
       <div className={cn('py-4 flex items-center gap-3 transition-all', collapsed ? 'px-3 justify-center' : 'px-4')}>
         {collapsed ? (
           <button onClick={onToggleCollapse} title="Expand sidebar" className="relative h-8 w-8 shrink-0">
-            <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="rounded-md object-cover" priority />
+            <Image src={logoSrc} alt={displayName} fill className="rounded-md object-cover" priority />
           </button>
         ) : (
           <>
             <div className="relative h-8 w-8 shrink-0">
-              <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="rounded-md object-cover" priority />
+              <Image src={logoSrc} alt={displayName} fill className="rounded-md object-cover" priority />
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-white font-semibold text-sm leading-tight truncate">CDSC Industrial</div>
-              <div className="text-white/35 text-[11px] leading-tight">Supply ERP</div>
+              <div className="text-white font-semibold text-sm leading-tight truncate">{displayName}</div>
+              <div className="text-white/35 text-[11px] leading-tight">ERP System</div>
             </div>
             <button
               onClick={onToggleCollapse}

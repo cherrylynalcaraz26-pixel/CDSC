@@ -40,7 +40,7 @@ interface SOLine { item_name: string; quantity: string; unit: string; unit_price
 interface SOItem { id: string; item_name: string; quantity: number; unit: string | null; unit_price: number; selling_price: number | null; total_amount: number }
 interface ItemOption { item_code: string; item_name: string; unit_of_measure: string; cost: number | null; selling_price: number | null }
 interface ClientOption { id: string; company_name: string; payment_terms?: string | null }
-interface SystemSettings { company_name: string; address: string; phone: string; email: string; tin: string }
+interface SystemSettings { company_name: string; address: string; phone: string; email: string; tin: string; logo_url?: string }
 
 const emptyLine = (): SOLine => ({ item_name: '', quantity: '', unit: '', unit_price: '', selling_price: '' })
 const today = () => new Date().toISOString().split('T')[0]
@@ -99,7 +99,7 @@ export default function SalesOrdersPage() {
       supabase.from('sales_orders').select('id,so_number,so_date,created_at,client_name,client_po_number,status,total_amount,remarks').order('created_at', { ascending: false }),
       supabase.from('items').select('item_code,item_name,unit_of_measure,cost,selling_price').eq('status', 'active').order('item_name'),
       supabase.from('clients').select('id,company_name,payment_terms').eq('status', 'active').order('company_name'),
-      supabase.from('system_settings').select('company_name, address, phone, email, tin').single(),
+      supabase.from('system_settings').select('company_name, address, phone, email, tin, logo_url').single(),
     ])
     setSOs((soData ?? []) as SO[])
     setItems((itemData ?? []) as ItemOption[])
@@ -173,7 +173,7 @@ export default function SalesOrdersPage() {
 
   function buildSOHtml(so: SO, soItems: SOItem[]): string {
     const info = companyInfo
-    const logoUrl = `${window.location.origin}/cdsc-logo.jpg`
+    const logoUrl = companyInfo?.logo_url || `${window.location.origin}/cdsc-logo.jpg`
     const soDate = so.so_date ? new Date(so.so_date + 'T00:00:00').toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }) : new Date(so.created_at).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
     const fmtN = (n: number) => n.toLocaleString('en-PH', { minimumFractionDigits: 2 })
     const subtotalAmt = soItems.reduce((s, it) => s + (it.total_amount ?? 0), 0)
@@ -253,7 +253,7 @@ export default function SalesOrdersPage() {
   }
 
   async function buildSOPdfData(so: SO, soItems: SOItem[]): Promise<SOPdfData> {
-    const logoUrl = '/cdsc-logo.jpg'
+    const logoUrl = companyInfo?.logo_url || '/cdsc-logo.jpg'
     let logoDataUrl: string | undefined
     try {
       const blob = await fetch(logoUrl).then(r => r.blob())
@@ -599,7 +599,7 @@ export default function SalesOrdersPage() {
                   {/* Header */}
                   <div className="flex justify-between items-start border-b pb-3">
                     <div className="flex items-center gap-2.5">
-                      <img src="/cdsc-logo.jpg" alt="CDSC" className="h-12 w-12 rounded object-cover shrink-0" />
+                      <img src={companyInfo?.logo_url || '/cdsc-logo.jpg'} alt={companyInfo?.company_name || 'Logo'} className="h-12 w-12 rounded object-cover shrink-0" />
                       <div className="text-[13px] font-bold text-red-700 leading-tight">
                         {companyInfo?.company_name || 'CDSC INDUSTRIAL'}
                       </div>

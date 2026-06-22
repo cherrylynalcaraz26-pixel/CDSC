@@ -92,7 +92,7 @@ export default function PurchaseOrdersPage() {
   const [saving, setSaving] = useState(false)
   const [activeTab, setActiveTab] = useState<'form' | 'preview'>('form')
   const [companyInfo, setCompanyInfo] = useState<{
-    company_name: string; address: string; phone: string; email: string; tin: string
+    company_name: string; address: string; phone: string; email: string; tin: string; logo_url?: string
   } | null>(null)
 
   // Form state
@@ -156,7 +156,7 @@ export default function PurchaseOrdersPage() {
     setPOs((poData ?? []) as PO[])
     setSuppliers(supData ?? [])
     setItems((itemData ?? []) as ItemOption[])
-    const { data: sysData } = await supabase.from('system_settings').select('company_name, address, phone, email, tin').single()
+    const { data: sysData } = await supabase.from('system_settings').select('company_name, address, phone, email, tin, logo_url').single()
     if (sysData) setCompanyInfo(sysData)
     const { data: wsData } = await supabase.from('warehouse_stock').select('item_name, quantity')
     if (wsData) {
@@ -348,7 +348,7 @@ export default function PurchaseOrdersPage() {
 
   function buildPOHtml(po: PO, items: { item_name: string; quantity: number; unit: string | null; unit_price: number; selling_price: number | null; total_amount: number }[] = []) {
     const supplierName = (po.supplier as any)?.company_name ?? '-'
-    const logoUrl = typeof window !== 'undefined' ? `${window.location.origin}/cdsc-logo.jpg` : '/cdsc-logo.jpg'
+    const logoUrl = companyInfo?.logo_url || (typeof window !== 'undefined' ? `${window.location.origin}/cdsc-logo.jpg` : '/cdsc-logo.jpg')
     const poDate = po.po_date ? new Date(po.po_date + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '-'
     const delDate = po.delivery_date ? new Date(po.delivery_date + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : null
     const fmtAmt = (n: number) => `&#8369;${(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
@@ -471,7 +471,7 @@ export default function PurchaseOrdersPage() {
   async function buildPOPdfData(po: PO | null): Promise<POPdfData> {
     let logoDataUrl: string | undefined
     try {
-      const resp = await fetch('/cdsc-logo.jpg')
+      const resp = await fetch(companyInfo?.logo_url || '/cdsc-logo.jpg')
       const blob = await resp.blob()
       logoDataUrl = await new Promise<string>(resolve => {
         const reader = new FileReader()
@@ -1078,7 +1078,7 @@ export default function PurchaseOrdersPage() {
                     <div className="flex justify-between items-start border-b pb-3">
                       {/* Left: logo + company name */}
                       <div className="flex items-center gap-2.5">
-                        <img src="/cdsc-logo.jpg" alt="CDSC" className="h-12 w-12 rounded object-cover shrink-0" />
+                        <img src={companyInfo?.logo_url || '/cdsc-logo.jpg'} alt={companyInfo?.company_name || 'Logo'} className="h-12 w-12 rounded object-cover shrink-0" />
                         <div className="text-[13px] font-bold text-red-700 leading-tight">
                           {companyInfo?.company_name || 'CDSC INDUSTRIAL'}
                         </div>
