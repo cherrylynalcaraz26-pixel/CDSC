@@ -22,7 +22,7 @@ import {
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
-import { sendEmail } from '@/lib/send-email'
+import { sendEmail, POPdfData } from '@/lib/send-email'
 
 interface ItemOption {
   item_code: string
@@ -134,6 +134,7 @@ export default function PurchaseOrdersPage() {
 
   // Email modal
   const [showEmail, setShowEmail] = useState(false)
+  const [sendingEmail, setSendingEmail] = useState(false)
   const [emailTo, setEmailTo] = useState('')
   const [emailSubject, setEmailSubject] = useState('')
   const [emailBody, setEmailBody] = useState('')
@@ -426,28 +427,74 @@ export default function PurchaseOrdersPage() {
     setShowEmail(true)
   }
 
+  async function buildPOPdfData(po: PO | null): Promise<POPdfData> {
+    let logoDataUrl: string | undefined
+    try {
+      const resp = await fetch('/cdsc-logo.jpg')
+      const blob = await resp.blob()
+      logoDataUrl = await new Promise<string>(resolve => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result as string)
+        reader.readAsDataURL(blob)
+      })
+    } catch { /* skip */ }
+
+    let poItems: { item_name: string; quantity: number; unit?: string | null; unit_price: number; selling_price?: number | null; total_amount: number }[] = []
+    if (po?.id) {
+      const { data } = await supabase.from('po_items').select('item_name,quantity,unit_of_measure,unit_cost,selling_price,total_cost').eq('po_id', po.id).order('created_at')
+      if (data) poItems = data.map(r => ({ item_name: r.item_name, quantity: r.quantity, unit: r.unit_of_measure, unit_price: r.unit_cost, selling_price: r.selling_price, total_amount: r.total_cost }))
+    } else {
+      poItems = lines.filter(l => l.item_name.trim()).map(l => ({
+        item_name: l.item_name,
+        quantity: parseFloat(l.quantity) || 1,
+        unit: l.unit || null,
+        unit_price: parseFloat(l.unit_price) || 0,
+        selling_price: parseFloat(l.selling_price) || null,
+        total_amount: (parseFloat(l.selling_price) || parseFloat(l.unit_price) || 0) * (parseFloat(l.quantity) || 1),
+      }))
+    }
+
+    const supplier = po
+      ? suppliers.find(s => s.id === ((po.supplier as any)?.id ?? (po as any).supplier_id))
+      : suppliers.find(s => s.id === supplierId)
+
+    return {
+      companyName: companyInfo?.company_name ?? 'CDSC INDUSTRIAL SUPPLY',
+      companyAddress: companyInfo?.address ?? undefined,
+      companyPhone: companyInfo?.phone ?? undefined,
+      companyEmail: companyInfo?.email ?? undefined,
+      companyTin: companyInfo?.tin ?? undefined,
+      logoDataUrl,
+      poNumber: po?.po_number ?? poNumber ?? '-',
+      poDate: po?.po_date ?? new Date().toISOString().split('T')[0],
+      deliveryDate: po?.delivery_date ?? deliveryDate ?? undefined,
+      supplierName: supplier?.company_name ?? (po?.supplier as any)?.company_name ?? undefined,
+      paymentTerms: po?.payment_terms ?? paymentTerms ?? undefined,
+      remarks: po?.remarks ?? remarks ?? undefined,
+      items: poItems,
+      subtotal: po?.subtotal ?? subtotal,
+      discountRate: po?.discount_rate ?? discountRate,
+      discountAmount: po?.discount_amount ?? discountAmount,
+      vatAmount: po?.vat_amount ?? vatAmount,
+      ewtAmount: po?.ewt_amount ?? taxAmount,
+      netPayable: po?.net_payable ?? netPayable,
+    }
+  }
+
   async function handleSendEmail() {
     if (!emailTo) { toast.error('Please enter a recipient email address.'); return }
     const po = emailPO
     const poNum = po?.po_number ?? poNumber ?? 'draft'
-    const filename = `PO-${poNum}.pdf`
-    let printHtml: string | undefined
-    if (po) {
-      printHtml = buildPOHtml(po)
-    } else {
-      const el = printRef.current
-      if (el) printHtml = `<!DOCTYPE html><html><head><title>PO</title>
-        <script src="https://cdn.tailwindcss.com"><\/script>
-        <style>body{font-family:Arial,sans-serif;}</style>
-      </head><body class="p-6 text-[11px]">${el.innerHTML}</body></html>`
-    }
-    setShowEmail(false)
-    toast.loading('Generating PDF…', { id: 'email-send' })
+    setSendingEmail(true)
     try {
-      await sendEmail({ to: emailTo, subject: emailSubject, body: emailBody, printHtml, pdfFilename: filename })
-      toast.success('Email sent successfully!', { id: 'email-send' })
+      const poPdfData = await buildPOPdfData(po)
+      await sendEmail({ to: emailTo, subject: emailSubject, body: emailBody, poPdfData, pdfFilename: `PO-${poNum}.pdf` })
+      toast.success('Email sent successfully!')
+      setShowEmail(false)
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to send email', { id: 'email-send' })
+      toast.error(err instanceof Error ? err.message : 'Failed to send email')
+    } finally {
+      setSendingEmail(false)
     }
   }
 
@@ -1320,9 +1367,9 @@ export default function PurchaseOrdersPage() {
               The email will be sent from cdsc.gmot@gmail.com with the PO attached as a PDF.
             </p>
             <div className="flex justify-end gap-2 pt-1">
-              <Button variant="outline" onClick={() => setShowEmail(false)}>Cancel</Button>
-              <Button onClick={handleSendEmail} className="bg-red-600 hover:bg-red-700 gap-1.5">
-                <Send className="h-4 w-4" />Send Email
+              <Button variant="outline" disabled={sendingEmail} onClick={() => setShowEmail(false)}>Cancel</Button>
+              <Button onClick={handleSendEmail} disabled={sendingEmail} className="bg-red-600 hover:bg-red-700 gap-1.5">
+                {sendingEmail ? <><Loader2 className="h-4 w-4 animate-spin" />Sending…</> : <><Send className="h-4 w-4" />Send Email</>}
               </Button>
             </div>
           </div>
