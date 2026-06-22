@@ -4,14 +4,6 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import { Plus, Trash2, Loader2, ChevronLeft, Send } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Card, CardContent } from '@/components/ui/card'
-import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
-} from '@/components/ui/select'
 import { toast } from 'sonner'
 import Link from 'next/link'
 
@@ -19,11 +11,10 @@ interface Item {
   description: string
   quantity: string
   unit: string
-  remarks: string
 }
 
 function blankItem(): Item {
-  return { description: '', quantity: '1', unit: 'pcs', remarks: '' }
+  return { description: '', quantity: '1', unit: 'pcs' }
 }
 
 const UNITS = ['pcs', 'sets', 'boxes', 'rolls', 'liters', 'kg', 'meters', 'bags', 'pairs', 'units']
@@ -34,7 +25,7 @@ export default function NewRequestPage() {
   const [clientId, setClientId] = useState<string | null>(null)
   const [clientName, setClientName] = useState('')
   const [subject, setSubject] = useState('')
-  const [message, setMessage] = useState('')
+  const [notes, setNotes] = useState('')
   const [items, setItems] = useState<Item[]>([blankItem()])
   const [submitting, setSubmitting] = useState(false)
 
@@ -43,14 +34,8 @@ export default function NewRequestPage() {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) { router.push('/portal/login'); return }
       const { data: clientRow } = await supabase
-        .from('clients')
-        .select('id, company_name')
-        .eq('auth_user_id', session.user.id)
-        .single()
-      if (clientRow) {
-        setClientId(clientRow.id)
-        setClientName(clientRow.company_name)
-      }
+        .from('clients').select('id, company_name').eq('auth_user_id', session.user.id).single()
+      if (clientRow) { setClientId(clientRow.id); setClientName(clientRow.company_name) }
     }
     init()
   }, [])
@@ -61,14 +46,14 @@ export default function NewRequestPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!subject.trim()) { toast.error('Subject is required'); return }
+    if (!subject.trim()) { toast.error('Purchase reference is required'); return }
     if (!clientId) { toast.error('Client account not linked'); return }
     const filledItems = items.filter(it => it.description.trim())
+    if (filledItems.length === 0) { toast.error('Add at least one item'); return }
     setSubmitting(true)
     try {
       const today = new Date().toISOString().split('T')[0]
       const soNumber = `SO-P-${Date.now().toString().slice(-8)}`
-
       const { data: soData, error: soErr } = await supabase
         .from('sales_orders')
         .insert({
@@ -77,16 +62,14 @@ export default function NewRequestPage() {
           client_id: clientId,
           client_name: clientName,
           client_po_number: subject.trim(),
-          remarks: message.trim() || null,
+          remarks: notes.trim() || null,
           status: 'draft',
           total_amount: 0,
         })
         .select('id')
         .single()
-
       if (soErr) throw soErr
-
-      if (soData?.id && filledItems.length > 0) {
+      if (soData?.id) {
         const itemRows = filledItems.map(it => ({
           so_id: soData.id,
           item_name: it.description,
@@ -98,11 +81,10 @@ export default function NewRequestPage() {
         const { error: itemErr } = await supabase.from('so_items').insert(itemRows)
         if (itemErr) toast.error(`Items: ${itemErr.message}`)
       }
-
-      toast.success('Purchase request submitted as Sales Order!')
+      toast.success('Order submitted successfully!')
       router.push('/portal/requests')
     } catch (err: any) {
-      toast.error(err.message ?? 'Failed to submit request')
+      toast.error(err.message ?? 'Failed to submit order')
     }
     setSubmitting(false)
   }
@@ -110,110 +92,111 @@ export default function NewRequestPage() {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div>
-        <Link href="/portal/requests" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4">
+        <Link href="/portal/requests" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700 mb-4">
           <ChevronLeft className="h-4 w-4" /> Back to My Orders
         </Link>
-        <h1 className="text-2xl font-bold">New Purchase Request</h1>
-        <p className="text-muted-foreground text-sm mt-1">Submit a request for products or services to CDSC Industrial Supply.</p>
+        <h1 className="text-2xl font-bold text-gray-900">New Purchase Order</h1>
+        <p className="text-sm text-gray-500 mt-1">Submit a request for products or services to CDSC Industrial Supply.</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <Card>
-          <CardContent className="pt-5 space-y-4">
-            <div className="space-y-1.5">
-              <Label>Subject / Purchase Reference <span className="text-red-500">*</span></Label>
-              <Input
-                value={subject}
-                onChange={e => setSubject(e.target.value)}
-                placeholder="e.g. Industrial Supplies for Project XYZ"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Additional Notes</Label>
-              <Textarea
-                rows={3}
-                value={message}
-                onChange={e => setMessage(e.target.value)}
-                placeholder="Delivery requirements, project details, special instructions, etc."
-              />
-            </div>
-          </CardContent>
-        </Card>
+        {/* Order details */}
+        <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+          <h2 className="text-sm font-semibold text-gray-700">Order Details</h2>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-gray-700">
+              Purchase Reference / PO Number <span className="text-red-500">*</span>
+            </label>
+            <input
+              value={subject}
+              onChange={e => setSubject(e.target.value)}
+              placeholder="e.g. PO-2024-001 or Project XYZ Supplies"
+              className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-gray-700">Additional Notes</label>
+            <textarea
+              rows={3}
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              placeholder="Delivery requirements, project details, special instructions..."
+              className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            />
+          </div>
+        </div>
 
-        <div>
-          <div className="flex items-center justify-between mb-3">
+        {/* Items */}
+        <div className="bg-white rounded-xl border border-gray-200 p-6">
+          <div className="flex items-center justify-between mb-4">
             <div>
-              <h2 className="font-semibold">Items Requested</h2>
-              <p className="text-xs text-muted-foreground">List the specific items you require</p>
+              <h2 className="text-sm font-semibold text-gray-700">Items Requested</h2>
+              <p className="text-xs text-gray-400 mt-0.5">List the specific products or supplies needed</p>
             </div>
-            <Button type="button" variant="outline" size="sm" onClick={() => setItems(p => [...p, blankItem()])}>
-              <Plus className="h-3.5 w-3.5 mr-1" /> Add Item
-            </Button>
+            <button type="button"
+              onClick={() => setItems(p => [...p, blankItem()])}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-600 border border-gray-300 hover:bg-gray-50 px-3 py-1.5 rounded-lg transition-colors">
+              <Plus className="h-3.5 w-3.5" /> Add Item
+            </button>
           </div>
 
           <div className="space-y-3">
             {items.map((item, i) => (
-              <Card key={i}>
-                <CardContent className="pt-4 pb-3">
-                  <div className="grid grid-cols-12 gap-2 items-start">
-                    <div className="col-span-12 sm:col-span-5 space-y-1">
-                      <Label className="text-xs">Description</Label>
-                      <Input
-                        value={item.description}
-                        onChange={e => setItem(i, 'description', e.target.value)}
-                        placeholder="Item name or description"
-                        className="h-8 text-sm"
-                      />
-                    </div>
-                    <div className="col-span-4 sm:col-span-2 space-y-1">
-                      <Label className="text-xs">Qty</Label>
-                      <Input
-                        type="number"
-                        min="1"
-                        value={item.quantity}
-                        onChange={e => setItem(i, 'quantity', e.target.value)}
-                        className="h-8 text-sm"
-                      />
-                    </div>
-                    <div className="col-span-4 sm:col-span-2 space-y-1">
-                      <Label className="text-xs">Unit</Label>
-                      <Select value={item.unit} onValueChange={(v: string | null) => setItem(i, 'unit', v ?? 'pcs')}>
-                        <SelectTrigger className="h-8 text-sm"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {UNITS.map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="col-span-3 sm:col-span-2 space-y-1">
-                      <Label className="text-xs">Remarks</Label>
-                      <Input
-                        value={item.remarks}
-                        onChange={e => setItem(i, 'remarks', e.target.value)}
-                        placeholder="optional"
-                        className="h-8 text-sm"
-                      />
-                    </div>
-                    <div className="col-span-1 flex items-end pb-0.5 justify-end">
-                      {items.length > 1 && (
-                        <button type="button" onClick={() => setItems(p => p.filter((_, idx) => idx !== i))}
-                          className="h-8 w-8 flex items-center justify-center rounded text-muted-foreground hover:text-red-600 hover:bg-red-50 transition-colors">
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      )}
-                    </div>
+              <div key={i} className="flex gap-2 items-start p-3 rounded-lg bg-gray-50 border border-gray-100">
+                <div className="flex-1 grid grid-cols-12 gap-2">
+                  <div className="col-span-12 sm:col-span-6">
+                    <label className="text-xs text-gray-500 mb-1 block">Description</label>
+                    <input
+                      value={item.description}
+                      onChange={e => setItem(i, 'description', e.target.value)}
+                      placeholder="Item name or product description"
+                      className="w-full h-9 px-2.5 rounded-md border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    />
                   </div>
-                </CardContent>
-              </Card>
+                  <div className="col-span-5 sm:col-span-3">
+                    <label className="text-xs text-gray-500 mb-1 block">Quantity</label>
+                    <input
+                      type="number"
+                      min="1"
+                      value={item.quantity}
+                      onChange={e => setItem(i, 'quantity', e.target.value)}
+                      className="w-full h-9 px-2.5 rounded-md border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    />
+                  </div>
+                  <div className="col-span-7 sm:col-span-3">
+                    <label className="text-xs text-gray-500 mb-1 block">Unit</label>
+                    <select
+                      value={item.unit}
+                      onChange={e => setItem(i, 'unit', e.target.value)}
+                      className="w-full h-9 px-2.5 rounded-md border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 bg-white">
+                      {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
+                    </select>
+                  </div>
+                </div>
+                {items.length > 1 && (
+                  <button type="button"
+                    onClick={() => setItems(p => p.filter((_, idx) => idx !== i))}
+                    className="mt-5 h-9 w-9 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors shrink-0">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
             ))}
           </div>
         </div>
 
+        {/* Actions */}
         <div className="flex gap-3 justify-end">
-          <Button type="button" variant="outline" onClick={() => router.push('/portal/requests')}>Cancel</Button>
-          <Button type="submit" disabled={submitting} className="bg-red-600 hover:bg-red-700">
-            {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Send className="h-4 w-4 mr-2" />}
-            Submit Request
-          </Button>
+          <button type="button"
+            onClick={() => router.push('/portal/requests')}
+            className="px-4 py-2 text-sm font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+            Cancel
+          </button>
+          <button type="submit" disabled={submitting}
+            className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors">
+            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            Submit Order
+          </button>
         </div>
       </form>
     </div>

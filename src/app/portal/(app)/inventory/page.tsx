@@ -2,12 +2,8 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Package, Loader2, Search } from 'lucide-react'
-import { Card, CardContent } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
-} from '@/components/ui/table'
+import { Package, Loader2, Search, Tag } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
 interface InventoryItem {
   id: string
@@ -18,7 +14,6 @@ interface InventoryItem {
   quantity_on_hand: number | null
   unit_price: number | null
   description: string | null
-  status: string | null
 }
 
 export default function PortalInventoryPage() {
@@ -26,12 +21,13 @@ export default function PortalInventoryPage() {
   const [items, setItems] = useState<InventoryItem[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [category, setCategory] = useState('')
 
   useEffect(() => {
     async function load() {
       const { data } = await supabase
         .from('items')
-        .select('id, item_name, item_code, category, unit, quantity_on_hand, unit_price, description, status')
+        .select('id, item_name, item_code, category, unit, quantity_on_hand, unit_price, description')
         .eq('status', 'active')
         .order('item_name')
       setItems(data ?? [])
@@ -40,97 +36,140 @@ export default function PortalInventoryPage() {
     load()
   }, [])
 
+  const categories = ['', ...Array.from(new Set(items.map(i => i.category).filter(Boolean) as string[])).sort()]
+
   const filtered = items.filter(i => {
     const q = search.toLowerCase()
-    return !q ||
+    const matchSearch = !q ||
       i.item_name.toLowerCase().includes(q) ||
       (i.item_code ?? '').toLowerCase().includes(q) ||
-      (i.category ?? '').toLowerCase().includes(q)
+      (i.description ?? '').toLowerCase().includes(q)
+    const matchCat = !category || i.category === category
+    return matchSearch && matchCat
   })
-
-  const categories = [...new Set(items.map(i => i.category).filter(Boolean))]
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Product Catalog</h1>
-        <p className="text-muted-foreground text-sm mt-1">Browse available products and supplies from CDSC Industrial Supply.</p>
+        <h1 className="text-2xl font-bold text-gray-900">Product Catalog</h1>
+        <p className="text-sm text-gray-500 mt-1">Browse available products and supplies from CDSC Industrial Supply.</p>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        {[
-          { label: 'Total Products', value: items.length },
-          { label: 'Categories', value: categories.length },
-          { label: 'Available', value: items.filter(i => (i.quantity_on_hand ?? 0) > 0).length },
-        ].map(s => (
-          <Card key={s.label}>
-            <CardContent className="pt-4 pb-3">
-              <div className="text-2xl font-bold">{loading ? '—' : s.value}</div>
-              <div className="text-xs text-muted-foreground">{s.label}</div>
-            </CardContent>
-          </Card>
-        ))}
+      {/* Stats row */}
+      <div className="flex gap-4 flex-wrap">
+        <div className="bg-white border border-gray-200 rounded-xl px-5 py-3 flex items-center gap-3">
+          <Package className="h-5 w-5 text-red-600" />
+          <div>
+            <div className="text-xl font-bold text-gray-900">{loading ? '—' : items.length}</div>
+            <div className="text-xs text-gray-500">Total Products</div>
+          </div>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl px-5 py-3 flex items-center gap-3">
+          <Tag className="h-5 w-5 text-indigo-500" />
+          <div>
+            <div className="text-xl font-bold text-gray-900">{loading ? '—' : categories.length - 1}</div>
+            <div className="text-xs text-gray-500">Categories</div>
+          </div>
+        </div>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Search products..."
-          className="pl-9"
-        />
+      {/* Search + category filter */}
+      <div className="space-y-3">
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search products, codes..."
+            className="w-full h-10 pl-9 pr-4 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+          />
+        </div>
+        {categories.length > 1 && (
+          <div className="flex gap-2 flex-wrap">
+            {categories.map(cat => (
+              <button key={cat} onClick={() => setCategory(cat)}
+                className={cn(
+                  'px-3 py-1 text-xs rounded-full font-medium border transition-colors',
+                  category === cat
+                    ? 'bg-red-600 text-white border-red-600'
+                    : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                )}>
+                {cat === '' ? 'All Categories' : cat}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Table */}
-      <div className="rounded-lg border bg-white overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Product</TableHead>
-              <TableHead>Category</TableHead>
-              <TableHead>Unit</TableHead>
-              <TableHead className="text-right">Unit Price</TableHead>
-              <TableHead className="text-center">Availability</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow><TableCell colSpan={5} className="text-center py-12">
-                <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
-              </TableCell></TableRow>
-            ) : filtered.length === 0 ? (
-              <TableRow><TableCell colSpan={5} className="text-center py-12">
-                <Package className="h-7 w-7 text-muted-foreground/30 mx-auto mb-2" />
-                <p className="text-muted-foreground text-sm">{search ? 'No products match your search.' : 'No products available.'}</p>
-              </TableCell></TableRow>
-            ) : filtered.map(item => {
-              const inStock = (item.quantity_on_hand ?? 0) > 0
-              return (
-                <TableRow key={item.id}>
-                  <TableCell>
-                    <div className="font-medium text-sm">{item.item_name}</div>
-                    {item.item_code && <div className="text-xs text-muted-foreground">{item.item_code}</div>}
-                    {item.description && <div className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{item.description}</div>}
-                  </TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{item.category ?? '—'}</TableCell>
-                  <TableCell className="text-sm">{item.unit ?? '—'}</TableCell>
-                  <TableCell className="text-right text-sm font-medium">
-                    {item.unit_price != null ? `₱${item.unit_price.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${inStock ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
-                      {inStock ? 'In Stock' : 'Out of Stock'}
+      {/* Results count */}
+      {!loading && (
+        <p className="text-xs text-gray-400">
+          {filtered.length} product{filtered.length !== 1 ? 's' : ''}
+          {(search || category) ? ' found' : ' available'}
+        </p>
+      )}
+
+      {/* Grid */}
+      {loading ? (
+        <div className="flex justify-center py-16">
+          <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="bg-white rounded-xl border border-gray-200 py-16 text-center">
+          <Package className="h-9 w-9 text-gray-300 mx-auto mb-3" />
+          <p className="text-gray-500 text-sm font-medium">
+            {search || category ? 'No products match your filters.' : 'No products available.'}
+          </p>
+          {(search || category) && (
+            <button onClick={() => { setSearch(''); setCategory('') }}
+              className="mt-3 text-sm text-red-600 hover:underline">
+              Clear filters
+            </button>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filtered.map(item => {
+            const inStock = (item.quantity_on_hand ?? 0) > 0
+            return (
+              <div key={item.id} className="bg-white rounded-xl border border-gray-200 p-5 flex flex-col gap-3 hover:shadow-md transition-shadow">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-semibold text-gray-900 text-sm leading-tight">{item.item_name}</h3>
+                    {item.item_code && (
+                      <p className="text-xs text-gray-400 mt-0.5">{item.item_code}</p>
+                    )}
+                  </div>
+                  <span className={cn(
+                    'text-xs px-2 py-0.5 rounded-full font-medium shrink-0',
+                    inStock ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
+                  )}>
+                    {inStock ? 'In Stock' : 'Out of Stock'}
+                  </span>
+                </div>
+                {item.description && (
+                  <p className="text-xs text-gray-500 line-clamp-2">{item.description}</p>
+                )}
+                <div className="flex items-center justify-between mt-auto pt-1">
+                  <div className="flex items-center gap-2">
+                    {item.category && (
+                      <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{item.category}</span>
+                    )}
+                    {item.unit && (
+                      <span className="text-xs text-gray-400">per {item.unit}</span>
+                    )}
+                  </div>
+                  {item.unit_price != null && (
+                    <span className="text-sm font-bold text-red-600">
+                      ₱{item.unit_price.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                     </span>
-                  </TableCell>
-                </TableRow>
-              )
-            })}
-          </TableBody>
-        </Table>
-      </div>
+                  )}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

@@ -3,11 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
-import { Loader2, Save, Eye, EyeOff, User, Lock } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Card, CardContent } from '@/components/ui/card'
+import { Loader2, Save, Eye, EyeOff, User, Lock, Building2 } from 'lucide-react'
 
 export default function PortalSettingsPage() {
   const supabase = createClient()
@@ -16,6 +12,7 @@ export default function PortalSettingsPage() {
   const [changingPw, setChangingPw] = useState(false)
   const [email, setEmail] = useState('')
   const [fullName, setFullName] = useState('')
+  const [companyName, setCompanyName] = useState('')
   const [currentPw, setCurrentPw] = useState('')
   const [newPw, setNewPw] = useState('')
   const [confirmPw, setConfirmPw] = useState('')
@@ -28,12 +25,10 @@ export default function PortalSettingsPage() {
       if (!session) return
       setEmail(session.user.email ?? '')
       setUserId(session.user.id)
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('full_name')
-        .eq('id', session.user.id)
-        .single()
+      const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', session.user.id).single()
       setFullName(profile?.full_name ?? '')
+      const { data: clientRow } = await supabase.from('clients').select('company_name').eq('auth_user_id', session.user.id).single()
+      setCompanyName(clientRow?.company_name ?? '')
       setLoading(false)
     }
     load()
@@ -42,25 +37,19 @@ export default function PortalSettingsPage() {
   async function saveProfile() {
     if (!fullName.trim()) { toast.error('Name is required'); return }
     setSaving(true)
-    const { error } = await supabase
-      .from('profiles')
-      .update({ full_name: fullName.trim() })
-      .eq('id', userId)
+    const { error } = await supabase.from('profiles').update({ full_name: fullName.trim() }).eq('id', userId)
     if (error) toast.error(error.message)
-    else toast.success('Profile updated')
+    else toast.success('Profile updated successfully')
     setSaving(false)
   }
 
   async function changePassword() {
+    if (!currentPw) { toast.error('Enter your current password'); return }
     if (!newPw) { toast.error('Enter a new password'); return }
     if (newPw.length < 8) { toast.error('Password must be at least 8 characters'); return }
     if (newPw !== confirmPw) { toast.error('Passwords do not match'); return }
     setChangingPw(true)
-    // Re-authenticate first
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password: currentPw,
-    })
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password: currentPw })
     if (signInError) { toast.error('Current password is incorrect'); setChangingPw(false); return }
     const { error } = await supabase.auth.updateUser({ password: newPw })
     if (error) toast.error(error.message)
@@ -72,85 +61,136 @@ export default function PortalSettingsPage() {
   }
 
   if (loading) {
-    return <div className="flex justify-center py-20"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+    return (
+      <div className="flex justify-center py-20">
+        <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+      </div>
+    )
   }
 
+  const initials = (companyName || fullName).split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'C'
+
   return (
-    <div className="max-w-lg space-y-6">
+    <div className="max-w-xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Account Settings</h1>
-        <p className="text-muted-foreground text-sm mt-1">Manage your portal profile and password.</p>
+        <h1 className="text-2xl font-bold text-gray-900">Account Settings</h1>
+        <p className="text-sm text-gray-500 mt-1">Manage your profile and security settings.</p>
       </div>
 
-      {/* Profile */}
-      <Card>
-        <CardContent className="pt-5 space-y-4">
-          <div className="flex items-center gap-2 mb-1">
-            <User className="h-4 w-4 text-muted-foreground" />
-            <span className="font-semibold text-sm">Profile</span>
+      {/* Account identity */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="flex items-center gap-4 mb-6">
+          <div className="h-14 w-14 rounded-full bg-red-600 text-white text-lg font-bold flex items-center justify-center shrink-0">
+            {initials}
           </div>
-          <div className="space-y-1.5">
-            <Label>Full Name</Label>
-            <Input value={fullName} onChange={e => setFullName(e.target.value)} placeholder="Your name" />
+          <div>
+            <div className="font-semibold text-gray-900">{fullName || '—'}</div>
+            <div className="text-sm text-gray-500">{email}</div>
+            {companyName && (
+              <div className="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
+                <Building2 className="h-3 w-3" /> {companyName}
+              </div>
+            )}
           </div>
-          <div className="space-y-1.5">
-            <Label>Email</Label>
-            <Input value={email} disabled className="bg-muted/40 text-muted-foreground" />
-            <p className="text-xs text-muted-foreground">Contact CDSC to change your email address.</p>
-          </div>
-          <Button onClick={saveProfile} disabled={saving} className="bg-red-600 hover:bg-red-700">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-            Save Profile
-          </Button>
-        </CardContent>
-      </Card>
+        </div>
 
-      {/* Change Password */}
-      <Card>
-        <CardContent className="pt-5 space-y-4">
-          <div className="flex items-center gap-2 mb-1">
-            <Lock className="h-4 w-4 text-muted-foreground" />
-            <span className="font-semibold text-sm">Change Password</span>
+        <div className="flex items-center gap-2 mb-4">
+          <User className="h-4 w-4 text-gray-400" />
+          <span className="text-sm font-semibold text-gray-700">Profile Information</span>
+        </div>
+
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-gray-700">Full Name</label>
+            <input
+              value={fullName}
+              onChange={e => setFullName(e.target.value)}
+              placeholder="Your name"
+              className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            />
           </div>
           <div className="space-y-1.5">
-            <Label>Current Password</Label>
+            <label className="text-sm font-medium text-gray-700">Email Address</label>
+            <input
+              value={email}
+              disabled
+              className="w-full h-10 px-3 rounded-lg border border-gray-200 text-sm bg-gray-50 text-gray-400 cursor-not-allowed"
+            />
+            <p className="text-xs text-gray-400">Contact CDSC to change your email address.</p>
+          </div>
+          {companyName && (
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-gray-700">Company</label>
+              <input
+                value={companyName}
+                disabled
+                className="w-full h-10 px-3 rounded-lg border border-gray-200 text-sm bg-gray-50 text-gray-400 cursor-not-allowed"
+              />
+            </div>
+          )}
+          <button
+            onClick={saveProfile}
+            disabled={saving}
+            className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            Save Profile
+          </button>
+        </div>
+      </div>
+
+      {/* Change password */}
+      <div className="bg-white rounded-xl border border-gray-200 p-6">
+        <div className="flex items-center gap-2 mb-4">
+          <Lock className="h-4 w-4 text-gray-400" />
+          <span className="text-sm font-semibold text-gray-700">Change Password</span>
+        </div>
+
+        <div className="space-y-4">
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-gray-700">Current Password</label>
             <div className="relative">
-              <Input
+              <input
                 type={showPw ? 'text' : 'password'}
                 value={currentPw}
                 onChange={e => setCurrentPw(e.target.value)}
                 placeholder="••••••••"
-                className="pr-10"
+                className="w-full h-10 pl-3 pr-10 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
               />
-              <button type="button" onClick={() => setShowPw(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+              <button type="button" onClick={() => setShowPw(v => !v)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
                 {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </button>
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label>New Password</Label>
-            <Input
+            <label className="text-sm font-medium text-gray-700">New Password</label>
+            <input
               type={showPw ? 'text' : 'password'}
               value={newPw}
               onChange={e => setNewPw(e.target.value)}
               placeholder="Minimum 8 characters"
+              className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
             />
           </div>
           <div className="space-y-1.5">
-            <Label>Confirm New Password</Label>
-            <Input
+            <label className="text-sm font-medium text-gray-700">Confirm New Password</label>
+            <input
               type={showPw ? 'text' : 'password'}
               value={confirmPw}
               onChange={e => setConfirmPw(e.target.value)}
               placeholder="Re-enter new password"
+              className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
             />
           </div>
-          <Button onClick={changePassword} disabled={changingPw} variant="outline">
-            {changingPw ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Lock className="h-4 w-4 mr-2" />}
+          <button
+            onClick={changePassword}
+            disabled={changingPw}
+            className="inline-flex items-center gap-2 border border-gray-300 hover:bg-gray-50 disabled:opacity-60 text-gray-700 text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
+            {changingPw ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
             Change Password
-          </Button>
-        </CardContent>
-      </Card>
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
