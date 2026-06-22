@@ -305,7 +305,7 @@ export default function UsersPage() {
             </div>
             <div className="space-y-1.5">
               <Label>Company</Label>
-              <Select value={inviteForm.company || '_none'} onValueChange={v => setInviteForm(f => ({ ...f, company: v === '_none' ? '' : v }))}>
+              <Select value={inviteForm.company || '_none'} onValueChange={v => setInviteForm(f => ({ ...f, company: v === '_none' ? '' : (v ?? '') }))}>
                 <SelectTrigger><SelectValue placeholder="Select company…" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="_none">— None —</SelectItem>
@@ -365,7 +365,7 @@ export default function UsersPage() {
             </div>
             <div className="space-y-1.5">
               <Label>Company</Label>
-              <Select value={editForm.company || '_none'} onValueChange={v => setEditForm(f => ({ ...f, company: v === '_none' ? '' : v }))}>
+              <Select value={editForm.company || '_none'} onValueChange={v => setEditForm(f => ({ ...f, company: v === '_none' ? '' : (v ?? '') }))}>
                 <SelectTrigger><SelectValue placeholder="Select company…" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="_none">— None —</SelectItem>
