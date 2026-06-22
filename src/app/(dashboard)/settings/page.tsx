@@ -126,19 +126,111 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
 // ── Live Preview ──────────────────────────────────────────────────────────────
 
 function LivePreview({ s }: { s: Settings }) {
+  const today = new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: '2-digit' })
+  const fullName = [s.company_name || 'Company Name', s.legal_suffix].filter(Boolean).join(' ')
+  const addressLine = [s.address, s.city, s.province, s.zip_code].filter(Boolean).join(', ')
+
+  function handlePrint() {
+    const html = `<!DOCTYPE html><html><head><title>${fullName} – Company Profile</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 0; padding: 24px; color: #1e293b; }
+      .header { display: flex; align-items: flex-start; gap: 16px; border-bottom: 2px solid #dc2626; padding-bottom: 16px; margin-bottom: 16px; }
+      .logo { width: 64px; height: 64px; object-fit: contain; border-radius: 8px; border: 1px solid #e2e8f0; }
+      .logo-placeholder { width: 64px; height: 64px; background: #f1f5f9; border-radius: 8px; border: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #94a3b8; }
+      h1 { margin: 0 0 4px; font-size: 18px; color: #0f172a; }
+      .tagline { color: #64748b; font-style: italic; font-size: 12px; margin: 0 0 6px; }
+      .contact { font-size: 11px; color: #475569; line-height: 1.7; }
+      .section { margin-bottom: 14px; }
+      .label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; margin-bottom: 2px; }
+      .value { font-size: 12px; font-weight: 500; color: #1e293b; }
+      .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+      .doc-type { font-size: 20px; font-weight: 700; color: #dc2626; }
+      table { width: 100%; border-collapse: collapse; font-size: 11px; }
+      th { background: #f8fafc; text-align: left; padding: 6px 8px; border-bottom: 1px solid #e2e8f0; font-size: 10px; text-transform: uppercase; color: #64748b; }
+      td { padding: 6px 8px; border-bottom: 1px solid #f1f5f9; }
+      .footer { margin-top: 20px; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; }
+    </style></head><body>
+    <div class="header">
+      ${s.logo_url ? `<img src="${s.logo_url}" class="logo" alt="logo" />` : '<div class="logo-placeholder">LOGO</div>'}
+      <div>
+        <h1>${fullName}</h1>
+        ${s.tagline ? `<p class="tagline">${s.tagline}</p>` : ''}
+        <div class="contact">
+          ${addressLine ? `${addressLine}<br/>` : ''}
+          ${s.phone ? `Tel: ${s.phone}` : ''}${s.mobile ? ` / ${s.mobile}` : ''}${(s.phone || s.mobile) ? '<br/>' : ''}
+          ${s.email ? `Email: ${s.email}<br/>` : ''}
+          ${s.website ? `Web: ${s.website}<br/>` : ''}
+          ${s.tin ? `TIN: ${s.tin}` : ''}
+        </div>
+      </div>
+    </div>
+    <div class="grid2">
+      ${s.business_type ? `<div><div class="label">Business Type</div><div class="value">${s.business_type}</div></div>` : ''}
+      ${s.industry ? `<div><div class="label">Industry</div><div class="value">${s.industry}</div></div>` : ''}
+      ${s.founded_year ? `<div><div class="label">Founded</div><div class="value">${s.founded_year}</div></div>` : ''}
+      ${s.employees_count ? `<div><div class="label">Employees</div><div class="value">${s.employees_count}</div></div>` : ''}
+      ${s.sec_reg_no ? `<div><div class="label">SEC Reg No</div><div class="value">${s.sec_reg_no}</div></div>` : ''}
+      <div><div class="label">VAT</div><div class="value">${s.vat_registered ? `Registered (${s.default_vat_rate}%)` : 'Non-VAT'}</div></div>
+    </div>
+    ${s.mission_statement ? `<div class="section"><div class="label">Mission</div><div class="value">${s.mission_statement}</div></div>` : ''}
+    ${s.brand_positioning ? `<div class="section"><div class="label">Brand Positioning</div><div class="value">${s.brand_positioning}</div></div>` : ''}
+    <div class="footer">Generated: ${today} &nbsp;·&nbsp; ${fullName}</div>
+    </body></html>`
+
+    const win = window.open('', '_blank')
+    if (!win) return
+    win.document.write(html)
+    win.document.close()
+    win.focus()
+    win.print()
+  }
+
+  function handleEmail() {
+    const subject = encodeURIComponent(`Company Profile – ${fullName}`)
+    const body = encodeURIComponent(
+      `Dear Sir/Madam,\n\nPlease find below our company information:\n\n` +
+      `Company: ${fullName}\n` +
+      (s.tagline ? `Tagline: ${s.tagline}\n` : '') +
+      (addressLine ? `Address: ${addressLine}\n` : '') +
+      (s.phone ? `Tel: ${s.phone}\n` : '') +
+      (s.email ? `Email: ${s.email}\n` : '') +
+      (s.website ? `Website: ${s.website}\n` : '') +
+      (s.tin ? `TIN: ${s.tin}\n` : '') +
+      `\nThank you.`
+    )
+    window.location.href = `mailto:?subject=${subject}&body=${body}`
+  }
+
   return (
     <div className="sticky top-4">
       <div className="flex items-center gap-2 mb-3">
         <Eye className="h-4 w-4 text-muted-foreground" />
         <span className="text-sm font-medium text-muted-foreground">Live Preview</span>
-        <span className="ml-auto text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">● LIVE</span>
+        <span className="ml-auto flex items-center gap-1.5">
+          <button
+            onClick={handleEmail}
+            title="Send via Email"
+            className="flex items-center gap-1 text-xs px-2 py-1 rounded-md border border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors"
+          >
+            <Mail className="h-3 w-3" /> Email
+          </button>
+          <button
+            onClick={handlePrint}
+            title="Print Profile"
+            className="flex items-center gap-1 text-xs px-2 py-1 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+          >
+            <FileText className="h-3 w-3" /> Print
+          </button>
+          <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">● LIVE</span>
+        </span>
       </div>
 
       <div className="border rounded-xl overflow-hidden bg-white shadow-sm">
         <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-3">
-          <p className="text-white/50 text-[10px] uppercase tracking-widest">Document Header Preview</p>
+          <p className="text-white/50 text-[10px] uppercase tracking-widest">Company Header</p>
         </div>
 
+        {/* Header: logo + company info */}
         <div className="p-5 border-b">
           <div className="flex items-start gap-4">
             <div className="h-14 w-14 rounded-lg border bg-muted/30 flex items-center justify-center shrink-0 overflow-hidden">
@@ -151,14 +243,14 @@ function LivePreview({ s }: { s: Settings }) {
             </div>
             <div className="flex-1 min-w-0">
               <div className="font-bold text-base leading-tight text-slate-800">
-                {s.company_name || 'Company Name'}{s.legal_suffix ? ` ${s.legal_suffix}` : ''}
+                {fullName}
               </div>
               {s.tagline && <div className="text-xs text-slate-500 italic mt-0.5">{s.tagline}</div>}
               <div className="mt-1.5 space-y-0.5">
-                {s.address && (
+                {addressLine && (
                   <div className="flex items-start gap-1.5 text-[11px] text-slate-600">
                     <MapPin className="h-3 w-3 mt-0.5 shrink-0 text-slate-400" />
-                    <span>{[s.address, s.city, s.province, s.zip_code].filter(Boolean).join(', ')}</span>
+                    <span>{addressLine}</span>
                   </div>
                 )}
                 <div className="flex flex-wrap gap-3 text-[11px] text-slate-600">
@@ -172,41 +264,57 @@ function LivePreview({ s }: { s: Settings }) {
           </div>
         </div>
 
+        {/* Company details */}
         <div className="p-5 space-y-3">
-          <div className="flex justify-between items-start">
+          <div className="grid grid-cols-2 gap-3">
+            {s.business_type && (
+              <div>
+                <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Business Type</div>
+                <div className="text-xs font-medium">{s.business_type}</div>
+              </div>
+            )}
+            {s.industry && (
+              <div>
+                <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Industry</div>
+                <div className="text-xs font-medium">{s.industry}</div>
+              </div>
+            )}
+            {s.founded_year && (
+              <div>
+                <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Founded</div>
+                <div className="text-xs font-medium">{s.founded_year}</div>
+              </div>
+            )}
+            {s.employees_count && (
+              <div>
+                <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Employees</div>
+                <div className="text-xs font-medium">{s.employees_count}</div>
+              </div>
+            )}
+            {s.sec_reg_no && (
+              <div>
+                <div className="text-[10px] text-muted-foreground uppercase tracking-wide">SEC Reg No</div>
+                <div className="text-xs font-medium">{s.sec_reg_no}</div>
+              </div>
+            )}
             <div>
-              <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Document Type</div>
-              <div className="font-bold text-lg text-red-600">PURCHASE ORDER</div>
-            </div>
-            <div className="text-right text-xs text-muted-foreground space-y-0.5">
-              <div><span className="font-medium">PO No:</span> PO-2026-00001</div>
-              <div><span className="font-medium">Date:</span> Jun 19, 2026</div>
+              <div className="text-[10px] text-muted-foreground uppercase tracking-wide">VAT</div>
+              <div className="text-xs font-medium">{s.vat_registered ? `Registered (${s.default_vat_rate}%)` : 'Non-VAT'}</div>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-3 pt-1">
-            {[['Supplier', 'ABC Trading Corp.'], ['Payment Terms', '30 days']].map(([k, v]) => (
-              <div key={k}>
-                <div className="text-[10px] text-muted-foreground uppercase tracking-wide">{k}</div>
-                <div className="text-xs font-medium">{v}</div>
-              </div>
-            ))}
-          </div>
-          <div className="bg-muted/30 rounded-lg p-3 space-y-1.5">
-            {[['Office Supplies', '10', 'pcs', '₱500.00', '₱5,000.00'], ['IT Equipment', '2', 'units', '₱15,000.00', '₱30,000.00']].map(([item, qty, unit, price, amt]) => (
-              <div key={item} className="flex justify-between text-[11px]">
-                <span className="font-medium w-32 truncate">{item}</span>
-                <span className="text-muted-foreground">{qty} {unit}</span>
-                <span className="text-muted-foreground">{price}</span>
-                <span className="font-semibold">{amt}</span>
-              </div>
-            ))}
-          </div>
+          {s.mission_statement && (
+            <div className="pt-1 border-t">
+              <div className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Mission</div>
+              <div className="text-xs text-slate-600 leading-relaxed line-clamp-3">{s.mission_statement}</div>
+            </div>
+          )}
           <div className="text-[10px] text-muted-foreground text-right border-t pt-2">
-            VAT Registered: {s.vat_registered ? `Yes (${s.default_vat_rate}%)` : 'No'} &nbsp;·&nbsp; EWT Default: {s.ewt_default_rate}%
+            EWT Default: {s.ewt_default_rate}% &nbsp;·&nbsp; Fiscal Year: {s.fiscal_year_start}
           </div>
         </div>
       </div>
 
+      {/* Letterhead / Business Card */}
       <div className="mt-4 border rounded-xl overflow-hidden shadow-sm">
         <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-3">
           <p className="text-white/50 text-[10px] uppercase tracking-widest">Letterhead / Business Card</p>
@@ -228,9 +336,11 @@ function LivePreview({ s }: { s: Settings }) {
           </div>
           {s.tagline && <div className="text-white/60 text-xs italic mb-3 border-l-2 border-red-500 pl-2">{s.tagline}</div>}
           <div className="space-y-1 text-[11px] text-white/70">
-            {s.address && <div className="flex items-center gap-1.5"><MapPin className="h-3 w-3 text-white/40" />{s.address}</div>}
+            {addressLine && <div className="flex items-center gap-1.5"><MapPin className="h-3 w-3 text-white/40" />{addressLine}</div>}
             {s.phone && <div className="flex items-center gap-1.5"><Phone className="h-3 w-3 text-white/40" />{s.phone}</div>}
+            {s.mobile && <div className="flex items-center gap-1.5"><Phone className="h-3 w-3 text-white/40" />{s.mobile}</div>}
             {s.email && <div className="flex items-center gap-1.5"><Mail className="h-3 w-3 text-white/40" />{s.email}</div>}
+            {s.website && <div className="flex items-center gap-1.5"><Globe className="h-3 w-3 text-white/40" />{s.website}</div>}
           </div>
         </div>
       </div>
