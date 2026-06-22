@@ -51,7 +51,8 @@ async function buildQuotePdf(data: QuotationPdfData): Promise<string> {
   } catch { /* fall back to helvetica */ }
 
   const setFont = (weight: 'normal' | 'bold' = 'normal') => {
-    try { pdf.setFont('Questrial', 'normal') } catch { pdf.setFont('helvetica', weight) }
+    if (weight === 'bold') { pdf.setFont('helvetica', 'bold') }
+    else { try { pdf.setFont('Questrial', 'normal') } catch { pdf.setFont('helvetica', 'normal') } }
   }
 
   // ── Header ──────────────────────────────────────────────────────────────
@@ -66,7 +67,7 @@ async function buildQuotePdf(data: QuotationPdfData): Promise<string> {
   }
 
   // Company name vertically centered with logo
-  setFont()
+  setFont('bold')
   pdf.setFontSize(14)
   pdf.setTextColor(185, 28, 28)
   pdf.text(data.companyName, textStartX, y + logoSize / 2 + 5)
@@ -92,9 +93,10 @@ async function buildQuotePdf(data: QuotationPdfData): Promise<string> {
 
   // ── Bill To / Quote# ─────────────────────────────────────────────────────
   pdf.setFontSize(8)
-  setFont()
+  setFont('bold')
   pdf.setTextColor(156, 163, 175)
   pdf.text('BILL TO', margin, y)
+  setFont('bold')
   pdf.setFontSize(10)
   pdf.setTextColor(31, 41, 55)
   pdf.text(data.clientName ?? '-', margin, y + 11)
@@ -110,9 +112,10 @@ async function buildQuotePdf(data: QuotationPdfData): Promise<string> {
   // Right: Quote#, Date, Valid Until
   const rx = W - margin
   pdf.setFontSize(8)
-  setFont()
+  setFont('bold')
   pdf.setTextColor(156, 163, 175)
   pdf.text('QUOTE NUMBER', rx, y, { align: 'right' })
+  setFont('bold')
   pdf.setFontSize(10)
   pdf.setTextColor(31, 41, 55)
   pdf.text(data.quoteNumber, rx, y + 11, { align: 'right' })
@@ -140,7 +143,7 @@ async function buildQuotePdf(data: QuotationPdfData): Promise<string> {
   y += 14
 
   // ── QUOTATION title ───────────────────────────────────────────────────────
-  setFont()
+  setFont('bold')
   pdf.setFontSize(16)
   pdf.setTextColor(185, 28, 28)
   pdf.text('QUOTATION', W / 2, y, { align: 'center' })
@@ -272,7 +275,7 @@ async function buildQuotePdf(data: QuotationPdfData): Promise<string> {
   const sigW = (contentW - 40) / 2
   pdf.setDrawColor(55, 65, 81)
   pdf.line(margin, y, margin + sigW, y)
-  setFont()
+  setFont('bold')
   pdf.setFontSize(9)
   pdf.setTextColor(55, 65, 81)
   pdf.text('PREPARED BY', margin + sigW / 2, y + 10, { align: 'center' })
@@ -284,7 +287,7 @@ async function buildQuotePdf(data: QuotationPdfData): Promise<string> {
   const sig2X = W - margin - sigW
   pdf.setDrawColor(55, 65, 81)
   pdf.line(sig2X, y, W - margin, y)
-  setFont()
+  setFont('bold')
   pdf.setFontSize(9)
   pdf.setTextColor(55, 65, 81)
   pdf.text('ACCEPTED BY', sig2X + sigW / 2, y + 10, { align: 'center' })
