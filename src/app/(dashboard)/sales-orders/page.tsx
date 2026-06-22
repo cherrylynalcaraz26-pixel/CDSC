@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -626,13 +626,14 @@ export default function SalesOrdersPage() {
                         <DropdownMenuTrigger className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent">
                           <MoreHorizontal className="h-4 w-4" />
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuContent align="end" className="w-52">
                           <DropdownMenuItem onClick={() => toast.info(`SO: ${so.so_number ?? so.id}`)}>
                             <Eye className="mr-2 h-4 w-4" />View Details
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => window.print()}>
                             <Printer className="mr-2 h-4 w-4" />Print SO
                           </DropdownMenuItem>
+                          <DropdownMenuSeparator />
                           {so.status === 'draft' && (
                             <DropdownMenuItem onClick={() => updateStatus(so.id, 'confirmed')} className="text-blue-600">
                               <CheckCircle2 className="mr-2 h-4 w-4" />Confirm Order
@@ -658,6 +659,7 @@ export default function SalesOrdersPage() {
                               <XCircle className="mr-2 h-4 w-4" />Cancel
                             </DropdownMenuItem>
                           )}
+                          <DropdownMenuSeparator />
                           <DropdownMenuItem onClick={() => deleteSO(so.id)} className="text-destructive">
                             <Trash2 className="mr-2 h-4 w-4" />Delete
                           </DropdownMenuItem>

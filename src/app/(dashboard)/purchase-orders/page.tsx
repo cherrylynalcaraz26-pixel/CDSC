@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -655,12 +655,14 @@ export default function PurchaseOrdersPage() {
                             <DropdownMenuItem onClick={() => openEdit(po)}>
                               <Pencil className="mr-2 h-4 w-4" />Edit
                             </DropdownMenuItem>
+                            <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => handlePrintPO(po)}>
                               <Printer className="mr-2 h-4 w-4" />Print PO
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => openEmailDialog(po)}>
                               <Mail className="mr-2 h-4 w-4" />Send Email
                             </DropdownMenuItem>
+                            <DropdownMenuSeparator />
                             {po.status === 'open' && (
                               <DropdownMenuItem onClick={() => updateStatus(po.id, 'partially_delivered')} className="text-yellow-600">
                                 <ArrowRightLeft className="mr-2 h-4 w-4" />Mark Partial Delivery
@@ -676,6 +678,7 @@ export default function PurchaseOrdersPage() {
                                 <XCircle className="mr-2 h-4 w-4" />Cancel PO
                               </DropdownMenuItem>
                             )}
+                            <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => deletePO(po.id)} className="text-destructive">
                               <Trash2 className="mr-2 h-4 w-4" />Delete
                             </DropdownMenuItem>

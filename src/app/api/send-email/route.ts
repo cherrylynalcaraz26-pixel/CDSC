@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
     }
 
     await transporter.sendMail({
-      from: `CDSC Industrial <${gmailUser}>`,
+      from: `CDSC Industrial Supply <${gmailUser}>`,
       to,
       subject,
       text: body,

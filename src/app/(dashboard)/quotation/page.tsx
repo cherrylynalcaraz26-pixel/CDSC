@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Plus, MoreHorizontal, Loader2, Trash2, X, FileText, Printer, Mail, Send, Package, Search, Pencil, Eye, CheckCircle, XCircle, Clock, CheckCheck } from 'lucide-react'
 import { toast } from 'sonner'
@@ -763,21 +763,24 @@ export default function QuotationPage() {
                             <DropdownMenuItem onClick={() => openEdit(q)}>
                               <Pencil className="mr-2 h-4 w-4" />Edit
                             </DropdownMenuItem>
+                            <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => openListEmail(q)}>
                               <Mail className="mr-2 h-4 w-4" />Send Email
                             </DropdownMenuItem>
+                            <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => updateStatus(q.id, 'sent')}>
                               <Send className="mr-2 h-4 w-4" />Mark as Sent
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => updateStatus(q.id, 'accepted')}>
+                            <DropdownMenuItem onClick={() => updateStatus(q.id, 'accepted')} className="text-green-600">
                               <CheckCircle className="mr-2 h-4 w-4" />Mark as Accepted
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => updateStatus(q.id, 'declined')}>
+                            <DropdownMenuItem onClick={() => updateStatus(q.id, 'declined')} className="text-destructive">
                               <XCircle className="mr-2 h-4 w-4" />Mark as Declined
                             </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => updateStatus(q.id, 'expired')}>
+                            <DropdownMenuItem onClick={() => updateStatus(q.id, 'expired')} className="text-yellow-600">
                               <Clock className="mr-2 h-4 w-4" />Mark as Expired
                             </DropdownMenuItem>
+                            <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => deleteQuotation(q.id)} className="text-destructive">
                               <Trash2 className="mr-2 h-4 w-4" />Delete
                             </DropdownMenuItem>
