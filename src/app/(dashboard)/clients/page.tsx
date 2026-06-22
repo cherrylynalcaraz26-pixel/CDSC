@@ -45,7 +45,8 @@ const BUSINESS_TYPES = [
 
 interface Client {
   id: string
-  client_number: string
+  client_number: string | null
+  client_code: string | null
   company_name: string
   contact_person: string | null
   position: string | null
@@ -207,9 +208,11 @@ export default function ClientsPage() {
         toast.success('Client updated')
       } else {
         const { data: numData } = await supabase.rpc('next_client_number')
+        const clientNum = numData ?? `CLIENT-${Date.now()}`
         const { error } = await supabase.from('clients').insert({
           ...payload,
-          client_number: numData ?? `CLIENT-${Date.now()}`,
+          client_number: clientNum,
+          client_code: clientNum,
         })
         if (error) throw error
         toast.success('Client account created')
@@ -281,7 +284,7 @@ export default function ClientsPage() {
       (c.contact_person ?? '').toLowerCase().includes(q) ||
       (c.email ?? '').toLowerCase().includes(q) ||
       (c.city ?? '').toLowerCase().includes(q) ||
-      c.client_number.toLowerCase().includes(q)
+      (c.client_number ?? c.client_code ?? '').toLowerCase().includes(q)
     const matchStatus = !filterStatus || c.status === filterStatus
     const matchIndustry = !filterIndustry || c.industry === filterIndustry
     return matchSearch && matchStatus && matchIndustry
@@ -385,7 +388,7 @@ export default function ClientsPage() {
                       </div>
                       <div>
                         <div className="font-medium text-sm leading-tight">{c.company_name}</div>
-                        <div className="text-xs text-muted-foreground">{c.client_number}</div>
+                        <div className="text-xs text-muted-foreground">{c.client_number ?? c.client_code ?? '—'}</div>
                       </div>
                     </div>
                   </TableCell>
@@ -469,7 +472,7 @@ export default function ClientsPage() {
                         </div>
                         <div className="min-w-0">
                           <div className="font-semibold text-sm leading-tight truncate">{c.company_name}</div>
-                          <div className="text-xs text-muted-foreground">{c.client_number}</div>
+                          <div className="text-xs text-muted-foreground">{c.client_number ?? c.client_code ?? '—'}</div>
                         </div>
                       </div>
                       <DropdownMenu>
