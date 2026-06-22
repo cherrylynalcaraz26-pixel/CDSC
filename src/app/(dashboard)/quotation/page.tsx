@@ -322,13 +322,17 @@ export default function QuotationPage() {
           }).join('')}
         </tbody>
       </table>` : ''
+    const logoUrl = typeof window !== 'undefined' ? `${window.location.origin}/cdsc-logo.jpg` : '/cdsc-logo.jpg'
     return `<!DOCTYPE html><html><head><title>Quotation</title>
       <style>body{font-family:Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;padding:24px;font-size:11px;}@media print{body{margin:0;}}</style>
     </head><body>
       <div>
         <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1px solid #e5e7eb;padding-bottom:12px;margin-bottom:12px;">
-          <div style="font-size:13px;font-weight:700;color:#b91c1c;">${companyInfo?.company_name ?? 'CDSC INDUSTRIAL SUPPLY'}</div>
-          <div style="text-align:right;font-size:9px;color:#6b7280;">${companyInfo?.address ?? ''}${companyInfo?.phone ? '<br/>' + companyInfo.phone : ''}${companyInfo?.tin ? '<br/>TIN: ' + companyInfo.tin : ''}</div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <img src="${logoUrl}" alt="CDSC" style="width:48px;height:48px;border-radius:4px;object-fit:cover;flex-shrink:0;" crossorigin="anonymous" />
+            <div style="font-size:13px;font-weight:700;color:#b91c1c;line-height:1.25;">${companyInfo?.company_name ?? 'CDSC INDUSTRIAL SUPPLY'}</div>
+          </div>
+          <div style="text-align:right;font-size:9px;color:#6b7280;">${companyInfo?.address ?? ''}${companyInfo?.phone ? '<br/>' + companyInfo.phone : ''}${companyInfo?.email ? '<br/>' + companyInfo.email : ''}${companyInfo?.tin ? '<br/>TIN: ' + companyInfo.tin : ''}</div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;border-bottom:1px solid #e5e7eb;padding-bottom:12px;margin-bottom:12px;">
           <div>
