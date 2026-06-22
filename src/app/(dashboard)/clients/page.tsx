@@ -661,7 +661,7 @@ export default function ClientsPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label>VAT Type</Label>
-                  <Select value={form.vat_type || 'vat'} onValueChange={v => f('vat_type', v)}>
+                  <Select value={form.vat_type || 'vat'} onValueChange={v => f('vat_type', v ?? 'vat')}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="vat">VAT</SelectItem>
