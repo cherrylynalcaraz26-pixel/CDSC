@@ -19,7 +19,6 @@ import {
   FileText, Database, User, Globe, Phone, Mail, MapPin,
   CheckCircle2, Eye, EyeOff, Loader2, Plus, Trash2, X,
 } from 'lucide-react'
-import Image from 'next/image'
 
 const BUSINESS_TYPES = [
   'Sole Proprietorship', 'Partnership', 'Corporation', 'Trading Corporation',
@@ -142,9 +141,10 @@ function LivePreview({ s }: { s: Settings }) {
 
         <div className="p-5 border-b">
           <div className="flex items-start gap-4">
-            <div className="relative h-14 w-14 rounded-lg border bg-muted/30 flex items-center justify-center shrink-0 overflow-hidden">
+            <div className="h-14 w-14 rounded-lg border bg-muted/30 flex items-center justify-center shrink-0 overflow-hidden">
               {s.logo_url ? (
-                <Image src={s.logo_url} alt="logo" fill className="object-contain p-1" />
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={s.logo_url} alt="logo" className="w-full h-full object-contain p-1" />
               ) : (
                 <Building2 className="h-7 w-7 text-muted-foreground/40" />
               )}
@@ -213,9 +213,10 @@ function LivePreview({ s }: { s: Settings }) {
         </div>
         <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-5 text-white">
           <div className="flex items-center gap-3 mb-3">
-            <div className="relative h-10 w-10 rounded-lg bg-white/10 flex items-center justify-center overflow-hidden">
+            <div className="h-10 w-10 rounded-lg bg-white/10 flex items-center justify-center overflow-hidden shrink-0">
               {s.logo_url ? (
-                <Image src={s.logo_url} alt="logo" fill className="object-contain p-1" />
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={s.logo_url} alt="logo" className="w-full h-full object-contain p-1" />
               ) : (
                 <Building2 className="h-5 w-5 text-white/60" />
               )}
@@ -251,9 +252,10 @@ function ProposalPreview({ s }: { s: Settings }) {
       <div className="border rounded-xl overflow-hidden bg-white shadow-sm text-sm">
         <div className="bg-gradient-to-r from-slate-800 to-slate-900 p-5">
           <div className="flex items-start gap-3">
-            <div className="relative h-12 w-12 rounded-lg bg-white/10 flex items-center justify-center overflow-hidden shrink-0">
+            <div className="h-12 w-12 rounded-lg bg-white/10 flex items-center justify-center overflow-hidden shrink-0">
               {s.logo_url ? (
-                <Image src={s.logo_url} alt="logo" fill className="object-contain p-1" />
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={s.logo_url} alt="logo" className="w-full h-full object-contain p-1" />
               ) : (
                 <Building2 className="h-6 w-6 text-white/50" />
               )}
@@ -984,7 +986,7 @@ export default function SettingsPage() {
       {tab === 'database' && <ProposalDatabaseTab />}
 
       {tab === 'profile' && (
-        <div className="grid grid-cols-1 xl:grid-cols-[1fr_420px] gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-8">
           <div className="space-y-0">
             <div className="flex items-center justify-between mb-6 pb-4 border-b">
               <h2 className="font-bold text-base uppercase tracking-wider text-slate-700">Company Identity</h2>
@@ -1183,7 +1185,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <div className="hidden xl:block">
+          <div className="hidden lg:block">
             <LivePreview s={settings} />
           </div>
         </div>

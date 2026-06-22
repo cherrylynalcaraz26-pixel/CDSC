@@ -67,7 +67,12 @@ export default function SalesOrdersPage() {
   const [emailSO, setEmailSO] = useState<SO | null>(null)
   const [emailSOItems, setEmailSOItems] = useState<SOItem[]>([])
   const [emailToSO, setEmailToSO] = useState('')
+  const [emailSubjectSO, setEmailSubjectSO] = useState('')
+  const [emailBodySO, setEmailBodySO] = useState('')
   const [sendingEmailSO, setSendingEmailSO] = useState(false)
+
+  // Edit SO
+  const [editingSOId, setEditingSOId] = useState<string | null>(null)
 
   // Pipeline
   const [pipelineOpen, setPipelineOpen] = useState(false)
@@ -117,12 +122,13 @@ export default function SalesOrdersPage() {
   function resetForm() {
     setSoNumber(''); setSoDate(today()); setClientId(''); setClientPONumber('')
     setDeliveryDate(''); setRemarks(''); setLines([emptyLine()]); setMobileTab('form')
+    setEditingSOId(null)
   }
 
   async function submitSO() {
     if (!clientId) { toast.error('Client is required'); return }
     setSaving(true)
-    const { data: soData, error } = await supabase.from('sales_orders').insert({
+    const payload = {
       so_number: soNumber.trim() || null,
       so_date: soDate,
       client_id: clientId,
@@ -130,27 +136,67 @@ export default function SalesOrdersPage() {
       client_po_number: clientPONumber || null,
       delivery_date: deliveryDate || null,
       remarks: remarks || null,
-      status: 'draft',
+      status: 'draft' as const,
       total_amount: subtotal,
-    }).select('id').single()
-    if (error) { toast.error(error.message); setSaving(false); return }
-    if (soData?.id) {
-      const validLines = lines.filter(l => l.item_name.trim())
-      if (validLines.length > 0) {
-        await supabase.from('so_items').insert(validLines.map(l => ({
-          so_id: soData.id,
-          item_name: l.item_name,
-          quantity: parseFloat(l.quantity) || 1,
-          unit: l.unit || null,
-          unit_price: parseFloat(l.unit_price) || 0,
-          selling_price: parseFloat(l.selling_price) || null,
-          total_amount: (parseFloat(l.selling_price) || parseFloat(l.unit_price) || 0) * (parseFloat(l.quantity) || 0),
-        })))
-      }
     }
-    toast.success('Sales Order created')
+    const validLines = lines.filter(l => l.item_name.trim())
+    const itemRows = validLines.map(l => ({
+      item_name: l.item_name,
+      quantity: parseFloat(l.quantity) || 1,
+      unit: l.unit || null,
+      unit_price: parseFloat(l.unit_price) || 0,
+      selling_price: parseFloat(l.selling_price) || null,
+      total_amount: (parseFloat(l.selling_price) || parseFloat(l.unit_price) || 0) * (parseFloat(l.quantity) || 0),
+    }))
+
+    if (editingSOId) {
+      // Update existing SO
+      const { error } = await supabase.from('sales_orders').update(payload).eq('id', editingSOId)
+      if (error) { toast.error(error.message); setSaving(false); return }
+      // Replace items
+      await supabase.from('so_items').delete().eq('so_id', editingSOId)
+      if (itemRows.length > 0) {
+        const { error: itemErr } = await supabase.from('so_items').insert(itemRows.map(r => ({ ...r, so_id: editingSOId })))
+        if (itemErr) toast.error(`Items: ${itemErr.message}`)
+      }
+      toast.success('Sales Order updated')
+    } else {
+      // Create new SO
+      const { data: soData, error } = await supabase.from('sales_orders').insert(payload).select('id').single()
+      if (error) { toast.error(error.message); setSaving(false); return }
+      if (soData?.id && itemRows.length > 0) {
+        const { error: itemErr } = await supabase.from('so_items').insert(itemRows.map(r => ({ ...r, so_id: soData.id })))
+        if (itemErr) toast.error(`Items: ${itemErr.message}`)
+      }
+      toast.success('Sales Order created')
+    }
     setOpen(false); resetForm(); load()
     setSaving(false)
+  }
+
+  async function openEditSO(so: SO) {
+    const { data: items } = await supabase.from('so_items').select('*').eq('so_id', so.id)
+    setSoNumber(so.so_number ?? '')
+    setSoDate(so.so_date ?? today())
+    const cli = clients.find(c => c.company_name === so.client_name)
+    setClientId(cli?.id ?? '')
+    setClientPONumber(so.client_po_number ?? '')
+    setDeliveryDate('')
+    setRemarks(so.remarks ?? '')
+    setLines(
+      items && items.length > 0
+        ? (items as SOItem[]).map(it => ({
+            item_name: it.item_name,
+            quantity: String(it.quantity),
+            unit: it.unit ?? '',
+            unit_price: String(it.unit_price),
+            selling_price: it.selling_price != null ? String(it.selling_price) : '',
+          }))
+        : [emptyLine()]
+    )
+    setEditingSOId(so.id)
+    setMobileTab('form')
+    setOpen(true)
   }
 
   async function updateStatus(id: string, status: SOStatus) {
@@ -218,7 +264,6 @@ export default function SalesOrdersPage() {
         <div>${soDate}</div>
       </div>
     </div>
-    <div style="font-size:16px;font-weight:900;color:#b91c1c;text-align:center;margin-bottom:10px;text-transform:uppercase;letter-spacing:2px">SALES ORDER</div>
     <table style="margin-bottom:8px">
       <thead><tr style="background:#b91c1c;color:#fff">
         <th style="padding:5px 6px;text-align:center;width:28px">#</th>
@@ -295,8 +340,9 @@ export default function SalesOrdersPage() {
   async function openEmailSO(so: SO) {
     const { data } = await supabase.from('so_items').select('*').eq('so_id', so.id)
     setEmailSOItems((data ?? []) as SOItem[])
-    const cli = clients.find(c => c.company_name === so.client_name)
     setEmailToSO('')
+    setEmailSubjectSO(`Sales Order ${so.so_number ?? ''} — ${companyInfo?.company_name ?? 'CDSC Industrial Supply'}`)
+    setEmailBodySO(`Dear ${so.client_name ?? 'Client'},\n\nPlease find attached Sales Order ${so.so_number ?? ''}.\n\nKindly confirm receipt and advise on any concerns.\n\nBest regards,\n${companyInfo?.company_name ?? 'CDSC Industrial Supply'}`)
     setEmailSO(so)
   }
 
@@ -308,8 +354,8 @@ export default function SalesOrdersPage() {
       const pdfData = await buildSOPdfData(emailSO, emailSOItems)
       await sendEmail({
         to: emailToSO.trim(),
-        subject: `Sales Order ${emailSO.so_number ?? ''} — CDSC Industrial Supply`,
-        body: `Dear ${emailSO.client_name ?? 'Client'},\n\nPlease find attached Sales Order ${emailSO.so_number ?? ''}.\n\nBest regards,\nCDSC Industrial Supply`,
+        subject: emailSubjectSO,
+        body: emailBodySO,
         soPdfData: pdfData,
         pdfFilename: `SO-${emailSO.so_number ?? emailSO.id}.pdf`,
       })
@@ -421,7 +467,7 @@ export default function SalesOrdersPage() {
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base flex items-center gap-2">
-                    <FileText className="h-4 w-4" />Sales Order Details
+                    <FileText className="h-4 w-4" />{editingSOId ? 'Edit Sales Order' : 'Sales Order Details'}
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -578,7 +624,7 @@ export default function SalesOrdersPage() {
                       <Printer className="h-4 w-4" />Print
                     </Button>
                     <Button onClick={submitSO} disabled={saving} className="bg-red-600 hover:bg-red-700">
-                      {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Creating…</> : 'Create Sales Order'}
+                      {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />{editingSOId ? 'Updating…' : 'Creating…'}</> : editingSOId ? 'Update Sales Order' : 'Create Sales Order'}
                     </Button>
                   </div>
                 </CardContent>
@@ -820,6 +866,9 @@ export default function SalesOrdersPage() {
                           <DropdownMenuItem onClick={() => openViewSO(so)}>
                             <Eye className="mr-2 h-4 w-4" />View SO
                           </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openEditSO(so)}>
+                            <FileText className="mr-2 h-4 w-4" />Edit SO
+                          </DropdownMenuItem>
                           <DropdownMenuItem onClick={async () => {
                             const { data } = await supabase.from('so_items').select('*').eq('so_id', so.id)
                             const items = (data ?? []) as SOItem[]
@@ -895,13 +944,13 @@ export default function SalesOrdersPage() {
 
       {/* Email SO Dialog */}
       <Dialog open={!!emailSO} onOpenChange={o => { if (!o && !sendingEmailSO) setEmailSO(null) }}>
-        <DialogContent className="sm:!max-w-md">
+        <DialogContent className="sm:!max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Mail className="h-4 w-4" />Send Sales Order</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 pt-2">
+          <div className="space-y-3 pt-2">
             <div className="space-y-1.5">
-              <Label>Recipient Email</Label>
+              <Label>Recipient Email <span className="text-destructive">*</span></Label>
               <Input
                 type="email"
                 placeholder="client@example.com"
@@ -910,10 +959,27 @@ export default function SalesOrdersPage() {
                 disabled={sendingEmailSO}
               />
             </div>
-            <div className="text-sm text-muted-foreground">
-              Sending SO <span className="font-mono font-semibold">{emailSO?.so_number ?? '—'}</span> to <span className="font-semibold">{emailSO?.client_name}</span>
+            <div className="space-y-1.5">
+              <Label>Subject</Label>
+              <Input
+                placeholder="Email subject"
+                value={emailSubjectSO}
+                onChange={e => setEmailSubjectSO(e.target.value)}
+                disabled={sendingEmailSO}
+              />
             </div>
-            <div className="flex justify-end gap-2">
+            <div className="space-y-1.5">
+              <Label>Message Body</Label>
+              <textarea
+                className="w-full min-h-[120px] rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                placeholder="Email message…"
+                value={emailBodySO}
+                onChange={e => setEmailBodySO(e.target.value)}
+                disabled={sendingEmailSO}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">PDF attachment: <span className="font-mono">SO-{emailSO?.so_number ?? '—'}.pdf</span></p>
+            <div className="flex justify-end gap-2 pt-1">
               <Button variant="outline" onClick={() => setEmailSO(null)} disabled={sendingEmailSO}>Cancel</Button>
               <Button onClick={handleSendEmailSO} disabled={sendingEmailSO} className="bg-red-600 hover:bg-red-700">
                 {sendingEmailSO ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Sending…</> : <><Mail className="h-4 w-4 mr-2" />Send Email</>}
