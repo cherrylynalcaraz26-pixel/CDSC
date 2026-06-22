@@ -76,7 +76,7 @@ export default function SalesOrdersPage() {
 
   // Pipeline
   const [pipelineOpen, setPipelineOpen] = useState(false)
-  const [collectedClients, setCollectedClients] = useState<Set<string>>(new Set())
+  // collectedClients removed — no OR/CR receipt system
 
   // Form
   const [soNumber, setSoNumber] = useState('')
@@ -88,7 +88,7 @@ export default function SalesOrdersPage() {
   const [lines, setLines] = useState<SOLine[]>([emptyLine()])
 
   const selectedClient = clients.find(c => c.id === clientId)
-  const subtotal = lines.reduce((s, l) => s + (parseFloat(l.selling_price) || parseFloat(l.unit_price) || 0) * (parseFloat(l.quantity) || 0), 0)
+  const subtotal = lines.reduce((s, l) => s + (parseFloat(l.unit_price) || 0) * (parseFloat(l.quantity) || 0), 0)
   const costTotal = lines.reduce((s, l) => s + (parseFloat(l.unit_price) || 0) * (parseFloat(l.quantity) || 0), 0)
   const estimatedProfit = subtotal - costTotal
   const profitMarginPct = subtotal > 0 ? (estimatedProfit / subtotal) * 100 : 0
@@ -110,9 +110,6 @@ export default function SalesOrdersPage() {
     setItems((itemData ?? []) as ItemOption[])
     setClients((cliData ?? []) as ClientOption[])
     if (sysData) setCompanyInfo(sysData as SystemSettings)
-
-    const { data: colData } = await supabase.from('collections').select('client_name')
-    setCollectedClients(new Set((colData ?? []).map((r: any) => (r.client_name ?? '').trim()).filter(Boolean)))
 
     setLoading(false)
   }
@@ -523,8 +520,7 @@ export default function SalesOrdersPage() {
                             <TableHead className="min-w-[160px]">Item Description</TableHead>
                             <TableHead className="w-16">Qty</TableHead>
                             <TableHead className="w-20">Unit</TableHead>
-                            <TableHead className="w-28">Cost Price</TableHead>
-                            <TableHead className="w-28">Selling Price</TableHead>
+                            <TableHead className="w-28">Unit Price</TableHead>
                             <TableHead className="w-24 text-right">Amount</TableHead>
                             <TableHead className="w-8"></TableHead>
                           </TableRow>
@@ -566,11 +562,7 @@ export default function SalesOrdersPage() {
                                   <Input type="number" min={0} step="0.01" className="h-8 text-xs w-full" placeholder="0.00" value={line.unit_price}
                                     onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, unit_price: e.target.value } : l))} />
                                 </TableCell>
-                                <TableCell className="py-1.5">
-                                  <Input type="number" min={0} step="0.01" className="h-8 text-xs w-full" placeholder="0.00" value={line.selling_price}
-                                    onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, selling_price: e.target.value } : l))} />
-                                </TableCell>
-                                <TableCell className="py-1.5 text-right text-xs font-medium">{fmt((parseFloat(line.selling_price) || parseFloat(line.unit_price) || 0) * (parseFloat(line.quantity) || 0))}</TableCell>
+                                <TableCell className="py-1.5 text-right text-xs font-medium">{fmt((parseFloat(line.unit_price) || 0) * (parseFloat(line.quantity) || 0))}</TableCell>
                                 <TableCell className="py-1.5">
                                   {lines.length > 1 && (
                                     <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
@@ -738,7 +730,7 @@ export default function SalesOrdersPage() {
                   <div className="grid grid-cols-2 gap-6 border-t pt-4 mt-1">
                     <div className="text-center">
                       <div className="border-b border-gray-400 mb-1 h-8" />
-                      <div className="text-[9px] text-gray-400 uppercase tracking-wider">Prepared By</div>
+                      <div className="text-[9px] text-gray-400 uppercase tracking-wider">Authorized By</div>
                     </div>
                     <div className="text-center">
                       <div className="border-b border-gray-400 mb-1 h-8" />
@@ -766,13 +758,12 @@ export default function SalesOrdersPage() {
           </CardHeader>
           {pipelineOpen && (
             <CardContent className="p-0 mt-3">
-              <div className="grid grid-cols-5 text-center text-[10px] font-semibold uppercase tracking-wider border-b border-t">
+              <div className="grid grid-cols-4 text-center text-[10px] font-semibold uppercase tracking-wider border-b border-t">
                 {[
                   { label: 'SO Created',  color: 'text-blue-600 bg-blue-50' },
                   { label: 'Confirmed',   color: 'text-indigo-600 bg-indigo-50' },
                   { label: 'Processing',  color: 'text-yellow-600 bg-yellow-50' },
                   { label: 'Shipped',     color: 'text-orange-600 bg-orange-50' },
-                  { label: 'Collected',   color: 'text-green-600 bg-green-50' },
                 ].map(s => (
                   <div key={s.label} className={`py-2 ${s.color}`}>{s.label}</div>
                 ))}
@@ -786,17 +777,14 @@ export default function SalesOrdersPage() {
                   {sos.filter(s => !['cancelled', 'delivered'].includes(s.status)).map(so => {
                     const statusOrder = ['draft', 'confirmed', 'processing', 'shipped', 'delivered']
                     const stageIdx = statusOrder.indexOf(so.status)
-                    const clientName = (so.client_name ?? '').trim()
-                    const hasOr = collectedClients.has(clientName)
                     const stages = [
                       { done: true,          label: so.so_number ?? '—',           sub: so.client_name ?? '' },
                       { done: stageIdx >= 1, label: stageIdx >= 1 ? 'Confirmed'  : 'Pending' },
                       { done: stageIdx >= 2, label: stageIdx >= 2 ? 'Processing' : 'Pending' },
                       { done: stageIdx >= 3, label: stageIdx >= 3 ? 'Shipped'    : 'Pending' },
-                      { done: hasOr,         label: hasOr          ? 'Collected'  : 'Pending' },
                     ]
                     return (
-                      <div key={so.id} className="grid grid-cols-5 text-center text-xs">
+                      <div key={so.id} className="grid grid-cols-4 text-center text-xs">
                         {stages.map((s, i) => (
                           <div key={i} className={`py-2.5 px-1 border-r last:border-r-0 ${s.done ? '' : 'opacity-40'}`}>
                             <div className={`inline-flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold mx-auto mb-0.5 ${s.done ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>

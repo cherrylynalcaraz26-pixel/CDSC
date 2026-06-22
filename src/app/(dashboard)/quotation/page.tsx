@@ -177,7 +177,7 @@ export default function QuotationPage() {
     setNotes(q.notes ?? '')
     setVatEnabled((q.vat_amount ?? 0) > 0)
     setEwtType('none')
-    setPreparedBy(''); setAcceptedBy('')
+    setPreparedBy((q as any).prepared_by ?? ''); setAcceptedBy((q as any).accepted_by ?? '')
     const matched = clients.find(c => c.company_name === q.client_name)
     setClientId(matched?.id ?? '')
 
@@ -255,6 +255,8 @@ export default function QuotationPage() {
       ewt_amount: ewtAmount,
       total_amount: totalAmount,
       notes: notes || null,
+      prepared_by: preparedBy || null,
+      accepted_by: acceptedBy || null,
     }
     let error
     let savedId = editingId
