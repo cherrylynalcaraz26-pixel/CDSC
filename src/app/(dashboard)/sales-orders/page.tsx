@@ -90,7 +90,7 @@ export default function SalesOrdersPage() {
   const [lines, setLines] = useState<SOLine[]>([emptyLine()])
 
   const selectedClient = clients.find(c => c.id === clientId)
-  const subtotal = lines.reduce((s, l) => s + (parseFloat(l.unit_price) || 0) * (parseFloat(l.quantity) || 0), 0)
+  const subtotal = lines.reduce((s, l) => s + (parseFloat(l.selling_price) || parseFloat(l.unit_price) || 0) * (parseFloat(l.quantity) || 0), 0)
   const costTotal = lines.reduce((s, l) => s + (parseFloat(l.unit_price) || 0) * (parseFloat(l.quantity) || 0), 0)
   const estimatedProfit = subtotal - costTotal
   const profitMarginPct = subtotal > 0 ? (estimatedProfit / subtotal) * 100 : 0
@@ -566,13 +566,14 @@ export default function SalesOrdersPage() {
                             <TableHead className="w-16">Qty</TableHead>
                             <TableHead className="w-20">Unit</TableHead>
                             <TableHead className="w-28">Unit Price</TableHead>
+                            <TableHead className="w-28">Selling Price</TableHead>
                             <TableHead className="w-24 text-right">Amount</TableHead>
                             <TableHead className="w-8"></TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {lines.map((line, i) => {
-                            const lineTotal = (parseFloat(line.unit_price) || 0) * (parseFloat(line.quantity) || 0)
+                            const lineTotal = (parseFloat(line.selling_price) || parseFloat(line.unit_price) || 0) * (parseFloat(line.quantity) || 0)
                             return (
                               <TableRow key={i}>
                                 <TableCell className="py-1.5">
@@ -607,7 +608,11 @@ export default function SalesOrdersPage() {
                                   <Input type="number" min={0} step="0.01" className="h-8 text-xs w-full" placeholder="0.00" value={line.unit_price}
                                     onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, unit_price: e.target.value } : l))} />
                                 </TableCell>
-                                <TableCell className="py-1.5 text-right text-xs font-medium">{fmt((parseFloat(line.unit_price) || 0) * (parseFloat(line.quantity) || 0))}</TableCell>
+                                <TableCell className="py-1.5">
+                                  <Input type="number" min={0} step="0.01" className="h-8 text-xs w-full" placeholder="0.00" value={line.selling_price}
+                                    onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, selling_price: e.target.value } : l))} />
+                                </TableCell>
+                                <TableCell className="py-1.5 text-right text-xs font-medium">{fmt(lineTotal)}</TableCell>
                                 <TableCell className="py-1.5">
                                   {lines.length > 1 && (
                                     <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
@@ -755,14 +760,15 @@ export default function SalesOrdersPage() {
                     </thead>
                     <tbody>
                       {lines.map((line, i) => {
-                        const total = (parseFloat(line.unit_price) || 0) * (parseFloat(line.quantity) || 0)
+                        const sp = parseFloat(line.selling_price) || parseFloat(line.unit_price) || 0
+                        const total = sp * (parseFloat(line.quantity) || 0)
                         return (
                           <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                             <td className="px-1.5 py-1 text-gray-400">{i + 1}</td>
                             <td className="px-1.5 py-1">{line.item_name || <span className="text-gray-300 italic">—</span>}</td>
                             <td className="px-1.5 py-1 text-right">{line.quantity || '—'}</td>
                             <td className="px-1.5 py-1 text-gray-500">{line.unit || '—'}</td>
-                            <td className="px-1.5 py-1 text-right">₱{(parseFloat(line.unit_price) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+                            <td className="px-1.5 py-1 text-right">₱{sp.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
                             <td className="px-1.5 py-1 text-right font-medium">₱{total.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
                           </tr>
                         )

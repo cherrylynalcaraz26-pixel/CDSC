@@ -63,15 +63,17 @@ export default function UsersPage() {
   const [inviting, setInviting] = useState(false)
   const [inviteForm, setInviteForm] = useState({ email: '', full_name: '', role: 'client', department: '', company: '' })
   const [editForm, setEditForm] = useState({ full_name: '', role: 'client', department: '', company: '' })
+  const [clientNames, setClientNames] = useState<string[]>([])
 
   async function load() {
     setLoading(true)
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, full_name, email, role, department, company, status, created_at')
-      .order('created_at', { ascending: false })
+    const [{ data, error }, { data: cliData }] = await Promise.all([
+      supabase.from('profiles').select('id, full_name, email, role, department, company, status, created_at').order('created_at', { ascending: false }),
+      supabase.from('clients').select('company_name').eq('status', 'active').order('company_name'),
+    ])
     if (error) toast.error(error.message)
     else setProfiles(data ?? [])
+    setClientNames((cliData ?? []).map((c: any) => c.company_name))
     setLoading(false)
   }
 
@@ -303,8 +305,13 @@ export default function UsersPage() {
             </div>
             <div className="space-y-1.5">
               <Label>Company</Label>
-              <Input placeholder="e.g. CDSC Industrial Supply" value={inviteForm.company}
-                onChange={e => setInviteForm(f => ({ ...f, company: e.target.value }))} />
+              <Select value={inviteForm.company || '_none'} onValueChange={v => setInviteForm(f => ({ ...f, company: v === '_none' ? '' : v }))}>
+                <SelectTrigger><SelectValue placeholder="Select company…" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">— None —</SelectItem>
+                  {clientNames.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             <p className="text-xs text-muted-foreground bg-muted p-3 rounded-md">
               A confirmation email will be sent. The user must confirm their email and set their password before logging in.
@@ -358,7 +365,13 @@ export default function UsersPage() {
             </div>
             <div className="space-y-1.5">
               <Label>Company</Label>
-              <Input placeholder="Company name" value={editForm.company} onChange={e => setEditForm(f => ({ ...f, company: e.target.value }))} />
+              <Select value={editForm.company || '_none'} onValueChange={v => setEditForm(f => ({ ...f, company: v === '_none' ? '' : v }))}>
+                <SelectTrigger><SelectValue placeholder="Select company…" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">— None —</SelectItem>
+                  {clientNames.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>

@@ -113,18 +113,18 @@ export default function QuotationPage() {
   const [subject, setSubject] = useState('')
   const [lines, setLines] = useState<QuoteLine[]>([emptyLine()])
   const [notes, setNotes] = useState('')
-  const [vatEnabled, setVatEnabled] = useState(true)
+  const [vatType, setVatType] = useState<'exclusive' | 'inclusive' | 'exempt'>('exclusive')
   const [ewtType, setEwtType] = useState<EWTType>('none')
   const [preparedBy, setPreparedBy] = useState('')
   const [acceptedBy, setAcceptedBy] = useState('')
 
   const selectedClient = clients.find(c => c.id === clientId)
   const subtotal = lines.reduce((s, l) => s + (parseFloat(l.selling_price) || parseFloat(l.unit_price) || 0) * (parseFloat(l.quantity) || 0), 0)
-  const vatAmount = vatEnabled ? subtotal * 0.12 : 0
+  const vatAmount = vatType === 'exclusive' ? subtotal * 0.12 : vatType === 'inclusive' ? subtotal * (0.12 / 1.12) : 0
   const ewtCfg = EWT_CFG[ewtType]
   const ewtAmount = ewtType !== 'none' ? (subtotal / 1.12) * ewtCfg.rate : 0
   const ewtLabel = ewtType !== 'none' ? `EWT — ${ewtCfg.atc}` : 'EWT'
-  const totalAmount = subtotal + vatAmount - ewtAmount
+  const totalAmount = (vatType === 'inclusive' ? subtotal : subtotal + vatAmount) - ewtAmount
 
   const fmt = (n: number) => `₱${n.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
 
@@ -163,7 +163,7 @@ export default function QuotationPage() {
 
   function resetForm() {
     setQuoteNumber(''); setQuoteDate(today()); setValidUntil(''); setClientId('')
-    setSubject(''); setLines([emptyLine()]); setNotes(''); setVatEnabled(true); setEwtType('none')
+    setSubject(''); setLines([emptyLine()]); setNotes(''); setVatType('exclusive'); setEwtType('none')
     setPreparedBy(''); setAcceptedBy(''); setEditingId(null)
     setMobileTab('form')
   }
@@ -175,7 +175,7 @@ export default function QuotationPage() {
     setValidUntil(q.valid_until ?? '')
     setSubject(q.subject ?? '')
     setNotes(q.notes ?? '')
-    setVatEnabled((q.vat_amount ?? 0) > 0)
+    setVatType((q as any).vat_type ?? ((q.vat_amount ?? 0) > 0 ? 'exclusive' : 'exempt'))
     setEwtType('none')
     setPreparedBy((q as any).prepared_by ?? ''); setAcceptedBy((q as any).accepted_by ?? '')
     const matched = clients.find(c => c.company_name === q.client_name)
@@ -251,6 +251,7 @@ export default function QuotationPage() {
       client_name: selectedClient?.company_name ?? null,
       subject: subject || null,
       subtotal,
+      vat_type: vatType,
       vat_amount: vatAmount,
       ewt_amount: ewtAmount,
       total_amount: totalAmount,
@@ -525,7 +526,7 @@ export default function QuotationPage() {
       <div className="flex justify-end">
         <div className="w-52 space-y-0.5 text-[10px]">
           <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span>₱{subtotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
-          {vatEnabled && <div className="flex justify-between"><span className="text-gray-500">VAT (12%)</span><span className="text-blue-600">₱{vatAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
+          {vatType !== 'exempt' && <div className="flex justify-between"><span className="text-gray-500">VAT {vatType === 'inclusive' ? '(incl. 12%)' : '(12%)'}</span><span className="text-blue-600">₱{vatAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
           {ewtType !== 'none' && <div className="flex justify-between"><span className="text-gray-500">{ewtLabel} ({ewtCfg.rate * 100}%)</span><span className="text-red-700">−₱{ewtAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
           <div className="flex justify-between border-t pt-0.5 font-bold text-[11px]"><span>Total</span><span className="text-red-700">₱{totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
         </div>
@@ -764,13 +765,24 @@ export default function QuotationPage() {
                     </div>
                   </div>
 
-                  {/* Tax */}
-                  <div className="space-y-2">
-                    <Label>Tax</Label>
-                    <label className="flex items-center gap-2 text-sm cursor-pointer">
-                      <input type="checkbox" className="rounded" checked={vatEnabled} onChange={e => setVatEnabled(e.target.checked)} />
-                      VAT 12%
-                    </label>
+                  {/* VAT Type */}
+                  <div className="space-y-1.5">
+                    <Label>VAT Type</Label>
+                    <div className="flex gap-2 flex-wrap">
+                      {([
+                        { value: 'exclusive', label: 'VAT Exclusive' },
+                        { value: 'inclusive', label: 'VAT Inclusive' },
+                        { value: 'exempt',    label: 'VAT Exempt' },
+                      ] as const).map(opt => (
+                        <button key={opt.value} type="button" onClick={() => setVatType(opt.value)}
+                          className={`px-3 py-1.5 text-sm rounded-md border font-medium transition-colors ${vatType === opt.value ? 'bg-red-600 text-white border-red-600' : 'bg-background text-muted-foreground hover:bg-muted border-input'}`}>
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {vatType === 'exclusive' ? 'VAT (12%) added on top of subtotal' : vatType === 'inclusive' ? 'VAT already included in price (extracted at 12/112)' : 'No VAT applied'}
+                    </p>
                   </div>
 
                   {/* EWT */}
@@ -794,7 +806,7 @@ export default function QuotationPage() {
                   {/* Totals summary */}
                   <div className="rounded-lg bg-muted/30 p-4 space-y-1 text-sm">
                     <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{fmt(subtotal)}</span></div>
-                    {vatEnabled && <div className="flex justify-between"><span className="text-muted-foreground">VAT 12%</span><span>{fmt(vatAmount)}</span></div>}
+                    {vatType !== 'exempt' && <div className="flex justify-between"><span className="text-muted-foreground">VAT {vatType === 'inclusive' ? '(incl. 12%)' : '12%'}</span><span>{fmt(vatAmount)}</span></div>}
                     {ewtType !== 'none' && <div className="flex justify-between"><span className="text-muted-foreground">{ewtLabel} ({ewtCfg.rate * 100}%)</span><span className="text-red-700">− {fmt(ewtAmount)}</span></div>}
                     <div className="h-px bg-border my-1" />
                     <div className="flex justify-between font-bold"><span>Total</span><span className="text-red-600">{fmt(totalAmount)}</span></div>

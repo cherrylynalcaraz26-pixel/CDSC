@@ -89,6 +89,7 @@ export default function DashboardPage() {
   const [receivedPONumbers, setReceivedPONumbers] = useState<Set<string>>(new Set())
   const [pipelineSOs, setPipelineSOs] = useState<any[]>([])
   const [collectedClients, setCollectedClients] = useState<Set<string>>(new Set())
+  const [drLogSONumbers, setDrLogSONumbers] = useState<Set<string>>(new Set())
   const [poPipelineOpen, setPoPipelineOpen] = useState(true)
   const [soPipelineOpen, setSoPipelineOpen] = useState(true)
   const [decisionMakerOpen, setDecisionMakerOpen] = useState(true)
@@ -207,10 +208,12 @@ export default function DashboardPage() {
       setReceivedPONumbers(new Set((rrData.data ?? []).map((r: any) => r.po_number).filter(Boolean)))
 
       // --- SO Pipeline ---
-      const openSOsData = await supabase.from('sales_orders').select('id, so_number, status, client_name').not('status', 'in', '("cancelled","delivered")').order('created_at', { ascending: false }).limit(10)
+      const openSOsData = await supabase.from('sales_orders').select('id, so_number, client_po_number, status, client_name').not('status', 'in', '("cancelled","delivered")').order('created_at', { ascending: false }).limit(10)
       const colClientsData = await supabase.from('collections').select('client_name')
+      const drSOData = await supabase.from('dr_logs').select('po_number')
       setPipelineSOs(openSOsData.data ?? [])
       setCollectedClients(new Set((colClientsData.data ?? []).map((r: any) => (r.client_name ?? '').trim()).filter(Boolean)))
+      setDrLogSONumbers(new Set((drSOData.data ?? []).map((r: any) => r.po_number).filter(Boolean)))
 
       setMonthlyData(bars)
       setRecentDRs((recentDRData.data ?? []) as RecentDR[])
@@ -425,7 +428,7 @@ export default function DashboardPage() {
                   const statusOrder = ['draft', 'confirmed', 'processing', 'shipped', 'delivered']
                   const stageIdx = statusOrder.indexOf(so.status)
                   const clientName = (so.client_name ?? '').trim()
-                  const hasDR = csiRows.some(r => r.client === clientName) || stageIdx >= 3
+                  const hasDR = drLogSONumbers.has(so.so_number ?? '') || (!!so.client_po_number && drLogSONumbers.has(so.client_po_number))
                   const hasCSI = csiRows.some(r => r.client === clientName)
                   const stages = [
                     { done: true,    label: so.so_number ?? '—', sub: so.client_name ?? '' },

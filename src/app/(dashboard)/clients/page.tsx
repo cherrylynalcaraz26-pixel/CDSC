@@ -66,6 +66,7 @@ interface Client {
   status: string
   auth_user_id: string | null
   portal_access: boolean
+  vat_type: string | null
   created_at: string
 }
 
@@ -87,6 +88,7 @@ type FormData = {
   credit_limit: string
   notes: string
   status: string
+  vat_type: string
 }
 
 function blankForm(): FormData {
@@ -96,6 +98,7 @@ function blankForm(): FormData {
     address: '', city: '', province: '', zip_code: '',
     industry: '', business_type: '', tin: '',
     payment_terms: '30 days', credit_limit: '0', notes: '', status: 'active',
+    vat_type: 'vat',
   }
 }
 
@@ -175,6 +178,7 @@ export default function ClientsPage() {
       credit_limit: String(c.credit_limit ?? 0),
       notes: c.notes ?? '',
       status: c.status,
+      vat_type: c.vat_type ?? 'vat',
     })
     setOpen(true)
   }
@@ -201,6 +205,7 @@ export default function ClientsPage() {
         credit_limit: parseFloat(form.credit_limit) || 0,
         notes: form.notes || null,
         status: form.status,
+        vat_type: form.vat_type || 'vat',
         updated_at: new Date().toISOString(),
       }
 
@@ -370,6 +375,7 @@ export default function ClientsPage() {
                 <TableHead>Location</TableHead>
                 <TableHead>Industry</TableHead>
                 <TableHead>Payment Terms</TableHead>
+                <TableHead>VAT</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Since</TableHead>
                 <TableHead className="w-10" />
@@ -377,11 +383,11 @@ export default function ClientsPage() {
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-12">
+                <TableRow><TableCell colSpan={9} className="text-center py-12">
                   <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                 </TableCell></TableRow>
               ) : filtered.length === 0 ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
+                <TableRow><TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
                   {search || filterStatus || filterIndustry ? 'No clients match your filters.' : 'No clients yet. Create your first client account.'}
                 </TableCell></TableRow>
               ) : filtered.map(c => (
@@ -407,6 +413,17 @@ export default function ClientsPage() {
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">{c.industry ?? '—'}</TableCell>
                   <TableCell className="text-sm">{c.payment_terms ?? '—'}</TableCell>
+                  <TableCell>
+                    {c.vat_type ? (
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        c.vat_type === 'vat' ? 'bg-blue-100 text-blue-700' :
+                        c.vat_type === 'vat_exempt' ? 'bg-amber-100 text-amber-700' :
+                        'bg-gray-100 text-gray-600'
+                      }`}>
+                        {c.vat_type === 'vat' ? 'VAT' : c.vat_type === 'vat_exempt' ? 'VAT Exempt' : 'NVAT'}
+                      </span>
+                    ) : '—'}
+                  </TableCell>
                   <TableCell>
                     <div className="flex flex-col gap-1">
                       <button onClick={() => toggleStatus(c)}>
@@ -641,6 +658,17 @@ export default function ClientsPage() {
                 <div className="space-y-1.5">
                   <Label>Credit Limit (₱)</Label>
                   <Input type="number" min="0" value={form.credit_limit} onChange={e => f('credit_limit', e.target.value)} placeholder="0" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>VAT Type</Label>
+                  <Select value={form.vat_type || 'vat'} onValueChange={v => f('vat_type', v)}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="vat">VAT</SelectItem>
+                      <SelectItem value="vat_exempt">VAT Exempt</SelectItem>
+                      <SelectItem value="nvat">Non-VAT (NVAT)</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
             </div>

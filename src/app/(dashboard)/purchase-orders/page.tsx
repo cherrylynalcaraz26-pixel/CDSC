@@ -126,6 +126,9 @@ export default function PurchaseOrdersPage() {
   const [csiSuppliers, setCsiSuppliers] = useState<Set<string>>(new Set())
   const [collectedSuppliers, setCollectedSuppliers] = useState<Set<string>>(new Set())
 
+  // VAT mode
+  const [vatInclusive, setVatInclusive] = useState(false)
+
   // EWT
   const [ewtType, setEwtType] = useState<EWTType>('services')
 
@@ -191,9 +194,9 @@ export default function PurchaseOrdersPage() {
 
   const discountAmount = subtotal * (discountRate / 100)
   const netSubtotal = subtotal - discountAmount
-  const vatAmount = netSubtotal * 0.12
+  const vatAmount = vatInclusive ? netSubtotal * (0.12 / 1.12) : netSubtotal * 0.12
   const taxAmount = (netSubtotal / 1.12) * taxRate
-  const totalAmount = netSubtotal + vatAmount
+  const totalAmount = vatInclusive ? netSubtotal : netSubtotal + vatAmount
   const netPayable = totalAmount - taxAmount
 
   function resetForm() {
@@ -201,7 +204,7 @@ export default function PurchaseOrdersPage() {
     setSupplierId(''); setPoNumber(''); setDeliveryDate('')
     setPaymentTerms('30 days'); setRemarks(''); setLines([emptyLine()])
     setActiveTab('form'); setDiscountType('none'); setDiscountCustom('')
-    setEwtType('services'); setPreparedBy(''); setApprovedBy('')
+    setEwtType('services'); setPreparedBy(''); setApprovedBy(''); setVatInclusive(false)
   }
 
   async function openEdit(po: PO) {
@@ -369,7 +372,7 @@ export default function PurchaseOrdersPage() {
         </thead>
         <tbody>
           ${items.map((it, i) => {
-            const price = it.selling_price ?? it.unit_price ?? 0
+            const price = it.unit_price ?? 0
             return `<tr style="background:${i % 2 === 0 ? '#fff' : '#f9fafb'};">
               <td style="padding:4px 6px;color:#9ca3af;text-align:center;">${i + 1}</td>
               <td style="padding:4px 6px;">${it.item_name ?? '-'}</td>
@@ -920,6 +923,22 @@ export default function PurchaseOrdersPage() {
                     </div>
                   </div>
 
+                  {/* VAT Mode */}
+                  <div className="space-y-1.5">
+                    <Label>VAT Mode</Label>
+                    <div className="flex gap-2 flex-wrap">
+                      {[{ label: 'VAT Exclusive', value: false }, { label: 'VAT Inclusive', value: true }].map(opt => (
+                        <button key={String(opt.value)} type="button" onClick={() => setVatInclusive(opt.value)}
+                          className={`px-3 py-1.5 text-sm rounded-md border font-medium transition-colors ${vatInclusive === opt.value ? 'bg-red-600 text-white border-red-600' : 'bg-background text-muted-foreground hover:bg-muted border-input'}`}>
+                          {opt.label}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {vatInclusive ? 'VAT is already included in the unit price (price ÷ 1.12)' : 'VAT (12%) will be added on top of the subtotal'}
+                    </p>
+                  </div>
+
                   {/* EWT */}
                   <div className="space-y-1.5">
                     <Label>EWT (Expanded Withholding Tax)</Label>
@@ -1148,14 +1167,14 @@ export default function PurchaseOrdersPage() {
                       </thead>
                       <tbody>
                         {lines.map((line, i) => {
-                          const total = (parseFloat(line.selling_price) || 0) * (parseFloat(line.quantity) || 0)
+                          const total = (parseFloat(line.unit_price) || 0) * (parseFloat(line.quantity) || 0)
                           return (
                             <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                               <td className="px-1.5 py-1 text-gray-400">{i + 1}</td>
                               <td className="px-1.5 py-1">{line.item_name || <span className="text-gray-300 italic">—</span>}</td>
                               <td className="px-1.5 py-1 text-right font-bold text-gray-800">{line.quantity || '—'}</td>
                               <td className="px-1.5 py-1 text-gray-500">{line.unit || '—'}</td>
-                              <td className="px-1.5 py-1 text-right">₱{(parseFloat(line.selling_price) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+                              <td className="px-1.5 py-1 text-right">₱{(parseFloat(line.unit_price) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
                               <td className="px-1.5 py-1 text-right font-medium">₱{total.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
                             </tr>
                           )
@@ -1169,7 +1188,7 @@ export default function PurchaseOrdersPage() {
                         <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span>₱{subtotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
                         {discountRate > 0 && <div className="flex justify-between"><span className="text-gray-500">Discount ({discountRate}%)</span><span className="text-orange-600">−₱{discountAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
                         {discountRate > 0 && <div className="flex justify-between"><span className="text-gray-500">Net Subtotal</span><span>₱{netSubtotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
-                        <div className="flex justify-between"><span className="text-gray-500">VAT (12%)</span><span className="text-blue-600">₱{vatAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">VAT {vatInclusive ? '(12% incl.)' : '(12%)'}</span><span className="text-blue-600">₱{vatAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
                         {ewtType !== 'none' && <div className="flex justify-between"><span className="text-gray-500">{taxLabel}</span><span className="text-red-700">−₱{taxAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
                         <div className="flex justify-between border-t pt-0.5 font-bold text-[11px]"><span>Net Payable</span><span className="text-red-700">₱{netPayable.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
                       </div>
