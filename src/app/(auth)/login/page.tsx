@@ -22,9 +22,19 @@ export default function LoginPage() {
     setLoading(true)
     try {
       const supabase = createClient()
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password })
       if (error) throw error
-      router.push('/dashboard')
+      // Redirect clients to the portal
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', data.user.id)
+        .single()
+      if (profile?.role === 'client') {
+        router.push('/portal')
+      } else {
+        router.push('/dashboard')
+      }
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Login failed')
     } finally {
