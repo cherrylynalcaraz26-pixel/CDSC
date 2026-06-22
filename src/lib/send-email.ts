@@ -34,31 +34,45 @@ function fmtAmt(n: number) {
   return (n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })
 }
 
-function buildQuotePdf(data: QuotationPdfData): string {
+async function buildQuotePdf(data: QuotationPdfData): Promise<string> {
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' })
   const W = pdf.internal.pageSize.getWidth()
   const margin = 36
   const contentW = W - margin * 2
   let y = margin
 
+  // Load Questrial font
+  try {
+    const fontResp = await fetch('/fonts/Questrial-Regular.ttf')
+    const fontBuf = await fontResp.arrayBuffer()
+    const fontBase64 = btoa(String.fromCharCode(...new Uint8Array(fontBuf)))
+    pdf.addFileToVFS('Questrial-Regular.ttf', fontBase64)
+    pdf.addFont('Questrial-Regular.ttf', 'Questrial', 'normal')
+  } catch { /* fall back to helvetica */ }
+
+  const setFont = (weight: 'normal' | 'bold' = 'normal') => {
+    try { pdf.setFont('Questrial', 'normal') } catch { pdf.setFont('helvetica', weight) }
+  }
+
   // ── Header ──────────────────────────────────────────────────────────────
-  const logoSize = 56
+  const logoSize = 80
   let textStartX = margin
 
   if (data.logoDataUrl) {
     try {
       pdf.addImage(data.logoDataUrl, 'JPEG', margin, y, logoSize, logoSize)
-      textStartX = margin + logoSize + 8
+      textStartX = margin + logoSize + 10
     } catch { /* skip logo on error */ }
   }
 
-  pdf.setFont('helvetica', 'bold')
-  pdf.setFontSize(13)
+  // Company name vertically centered with logo
+  setFont()
+  pdf.setFontSize(14)
   pdf.setTextColor(185, 28, 28)
-  pdf.text(data.companyName, textStartX, y + 14)
+  pdf.text(data.companyName, textStartX, y + logoSize / 2 + 5)
 
   // Right: address/phone/tin
-  pdf.setFont('helvetica', 'normal')
+  setFont()
   pdf.setFontSize(8)
   pdf.setTextColor(107, 114, 128)
   const rightLines = [
@@ -77,17 +91,15 @@ function buildQuotePdf(data: QuotationPdfData): string {
   y += 12
 
   // ── Bill To / Quote# ─────────────────────────────────────────────────────
-  // Left: Bill To
   pdf.setFontSize(8)
-  pdf.setFont('helvetica', 'bold')
+  setFont()
   pdf.setTextColor(156, 163, 175)
   pdf.text('BILL TO', margin, y)
-  pdf.setFont('helvetica', 'bold')
   pdf.setFontSize(10)
   pdf.setTextColor(31, 41, 55)
   pdf.text(data.clientName ?? '-', margin, y + 11)
   if (data.subject) {
-    pdf.setFont('helvetica', 'normal')
+    setFont()
     pdf.setFontSize(8)
     pdf.setTextColor(156, 163, 175)
     pdf.text('SUBJECT', margin, y + 23)
@@ -98,27 +110,25 @@ function buildQuotePdf(data: QuotationPdfData): string {
   // Right: Quote#, Date, Valid Until
   const rx = W - margin
   pdf.setFontSize(8)
-  pdf.setFont('helvetica', 'bold')
+  setFont()
   pdf.setTextColor(156, 163, 175)
   pdf.text('QUOTE NUMBER', rx, y, { align: 'right' })
-  pdf.setFont('helvetica', 'bold')
   pdf.setFontSize(10)
   pdf.setTextColor(31, 41, 55)
   pdf.text(data.quoteNumber, rx, y + 11, { align: 'right' })
-  pdf.setFont('helvetica', 'bold')
   pdf.setFontSize(8)
   pdf.setTextColor(156, 163, 175)
   pdf.text('DATE', rx, y + 23, { align: 'right' })
-  pdf.setFont('helvetica', 'normal')
+  setFont()
   pdf.setFontSize(9)
   pdf.setTextColor(31, 41, 55)
   pdf.text(data.quoteDate, rx, y + 32, { align: 'right' })
   if (data.validUntil) {
-    pdf.setFont('helvetica', 'bold')
+    setFont()
     pdf.setFontSize(8)
     pdf.setTextColor(156, 163, 175)
     pdf.text('VALID UNTIL', rx, y + 44, { align: 'right' })
-    pdf.setFont('helvetica', 'normal')
+    setFont()
     pdf.setFontSize(9)
     pdf.setTextColor(31, 41, 55)
     pdf.text(data.validUntil, rx, y + 53, { align: 'right' })
@@ -130,7 +140,7 @@ function buildQuotePdf(data: QuotationPdfData): string {
   y += 14
 
   // ── QUOTATION title ───────────────────────────────────────────────────────
-  pdf.setFont('helvetica', 'bold')
+  setFont()
   pdf.setFontSize(16)
   pdf.setTextColor(185, 28, 28)
   pdf.text('QUOTATION', W / 2, y, { align: 'center' })
@@ -142,11 +152,10 @@ function buildQuotePdf(data: QuotationPdfData): string {
     const rowH = 16
     const headerY = y
 
-    // Header background
     pdf.setFillColor(185, 28, 28)
     pdf.rect(margin, headerY, contentW, rowH, 'F')
 
-    pdf.setFont('helvetica', 'bold')
+    setFont()
     pdf.setFontSize(8)
     pdf.setTextColor(255, 255, 255)
 
@@ -165,7 +174,7 @@ function buildQuotePdf(data: QuotationPdfData): string {
       pdf.setFillColor(rowBg[0], rowBg[1], rowBg[2])
       pdf.rect(margin, y, contentW, rowH, 'F')
 
-      pdf.setFont('helvetica', 'normal')
+      setFont()
       pdf.setFontSize(8)
       pdf.setTextColor(156, 163, 175)
 
@@ -173,23 +182,18 @@ function buildQuotePdf(data: QuotationPdfData): string {
       pdf.text(String(i + 1), rx2 + cols.num / 2, y + 11, { align: 'center' }); rx2 += cols.num
 
       pdf.setTextColor(31, 41, 55)
-      // Truncate long item names
       const maxDescW = cols.desc - 8
-      const descText = pdf.splitTextToSize(item.item_name ?? '—', maxDescW)[0]
+      const descText = pdf.splitTextToSize(item.item_name ?? '-', maxDescW)[0]
       pdf.text(descText, rx2 + 4, y + 11); rx2 += cols.desc
 
-      pdf.setFont('helvetica', 'bold')
       pdf.text(String(item.quantity), rx2 + cols.qty / 2, y + 11, { align: 'center' }); rx2 += cols.qty
 
-      pdf.setFont('helvetica', 'normal')
       pdf.setTextColor(107, 114, 128)
-      pdf.text(item.unit ?? '—', rx2 + cols.unit / 2, y + 11, { align: 'center' }); rx2 += cols.unit
+      pdf.text(item.unit ?? '-', rx2 + cols.unit / 2, y + 11, { align: 'center' }); rx2 += cols.unit
 
       pdf.setTextColor(31, 41, 55)
       const price = item.selling_price ?? item.unit_price ?? 0
       pdf.text(fmtAmt(price), rx2 + cols.price - 2, y + 11, { align: 'right' }); rx2 += cols.price
-
-      pdf.setFont('helvetica', 'bold')
       pdf.text(fmtAmt(item.total_amount), rx2 + cols.total - 2, y + 11, { align: 'right' })
 
       y += rowH
@@ -206,7 +210,7 @@ function buildQuotePdf(data: QuotationPdfData): string {
 
   y += 26 // 2 row space before subtotal
 
-  pdf.setFont('helvetica', 'normal')
+  setFont()
   pdf.setFontSize(9)
   pdf.setTextColor(107, 114, 128)
   pdf.text('Subtotal', totX, y)
@@ -236,7 +240,7 @@ function buildQuotePdf(data: QuotationPdfData): string {
 
   pdf.setDrawColor(229, 231, 235)
   pdf.line(totX, y - 3, W - margin, y - 3)
-  pdf.setFont('helvetica', 'bold')
+  setFont()
   pdf.setFontSize(10)
   pdf.setTextColor(31, 41, 55)
   pdf.text('Total', totX, y)
@@ -250,12 +254,12 @@ function buildQuotePdf(data: QuotationPdfData): string {
     pdf.setDrawColor(229, 231, 235)
     pdf.line(margin, y, W - margin, y)
     y += 10
-    pdf.setFont('helvetica', 'bold')
+    setFont()
     pdf.setFontSize(8)
     pdf.setTextColor(156, 163, 175)
     pdf.text('NOTES / TERMS', margin, y)
     y += 10
-    pdf.setFont('helvetica', 'normal')
+    setFont()
     pdf.setFontSize(9)
     pdf.setTextColor(55, 65, 81)
     const noteLines = pdf.splitTextToSize(data.notes, contentW)
@@ -268,11 +272,11 @@ function buildQuotePdf(data: QuotationPdfData): string {
   const sigW = (contentW - 40) / 2
   pdf.setDrawColor(55, 65, 81)
   pdf.line(margin, y, margin + sigW, y)
-  pdf.setFont('helvetica', 'bold')
+  setFont()
   pdf.setFontSize(9)
   pdf.setTextColor(55, 65, 81)
   pdf.text('PREPARED BY', margin + sigW / 2, y + 10, { align: 'center' })
-  pdf.setFont('helvetica', 'normal')
+  setFont()
   pdf.setFontSize(8)
   pdf.setTextColor(156, 163, 175)
   pdf.text('Signature over Printed Name', margin + sigW / 2, y + 19, { align: 'center' })
@@ -280,11 +284,11 @@ function buildQuotePdf(data: QuotationPdfData): string {
   const sig2X = W - margin - sigW
   pdf.setDrawColor(55, 65, 81)
   pdf.line(sig2X, y, W - margin, y)
-  pdf.setFont('helvetica', 'bold')
+  setFont()
   pdf.setFontSize(9)
   pdf.setTextColor(55, 65, 81)
   pdf.text('ACCEPTED BY', sig2X + sigW / 2, y + 10, { align: 'center' })
-  pdf.setFont('helvetica', 'normal')
+  setFont()
   pdf.setFontSize(8)
   pdf.setTextColor(156, 163, 175)
   pdf.text('Signature over Printed Name / Date', sig2X + sigW / 2, y + 19, { align: 'center' })
@@ -322,7 +326,7 @@ export async function sendEmail(payload: SendEmailPayload): Promise<void> {
   const pdfFilename = payload.pdfFilename ?? 'attachment.pdf'
   let pdfBase64: string | undefined
   if (payload.pdfData) {
-    pdfBase64 = buildQuotePdf(payload.pdfData)
+    pdfBase64 = await buildQuotePdf(payload.pdfData)
   } else if (payload.printHtml) {
     pdfBase64 = await htmlToPdfBase64(payload.printHtml)
   }
