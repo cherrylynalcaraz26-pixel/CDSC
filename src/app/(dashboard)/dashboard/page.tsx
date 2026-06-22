@@ -406,13 +406,11 @@ export default function DashboardPage() {
         </CardHeader>
         {soPipelineOpen && (
           <CardContent className="p-0 mt-3">
-            <div className="grid grid-cols-5 text-center text-[10px] font-semibold uppercase tracking-wider border-b border-t">
+            <div className="grid grid-cols-3 text-center text-[10px] font-semibold uppercase tracking-wider border-b border-t">
               {[
-                { label: 'SO Created',  color: 'text-blue-600 bg-blue-50' },
-                { label: 'Confirmed',   color: 'text-indigo-600 bg-indigo-50' },
-                { label: 'Processing',  color: 'text-yellow-600 bg-yellow-50' },
-                { label: 'Shipped',     color: 'text-orange-600 bg-orange-50' },
-                { label: 'Collected',   color: 'text-green-600 bg-green-50' },
+                { label: 'SO Created',     color: 'text-blue-600 bg-blue-50' },
+                { label: 'DR Logs',        color: 'text-orange-600 bg-orange-50' },
+                { label: 'CSI Monitoring', color: 'text-purple-600 bg-purple-50' },
               ].map(s => (
                 <div key={s.label} className={`py-2 ${s.color}`}>{s.label}</div>
               ))}
@@ -427,16 +425,15 @@ export default function DashboardPage() {
                   const statusOrder = ['draft', 'confirmed', 'processing', 'shipped', 'delivered']
                   const stageIdx = statusOrder.indexOf(so.status)
                   const clientName = (so.client_name ?? '').trim()
-                  const hasOr = collectedClients.has(clientName)
+                  const hasDR = csiRows.some(r => r.client === clientName) || stageIdx >= 3
+                  const hasCSI = csiRows.some(r => r.client === clientName)
                   const stages = [
-                    { done: true,           label: so.so_number ?? '—',          sub: so.client_name ?? '' },
-                    { done: stageIdx >= 1,  label: stageIdx >= 1 ? 'Confirmed' : 'Pending' },
-                    { done: stageIdx >= 2,  label: stageIdx >= 2 ? 'Processing' : 'Pending' },
-                    { done: stageIdx >= 3,  label: stageIdx >= 3 ? 'Shipped' : 'Pending' },
-                    { done: hasOr,          label: hasOr ? 'Collected' : 'Pending' },
+                    { done: true,    label: so.so_number ?? '—', sub: so.client_name ?? '' },
+                    { done: hasDR,   label: hasDR ? 'Logged' : 'Pending' },
+                    { done: hasCSI,  label: hasCSI ? 'Issued' : 'Pending' },
                   ]
                   return (
-                    <div key={so.id} className="grid grid-cols-5 text-center text-xs cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => router.push('/sales-orders')}>
+                    <div key={so.id} className="grid grid-cols-3 text-center text-xs cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => router.push('/sales-orders')}>
                       {stages.map((s, i) => (
                         <div key={i} className={`py-2.5 px-1 border-r last:border-r-0 ${s.done ? '' : 'opacity-40'}`}>
                           <div className={`inline-flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold mx-auto mb-0.5 ${s.done ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
