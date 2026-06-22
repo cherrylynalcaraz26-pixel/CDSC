@@ -31,7 +31,7 @@ export interface SendEmailPayload {
 }
 
 function fmtAmt(n: number) {
-  return `PHP ${(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
+  return (n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })
 }
 
 function buildQuotePdf(data: QuotationPdfData): string {
@@ -76,9 +76,7 @@ function buildQuotePdf(data: QuotationPdfData): string {
   pdf.line(margin, y, W - margin, y)
   y += 12
 
-  // ── Bill To / QUOTATION / Quote# ─────────────────────────────────────────
-  const col = contentW / 3
-
+  // ── Bill To / Quote# ─────────────────────────────────────────────────────
   // Left: Bill To
   pdf.setFontSize(8)
   pdf.setFont('helvetica', 'bold')
@@ -87,7 +85,7 @@ function buildQuotePdf(data: QuotationPdfData): string {
   pdf.setFont('helvetica', 'bold')
   pdf.setFontSize(10)
   pdf.setTextColor(31, 41, 55)
-  pdf.text(data.clientName ?? '—', margin, y + 11)
+  pdf.text(data.clientName ?? '-', margin, y + 11)
   if (data.subject) {
     pdf.setFont('helvetica', 'normal')
     pdf.setFontSize(8)
@@ -96,12 +94,6 @@ function buildQuotePdf(data: QuotationPdfData): string {
     pdf.setTextColor(55, 65, 81)
     pdf.text(data.subject, margin, y + 32)
   }
-
-  // Center: QUOTATION
-  pdf.setFont('helvetica', 'bold')
-  pdf.setFontSize(16)
-  pdf.setTextColor(185, 28, 28)
-  pdf.text('QUOTATION', margin + col + col / 2, y + 14, { align: 'center' })
 
   // Right: Quote#, Date, Valid Until
   const rx = W - margin
@@ -135,7 +127,14 @@ function buildQuotePdf(data: QuotationPdfData): string {
   y += 60
   pdf.setDrawColor(229, 231, 235)
   pdf.line(margin, y, W - margin, y)
-  y += 10
+  y += 14
+
+  // ── QUOTATION title ───────────────────────────────────────────────────────
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(16)
+  pdf.setTextColor(185, 28, 28)
+  pdf.text('QUOTATION', W / 2, y, { align: 'center' })
+  y += 14
 
   // ── Items Table ───────────────────────────────────────────────────────────
   if (data.items.length > 0) {
