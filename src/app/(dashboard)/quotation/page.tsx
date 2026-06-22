@@ -96,6 +96,7 @@ export default function QuotationPage() {
 
   // View
   const [viewingQ, setViewingQ] = useState<Quotation | null>(null)
+  const [viewingQItems, setViewingQItems] = useState<{ item_name: string; quantity: number; unit: string | null; selling_price: number | null; unit_price: number; total_amount: number }[]>([])
 
   // List email
   const [listEmailQ, setListEmailQ] = useState<Quotation | null>(null)
@@ -290,37 +291,64 @@ export default function QuotationPage() {
     setSaving(false)
   }
 
-  function buildQuoteHtml(q: Quotation) {
+  function buildQuoteHtml(q: Quotation, items: { item_name: string; quantity: number; unit: string | null; unit_price: number; selling_price: number | null; total_amount: number }[] = []) {
     const fmtAmt = (n: number) => `₱${(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
     const hasVat = (q.vat_amount ?? 0) > 0
     const hasEwt = (q.ewt_amount ?? 0) > 0
+    const itemsHtml = items.length > 0 ? `
+      <table style="width:100%;border-collapse:collapse;font-size:10px;margin-top:8px;">
+        <thead>
+          <tr style="background:#b91c1c;color:#fff;">
+            <th style="text-align:left;padding:4px 6px;width:24px;">#</th>
+            <th style="text-align:left;padding:4px 6px;">Item Description</th>
+            <th style="text-align:right;padding:4px 6px;width:50px;">QTY</th>
+            <th style="text-align:left;padding:4px 6px;width:60px;">Unit</th>
+            <th style="text-align:right;padding:4px 6px;width:90px;">Unit Price</th>
+            <th style="text-align:right;padding:4px 6px;width:80px;">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${items.map((it, i) => {
+            const price = it.selling_price ?? it.unit_price ?? 0
+            const total = it.total_amount ?? price * it.quantity
+            return `<tr style="background:${i % 2 === 0 ? '#fff' : '#f9fafb'};">
+              <td style="padding:4px 6px;color:#9ca3af;">${i + 1}</td>
+              <td style="padding:4px 6px;">${it.item_name ?? '—'}</td>
+              <td style="padding:4px 6px;text-align:right;font-weight:700;">${it.quantity}</td>
+              <td style="padding:4px 6px;color:#6b7280;">${it.unit ?? '—'}</td>
+              <td style="padding:4px 6px;text-align:right;">${fmtAmt(price)}</td>
+              <td style="padding:4px 6px;text-align:right;font-weight:600;">${fmtAmt(total)}</td>
+            </tr>`
+          }).join('')}
+        </tbody>
+      </table>` : ''
     return `<!DOCTYPE html><html><head><title>Quotation</title>
-      <script src="https://cdn.tailwindcss.com"><\/script>
-      <style>body{font-family:Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact;}@media print{body{margin:0;}}</style>
-    </head><body class="p-6 text-[11px] font-sans">
-      <div class="space-y-3">
-        <div class="flex justify-between items-start border-b pb-3">
-          <div class="text-[13px] font-bold text-red-700">${companyInfo?.company_name ?? 'CDSC INDUSTRIAL'}</div>
-          <div class="text-right text-[9px] text-gray-500">${companyInfo?.address ?? ''}${companyInfo?.phone ? '<br/>' + companyInfo.phone : ''}${companyInfo?.tin ? '<br/>TIN: ' + companyInfo.tin : ''}</div>
+      <style>body{font-family:Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;padding:24px;font-size:11px;}@media print{body{margin:0;}}</style>
+    </head><body>
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1px solid #e5e7eb;padding-bottom:12px;margin-bottom:12px;">
+          <div style="font-size:13px;font-weight:700;color:#b91c1c;">${companyInfo?.company_name ?? 'CDSC INDUSTRIAL SUPPLY'}</div>
+          <div style="text-align:right;font-size:9px;color:#6b7280;">${companyInfo?.address ?? ''}${companyInfo?.phone ? '<br/>' + companyInfo.phone : ''}${companyInfo?.tin ? '<br/>TIN: ' + companyInfo.tin : ''}</div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;" class="border-b pb-3">
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;border-bottom:1px solid #e5e7eb;padding-bottom:12px;margin-bottom:12px;">
           <div>
-            <div class="text-[9px] font-semibold uppercase text-gray-400">Bill To</div>
-            <div class="font-semibold text-gray-800">${q.client_name ?? '—'}</div>
-            ${q.subject ? `<div class="text-[9px] font-semibold uppercase text-gray-400 mt-1">Subject</div><div class="text-[10px] text-gray-700">${q.subject}</div>` : ''}
+            <div style="font-size:9px;font-weight:600;text-transform:uppercase;color:#9ca3af;">Bill To</div>
+            <div style="font-weight:600;color:#1f2937;">${q.client_name ?? '—'}</div>
+            ${q.subject ? `<div style="font-size:9px;font-weight:600;text-transform:uppercase;color:#9ca3af;margin-top:4px;">Subject</div><div style="font-size:10px;color:#374151;">${q.subject}</div>` : ''}
           </div>
           <div style="display:flex;align-items:center;justify-content:center;">
             <div style="font-size:16px;font-weight:900;color:#b91c1c;text-align:center;letter-spacing:0.1em;">QUOTATION</div>
           </div>
           <div style="text-align:right;">
-            <div class="text-[9px] font-semibold uppercase text-gray-400">Quote Number</div>
-            <div class="font-mono font-bold">${q.quote_number ?? '—'}</div>
-            <div class="text-[9px] font-semibold uppercase text-gray-400 mt-1">Date</div>
+            <div style="font-size:9px;font-weight:600;text-transform:uppercase;color:#9ca3af;">Quote Number</div>
+            <div style="font-family:monospace;font-weight:700;">${q.quote_number ?? '—'}</div>
+            <div style="font-size:9px;font-weight:600;text-transform:uppercase;color:#9ca3af;margin-top:4px;">Date</div>
             <div>${q.quote_date ?? '—'}</div>
-            ${q.valid_until ? `<div class="text-[9px] font-semibold uppercase text-gray-400 mt-1">Valid Until</div><div>${q.valid_until}</div>` : ''}
+            ${q.valid_until ? `<div style="font-size:9px;font-weight:600;text-transform:uppercase;color:#9ca3af;margin-top:4px;">Valid Until</div><div>${q.valid_until}</div>` : ''}
           </div>
         </div>
-        <div style="display:flex;justify-content:flex-end;">
+        ${itemsHtml}
+        <div style="display:flex;justify-content:flex-end;margin-top:12px;">
           <div style="width:220px;font-size:10px;">
             <div style="display:flex;justify-content:space-between;"><span style="color:#6b7280;">Subtotal</span><span>${fmtAmt(q.subtotal)}</span></div>
             ${hasVat ? `<div style="display:flex;justify-content:space-between;"><span style="color:#6b7280;">VAT (12%)</span><span style="color:#2563eb;">${fmtAmt(q.vat_amount)}</span></div>` : ''}
@@ -328,7 +356,7 @@ export default function QuotationPage() {
             <div style="display:flex;justify-content:space-between;border-top:1px solid #e5e7eb;padding-top:4px;font-weight:700;font-size:11px;"><span>Total</span><span style="color:#b91c1c;">${fmtAmt(q.total_amount)}</span></div>
           </div>
         </div>
-        ${q.notes ? `<div class="border-t pt-2"><div class="text-[9px] font-semibold uppercase text-gray-400 mb-1">Notes / Terms</div><div class="text-[10px] text-gray-700">${q.notes}</div></div>` : ''}
+        ${q.notes ? `<div style="border-top:1px solid #e5e7eb;padding-top:8px;margin-top:8px;"><div style="font-size:9px;font-weight:600;text-transform:uppercase;color:#9ca3af;margin-bottom:4px;">Notes / Terms</div><div style="font-size:10px;color:#374151;">${q.notes}</div></div>` : ''}
       </div>
     </body></html>`
   }
@@ -613,7 +641,7 @@ export default function QuotationPage() {
                                 </div>
                               </TableCell>
                               <TableCell className="py-1.5">
-                                <Input type="number" min="0" className="h-8 text-xs w-full min-w-[80px]" value={line.quantity} onChange={e => updateLine(idx, 'quantity', e.target.value)} />
+                                <Input type="number" min="0" className="h-8 text-xs w-14" value={line.quantity} onChange={e => updateLine(idx, 'quantity', e.target.value)} />
                               </TableCell>
                               <TableCell className="py-1.5">
                                 <div className="h-8 flex items-center px-2 text-xs bg-muted/40 rounded border text-muted-foreground">{line.unit || '—'}</div>
@@ -798,7 +826,11 @@ export default function QuotationPage() {
                             <MoreHorizontal className="h-4 w-4" />
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-52">
-                            <DropdownMenuItem onClick={() => setViewingQ(q)}>
+                            <DropdownMenuItem onClick={async () => {
+                              setViewingQ(q)
+                              const { data } = await supabase.from('quotation_items').select('item_name,quantity,unit,unit_price,selling_price,total_amount').eq('quotation_id', q.id).order('created_at')
+                              setViewingQItems(data ?? [])
+                            }}>
                               <Eye className="mr-2 h-4 w-4" />View
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => openEdit(q)}>
@@ -913,31 +945,20 @@ export default function QuotationPage() {
       </Dialog>
 
       {/* View Quotation Dialog */}
-      <Dialog open={!!viewingQ} onOpenChange={o => { if (!o) setViewingQ(null) }}>
-        <DialogContent className="sm:max-w-lg">
+      <Dialog open={!!viewingQ} onOpenChange={o => { if (!o) { setViewingQ(null); setViewingQItems([]) } }}>
+        <DialogContent className="w-[98vw] sm:!max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Eye className="h-4 w-4" />Quotation Details
+              <Eye className="h-4 w-4" />Quotation Preview
             </DialogTitle>
           </DialogHeader>
           {viewingQ && (
-            <div className="space-y-3 text-sm">
-              <div className="grid grid-cols-2 gap-2">
-                <div><span className="text-muted-foreground">Quote #:</span> <span className="font-medium">{viewingQ.quote_number}</span></div>
-                <div><span className="text-muted-foreground">Date:</span> <span className="font-medium">{viewingQ.quote_date}</span></div>
-                <div><span className="text-muted-foreground">Client:</span> <span className="font-medium">{viewingQ.client_name ?? '—'}</span></div>
-                <div><span className="text-muted-foreground">Valid Until:</span> <span className="font-medium">{viewingQ.valid_until ?? '—'}</span></div>
-                <div><span className="text-muted-foreground">Status:</span> <span className="font-medium capitalize">{viewingQ.status}</span></div>
-                <div><span className="text-muted-foreground">Subject:</span> <span className="font-medium">{viewingQ.subject ?? '—'}</span></div>
-              </div>
-              <div className="border-t pt-3 space-y-1">
-                <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>₱{viewingQ.subtotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
-                {(viewingQ.vat_amount ?? 0) > 0 && <div className="flex justify-between"><span className="text-muted-foreground">VAT (12%)</span><span>₱{viewingQ.vat_amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
-                {(viewingQ.ewt_amount ?? 0) > 0 && <div className="flex justify-between"><span className="text-muted-foreground">EWT</span><span>-₱{viewingQ.ewt_amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
-                <div className="flex justify-between font-semibold border-t pt-1"><span>Total</span><span>₱{viewingQ.total_amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
-              </div>
-              {viewingQ.notes && <div className="border-t pt-2"><span className="text-muted-foreground">Notes:</span> <p className="mt-1">{viewingQ.notes}</p></div>}
-            </div>
+            <iframe
+              srcDoc={buildQuoteHtml(viewingQ, viewingQItems)}
+              className="w-full border-0 rounded"
+              style={{ minHeight: '600px' }}
+              title="Quotation Preview"
+            />
           )}
         </DialogContent>
       </Dialog>
@@ -979,11 +1000,12 @@ export default function QuotationPage() {
                   const q = listEmailQ!
                   setSendingListEmail(true)
                   try {
+                    const { data: qItemsForEmail } = await supabase.from('quotation_items').select('item_name,quantity,unit,unit_price,selling_price,total_amount').eq('quotation_id', q.id).order('created_at')
                     await sendEmail({
                       to: listEmailTo,
                       subject: listEmailSubject,
                       body: listEmailBody,
-                      printHtml: buildQuoteHtml(q),
+                      printHtml: buildQuoteHtml(q, qItemsForEmail ?? []),
                       pdfFilename: `Quotation-${q.quote_number ?? 'draft'}.pdf`,
                     })
                     toast.success('Email sent successfully!')
