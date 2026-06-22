@@ -395,11 +395,11 @@ export default function QuotationPage() {
         ${q.notes ? `<div style="border-top:1px solid #e5e7eb;padding-top:8px;margin-top:8px;"><div style="font-size:9px;font-weight:600;text-transform:uppercase;color:#9ca3af;margin-bottom:4px;">Notes / Terms</div><div style="font-size:10px;color:#374151;">${q.notes}</div></div>` : ''}
         <div style="display:flex;justify-content:space-between;margin-top:40px;gap:24px;">
           <div style="flex:1;text-align:center;">
-            <div style="border-top:1px solid #374151;padding-top:6px;font-size:10px;color:#374151;font-weight:600;">Prepared by</div>
+            <div style="border-top:1px solid #374151;padding-top:6px;font-size:10px;color:#374151;font-weight:600;">PREPARED BY</div>
             <div style="font-size:9px;color:#9ca3af;margin-top:2px;">Signature over Printed Name</div>
           </div>
           <div style="flex:1;text-align:center;">
-            <div style="border-top:1px solid #374151;padding-top:6px;font-size:10px;color:#374151;font-weight:600;">Accepted by</div>
+            <div style="border-top:1px solid #374151;padding-top:6px;font-size:10px;color:#374151;font-weight:600;">ACCEPTED BY</div>
             <div style="font-size:9px;color:#9ca3af;margin-top:2px;">Signature over Printed Name / Date</div>
           </div>
         </div>

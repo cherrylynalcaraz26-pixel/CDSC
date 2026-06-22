@@ -42,7 +42,7 @@ function buildQuotePdf(data: QuotationPdfData): string {
   let y = margin
 
   // ── Header ──────────────────────────────────────────────────────────────
-  const logoSize = 36
+  const logoSize = 56
   let textStartX = margin
 
   if (data.logoDataUrl) {
@@ -204,6 +204,8 @@ function buildQuotePdf(data: QuotationPdfData): string {
   const hasVat = (data.vatAmount ?? 0) > 0
   const hasEwt = (data.ewtAmount ?? 0) > 0
 
+  y += 26 // 2 row space before subtotal
+
   pdf.setFont('helvetica', 'normal')
   pdf.setFontSize(9)
   pdf.setTextColor(107, 114, 128)
@@ -269,7 +271,7 @@ function buildQuotePdf(data: QuotationPdfData): string {
   pdf.setFont('helvetica', 'bold')
   pdf.setFontSize(9)
   pdf.setTextColor(55, 65, 81)
-  pdf.text('Prepared by', margin + sigW / 2, y + 10, { align: 'center' })
+  pdf.text('PREPARED BY', margin + sigW / 2, y + 10, { align: 'center' })
   pdf.setFont('helvetica', 'normal')
   pdf.setFontSize(8)
   pdf.setTextColor(156, 163, 175)
@@ -281,7 +283,7 @@ function buildQuotePdf(data: QuotationPdfData): string {
   pdf.setFont('helvetica', 'bold')
   pdf.setFontSize(9)
   pdf.setTextColor(55, 65, 81)
-  pdf.text('Accepted by', sig2X + sigW / 2, y + 10, { align: 'center' })
+  pdf.text('ACCEPTED BY', sig2X + sigW / 2, y + 10, { align: 'center' })
   pdf.setFont('helvetica', 'normal')
   pdf.setFontSize(8)
   pdf.setTextColor(156, 163, 175)
