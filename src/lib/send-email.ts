@@ -118,7 +118,7 @@ async function buildQuotePdf(data: QuotationPdfData): Promise<string> {
   pdf.setFontSize(8)
   setFont('bold')
   pdf.setTextColor(156, 163, 175)
-  pdf.text('BILL TO', margin, y)
+  pdf.text('QUOTE TO', margin, y)
   setFont('bold')
   pdf.setFontSize(10)
   pdf.setTextColor(31, 41, 55)

@@ -368,7 +368,7 @@ export default function QuotationPage() {
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;border-bottom:1px solid #e5e7eb;padding-bottom:12px;margin-bottom:12px;">
           <div>
-            <div style="font-size:9px;font-weight:600;text-transform:uppercase;color:#9ca3af;">Bill To</div>
+            <div style="font-size:9px;font-weight:600;text-transform:uppercase;color:#9ca3af;">Quote To</div>
             <div style="font-weight:600;color:#1f2937;">${q.client_name ?? '—'}</div>
             ${q.subject ? `<div style="font-size:9px;font-weight:600;text-transform:uppercase;color:#9ca3af;margin-top:4px;">Subject</div><div style="font-size:10px;color:#374151;">${q.subject}</div>` : ''}
           </div>
@@ -453,7 +453,7 @@ export default function QuotationPage() {
       {/* Party row: Bill To (left) | QUOTATION (center) | Quote # / Date (right) */}
       <div className="grid grid-cols-3 gap-3 border-b pb-3">
         <div className="space-y-0.5">
-          <div className="text-[9px] font-semibold uppercase text-gray-400">Bill To</div>
+          <div className="text-[9px] font-semibold uppercase text-gray-400">Quote To</div>
           <div className="font-semibold text-gray-800 text-[11px]">
             {selectedClient?.company_name ?? <span className="text-gray-400 italic font-normal">Not selected</span>}
           </div>
