@@ -28,6 +28,7 @@ const navigation: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'CRM / Inquiry', href: '/crm', icon: TrendingUp },
   { label: 'Clients', href: '/clients', icon: Users },
+  { label: 'Client Requests', href: '/client-requests', icon: ClipboardList },
   {
     label: 'Purchasing', icon: ShoppingCart,
     children: [

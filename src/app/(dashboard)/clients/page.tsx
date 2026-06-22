@@ -4,9 +4,9 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import {
-  Plus, Loader2, MoreHorizontal, Search, Building2, Phone, Mail,
+  Plus, Loader2, MoreHorizontal, Building2, Phone, Mail,
   MapPin, User, Pencil, Trash2, Users, CheckCircle2, XCircle,
-  CreditCard, FileText, LayoutGrid, List, ChevronDown,
+  FileText, LayoutGrid, List, KeyRound, Copy, ShieldCheck,
 } from 'lucide-react'
 import { useSearchContext } from '@/context/search-context'
 import { Button } from '@/components/ui/button'
@@ -63,6 +63,8 @@ interface Client {
   credit_limit: number | null
   notes: string | null
   status: string
+  auth_user_id: string | null
+  portal_access: boolean
   created_at: string
 }
 
@@ -122,6 +124,10 @@ export default function ClientsPage() {
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState<FormData>(blankForm())
   const [deleteConfirm, setDeleteConfirm] = useState<Client | null>(null)
+  const [inviteClient, setInviteClient] = useState<Client | null>(null)
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [inviting, setInviting] = useState(false)
+  const [inviteResult, setInviteResult] = useState<{ email: string; password: string } | null>(null)
 
   async function load() {
     setLoading(true)
@@ -227,6 +233,45 @@ export default function ClientsPage() {
     const { error } = await supabase.from('clients').update({ status: next }).eq('id', c.id)
     if (error) toast.error(error.message)
     else { toast.success(`Client marked ${next}`); load() }
+  }
+
+  function openInvite(c: Client) {
+    setInviteClient(c)
+    setInviteEmail(c.email ?? '')
+    setInviteResult(null)
+    setInviting(false)
+  }
+
+  async function handleInvite() {
+    if (!inviteClient || !inviteEmail.trim()) { toast.error('Email is required'); return }
+    setInviting(true)
+    try {
+      const tempPassword = Math.random().toString(36).slice(-8) + 'Aa1!'
+      const { data, error } = await supabase.auth.signUp({
+        email: inviteEmail.trim().toLowerCase(),
+        password: tempPassword,
+        options: { data: { full_name: inviteClient.company_name, role: 'client', client_id: inviteClient.id } },
+      })
+      if (error) throw error
+      if (data.user) {
+        await supabase.from('profiles').upsert({
+          id: data.user.id,
+          email: inviteEmail.trim().toLowerCase(),
+          full_name: inviteClient.contact_person || inviteClient.company_name,
+          role: 'client',
+        })
+        await supabase.from('clients').update({
+          auth_user_id: data.user.id,
+          portal_access: true,
+          email: inviteEmail.trim().toLowerCase(),
+        }).eq('id', inviteClient.id)
+      }
+      setInviteResult({ email: inviteEmail.trim().toLowerCase(), password: tempPassword })
+      load()
+    } catch (err: any) {
+      toast.error(err.message ?? 'Failed to create portal account')
+    }
+    setInviting(false)
   }
 
   const filtered = clients.filter(c => {
@@ -355,11 +400,18 @@ export default function ClientsPage() {
                   <TableCell className="text-sm text-muted-foreground">{c.industry ?? '—'}</TableCell>
                   <TableCell className="text-sm">{c.payment_terms ?? '—'}</TableCell>
                   <TableCell>
-                    <button onClick={() => toggleStatus(c)}>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${c.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                        {c.status === 'active' ? 'Active' : 'Inactive'}
-                      </span>
-                    </button>
+                    <div className="flex flex-col gap-1">
+                      <button onClick={() => toggleStatus(c)}>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${c.status === 'active' ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                          {c.status === 'active' ? 'Active' : 'Inactive'}
+                        </span>
+                      </button>
+                      {c.portal_access && (
+                        <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-blue-100 text-blue-700 flex items-center gap-1 w-fit">
+                          <ShieldCheck className="h-3 w-3" /> Portal
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                     {format(new Date(c.created_at), 'MMM d, yyyy')}
@@ -372,6 +424,10 @@ export default function ClientsPage() {
                       <DropdownMenuContent align="end">
                         <DropdownMenuItem onClick={() => openEdit(c)}>
                           <Pencil className="h-3.5 w-3.5 mr-2" /> Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => openInvite(c)}>
+                          <KeyRound className="h-3.5 w-3.5 mr-2" />
+                          {c.portal_access ? 'Reset Portal Access' : 'Invite to Portal'}
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => toggleStatus(c)}>
                           {c.status === 'active'
@@ -422,6 +478,9 @@ export default function ClientsPage() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem onClick={() => openEdit(c)}><Pencil className="h-3.5 w-3.5 mr-2" />Edit</DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openInvite(c)}>
+                            <KeyRound className="h-3.5 w-3.5 mr-2" />{c.portal_access ? 'Reset Portal Access' : 'Invite to Portal'}
+                          </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => toggleStatus(c)}>
                             {c.status === 'active' ? <><XCircle className="h-3.5 w-3.5 mr-2" />Deactivate</> : <><CheckCircle2 className="h-3.5 w-3.5 mr-2" />Activate</>}
                           </DropdownMenuItem>
@@ -592,6 +651,81 @@ export default function ClientsPage() {
               {editingId ? 'Update Client' : 'Create Client'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Invite to Portal Dialog */}
+      <Dialog open={!!inviteClient} onOpenChange={o => { if (!o) { setInviteClient(null); setInviteResult(null) } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {inviteResult ? 'Portal Account Created' : `Invite to Client Portal`}
+            </DialogTitle>
+          </DialogHeader>
+
+          {!inviteResult ? (
+            <>
+              <div className="space-y-4 py-2">
+                <p className="text-sm text-muted-foreground">
+                  Create a login account for <span className="font-semibold text-foreground">{inviteClient?.company_name}</span>.
+                  They will use this to log in to the Client Portal and submit purchase requests.
+                </p>
+                <div className="space-y-1.5">
+                  <Label>Email Address</Label>
+                  <Input
+                    type="email"
+                    value={inviteEmail}
+                    onChange={e => setInviteEmail(e.target.value)}
+                    placeholder="client@company.com"
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setInviteClient(null)}>Cancel</Button>
+                <Button onClick={handleInvite} disabled={inviting} className="bg-blue-600 hover:bg-blue-700">
+                  {inviting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <KeyRound className="h-4 w-4 mr-2" />}
+                  Create Portal Account
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <div className="space-y-4 py-2">
+                <div className="flex items-center gap-2 text-green-600 font-medium text-sm">
+                  <CheckCircle2 className="h-5 w-5" /> Account created successfully
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Share these credentials with the client. They should change the password after first login.
+                </p>
+                <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Portal URL</div>
+                    <div className="flex items-center gap-2">
+                      <code className="text-xs font-mono flex-1">{typeof window !== 'undefined' ? window.location.origin : ''}/portal</code>
+                      <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/portal`); toast.success('Copied') }}><Copy className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" /></button>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Email</div>
+                    <div className="flex items-center gap-2">
+                      <code className="text-xs font-mono flex-1">{inviteResult.email}</code>
+                      <button onClick={() => { navigator.clipboard.writeText(inviteResult!.email); toast.success('Copied') }}><Copy className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" /></button>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Temporary Password</div>
+                    <div className="flex items-center gap-2">
+                      <code className="text-sm font-mono flex-1 font-bold">{inviteResult.password}</code>
+                      <button onClick={() => { navigator.clipboard.writeText(inviteResult!.password); toast.success('Copied') }}><Copy className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" /></button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button onClick={() => { setInviteClient(null); setInviteResult(null) }}>Done</Button>
+              </DialogFooter>
+            </>
+          )}
         </DialogContent>
       </Dialog>
 
