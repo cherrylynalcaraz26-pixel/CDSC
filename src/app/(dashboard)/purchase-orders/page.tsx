@@ -69,7 +69,7 @@ interface PO {
   pr?: { pr_number: string } | null
 }
 
-interface Supplier { id: string; company_name: string; payment_terms: string | null; ewt_rate: number | null }
+interface Supplier { id: string; company_name: string; payment_terms: string | null; ewt_rate: number | null; email: string | null }
 interface POLine   { item_name: string; quantity: string; unit: string; unit_price: string; selling_price: string }
 const emptyLine = (): POLine => ({ item_name: '', quantity: '1', unit: 'piece', unit_price: '', selling_price: '' })
 
@@ -148,7 +148,7 @@ export default function PurchaseOrdersPage() {
         .from('purchase_orders')
         .select('*, supplier:suppliers(company_name), pr:purchase_requests(pr_number)')
         .order('created_at', { ascending: false }),
-      supabase.from('suppliers').select('id, company_name, payment_terms, ewt_rate').eq('is_active', true).order('company_name'),
+      supabase.from('suppliers').select('id, company_name, payment_terms, ewt_rate, email').eq('is_active', true).order('company_name'),
       supabase.from('items').select('item_code, item_name, unit_of_measure, status, cost, selling_price').order('item_name'),
     ])
     setPOs((poData ?? []) as PO[])
@@ -410,17 +410,19 @@ export default function PurchaseOrdersPage() {
 
   function openEmailDialog(po?: PO) {
     if (po) {
-      const supplierName = (po.supplier as any)?.company_name ?? 'Sir/Madam'
+      const supplier = suppliers.find(s => s.id === ((po.supplier as any)?.id ?? (po as any).supplier_id))
+      const supplierName = supplier?.company_name ?? (po.supplier as any)?.company_name ?? 'Sir/Madam'
       setEmailPO(po)
+      setEmailTo(supplier?.email ?? '')
       setEmailSubject(`Purchase Order ${po.po_number ?? '(draft)'}${supplierName !== 'Sir/Madam' ? ` — ${supplierName}` : ''}`)
       setEmailBody(`Dear ${supplierName},\n\nPlease find attached the Purchase Order ${po.po_number ?? '(draft)'}.\n\nKindly confirm receipt and advise on delivery schedule.\n\nBest regards,\n${companyInfo?.company_name ?? 'CDSC Industrial Supply'}`)
     } else {
-      const partyName = suppliers.find(s => s.id === supplierId)?.company_name
+      const supplier = suppliers.find(s => s.id === supplierId)
       setEmailPO(null)
-      setEmailSubject(`Purchase Order ${poNumber || '(draft)'}${partyName ? ` — ${partyName}` : ''}`)
-      setEmailBody(`Dear ${partyName ?? 'Sir/Madam'},\n\nPlease find attached the Purchase Order ${poNumber || '(draft)'}.\n\nKindly confirm receipt and advise on delivery schedule.\n\nBest regards,\n${companyInfo?.company_name ?? 'CDSC Industrial Supply'}`)
+      setEmailTo(supplier?.email ?? '')
+      setEmailSubject(`Purchase Order ${poNumber || '(draft)'}${supplier?.company_name ? ` — ${supplier.company_name}` : ''}`)
+      setEmailBody(`Dear ${supplier?.company_name ?? 'Sir/Madam'},\n\nPlease find attached the Purchase Order ${poNumber || '(draft)'}.\n\nKindly confirm receipt and advise on delivery schedule.\n\nBest regards,\n${companyInfo?.company_name ?? 'CDSC Industrial Supply'}`)
     }
-    setEmailTo('')
     setShowEmail(true)
   }
 

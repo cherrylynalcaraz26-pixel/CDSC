@@ -17,7 +17,7 @@ import { useSearchContext } from '@/context/search-context'
 import { sendEmail } from '@/lib/send-email'
 import Image from 'next/image'
 
-interface Client { id: string; company_name: string }
+interface Client { id: string; company_name: string; email: string | null }
 interface ItemOption { item_name: string; unit_of_measure: string; cost: number | null; selling_price: number | null }
 interface SystemSettings {
   company_name: string
@@ -144,7 +144,7 @@ export default function QuotationPage() {
     setLoading(true)
     const [{ data: quoData }, { data: clientData }, { data: itemData }, { data: sysData }] = await Promise.all([
       supabase.from('quotations').select('*').order('created_at', { ascending: false }),
-      supabase.from('clients').select('id, company_name').eq('status', 'active').order('company_name'),
+      supabase.from('clients').select('id, company_name, email').eq('status', 'active').order('company_name'),
       supabase.from('items').select('item_name, unit_of_measure, cost, selling_price').eq('status', 'active').order('item_name'),
       supabase.from('system_settings').select('company_name, address, phone, email, tin').single(),
     ])
@@ -190,8 +190,9 @@ export default function QuotationPage() {
   }
 
   function openListEmail(q: Quotation) {
+    const client = clients.find(c => c.company_name === q.client_name)
     setListEmailQ(q)
-    setListEmailTo('')
+    setListEmailTo(client?.email ?? '')
     setListEmailSubject(`Quotation ${q.quote_number ?? '(draft)'}${q.client_name ? ` — ${q.client_name}` : ''}`)
     setListEmailBody(`Dear ${q.client_name ?? 'Sir/Madam'},\n\nPlease find attached our Quotation ${q.quote_number ?? '(draft)'}.\n\nThis quotation is valid as indicated. Kindly review and confirm at your earliest convenience.\n\nBest regards,\n${companyInfo?.company_name ?? 'CDSC Industrial Supply'}`)
   }
@@ -692,9 +693,10 @@ export default function QuotationPage() {
                 <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Live Preview</div>
                 <div className="flex items-center gap-2">
                   <Button size="sm" variant="outline" onClick={() => {
-                    const clientName = clientId ? clients.find(c => c.id === clientId)?.company_name : ''
-                    setEmailSubjectQ(`Quotation ${quoteNumber || '(draft)'}${clientName ? ` — ${clientName}` : ''}`)
-                    setEmailBodyQ(`Dear ${clientName ?? 'Sir/Madam'},\n\nPlease find attached our Quotation ${quoteNumber || '(draft)'}.\n\nThis quotation is valid as indicated. Kindly review and confirm at your earliest convenience.\n\nBest regards,\n${companyInfo?.company_name ?? 'CDSC Industrial Supply'}`)
+                    const client = clientId ? clients.find(c => c.id === clientId) : null
+                    setEmailToQ(client?.email ?? '')
+                    setEmailSubjectQ(`Quotation ${quoteNumber || '(draft)'}${client?.company_name ? ` — ${client.company_name}` : ''}`)
+                    setEmailBodyQ(`Dear ${client?.company_name ?? 'Sir/Madam'},\n\nPlease find attached our Quotation ${quoteNumber || '(draft)'}.\n\nThis quotation is valid as indicated. Kindly review and confirm at your earliest convenience.\n\nBest regards,\n${companyInfo?.company_name ?? 'CDSC Industrial Supply'}`)
                     setShowEmailQ(true)
                   }} className="text-xs h-7 px-2">
                     <Mail className="h-3.5 w-3.5 mr-1" />Email
