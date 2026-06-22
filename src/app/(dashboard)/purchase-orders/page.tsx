@@ -115,6 +115,7 @@ export default function PurchaseOrdersPage() {
 
   // View PO modal
   const [viewPO, setViewPO] = useState<PO | null>(null)
+  const [viewPOItems, setViewPOItems] = useState<{ item_name: string; quantity: number; unit: string | null; unit_price: number; selling_price: number | null; total_amount: number }[]>([])
 
   // Edit
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -345,56 +346,81 @@ export default function PurchaseOrdersPage() {
     })
   }
 
-  function buildPOHtml(po: PO) {
-    const supplierName = (po.supplier as any)?.company_name ?? '—'
-    const poDate = po.po_date ? new Date(po.po_date + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'
+  function buildPOHtml(po: PO, items: { item_name: string; quantity: number; unit: string | null; unit_price: number; selling_price: number | null; total_amount: number }[] = []) {
+    const supplierName = (po.supplier as any)?.company_name ?? '-'
+    const logoUrl = typeof window !== 'undefined' ? `${window.location.origin}/cdsc-logo.jpg` : '/cdsc-logo.jpg'
+    const poDate = po.po_date ? new Date(po.po_date + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '-'
     const delDate = po.delivery_date ? new Date(po.delivery_date + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : null
-    const fmtAmt = (n: number) => `₱${(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
-    const sCfg = STATUS_CFG[po.status] ?? STATUS_CFG.open
+    const fmtAmt = (n: number) => `&#8369;${(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
     const hasEwt = (po.ewt_amount ?? 0) > 0
     const hasDiscount = (po.discount_rate ?? 0) > 0
     const vNetSub = (po.subtotal ?? 0) - (po.discount_amount ?? 0)
+    const itemsHtml = items.length > 0 ? `
+      <table style="width:100%;border-collapse:collapse;font-size:10px;margin-top:8px;">
+        <thead>
+          <tr style="background:#b91c1c;color:#fff;">
+            <th style="text-align:center;vertical-align:middle;padding:6px;">#</th>
+            <th style="text-align:center;vertical-align:middle;padding:6px;">Item Description</th>
+            <th style="text-align:center;vertical-align:middle;padding:6px;width:50px;">QTY</th>
+            <th style="text-align:center;vertical-align:middle;padding:6px;width:60px;">Unit</th>
+            <th style="text-align:center;vertical-align:middle;padding:6px;width:90px;">Unit Price</th>
+            <th style="text-align:center;vertical-align:middle;padding:6px;width:80px;">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${items.map((it, i) => {
+            const price = it.selling_price ?? it.unit_price ?? 0
+            return `<tr style="background:${i % 2 === 0 ? '#fff' : '#f9fafb'};">
+              <td style="padding:4px 6px;color:#9ca3af;text-align:center;">${i + 1}</td>
+              <td style="padding:4px 6px;">${it.item_name ?? '-'}</td>
+              <td style="padding:4px 6px;text-align:center;font-weight:700;">${it.quantity}</td>
+              <td style="padding:4px 6px;color:#6b7280;text-align:center;">${it.unit ?? '-'}</td>
+              <td style="padding:4px 6px;text-align:right;">${fmtAmt(price)}</td>
+              <td style="padding:4px 6px;text-align:right;font-weight:600;">${fmtAmt(it.total_amount)}</td>
+            </tr>`
+          }).join('')}
+        </tbody>
+      </table>` : ''
     return `<!DOCTYPE html><html><head><title>Purchase Order</title>
-      <script src="https://cdn.tailwindcss.com"><\/script>
-      <style>body{font-family:Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact;}@media print{body{margin:0;}}</style>
-    </head><body class="p-6 text-[11px] font-sans">
-      <div class="space-y-3">
-        <div class="flex justify-between items-start border-b pb-3">
-          <div><div class="text-[13px] font-bold text-red-700">${companyInfo?.company_name ?? 'CDSC INDUSTRIAL'}</div></div>
-          <div class="text-right text-[9px] text-gray-500">${companyInfo?.address ?? ''}<br/>${companyInfo?.phone ?? ''}${companyInfo?.phone && companyInfo?.email ? ' | ' : ''}${companyInfo?.email ?? ''}${companyInfo?.tin ? '<br/>TIN: ' + companyInfo.tin : ''}</div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;" class="border-b pb-3">
-          <div>
-            <div class="text-[9px] font-semibold uppercase text-gray-400">Supplier</div>
-            <div class="font-semibold text-gray-800">${supplierName}</div>
-            <div class="text-[9px] font-semibold uppercase text-gray-400 mt-1">Payment Terms</div>
-            <div>${po.payment_terms ?? '—'}</div>
-            ${po.remarks ? `<div class="text-[9px] font-semibold uppercase text-gray-400 mt-1">Remarks</div><div class="text-[10px] text-gray-700">${po.remarks}</div>` : ''}
+      <style>body{font-family:Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;padding:24px;font-size:11px;}@media print{body{margin:0;}}</style>
+    </head><body>
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1px solid #e5e7eb;padding-bottom:12px;margin-bottom:12px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <img src="${logoUrl}" alt="CDSC" style="width:56px;height:56px;border-radius:4px;object-fit:cover;" crossorigin="anonymous" />
+            <div style="font-size:13px;font-weight:700;color:#b91c1c;line-height:1.25;">${companyInfo?.company_name ?? 'CDSC INDUSTRIAL SUPPLY'}</div>
           </div>
-          <div style="display:flex;align-items:center;justify-content:center;">
-            <div style="font-size:16px;font-weight:900;color:#b91c1c;text-align:center;letter-spacing:0.1em;">PURCHASE<br/>ORDER</div>
+          <div style="text-align:right;font-size:9px;color:#6b7280;">${companyInfo?.address ?? ''}${companyInfo?.phone ? '<br/>' + companyInfo.phone : ''}${companyInfo?.email ? '<br/>' + companyInfo.email : ''}${companyInfo?.tin ? '<br/>TIN: ' + companyInfo.tin : ''}</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;border-bottom:1px solid #e5e7eb;padding-bottom:12px;margin-bottom:12px;">
+          <div>
+            <div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#9ca3af;">Supplier</div>
+            <div style="font-weight:700;color:#1f2937;">${supplierName}</div>
+            ${po.payment_terms ? `<div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#9ca3af;margin-top:4px;">Payment Terms</div><div style="font-size:10px;color:#374151;">${po.payment_terms}</div>` : ''}
+            ${po.remarks ? `<div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#9ca3af;margin-top:4px;">Remarks</div><div style="font-size:10px;color:#374151;">${po.remarks}</div>` : ''}
           </div>
           <div style="text-align:right;">
-            <div class="text-[9px] font-semibold uppercase text-gray-400">PO Number</div>
-            <div class="font-mono font-bold">${po.po_number ?? '—'}</div>
-            <div class="text-[9px] font-semibold uppercase text-gray-400 mt-1">Date</div>
+            <div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#9ca3af;">PO Number</div>
+            <div style="font-family:monospace;font-weight:700;">${po.po_number ?? '-'}</div>
+            <div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#9ca3af;margin-top:4px;">Date</div>
             <div>${poDate}</div>
-            ${delDate ? `<div class="text-[9px] font-semibold uppercase text-gray-400 mt-1">Delivery Date</div><div>${delDate}</div>` : ''}
-            <div class="mt-1"><span style="font-size:9px;padding:2px 6px;border-radius:999px;background:${sCfg.cls.includes('blue') ? '#dbeafe' : sCfg.cls.includes('green') ? '#dcfce7' : sCfg.cls.includes('yellow') ? '#fef9c3' : '#fee2e2'};color:${sCfg.cls.includes('blue') ? '#1d4ed8' : sCfg.cls.includes('green') ? '#15803d' : sCfg.cls.includes('yellow') ? '#a16207' : '#b91c1c'};">${sCfg.label}</span></div>
+            ${delDate ? `<div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#9ca3af;margin-top:4px;">Delivery Date</div><div>${delDate}</div>` : ''}
           </div>
         </div>
-        <div style="display:flex;justify-content:flex-end;">
+        <div style="font-size:16px;font-weight:900;color:#b91c1c;text-align:center;letter-spacing:0.1em;margin-bottom:8px;">PURCHASE ORDER</div>
+        ${itemsHtml}
+        <div style="display:flex;justify-content:flex-end;margin-top:20px;">
           <div style="width:220px;font-size:10px;">
-            <div style="display:flex;justify-content:space-between;"><span style="color:#6b7280;">Subtotal</span><span>${fmtAmt(po.subtotal)}</span></div>
-            ${hasDiscount ? `<div style="display:flex;justify-content:space-between;"><span style="color:#6b7280;">Discount (${po.discount_rate}%)</span><span style="color:#ea580c;">−${fmtAmt(po.discount_amount)}</span></div><div style="display:flex;justify-content:space-between;"><span style="color:#6b7280;">Net Subtotal</span><span>${fmtAmt(vNetSub)}</span></div>` : ''}
-            <div style="display:flex;justify-content:space-between;"><span style="color:#6b7280;">VAT (12%)</span><span style="color:#2563eb;">${fmtAmt(po.vat_amount)}</span></div>
-            ${hasEwt ? `<div style="display:flex;justify-content:space-between;"><span style="color:#6b7280;">EWT</span><span style="color:#b91c1c;">−${fmtAmt(po.ewt_amount)}</span></div>` : ''}
+            <div style="display:flex;justify-content:space-between;padding-bottom:4px;"><span style="color:#6b7280;">Subtotal</span><span>${fmtAmt(po.subtotal)}</span></div>
+            ${hasDiscount ? `<div style="display:flex;justify-content:space-between;border-top:1px solid #e5e7eb;padding-top:4px;"><span style="color:#6b7280;">Discount (${po.discount_rate}%)</span><span style="color:#ea580c;">-${fmtAmt(po.discount_amount)}</span></div><div style="display:flex;justify-content:space-between;"><span style="color:#6b7280;">Net Subtotal</span><span>${fmtAmt(vNetSub)}</span></div>` : ''}
+            <div style="display:flex;justify-content:space-between;border-top:1px solid #e5e7eb;padding-top:4px;"><span style="color:#6b7280;">VAT (12%)</span><span style="color:#2563eb;">${fmtAmt(po.vat_amount)}</span></div>
+            ${hasEwt ? `<div style="display:flex;justify-content:space-between;border-top:1px solid #e5e7eb;padding-top:4px;"><span style="color:#6b7280;">EWT</span><span style="color:#b91c1c;">-${fmtAmt(po.ewt_amount)}</span></div>` : ''}
             <div style="display:flex;justify-content:space-between;border-top:1px solid #e5e7eb;padding-top:4px;font-weight:700;font-size:11px;"><span>Net Payable</span><span style="color:#b91c1c;">${fmtAmt(po.net_payable)}</span></div>
           </div>
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;border-top:1px solid #e5e7eb;padding-top:16px;margin-top:4px;">
-          <div style="text-align:center;"><div style="border-bottom:1px solid #9ca3af;height:32px;"></div><div style="font-size:9px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;">Prepared By</div></div>
-          <div style="text-align:center;"><div style="border-bottom:1px solid #9ca3af;height:32px;"></div><div style="font-size:9px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;">Approved By</div></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:48px;">
+          <div style="text-align:center;"><div style="border-top:1px solid #374151;padding-top:6px;font-size:10px;font-weight:700;color:#374151;">PREPARED BY</div><div style="font-size:9px;color:#9ca3af;margin-top:2px;">Signature over Printed Name</div></div>
+          <div style="text-align:center;"><div style="border-top:1px solid #374151;padding-top:6px;font-size:10px;font-weight:700;color:#374151;">APPROVED BY</div><div style="font-size:9px;color:#9ca3af;margin-top:2px;">Signature over Printed Name / Date</div></div>
         </div>
       </div>
     </body></html>`
@@ -713,7 +739,11 @@ export default function PurchaseOrdersPage() {
                             <MoreHorizontal className="h-4 w-4" />
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end" className="w-52">
-                            <DropdownMenuItem onClick={() => setViewPO(po)}>
+                            <DropdownMenuItem onClick={async () => {
+                              setViewPO(po)
+                              const { data } = await supabase.from('po_items').select('item_name,quantity,unit_of_measure,unit_cost,selling_price,total_cost').eq('po_id', po.id).order('created_at')
+                              setViewPOItems((data ?? []).map(r => ({ item_name: r.item_name, quantity: r.quantity, unit: r.unit_of_measure, unit_price: r.unit_cost, selling_price: r.selling_price, total_amount: r.total_cost })))
+                            }}>
                               <Eye className="mr-2 h-4 w-4" />View PO
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => openEdit(po)}>
@@ -1168,94 +1198,20 @@ export default function PurchaseOrdersPage() {
       )}
 
       {/* View PO Dialog */}
-      <Dialog open={!!viewPO} onOpenChange={o => { if (!o) setViewPO(null) }}>
-        <DialogContent className="w-[98vw] sm:!max-w-2xl max-h-[90vh] overflow-y-auto">
+      <Dialog open={!!viewPO} onOpenChange={o => { if (!o) { setViewPO(null); setViewPOItems([]) } }}>
+        <DialogContent className="w-[98vw] sm:!max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <FileText className="h-4 w-4" />Purchase Order — {viewPO?.po_number ?? '—'}
+              <FileText className="h-4 w-4" />Purchase Order Preview
             </DialogTitle>
           </DialogHeader>
-          {viewPO && (() => {
-            const vSupplier = (viewPO.supplier as any)?.company_name ?? null
-            const vDiscount = viewPO.discount_rate ?? 0
-            const vDiscountAmt = viewPO.discount_amount ?? 0
-            const vNetSub = viewPO.subtotal - vDiscountAmt
-            const vTaxAmt = (viewPO.ewt_amount ?? 0) > 0 ? viewPO.ewt_amount : (viewPO.cwt_amount ?? 0)
-            const vTaxLabel = (viewPO.ewt_amount ?? 0) > 0 ? 'EWT' : 'CWT'
-            const vPoDate = viewPO.po_date ? new Date(viewPO.po_date + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : null
-            const vDelDate = viewPO.delivery_date ? new Date(viewPO.delivery_date + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : null
-            const sCfg = STATUS_CFG[viewPO.status] ?? STATUS_CFG.open
-            return (
-              <div className="border rounded-lg bg-white text-[11px] p-5 shadow-sm space-y-3 font-sans">
-                {/* Header */}
-                <div className="flex justify-between items-start border-b pb-3">
-                  <div className="flex items-center gap-2.5">
-                    <img src="/cdsc-logo.jpg" alt="CDSC" className="h-12 w-12 rounded object-cover shrink-0" />
-                    <div className="text-[13px] font-bold text-red-700 leading-tight">
-                      {companyInfo?.company_name || 'CDSC INDUSTRIAL'}
-                    </div>
-                  </div>
-                  <div className="text-right text-[9px] text-gray-500 space-y-0.5">
-                    {companyInfo?.address && <div>{companyInfo.address}</div>}
-                    {(companyInfo?.phone || companyInfo?.email) && (
-                      <div>{companyInfo.phone}{companyInfo.phone && companyInfo.email ? ' | ' : ''}{companyInfo.email}</div>
-                    )}
-                    {companyInfo?.tin && <div>TIN: {companyInfo.tin}</div>}
-                  </div>
-                </div>
-
-                {/* Party / Title / Meta */}
-                <div className="grid grid-cols-3 gap-3 border-b pb-3">
-                  <div className="space-y-0.5">
-                    <div className="text-[9px] font-semibold uppercase text-gray-400">Supplier / Client</div>
-                    <div className="font-semibold text-gray-800 text-[11px]">{vSupplier ?? '—'}</div>
-                    <div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5">Payment Terms</div>
-                    <div className="text-gray-700">{viewPO.payment_terms || '—'}</div>
-                    {viewPO.remarks && (
-                      <div className="mt-1.5">
-                        <div className="text-[9px] font-semibold uppercase text-gray-400">Remarks</div>
-                        <div className="text-gray-700 text-[10px]">{viewPO.remarks}</div>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex flex-col items-center justify-center gap-1">
-                    <div className="text-[16px] font-extrabold text-red-700 uppercase tracking-widest text-center leading-tight">Purchase<br />Order</div>
-                    <span className={`text-[9px] px-2 py-0.5 rounded-full font-medium ${sCfg.cls}`}>{sCfg.label}</span>
-                  </div>
-                  <div className="space-y-0.5 text-right">
-                    <div className="text-[9px] font-semibold uppercase text-gray-400">PO Number</div>
-                    <div className="font-mono font-bold text-gray-800">{viewPO.po_number || '—'}</div>
-                    {vPoDate && <><div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5">Date</div><div className="text-gray-700">{vPoDate}</div></>}
-                    {vDelDate && <><div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5">Delivery Date</div><div className="text-gray-700">{vDelDate}</div></>}
-                  </div>
-                </div>
-
-                {/* Totals */}
-                <div className="flex justify-end">
-                  <div className="w-56 space-y-0.5 text-[10px]">
-                    <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span>₱{(viewPO.subtotal ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
-                    {vDiscount > 0 && <div className="flex justify-between"><span className="text-gray-500">Discount ({vDiscount}%)</span><span className="text-orange-600">−₱{vDiscountAmt.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
-                    {vDiscount > 0 && <div className="flex justify-between"><span className="text-gray-500">Net Subtotal</span><span>₱{vNetSub.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
-                    <div className="flex justify-between"><span className="text-gray-500">VAT (12%)</span><span className="text-blue-600">₱{(viewPO.vat_amount ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
-                    <div className="flex justify-between"><span className="text-gray-500">{vTaxLabel}</span><span className="text-red-700">−₱{(vTaxAmt ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
-                    <div className="flex justify-between border-t pt-0.5 font-bold text-[11px]"><span>Net Payable</span><span className="text-red-700">₱{(viewPO.net_payable ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
-                  </div>
-                </div>
-
-                {/* Signatures */}
-                <div className="grid grid-cols-2 gap-6 border-t pt-4 mt-1">
-                  <div className="text-center">
-                    <div className="border-b border-gray-400 mb-1 h-8" />
-                    <div className="text-[9px] text-gray-400 uppercase tracking-wider">Prepared By</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="border-b border-gray-400 mb-1 h-8" />
-                    <div className="text-[9px] text-gray-400 uppercase tracking-wider">Approved By</div>
-                  </div>
-                </div>
-              </div>
-            )
-          })()}
+          {viewPO && (
+            <iframe
+              srcDoc={buildPOHtml(viewPO, viewPOItems)}
+              style={{ width: '100%', minHeight: '600px', border: 'none' }}
+              title="PO Preview"
+            />
+          )}
         </DialogContent>
       </Dialog>
 
