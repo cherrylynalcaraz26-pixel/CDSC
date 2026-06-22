@@ -914,18 +914,37 @@ export default function QuotationPage() {
                 disabled={sendingEmailQ}
                 onClick={async () => {
                   if (!emailToQ) { toast.error('Please enter a recipient email address.'); return }
-                  const el = printRef.current
-                  const printHtml = el ? `<!DOCTYPE html><html><head><title>Quotation</title>
-                    <script src="https://cdn.tailwindcss.com"><\/script>
-                    <style>body{font-family:Arial,sans-serif;}</style>
-                  </head><body class="p-6 text-[11px]">${el.innerHTML}</body></html>` : undefined
+                  // Build a quotation-like object from current form state
+                  const formQ: Quotation = {
+                    id: editingId ?? '',
+                    quote_number: quoteNumber,
+                    quote_date: quoteDate,
+                    valid_until: validUntil || null,
+                    client_name: selectedClient?.company_name ?? null,
+                    subject: subject || null,
+                    subtotal,
+                    vat_amount: vatAmount,
+                    ewt_amount: ewtAmount,
+                    total_amount: totalAmount,
+                    notes: notes || null,
+                    status: 'draft',
+                    created_at: new Date().toISOString(),
+                  }
+                  const formItems = lines.filter(l => l.item_name.trim()).map(l => ({
+                    item_name: l.item_name,
+                    quantity: parseFloat(l.quantity) || 1,
+                    unit: l.unit || null,
+                    unit_price: parseFloat(l.unit_price) || 0,
+                    selling_price: parseFloat(l.selling_price) || null,
+                    total_amount: (parseFloat(l.selling_price) || parseFloat(l.unit_price) || 0) * (parseFloat(l.quantity) || 1),
+                  }))
                   setSendingEmailQ(true)
                   try {
                     await sendEmail({
                       to: emailToQ,
                       subject: emailSubjectQ,
                       body: emailBodyQ,
-                      printHtml,
+                      printHtml: buildQuoteHtml(formQ, formItems),
                       pdfFilename: `Quotation-${quoteNumber || 'draft'}.pdf`,
                     })
                     toast.success('Email sent successfully!')
