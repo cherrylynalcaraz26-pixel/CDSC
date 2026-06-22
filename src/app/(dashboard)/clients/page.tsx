@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import {
   Plus, Loader2, MoreHorizontal, Building2, Phone, Mail,
   MapPin, User, Pencil, Trash2, Users, CheckCircle2, XCircle,
-  FileText, LayoutGrid, List, KeyRound, Copy, ShieldCheck,
+  FileText, LayoutGrid, List, KeyRound, Copy, ShieldCheck, Eye, EyeOff,
 } from 'lucide-react'
 import { useSearchContext } from '@/context/search-context'
 import { Button } from '@/components/ui/button'
@@ -127,8 +127,10 @@ export default function ClientsPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<Client | null>(null)
   const [inviteClient, setInviteClient] = useState<Client | null>(null)
   const [inviteEmail, setInviteEmail] = useState('')
+  const [invitePassword, setInvitePassword] = useState('')
+  const [showInvitePw, setShowInvitePw] = useState(false)
   const [inviting, setInviting] = useState(false)
-  const [inviteResult, setInviteResult] = useState<{ email: string; password: string } | null>(null)
+  const [inviteResult, setInviteResult] = useState<{ email: string } | null>(null)
 
   async function load() {
     setLoading(true)
@@ -241,18 +243,21 @@ export default function ClientsPage() {
   function openInvite(c: Client) {
     setInviteClient(c)
     setInviteEmail(c.email ?? '')
+    setInvitePassword('')
+    setShowInvitePw(false)
     setInviteResult(null)
     setInviting(false)
   }
 
   async function handleInvite() {
     if (!inviteClient || !inviteEmail.trim()) { toast.error('Email is required'); return }
+    if (!invitePassword.trim()) { toast.error('Password is required'); return }
+    if (invitePassword.length < 8) { toast.error('Password must be at least 8 characters'); return }
     setInviting(true)
     try {
-      const tempPassword = Math.random().toString(36).slice(-8) + 'Aa1!'
       const { data, error } = await supabase.auth.signUp({
         email: inviteEmail.trim().toLowerCase(),
-        password: tempPassword,
+        password: invitePassword,
         options: { data: { full_name: inviteClient.company_name, role: 'client', client_id: inviteClient.id } },
       })
       if (error) throw error
@@ -269,7 +274,7 @@ export default function ClientsPage() {
           email: inviteEmail.trim().toLowerCase(),
         }).eq('id', inviteClient.id)
       }
-      setInviteResult({ email: inviteEmail.trim().toLowerCase(), password: tempPassword })
+      setInviteResult({ email: inviteEmail.trim().toLowerCase() })
       load()
     } catch (err: any) {
       toast.error(err.message ?? 'Failed to create portal account')
@@ -662,7 +667,7 @@ export default function ClientsPage() {
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {inviteResult ? 'Portal Account Created' : `Invite to Client Portal`}
+              {inviteResult ? 'Portal Account Created' : 'Create Portal Account'}
             </DialogTitle>
           </DialogHeader>
 
@@ -670,8 +675,8 @@ export default function ClientsPage() {
             <>
               <div className="space-y-4 py-2">
                 <p className="text-sm text-muted-foreground">
-                  Create a login account for <span className="font-semibold text-foreground">{inviteClient?.company_name}</span>.
-                  They will use this to log in to the Client Portal and submit purchase requests.
+                  Set the login credentials for <span className="font-semibold text-foreground">{inviteClient?.company_name}</span>.
+                  They will use these to access the Client Portal.
                 </p>
                 <div className="space-y-1.5">
                   <Label>Email Address</Label>
@@ -682,12 +687,34 @@ export default function ClientsPage() {
                     placeholder="client@company.com"
                   />
                 </div>
+                <div className="space-y-1.5">
+                  <Label>Password</Label>
+                  <div className="relative">
+                    <Input
+                      type={showInvitePw ? 'text' : 'password'}
+                      value={invitePassword}
+                      onChange={e => setInvitePassword(e.target.value)}
+                      placeholder="Minimum 8 characters"
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowInvitePw(v => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      {showInvitePw
+                        ? <EyeOff className="h-4 w-4" />
+                        : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Must be at least 8 characters.</p>
+                </div>
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setInviteClient(null)}>Cancel</Button>
                 <Button onClick={handleInvite} disabled={inviting} className="bg-blue-600 hover:bg-blue-700">
                   {inviting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <KeyRound className="h-4 w-4 mr-2" />}
-                  Create Portal Account
+                  Create Account
                 </Button>
               </DialogFooter>
             </>
@@ -698,14 +725,14 @@ export default function ClientsPage() {
                   <CheckCircle2 className="h-5 w-5" /> Account created successfully
                 </div>
                 <p className="text-sm text-muted-foreground">
-                  Share these credentials with the client. They should change the password after first login.
+                  The client can now log in to the portal using the credentials you set.
                 </p>
                 <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
                   <div>
                     <div className="text-xs text-muted-foreground mb-1">Portal URL</div>
                     <div className="flex items-center gap-2">
-                      <code className="text-xs font-mono flex-1">{typeof window !== 'undefined' ? window.location.origin : ''}/portal</code>
-                      <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/portal`); toast.success('Copied') }}><Copy className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" /></button>
+                      <code className="text-xs font-mono flex-1">{typeof window !== 'undefined' ? window.location.origin : ''}/portal/login</code>
+                      <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/portal/login`); toast.success('Copied') }}><Copy className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" /></button>
                     </div>
                   </div>
                   <div>
@@ -713,13 +740,6 @@ export default function ClientsPage() {
                     <div className="flex items-center gap-2">
                       <code className="text-xs font-mono flex-1">{inviteResult.email}</code>
                       <button onClick={() => { navigator.clipboard.writeText(inviteResult!.email); toast.success('Copied') }}><Copy className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" /></button>
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-muted-foreground mb-1">Temporary Password</div>
-                    <div className="flex items-center gap-2">
-                      <code className="text-sm font-mono flex-1 font-bold">{inviteResult.password}</code>
-                      <button onClick={() => { navigator.clipboard.writeText(inviteResult!.password); toast.success('Copied') }}><Copy className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" /></button>
                     </div>
                   </div>
                 </div>
