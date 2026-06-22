@@ -299,12 +299,12 @@ export default function QuotationPage() {
       <table style="width:100%;border-collapse:collapse;font-size:10px;margin-top:8px;">
         <thead>
           <tr style="background:#b91c1c;color:#fff;">
-            <th style="text-align:left;padding:4px 6px;width:24px;">#</th>
-            <th style="text-align:left;padding:4px 6px;">Item Description</th>
-            <th style="text-align:right;padding:4px 6px;width:50px;">QTY</th>
-            <th style="text-align:left;padding:4px 6px;width:60px;">Unit</th>
-            <th style="text-align:right;padding:4px 6px;width:90px;">Unit Price</th>
-            <th style="text-align:right;padding:4px 6px;width:80px;">Total</th>
+            <th style="text-align:center;vertical-align:middle;padding:6px 6px;width:24px;">#</th>
+            <th style="text-align:center;vertical-align:middle;padding:6px 6px;">Item Description</th>
+            <th style="text-align:center;vertical-align:middle;padding:6px 6px;width:50px;">QTY</th>
+            <th style="text-align:center;vertical-align:middle;padding:6px 6px;width:60px;">Unit</th>
+            <th style="text-align:center;vertical-align:middle;padding:6px 6px;width:90px;">Unit Price</th>
+            <th style="text-align:center;vertical-align:middle;padding:6px 6px;width:80px;">Total</th>
           </tr>
         </thead>
         <tbody>
@@ -354,8 +354,8 @@ export default function QuotationPage() {
         ${itemsHtml}
         <div style="display:flex;justify-content:flex-end;margin-top:12px;">
           <div style="width:220px;font-size:10px;">
-            <div style="display:flex;justify-content:space-between;"><span style="color:#6b7280;">Subtotal</span><span>${fmtAmt(q.subtotal)}</span></div>
-            ${hasVat ? `<div style="display:flex;justify-content:space-between;"><span style="color:#6b7280;">VAT (12%)</span><span style="color:#2563eb;">${fmtAmt(q.vat_amount)}</span></div>` : ''}
+            <div style="display:flex;justify-content:space-between;padding-bottom:4px;"><span style="color:#6b7280;">Subtotal</span><span>${fmtAmt(q.subtotal)}</span></div>
+            ${hasVat ? `<div style="display:flex;justify-content:space-between;border-top:1px solid #e5e7eb;padding-top:4px;"><span style="color:#6b7280;">VAT (12%)</span><span style="color:#2563eb;">${fmtAmt(q.vat_amount)}</span></div>` : ''}
             ${hasEwt ? `<div style="display:flex;justify-content:space-between;"><span style="color:#6b7280;">EWT</span><span style="color:#b91c1c;">−${fmtAmt(q.ewt_amount)}</span></div>` : ''}
             <div style="display:flex;justify-content:space-between;border-top:1px solid #e5e7eb;padding-top:4px;font-weight:700;font-size:11px;"><span>Total</span><span style="color:#b91c1c;">${fmtAmt(q.total_amount)}</span></div>
           </div>
