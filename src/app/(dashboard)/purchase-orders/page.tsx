@@ -121,7 +121,7 @@ export default function PurchaseOrdersPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
 
   // Pipeline
-  const [pipelineOpen, setPipelineOpen] = useState(true)
+  const [pipelineOpen, setPipelineOpen] = useState(false)
   const [receivedPONums, setReceivedPONums] = useState<Set<string>>(new Set())
   const [csiSuppliers, setCsiSuppliers] = useState<Set<string>>(new Set())
   const [collectedSuppliers, setCollectedSuppliers] = useState<Set<string>>(new Set())

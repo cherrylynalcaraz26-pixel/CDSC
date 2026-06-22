@@ -17,6 +17,7 @@ import {
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
+import { sendEmail, SOPdfData } from '@/lib/send-email'
 
 type SOStatus = 'draft' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'cancelled'
 
@@ -36,6 +37,7 @@ interface SO {
 }
 
 interface SOLine { item_name: string; quantity: string; unit: string; unit_price: string; selling_price: string }
+interface SOItem { id: string; item_name: string; quantity: number; unit: string | null; unit_price: number; selling_price: number | null; total_amount: number }
 interface ItemOption { item_code: string; item_name: string; unit_of_measure: string; cost: number | null; selling_price: number | null }
 interface ClientOption { id: string; company_name: string; payment_terms?: string | null }
 interface SystemSettings { company_name: string; address: string; phone: string; email: string; tin: string }
@@ -57,8 +59,18 @@ export default function SalesOrdersPage() {
   const [itemSearchIdx, setItemSearchIdx] = useState<number | null>(null)
   const [itemQuery, setItemQuery] = useState('')
 
+  // View SO
+  const [viewSO, setViewSO] = useState<SO | null>(null)
+  const [viewSOItems, setViewSOItems] = useState<SOItem[]>([])
+
+  // Email SO
+  const [emailSO, setEmailSO] = useState<SO | null>(null)
+  const [emailSOItems, setEmailSOItems] = useState<SOItem[]>([])
+  const [emailToSO, setEmailToSO] = useState('')
+  const [sendingEmailSO, setSendingEmailSO] = useState(false)
+
   // Pipeline
-  const [pipelineOpen, setPipelineOpen] = useState(true)
+  const [pipelineOpen, setPipelineOpen] = useState(false)
   const [collectedClients, setCollectedClients] = useState<Set<string>>(new Set())
 
   // Form
@@ -110,7 +122,7 @@ export default function SalesOrdersPage() {
   async function submitSO() {
     if (!clientId) { toast.error('Client is required'); return }
     setSaving(true)
-    const { error } = await supabase.from('sales_orders').insert({
+    const { data: soData, error } = await supabase.from('sales_orders').insert({
       so_number: soNumber.trim() || null,
       so_date: soDate,
       client_id: clientId,
@@ -120,8 +132,22 @@ export default function SalesOrdersPage() {
       remarks: remarks || null,
       status: 'draft',
       total_amount: subtotal,
-    })
+    }).select('id').single()
     if (error) { toast.error(error.message); setSaving(false); return }
+    if (soData?.id) {
+      const validLines = lines.filter(l => l.item_name.trim())
+      if (validLines.length > 0) {
+        await supabase.from('so_items').insert(validLines.map(l => ({
+          so_id: soData.id,
+          item_name: l.item_name,
+          quantity: parseFloat(l.quantity) || 1,
+          unit: l.unit || null,
+          unit_price: parseFloat(l.unit_price) || 0,
+          selling_price: parseFloat(l.selling_price) || null,
+          total_amount: (parseFloat(l.selling_price) || parseFloat(l.unit_price) || 0) * (parseFloat(l.quantity) || 0),
+        })))
+      }
+    }
     toast.success('Sales Order created')
     setOpen(false); resetForm(); load()
     setSaving(false)
@@ -145,17 +171,181 @@ export default function SalesOrdersPage() {
     })
   }
 
+  function buildSOHtml(so: SO, soItems: SOItem[]): string {
+    const info = companyInfo
+    const logoUrl = `${window.location.origin}/cdsc-logo.jpg`
+    const soDate = so.so_date ? new Date(so.so_date + 'T00:00:00').toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }) : new Date(so.created_at).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
+    const fmtN = (n: number) => n.toLocaleString('en-PH', { minimumFractionDigits: 2 })
+    const subtotalAmt = soItems.reduce((s, it) => s + (it.total_amount ?? 0), 0)
+    const rows = soItems.map((it, i) => `
+      <tr style="background:${i % 2 === 0 ? '#fff' : '#f9fafb'}">
+        <td style="padding:4px 6px;color:#9ca3af;text-align:center">${i + 1}</td>
+        <td style="padding:4px 6px">${it.item_name ?? ''}</td>
+        <td style="padding:4px 6px;text-align:center">${it.quantity}</td>
+        <td style="padding:4px 6px;color:#6b7280;text-align:center">${it.unit ?? ''}</td>
+        <td style="padding:4px 6px;text-align:right">${fmtN(it.selling_price ?? it.unit_price ?? 0)}</td>
+        <td style="padding:4px 6px;text-align:right;font-weight:600">${fmtN(it.total_amount ?? 0)}</td>
+      </tr>`).join('')
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+      *{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:11px;padding:32px;color:#1f2937}
+      table{border-collapse:collapse;width:100%}
+    </style></head><body>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:12px;border-bottom:1px solid #e5e7eb;margin-bottom:14px">
+      <div style="display:flex;align-items:center;gap:10px">
+        <img src="${logoUrl}" style="width:64px;height:64px;object-fit:cover;border-radius:4px"/>
+        <div style="font-size:14px;font-weight:bold;color:#b91c1c">${info?.company_name ?? 'CDSC INDUSTRIAL SUPPLY'}</div>
+      </div>
+      <div style="text-align:right;font-size:9px;color:#6b7280">
+        ${info?.address ? `<div>${info.address}</div>` : ''}
+        ${info?.phone || info?.email ? `<div>${[info.phone, info.email].filter(Boolean).join(' | ')}</div>` : ''}
+        ${info?.tin ? `<div>TIN: ${info.tin}</div>` : ''}
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;padding-bottom:12px;border-bottom:1px solid #e5e7eb;margin-bottom:14px">
+      <div>
+        <div style="font-size:9px;font-weight:600;color:#9ca3af;text-transform:uppercase;margin-bottom:2px">Bill To</div>
+        <div style="font-weight:bold;font-size:11px">${so.client_name ?? ''}</div>
+        ${so.client_po_number ? `<div style="margin-top:6px"><div style="font-size:9px;font-weight:600;color:#9ca3af;text-transform:uppercase">Client PO #</div><div>${so.client_po_number}</div></div>` : ''}
+        ${so.remarks ? `<div style="margin-top:6px"><div style="font-size:9px;font-weight:600;color:#9ca3af;text-transform:uppercase">Remarks</div><div style="font-size:10px">${so.remarks}</div></div>` : ''}
+      </div>
+      <div style="display:flex;align-items:center;justify-content:center">
+        <div style="font-size:18px;font-weight:900;color:#b91c1c;text-transform:uppercase;text-align:center;letter-spacing:2px">Sales<br/>Order</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:9px;font-weight:600;color:#9ca3af;text-transform:uppercase">SO Number</div>
+        <div style="font-weight:bold;font-family:monospace">${so.so_number ?? '—'}</div>
+        <div style="font-size:9px;font-weight:600;color:#9ca3af;text-transform:uppercase;margin-top:6px">Date</div>
+        <div>${soDate}</div>
+      </div>
+    </div>
+    <div style="font-size:16px;font-weight:900;color:#b91c1c;text-align:center;margin-bottom:10px;text-transform:uppercase;letter-spacing:2px">SALES ORDER</div>
+    <table style="margin-bottom:8px">
+      <thead><tr style="background:#b91c1c;color:#fff">
+        <th style="padding:5px 6px;text-align:center;width:28px">#</th>
+        <th style="padding:5px 6px;text-align:left">Item Description</th>
+        <th style="padding:5px 6px;text-align:center;width:48px">QTY</th>
+        <th style="padding:5px 6px;text-align:center;width:60px">Unit</th>
+        <th style="padding:5px 6px;text-align:right;width:80px">Unit Price</th>
+        <th style="padding:5px 6px;text-align:right;width:80px">Total</th>
+      </tr></thead>
+      <tbody>${rows || '<tr><td colspan="6" style="padding:12px;text-align:center;color:#9ca3af">No items</td></tr>'}</tbody>
+    </table>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:20px">
+      <div style="width:200px">
+        <div style="border-top:1px solid #e5e7eb;padding-top:4px;display:flex;justify-content:space-between;font-weight:bold;font-size:12px">
+          <span>Total</span><span style="color:#b91c1c">${fmtN(subtotalAmt)}</span>
+        </div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;border-top:1px solid #e5e7eb;padding-top:24px">
+      <div style="text-align:center">
+        <div style="border-bottom:1px solid #374151;height:36px;margin-bottom:4px"></div>
+        <div style="font-size:9px;color:#6b7280;text-transform:uppercase;letter-spacing:1px;font-weight:bold">PREPARED BY</div>
+        <div style="font-size:8px;color:#9ca3af">Signature over Printed Name</div>
+      </div>
+      <div style="text-align:center">
+        <div style="border-bottom:1px solid #374151;height:36px;margin-bottom:4px"></div>
+        <div style="font-size:9px;color:#6b7280;text-transform:uppercase;letter-spacing:1px;font-weight:bold">RECEIVED BY</div>
+        <div style="font-size:8px;color:#9ca3af">Signature over Printed Name / Date</div>
+      </div>
+    </div>
+    </body></html>`
+  }
+
+  async function buildSOPdfData(so: SO, soItems: SOItem[]): Promise<SOPdfData> {
+    const logoUrl = '/cdsc-logo.jpg'
+    let logoDataUrl: string | undefined
+    try {
+      const blob = await fetch(logoUrl).then(r => r.blob())
+      logoDataUrl = await new Promise<string>(res => { const fr = new FileReader(); fr.onload = () => res(fr.result as string); fr.readAsDataURL(blob) })
+    } catch { /* skip */ }
+    const fmtDate = (d: string | null) => d ? new Date(d + 'T00:00:00').toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }) : ''
+    const subtotalAmt = soItems.reduce((s, it) => s + (it.total_amount ?? 0), 0)
+    return {
+      companyName: companyInfo?.company_name ?? 'CDSC Industrial Supply',
+      companyAddress: companyInfo?.address,
+      companyPhone: companyInfo?.phone,
+      companyEmail: companyInfo?.email,
+      companyTin: companyInfo?.tin,
+      logoDataUrl,
+      soNumber: so.so_number ?? '—',
+      soDate: fmtDate(so.so_date) || new Date(so.created_at).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }),
+      clientName: so.client_name ?? '',
+      clientPoNumber: so.client_po_number ?? undefined,
+      remarks: so.remarks ?? undefined,
+      items: soItems.map(it => ({
+        item_name: it.item_name,
+        quantity: it.quantity,
+        unit: it.unit,
+        unit_price: it.unit_price,
+        selling_price: it.selling_price,
+        total_amount: it.total_amount,
+      })),
+      subtotal: subtotalAmt,
+      totalAmount: subtotalAmt,
+    }
+  }
+
+  async function openViewSO(so: SO) {
+    const { data } = await supabase.from('so_items').select('*').eq('so_id', so.id)
+    setViewSOItems((data ?? []) as SOItem[])
+    setViewSO(so)
+  }
+
+  async function openEmailSO(so: SO) {
+    const { data } = await supabase.from('so_items').select('*').eq('so_id', so.id)
+    setEmailSOItems((data ?? []) as SOItem[])
+    const cli = clients.find(c => c.company_name === so.client_name)
+    setEmailToSO('')
+    setEmailSO(so)
+  }
+
+  async function handleSendEmailSO() {
+    if (!emailSO) return
+    if (!emailToSO.trim()) { toast.error('Recipient email required'); return }
+    setSendingEmailSO(true)
+    try {
+      const pdfData = await buildSOPdfData(emailSO, emailSOItems)
+      await sendEmail({
+        to: emailToSO.trim(),
+        subject: `Sales Order ${emailSO.so_number ?? ''} — CDSC Industrial Supply`,
+        body: `Dear ${emailSO.client_name ?? 'Client'},\n\nPlease find attached Sales Order ${emailSO.so_number ?? ''}.\n\nBest regards,\nCDSC Industrial Supply`,
+        soPdfData: pdfData,
+        pdfFilename: `SO-${emailSO.so_number ?? emailSO.id}.pdf`,
+      })
+      toast.success('Email sent successfully')
+      setEmailSO(null)
+    } catch (e: any) {
+      toast.error(e.message ?? 'Failed to send email')
+    } finally {
+      setSendingEmailSO(false)
+    }
+  }
+
   function handlePrint() {
-    const el = printRef.current
-    if (!el) return
-    const win = window.open('', '_blank', 'width=900,height=700')
-    if (!win) return
-    win.document.write(`<!DOCTYPE html><html><head><title>Sales Order</title>
-      <script src="https://cdn.tailwindcss.com"><\/script>
-      <style>body{font-family:Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact;}@media print{body{margin:0;padding:16px;}}</style>
-    </head><body class="p-6 text-[11px]">${el.innerHTML}</body></html>`)
-    win.document.close()
-    setTimeout(() => { win.focus(); win.print(); win.close() }, 800)
+    if (open) {
+      // Print form preview
+      const el = printRef.current
+      if (!el) return
+      const win = window.open('', '_blank', 'width=900,height=700')
+      if (!win) return
+      // Build a temporary fake SO from form state
+      const fakeSO: SO = {
+        id: '', so_number: soNumber || null, so_date: soDate, created_at: new Date().toISOString(),
+        client_name: selectedClient?.company_name ?? null, client_po_number: clientPONumber || null,
+        status: 'draft', total_amount: subtotal, remarks: remarks || null,
+      }
+      const fakeItems: SOItem[] = lines.filter(l => l.item_name).map((l, i) => ({
+        id: String(i), item_name: l.item_name, quantity: parseFloat(l.quantity) || 1,
+        unit: l.unit || null, unit_price: parseFloat(l.unit_price) || 0,
+        selling_price: parseFloat(l.selling_price) || null,
+        total_amount: (parseFloat(l.selling_price) || parseFloat(l.unit_price) || 0) * (parseFloat(l.quantity) || 0),
+      }))
+      const html = buildSOHtml(fakeSO, fakeItems)
+      win.document.write(html)
+      win.document.close()
+      setTimeout(() => { win.focus(); win.print(); win.close() }, 800)
+    }
   }
 
   const { query } = useSearchContext()
@@ -627,11 +817,23 @@ export default function SalesOrdersPage() {
                           <MoreHorizontal className="h-4 w-4" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-52">
-                          <DropdownMenuItem onClick={() => toast.info(`SO: ${so.so_number ?? so.id}`)}>
-                            <Eye className="mr-2 h-4 w-4" />View Details
+                          <DropdownMenuItem onClick={() => openViewSO(so)}>
+                            <Eye className="mr-2 h-4 w-4" />View SO
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => window.print()}>
+                          <DropdownMenuItem onClick={async () => {
+                            const { data } = await supabase.from('so_items').select('*').eq('so_id', so.id)
+                            const items = (data ?? []) as SOItem[]
+                            const fakeSO = so
+                            const html = buildSOHtml(fakeSO, items)
+                            const win = window.open('', '_blank', 'width=900,height=700')
+                            if (!win) return
+                            win.document.write(html); win.document.close()
+                            setTimeout(() => { win.focus(); win.print(); win.close() }, 800)
+                          }}>
                             <Printer className="mr-2 h-4 w-4" />Print SO
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => openEmailSO(so)}>
+                            <Mail className="mr-2 h-4 w-4" />Send Email
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           {so.status === 'draft' && (
@@ -673,6 +875,53 @@ export default function SalesOrdersPage() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* View SO Dialog */}
+      <Dialog open={!!viewSO} onOpenChange={o => { if (!o) setViewSO(null) }}>
+        <DialogContent className="w-[98vw] sm:!max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Eye className="h-4 w-4" />Sales Order — {viewSO?.so_number ?? '—'}</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-hidden">
+            {viewSO && (
+              <iframe
+                srcDoc={buildSOHtml(viewSO, viewSOItems)}
+                style={{ width: '100%', minHeight: '560px', border: 'none' }}
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Email SO Dialog */}
+      <Dialog open={!!emailSO} onOpenChange={o => { if (!o && !sendingEmailSO) setEmailSO(null) }}>
+        <DialogContent className="sm:!max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Mail className="h-4 w-4" />Send Sales Order</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-1.5">
+              <Label>Recipient Email</Label>
+              <Input
+                type="email"
+                placeholder="client@example.com"
+                value={emailToSO}
+                onChange={e => setEmailToSO(e.target.value)}
+                disabled={sendingEmailSO}
+              />
+            </div>
+            <div className="text-sm text-muted-foreground">
+              Sending SO <span className="font-mono font-semibold">{emailSO?.so_number ?? '—'}</span> to <span className="font-semibold">{emailSO?.client_name}</span>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setEmailSO(null)} disabled={sendingEmailSO}>Cancel</Button>
+              <Button onClick={handleSendEmailSO} disabled={sendingEmailSO} className="bg-red-600 hover:bg-red-700">
+                {sendingEmailSO ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Sending…</> : <><Mail className="h-4 w-4 mr-2" />Send Email</>}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Item Search Dialog */}
       <Dialog open={itemSearchIdx !== null} onOpenChange={o => { if (!o) setItemSearchIdx(null) }}>
