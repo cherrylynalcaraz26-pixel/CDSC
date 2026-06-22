@@ -483,7 +483,7 @@ export default function SalesOrdersPage() {
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                   <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `₱${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip formatter={(v: number) => [`₱${v.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, 'Revenue']} />
+                  <Tooltip formatter={(v: any) => [`₱${(v ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, 'Revenue']} />
                   <Bar dataKey="total" name="Revenue" fill="#dc2626" radius={[3, 3, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
