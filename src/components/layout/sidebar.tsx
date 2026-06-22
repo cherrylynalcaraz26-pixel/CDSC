@@ -27,7 +27,6 @@ interface NavItem {
 const navigation: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'CRM / Inquiry', href: '/crm', icon: TrendingUp },
-  { label: 'Clients', href: '/clients', icon: Users },
   { label: 'Client Requests', href: '/client-requests', icon: ClipboardList },
   {
     label: 'Purchasing', icon: ShoppingCart,
@@ -52,6 +51,7 @@ const navigation: NavItem[] = [
     label: 'Setup', icon: Wrench,
     children: [
       { label: 'Configuration', href: '/setup', icon: SlidersHorizontal },
+      { label: 'Clients', href: '/clients', icon: Users },
       { label: 'Reports', href: '/reports', icon: FileBarChart },
       { label: 'Users', href: '/users', icon: Users },
     ],
