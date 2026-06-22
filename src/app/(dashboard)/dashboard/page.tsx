@@ -8,11 +8,12 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
+  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
 } from 'recharts'
 import {
   Package, ShoppingCart, Truck, FileText, ClipboardList,
   TrendingUp, Cpu, Users, ArrowRight, Loader2, ChevronDown, ChevronUp,
+  AlertTriangle, Clock, CheckCircle2, TrendingDown,
 } from 'lucide-react'
 import Link from 'next/link'
 import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns'
@@ -35,6 +36,8 @@ interface RecentPR { id: string; pr_number: string | null; created_at: string; d
 interface ORClientRow { client: string; collected: number; ewt: number; ors: number }
 interface CSIClientRow { client: string; billed: number; invoices: number; items: number }
 interface ReconRow { client: string; csi_billed: number; or_collected: number; diff: number; status: 'Balanced' | 'Outstanding' | 'Over-collected' }
+interface MonthlySOBar { month: string; revenue: number; orders: number }
+interface TopClient { client: string; revenue: number; orders: number }
 
 const STATUS_COLORS: Record<string, string> = {
   open:       'bg-blue-100 text-blue-700',
@@ -86,6 +89,12 @@ export default function DashboardPage() {
   const [csiDetails, setCsiDetails] = useState<Record<string, any[]>>({})
   const [detailModal, setDetailModal] = useState<{ type: 'or' | 'csi' | 'recon'; client: string } | null>(null)
   const [loading, setLoading] = useState(true)
+  const [decisionOpen, setDecisionOpen] = useState(true)
+  const [decisionMakerOpen, setDecisionMakerOpen] = useState(true)
+  const [overduePOCount, setOverduePOCount] = useState(0)
+  const [lowStockCount, setLowStockCount] = useState(0)
+  const [soMonthlyBars, setSoMonthlyBars] = useState<MonthlySOBar[]>([])
+  const [topClients, setTopClients] = useState<TopClient[]>([])
 
   useEffect(() => {
     async function load() {
@@ -200,6 +209,41 @@ export default function DashboardPage() {
       setMonthlyData(bars)
       setRecentDRs((recentDRData.data ?? []) as RecentDR[])
       setRecentPRs((recentPRData.data ?? []) as RecentPR[])
+
+      // --- Decision Center: overdue POs & low stock ---
+      const today = new Date().toISOString().slice(0, 10)
+      const overduePOs = (openPOsData.data ?? []).filter((p: any) => p.delivery_date && p.delivery_date < today)
+      setOverduePOCount(overduePOs.length)
+      const { count: lsCount } = await supabase.from('items').select('id', { count: 'exact', head: true }).in('status', ['low_stock', 'out_of_stock'])
+      setLowStockCount(lsCount ?? 0)
+
+      // --- Decision Maker: monthly SO revenue + top clients ---
+      const { data: soAll } = await supabase.from('sales_orders').select('so_date, created_at, client_name, total_amount, status').not('status', 'eq', 'cancelled')
+      const soList = soAll ?? []
+      const soBars: MonthlySOBar[] = Array.from({ length: 6 }, (_, i) => {
+        const d = subMonths(now, 5 - i)
+        const start = startOfMonth(d).toISOString().slice(0, 10)
+        const end = endOfMonth(d).toISOString().slice(0, 10)
+        const monthSOs = soList.filter((s: any) => {
+          const dt = (s.so_date ?? s.created_at ?? '').slice(0, 10)
+          return dt >= start && dt <= end
+        })
+        return {
+          month: format(d, 'MMM'),
+          revenue: monthSOs.reduce((sum: number, s: any) => sum + (Number(s.total_amount) || 0), 0),
+          orders: monthSOs.length,
+        }
+      })
+      setSoMonthlyBars(soBars)
+      const clientMap: Record<string, { revenue: number; orders: number }> = {}
+      for (const s of soList) {
+        const name = (s as any).client_name?.trim() || 'Unknown'
+        if (!clientMap[name]) clientMap[name] = { revenue: 0, orders: 0 }
+        clientMap[name].revenue += Number((s as any).total_amount) || 0
+        clientMap[name].orders += 1
+      }
+      setTopClients(Object.entries(clientMap).map(([client, v]) => ({ client, ...v })).sort((a, b) => b.revenue - a.revenue).slice(0, 5))
+
       setLoading(false)
     }
     load()
@@ -226,6 +270,53 @@ export default function DashboardPage() {
         <StatCard title="CSI This Month" value={loading ? '—' : kpi.csiThisMonth} icon={TrendingUp} color="text-purple-600" href="/csi-monitoring" />
         <StatCard title="Assets" value={loading ? '—' : kpi.totalAssets} icon={Cpu} href="/assets" />
       </div>
+
+      {/* Decision Center */}
+      <Card>
+        <CardHeader className="pb-0 pt-4 px-4">
+          <button className="flex items-center justify-between w-full text-left" onClick={() => setDecisionOpen(o => !o)}>
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-500" />
+              Decision Center — Action Required
+            </CardTitle>
+            {decisionOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+          </button>
+        </CardHeader>
+        {decisionOpen && (
+          <CardContent className="pt-4 pb-3 space-y-2">
+            {loading ? (
+              <div className="text-center py-4"><Loader2 className="h-4 w-4 animate-spin mx-auto text-muted-foreground" /></div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className={`flex items-center gap-3 rounded-lg border px-4 py-3 ${overduePOCount > 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
+                  <Clock className={`h-5 w-5 shrink-0 ${overduePOCount > 0 ? 'text-red-500' : 'text-green-500'}`} />
+                  <div>
+                    <div className={`text-lg font-bold ${overduePOCount > 0 ? 'text-red-700' : 'text-green-700'}`}>{overduePOCount}</div>
+                    <div className="text-xs text-muted-foreground">Overdue Purchase Orders</div>
+                  </div>
+                  {overduePOCount > 0 && <Link href="/purchase-orders" className="ml-auto text-xs text-red-600 hover:underline">Review →</Link>}
+                </div>
+                <div className={`flex items-center gap-3 rounded-lg border px-4 py-3 ${kpi.pendingPRs > 0 ? 'bg-yellow-50 border-yellow-200' : 'bg-green-50 border-green-200'}`}>
+                  <FileText className={`h-5 w-5 shrink-0 ${kpi.pendingPRs > 0 ? 'text-yellow-500' : 'text-green-500'}`} />
+                  <div>
+                    <div className={`text-lg font-bold ${kpi.pendingPRs > 0 ? 'text-yellow-700' : 'text-green-700'}`}>{kpi.pendingPRs}</div>
+                    <div className="text-xs text-muted-foreground">Purchase Requests Pending</div>
+                  </div>
+                  {kpi.pendingPRs > 0 && <Link href="/purchase-requests" className="ml-auto text-xs text-yellow-700 hover:underline">Review →</Link>}
+                </div>
+                <div className={`flex items-center gap-3 rounded-lg border px-4 py-3 ${lowStockCount > 0 ? 'bg-orange-50 border-orange-200' : 'bg-green-50 border-green-200'}`}>
+                  <Package className={`h-5 w-5 shrink-0 ${lowStockCount > 0 ? 'text-orange-500' : 'text-green-500'}`} />
+                  <div>
+                    <div className={`text-lg font-bold ${lowStockCount > 0 ? 'text-orange-700' : 'text-green-700'}`}>{lowStockCount}</div>
+                    <div className="text-xs text-muted-foreground">Low / Out of Stock Items</div>
+                  </div>
+                  {lowStockCount > 0 && <Link href="/items" className="ml-auto text-xs text-orange-600 hover:underline">Review →</Link>}
+                </div>
+              </div>
+            )}
+          </CardContent>
+        )}
+      </Card>
 
       {/* PO Pipeline */}
       <Card>
@@ -347,6 +438,62 @@ export default function DashboardPage() {
                 })}
               </div>
             )}
+          </CardContent>
+        )}
+      </Card>
+
+      {/* Decision Maker — Sales Performance */}
+      <Card>
+        <CardHeader className="pb-0 pt-4 px-4">
+          <button className="flex items-center justify-between w-full text-left" onClick={() => setDecisionMakerOpen(o => !o)}>
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-blue-600" />
+              Decision Maker — Sales Performance
+            </CardTitle>
+            {decisionMakerOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+          </button>
+        </CardHeader>
+        {decisionMakerOpen && (
+          <CardContent className="pt-4">
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+              <div className="lg:col-span-3">
+                <p className="text-xs text-muted-foreground mb-3">Monthly Sales Orders Revenue (Last 6 Months)</p>
+                {loading || soMonthlyBars.every(m => m.revenue === 0) ? (
+                  <div className="h-40 flex items-center justify-center text-muted-foreground text-xs">{loading ? 'Loading…' : 'No sales data yet'}</div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={180}>
+                    <BarChart data={soMonthlyBars} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                      <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `₱${(v / 1000).toFixed(0)}k`} />
+                      <Tooltip formatter={(v: number) => [`₱${v.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, 'Revenue']} />
+                      <Bar dataKey="revenue" name="Revenue" fill="#2563eb" radius={[3, 3, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+              <div className="lg:col-span-2">
+                <p className="text-xs text-muted-foreground mb-3">Top 5 Clients by Revenue</p>
+                {loading ? (
+                  <div className="text-xs text-muted-foreground">Loading…</div>
+                ) : topClients.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">No data yet</div>
+                ) : (
+                  <div className="space-y-2">
+                    {topClients.map((c, i) => (
+                      <div key={c.client} className="flex items-center gap-2">
+                        <div className="h-5 w-5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold flex items-center justify-center shrink-0">{i + 1}</div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-medium truncate">{c.client}</div>
+                          <div className="text-[10px] text-muted-foreground">{c.orders} order{c.orders !== 1 ? 's' : ''}</div>
+                        </div>
+                        <div className="text-xs font-semibold text-blue-600 tabular-nums">₱{(c.revenue / 1000).toFixed(1)}k</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </CardContent>
         )}
       </Card>

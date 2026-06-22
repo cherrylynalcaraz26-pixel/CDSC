@@ -18,6 +18,8 @@ import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
 import { sendEmail, SOPdfData } from '@/lib/send-email'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
+import { subMonths, startOfMonth, endOfMonth, format as fmtDate } from 'date-fns'
 
 type SOStatus = 'draft' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'cancelled'
 
@@ -410,6 +412,19 @@ export default function SalesOrdersPage() {
   }
 
   const todayStr = new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
+
+  const soMonthlyData = (() => {
+    const now = new Date()
+    return Array.from({ length: 6 }, (_, i) => {
+      const d = subMonths(now, 5 - i)
+      const start = startOfMonth(d).toISOString().slice(0, 10)
+      const end = endOfMonth(d).toISOString().slice(0, 10)
+      const total = sos
+        .filter(s => s.status !== 'cancelled' && (s.so_date ?? s.created_at?.slice(0, 10) ?? '') >= start && (s.so_date ?? s.created_at?.slice(0, 10) ?? '') <= end)
+        .reduce((sum, s) => sum + (s.total_amount ?? 0), 0)
+      return { month: fmtDate(d, 'MMM'), total }
+    })
+  })()
   const deliveryStr = deliveryDate ? new Date(deliveryDate + 'T00:00:00').toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }) : ''
 
   return (
@@ -420,7 +435,11 @@ export default function SalesOrdersPage() {
           <p className="text-muted-foreground text-sm">Create and manage client sales orders</p>
         </div>
         {open ? (
-          <Button variant="outline" onClick={() => { setOpen(false); resetForm() }}>
+          <Button variant="outline" onClick={() => {
+            const hasData = clientId || soNumber || lines.some(l => l.item_name)
+            if (hasData && !window.confirm('You have unsaved changes. Discard them?')) return
+            setOpen(false); resetForm()
+          }}>
             <X className="h-4 w-4 mr-2" />Cancel
           </Button>
         ) : (
@@ -448,6 +467,30 @@ export default function SalesOrdersPage() {
           <div className="text-sm text-muted-foreground">Delivered</div>
         </CardContent></Card>
       </div>
+
+      {/* Monthly Sales Chart */}
+      {!open && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium">Monthly Sales Revenue (Last 6 Months)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {soMonthlyData.every(m => m.total === 0) ? (
+              <div className="h-40 flex items-center justify-center text-muted-foreground text-xs">No sales data yet</div>
+            ) : (
+              <ResponsiveContainer width="100%" height={180}>
+                <BarChart data={soMonthlyData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `₱${(v / 1000).toFixed(0)}k`} />
+                  <Tooltip formatter={(v: number) => [`₱${v.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, 'Revenue']} />
+                  <Bar dataKey="total" name="Revenue" fill="#dc2626" radius={[3, 3, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* ── Inline New SO Form ── */}
       {open && (
@@ -611,7 +654,11 @@ export default function SalesOrdersPage() {
                   </div>
 
                   <div className="flex justify-end gap-2 pt-2">
-                    <Button variant="outline" onClick={() => { setOpen(false); resetForm() }}>Cancel</Button>
+                    <Button variant="outline" onClick={() => {
+                      const hasData = clientId || soNumber || lines.some(l => l.item_name)
+                      if (hasData && !window.confirm('You have unsaved changes. Discard them?')) return
+                      setOpen(false); resetForm()
+                    }}>Cancel</Button>
                     <Button type="button" variant="outline" className="gap-1.5" onClick={handlePrint}>
                       <Printer className="h-4 w-4" />Print
                     </Button>

@@ -561,7 +561,11 @@ export default function QuotationPage() {
           <p className="text-muted-foreground text-sm">Create and manage client quotations</p>
         </div>
         {open ? (
-          <Button variant="outline" onClick={() => { setOpen(false); resetForm() }}>
+          <Button variant="outline" onClick={() => {
+            const hasData = clientId || quoteNumber || lines.some(l => l.item_name)
+            if (hasData && !window.confirm('You have unsaved changes. Discard them?')) return
+            setOpen(false); resetForm()
+          }}>
             <X className="h-4 w-4 mr-2" />Cancel
           </Button>
         ) : (
@@ -793,7 +797,11 @@ export default function QuotationPage() {
                   </div>
 
                   <div className="flex justify-end gap-2 pt-2">
-                    <Button variant="outline" onClick={() => { setOpen(false); resetForm() }}>Cancel</Button>
+                    <Button variant="outline" onClick={() => {
+                      const hasData = clientId || quoteNumber || lines.some(l => l.item_name)
+                      if (hasData && !window.confirm('You have unsaved changes. Discard them?')) return
+                      setOpen(false); resetForm()
+                    }}>Cancel</Button>
                     <Button onClick={handleSave} disabled={saving} className="bg-red-600 hover:bg-red-700">
                       {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />{editingId ? 'Updating…' : 'Saving…'}</> : editingId ? 'Update Quotation' : 'Save Quotation'}
                     </Button>

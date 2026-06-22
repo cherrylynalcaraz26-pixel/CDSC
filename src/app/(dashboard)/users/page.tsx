@@ -48,7 +48,7 @@ function avatarColor(id: string) {
 
 interface Profile {
   id: string; full_name: string | null; email: string | null
-  role: string; department: string | null; status: string; created_at: string
+  role: string; department: string | null; company: string | null; status: string; created_at: string
 }
 
 export default function UsersPage() {
@@ -61,14 +61,14 @@ export default function UsersPage() {
   const [editOpen, setEditOpen] = useState(false)
   const [editing, setEditing] = useState<Profile | null>(null)
   const [inviting, setInviting] = useState(false)
-  const [inviteForm, setInviteForm] = useState({ email: '', full_name: '', role: 'client', department: '' })
-  const [editForm, setEditForm] = useState({ full_name: '', role: 'client', department: '' })
+  const [inviteForm, setInviteForm] = useState({ email: '', full_name: '', role: 'client', department: '', company: '' })
+  const [editForm, setEditForm] = useState({ full_name: '', role: 'client', department: '', company: '' })
 
   async function load() {
     setLoading(true)
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, full_name, email, role, department, status, created_at')
+      .select('id, full_name, email, role, department, company, status, created_at')
       .order('created_at', { ascending: false })
     if (error) toast.error(error.message)
     else setProfiles(data ?? [])
@@ -101,11 +101,12 @@ export default function UsersPage() {
           full_name: inviteForm.full_name || null,
           role: inviteForm.role,
           department: inviteForm.department || null,
+          company: inviteForm.company || null,
         })
       }
       toast.success(`Invite sent to ${inviteForm.email}`)
       setInviteOpen(false)
-      setInviteForm({ email: '', full_name: '', role: 'employee', department: '' })
+      setInviteForm({ email: '', full_name: '', role: 'employee', department: '', company: '' })
       load()
     } catch (err: any) {
       toast.error(err.message ?? 'Failed to invite user')
@@ -115,7 +116,7 @@ export default function UsersPage() {
 
   function openEdit(p: Profile) {
     setEditing(p)
-    setEditForm({ full_name: p.full_name ?? '', role: p.role, department: p.department ?? '' })
+    setEditForm({ full_name: p.full_name ?? '', role: p.role, department: p.department ?? '', company: p.company ?? '' })
     setEditOpen(true)
   }
 
@@ -125,6 +126,7 @@ export default function UsersPage() {
       full_name: editForm.full_name || null,
       role: editForm.role,
       department: editForm.department || null,
+      company: editForm.company || null,
     }).eq('id', editing.id)
     if (error) toast.error(error.message)
     else { toast.success('User updated'); setEditOpen(false); load() }
@@ -197,6 +199,7 @@ export default function UsersPage() {
             <TableRow>
               <TableHead>User</TableHead>
               <TableHead>Role</TableHead>
+              <TableHead>Company</TableHead>
               <TableHead>Department</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Joined</TableHead>
@@ -205,11 +208,11 @@ export default function UsersPage() {
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={6} className="text-center py-12">
+              <TableRow><TableCell colSpan={7} className="text-center py-12">
                 <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
               </TableCell></TableRow>
             ) : filtered.length === 0 ? (
-              <TableRow><TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+              <TableRow><TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                 {search || filterRole ? 'No users match your filters.' : 'No users yet. Invite someone to get started.'}
               </TableCell></TableRow>
             ) : filtered.map(p => {
@@ -231,6 +234,7 @@ export default function UsersPage() {
                   <TableCell>
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${role.color}`}>{role.label}</span>
                   </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{p.company ?? '—'}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">{p.department ?? '—'}</TableCell>
                   <TableCell>
                     <button onClick={() => toggleStatus(p)}>
@@ -297,6 +301,11 @@ export default function UsersPage() {
                   onChange={e => setInviteForm(f => ({ ...f, department: e.target.value }))} />
               </div>
             </div>
+            <div className="space-y-1.5">
+              <Label>Company</Label>
+              <Input placeholder="e.g. CDSC Industrial Supply" value={inviteForm.company}
+                onChange={e => setInviteForm(f => ({ ...f, company: e.target.value }))} />
+            </div>
             <p className="text-xs text-muted-foreground bg-muted p-3 rounded-md">
               A confirmation email will be sent. The user must confirm their email and set their password before logging in.
             </p>
@@ -346,6 +355,10 @@ export default function UsersPage() {
                 <Label>Department</Label>
                 <Input value={editForm.department} onChange={e => setEditForm(f => ({ ...f, department: e.target.value }))} />
               </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Company</Label>
+              <Input placeholder="Company name" value={editForm.company} onChange={e => setEditForm(f => ({ ...f, company: e.target.value }))} />
             </div>
           </div>
           <DialogFooter>

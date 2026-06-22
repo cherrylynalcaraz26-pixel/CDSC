@@ -183,7 +183,7 @@ export default function PurchaseOrdersPage() {
   useEffect(() => { load() }, [])
 
   // Computed totals
-  const subtotal = lines.reduce((s, l) => s + (parseFloat(l.selling_price) || 0) * (parseFloat(l.quantity) || 0), 0)
+  const subtotal = lines.reduce((s, l) => s + (parseFloat(l.unit_price) || 0) * (parseFloat(l.quantity) || 0), 0)
   const selectedSupplier = suppliers.find(s => s.id === supplierId)
   const ewtCfg = EWT_CFG[ewtType]
   const taxRate = ewtCfg.rate
@@ -247,15 +247,15 @@ export default function PurchaseOrdersPage() {
     setOpen(true)
   }
 
-  async function updateItemSellingPrice(itemName: string, newPrice: string) {
+  async function updateItemUnitPrice(itemName: string, newPrice: string) {
     const price = parseFloat(newPrice)
     if (!itemName || isNaN(price) || price <= 0) {
-      toast.error('Enter a valid selling price first')
+      toast.error('Enter a valid unit price first')
       return
     }
-    const { error } = await supabase.from('items').update({ selling_price: price }).eq('item_name', itemName)
-    if (error) toast.error('Failed to update selling price')
-    else toast.success(`Selling price updated to ₱${price.toLocaleString('en-PH', { minimumFractionDigits: 2 })} — affects future records only`)
+    const { error } = await supabase.from('items').update({ cost: price }).eq('item_name', itemName)
+    if (error) toast.error('Failed to update unit price')
+    else toast.success(`Unit price updated to ₱${price.toLocaleString('en-PH', { minimumFractionDigits: 2 })} — affects future records only`)
   }
 
   async function submitPO() {
@@ -491,7 +491,7 @@ export default function PurchaseOrdersPage() {
         unit: l.unit || null,
         unit_price: parseFloat(l.unit_price) || 0,
         selling_price: parseFloat(l.selling_price) || null,
-        total_amount: (parseFloat(l.selling_price) || parseFloat(l.unit_price) || 0) * (parseFloat(l.quantity) || 1),
+        total_amount: (parseFloat(l.unit_price) || 0) * (parseFloat(l.quantity) || 1),
       }))
     }
 
@@ -579,11 +579,15 @@ export default function PurchaseOrdersPage() {
           <p className="text-muted-foreground text-sm">Manage supplier purchase orders, track deliveries and payments</p>
         </div>
         {open ? (
-          <Button variant="outline" onClick={() => { setOpen(false); resetForm() }}>
+          <Button variant="outline" onClick={() => {
+            const hasData = supplierId || poNumber || lines.some(l => l.item_name)
+            if (hasData && !window.confirm('You have unsaved changes. Discard them?')) return
+            setOpen(false); resetForm()
+          }}>
             <X className="h-4 w-4 mr-2" />Cancel
           </Button>
         ) : (
-          <Button onClick={() => { resetForm(); setOpen(true) }} className="bg-red-600 hover:bg-red-700">
+          <Button onClick={() => setOpen(true)} className="bg-red-600 hover:bg-red-700">
             <Plus className="h-4 w-4 mr-2" />Create PO
           </Button>
         )}
@@ -942,15 +946,14 @@ export default function PurchaseOrdersPage() {
                             <TableHead className="min-w-[160px]">Item Description</TableHead>
                             <TableHead className="w-16">Qty</TableHead>
                             <TableHead className="w-16">Unit</TableHead>
-                            <TableHead className="w-28">Unit Price <span className="font-normal text-muted-foreground text-[10px]">(ref)</span></TableHead>
-                            <TableHead className="w-32">Selling Price</TableHead>
+                            <TableHead className="w-36">Unit Price</TableHead>
                             <TableHead className="w-24 text-right">Amount</TableHead>
                             <TableHead className="w-8"></TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {lines.map((line, i) => {
-                            const lineTotal = (parseFloat(line.selling_price) || 0) * (parseFloat(line.quantity) || 0)
+                            const lineTotal = (parseFloat(line.unit_price) || 0) * (parseFloat(line.quantity) || 0)
                             const itemMeta = items.find(it => it.item_name === line.item_name)
                             const statusCfg = itemMeta ? (ITEM_STATUS_CFG[itemMeta.status] ?? ITEM_STATUS_CFG.active) : null
                             const stockQty = line.item_name ? (warehouseStock[line.item_name] ?? 0) : null
@@ -996,16 +999,12 @@ export default function PurchaseOrdersPage() {
                                   <div className="h-8 flex items-center px-2 text-xs bg-muted/40 rounded border text-muted-foreground">{line.unit || '—'}</div>
                                 </TableCell>
                                 <TableCell className="py-1.5">
-                                  <Input type="number" min={0} step="0.01" className="h-8 text-xs" placeholder="0.00" value={line.unit_price}
-                                    onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, unit_price: e.target.value } : l))} />
-                                </TableCell>
-                                <TableCell className="py-1.5">
                                   <div className="flex gap-1 items-center">
-                                    <Input type="number" min={0} step="0.01" className="h-8 text-xs flex-1 min-w-0" placeholder="0.00" value={line.selling_price}
-                                      onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, selling_price: e.target.value } : l))} />
+                                    <Input type="number" min={0} step="0.01" className="h-8 text-xs flex-1 min-w-0" placeholder="0.00" value={line.unit_price}
+                                      onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, unit_price: e.target.value } : l))} />
                                     <Button type="button" variant="ghost" size="icon" className="h-8 w-7 shrink-0 text-muted-foreground hover:text-blue-600"
-                                      title="Update item default selling price (affects future records only)"
-                                      onClick={() => updateItemSellingPrice(line.item_name, line.selling_price)}>
+                                      title="Update item default unit price (affects future records only)"
+                                      onClick={() => updateItemUnitPrice(line.item_name, line.unit_price)}>
                                       <Pencil className="h-3 w-3" />
                                     </Button>
                                   </div>
