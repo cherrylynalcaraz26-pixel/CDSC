@@ -35,7 +35,6 @@ export default function NewRequestPage() {
   const [clientName, setClientName] = useState('')
   const [subject, setSubject] = useState('')
   const [message, setMessage] = useState('')
-  const [priority, setPriority] = useState('normal')
   const [items, setItems] = useState<Item[]>([blankItem()])
   const [submitting, setSubmitting] = useState(false)
 
@@ -60,9 +59,6 @@ export default function NewRequestPage() {
     setItems(prev => prev.map((item, idx) => idx === i ? { ...item, [k]: v } : item))
   }
 
-  function addItem() { setItems(prev => [...prev, blankItem()]) }
-  function removeItem(i: number) { setItems(prev => prev.filter((_, idx) => idx !== i)) }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!subject.trim()) { toast.error('Subject is required'); return }
@@ -70,19 +66,40 @@ export default function NewRequestPage() {
     const filledItems = items.filter(it => it.description.trim())
     setSubmitting(true)
     try {
-      const { data: numData } = await supabase.rpc('next_request_number')
-      const { error } = await supabase.from('client_requests').insert({
-        request_number: numData ?? `REQ-${Date.now()}`,
-        client_id: clientId,
-        client_name: clientName,
-        subject: subject.trim(),
-        message: message.trim() || null,
-        items: filledItems,
-        priority,
-        status: 'pending',
-      })
-      if (error) throw error
-      toast.success('Purchase request submitted!')
+      const today = new Date().toISOString().split('T')[0]
+      const soNumber = `SO-P-${Date.now().toString().slice(-8)}`
+
+      const { data: soData, error: soErr } = await supabase
+        .from('sales_orders')
+        .insert({
+          so_number: soNumber,
+          so_date: today,
+          client_id: clientId,
+          client_name: clientName,
+          client_po_number: subject.trim(),
+          remarks: message.trim() || null,
+          status: 'draft',
+          total_amount: 0,
+        })
+        .select('id')
+        .single()
+
+      if (soErr) throw soErr
+
+      if (soData?.id && filledItems.length > 0) {
+        const itemRows = filledItems.map(it => ({
+          so_id: soData.id,
+          item_name: it.description,
+          quantity: parseFloat(it.quantity) || 1,
+          unit: it.unit,
+          unit_price: 0,
+          total_amount: 0,
+        }))
+        const { error: itemErr } = await supabase.from('so_items').insert(itemRows)
+        if (itemErr) toast.error(`Items: ${itemErr.message}`)
+      }
+
+      toast.success('Purchase request submitted as Sales Order!')
       router.push('/portal/requests')
     } catch (err: any) {
       toast.error(err.message ?? 'Failed to submit request')
@@ -94,18 +111,17 @@ export default function NewRequestPage() {
     <div className="max-w-2xl mx-auto space-y-6">
       <div>
         <Link href="/portal/requests" className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4">
-          <ChevronLeft className="h-4 w-4" /> Back to Requests
+          <ChevronLeft className="h-4 w-4" /> Back to My Orders
         </Link>
         <h1 className="text-2xl font-bold">New Purchase Request</h1>
         <p className="text-muted-foreground text-sm mt-1">Submit a request for products or services to CDSC Industrial Supply.</p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Request details */}
         <Card>
           <CardContent className="pt-5 space-y-4">
             <div className="space-y-1.5">
-              <Label>Subject / Title <span className="text-red-500">*</span></Label>
+              <Label>Subject / Purchase Reference <span className="text-red-500">*</span></Label>
               <Input
                 value={subject}
                 onChange={e => setSubject(e.target.value)}
@@ -113,37 +129,24 @@ export default function NewRequestPage() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Priority</Label>
-              <Select value={priority} onValueChange={(v: string | null) => setPriority(v ?? 'normal')}>
-                <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="normal">Normal</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="urgent">Urgent</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Message / Description</Label>
+              <Label>Additional Notes</Label>
               <Textarea
-                rows={4}
+                rows={3}
                 value={message}
                 onChange={e => setMessage(e.target.value)}
-                placeholder="Describe what you need, delivery requirements, project details, etc."
+                placeholder="Delivery requirements, project details, special instructions, etc."
               />
             </div>
           </CardContent>
         </Card>
 
-        {/* Items */}
         <div>
           <div className="flex items-center justify-between mb-3">
             <div>
-              <h2 className="font-semibold">Items Needed</h2>
-              <p className="text-xs text-muted-foreground">List the specific items you require (optional)</p>
+              <h2 className="font-semibold">Items Requested</h2>
+              <p className="text-xs text-muted-foreground">List the specific items you require</p>
             </div>
-            <Button type="button" variant="outline" size="sm" onClick={addItem}>
+            <Button type="button" variant="outline" size="sm" onClick={() => setItems(p => [...p, blankItem()])}>
               <Plus className="h-3.5 w-3.5 mr-1" /> Add Item
             </Button>
           </div>
@@ -192,7 +195,8 @@ export default function NewRequestPage() {
                     </div>
                     <div className="col-span-1 flex items-end pb-0.5 justify-end">
                       {items.length > 1 && (
-                        <button type="button" onClick={() => removeItem(i)} className="h-8 w-8 flex items-center justify-center rounded text-muted-foreground hover:text-red-600 hover:bg-red-50 transition-colors">
+                        <button type="button" onClick={() => setItems(p => p.filter((_, idx) => idx !== i))}
+                          className="h-8 w-8 flex items-center justify-center rounded text-muted-foreground hover:text-red-600 hover:bg-red-50 transition-colors">
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
                       )}
