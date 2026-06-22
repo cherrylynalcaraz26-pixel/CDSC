@@ -717,13 +717,13 @@ export default function DRLogsPage() {
                     </Button>
                   </div>
                   <div ref={printRef} className="border rounded-lg bg-white text-[11px] p-4 shadow-sm space-y-3 font-sans">
-                    {/* Header: logo + company name LEFT | address/phone/email/TIN RIGHT */}
+                    {/* Header: logo LEFT | company name + address RIGHT */}
                     <div className="flex justify-between items-start border-b pb-3">
-                      <div className="flex items-center gap-2">
+                      <div>
                         <img src="/cdsc-logo.jpg" alt="CDSC" className="h-12 w-12 rounded object-cover" />
-                        <div className="text-[13px] font-bold text-red-700">{companyInfo?.company_name || 'CDSC INDUSTRIAL'}</div>
                       </div>
                       <div className="text-right">
+                        <div className="text-[13px] font-bold text-red-700 mb-0.5">{companyInfo?.company_name || 'CDSC Industrial Supply'}</div>
                         {companyInfo?.address && <div className="text-[9px] text-gray-500">{companyInfo.address}</div>}
                         {(companyInfo?.phone || companyInfo?.email) && (
                           <div className="text-[9px] text-gray-500">

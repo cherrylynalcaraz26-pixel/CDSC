@@ -236,14 +236,16 @@ export default function SalesOrdersPage() {
       table{border-collapse:collapse;width:100%}
     </style></head><body>
     <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:12px;border-bottom:1px solid #e5e7eb;margin-bottom:14px">
-      <div style="display:flex;align-items:center;gap:10px">
+      <div>
         <img src="${logoUrl}" style="width:64px;height:64px;object-fit:cover;border-radius:4px"/>
-        <div style="font-size:14px;font-weight:bold;color:#b91c1c">${info?.company_name ?? 'CDSC INDUSTRIAL SUPPLY'}</div>
       </div>
-      <div style="text-align:right;font-size:9px;color:#6b7280">
-        ${info?.address ? `<div>${info.address}</div>` : ''}
-        ${info?.phone || info?.email ? `<div>${[info.phone, info.email].filter(Boolean).join(' | ')}</div>` : ''}
-        ${info?.tin ? `<div>TIN: ${info.tin}</div>` : ''}
+      <div style="text-align:right">
+        <div style="font-size:14px;font-weight:bold;color:#b91c1c;margin-bottom:2px">${info?.company_name ?? 'CDSC Industrial Supply'}</div>
+        <div style="font-size:9px;color:#6b7280">
+          ${info?.address ? `<div>${info.address}</div>` : ''}
+          ${info?.phone || info?.email ? `<div>${[info.phone, info.email].filter(Boolean).join(' | ')}</div>` : ''}
+          ${info?.tin ? `<div>TIN: ${info.tin}</div>` : ''}
+        </div>
       </div>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;padding-bottom:12px;border-bottom:1px solid #e5e7eb;margin-bottom:14px">

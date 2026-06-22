@@ -98,22 +98,18 @@ async function buildQuotePdf(data: QuotationPdfData): Promise<string> {
 
   // ── Header ──────────────────────────────────────────────────────────────
   const logoSize = 80
-  let textStartX = margin
 
   if (data.logoDataUrl) {
-    try {
-      pdf.addImage(data.logoDataUrl, 'JPEG', margin, y, logoSize, logoSize)
-      textStartX = margin + logoSize + 10
-    } catch { /* skip logo on error */ }
+    try { pdf.addImage(data.logoDataUrl, 'JPEG', margin, y, logoSize, logoSize) }
+    catch { /* skip logo on error */ }
   }
 
-  // Company name vertically centered with logo
+  // Right: company name then address/phone/tin
   setFont('bold')
   pdf.setFontSize(14)
   pdf.setTextColor(185, 28, 28)
-  pdf.text(data.companyName, textStartX, y + logoSize / 2 + 5)
+  pdf.text(data.companyName, W - margin, y + 14, { align: 'right' })
 
-  // Right: address/phone/tin
   setFont()
   pdf.setFontSize(8)
   pdf.setTextColor(107, 114, 128)
@@ -124,10 +120,10 @@ async function buildQuotePdf(data: QuotationPdfData): Promise<string> {
     data.companyTin ? `TIN: ${data.companyTin}` : undefined,
   ].filter(Boolean) as string[]
   rightLines.forEach((line, i) => {
-    pdf.text(line, W - margin, y + 8 + i * 10, { align: 'right' })
+    pdf.text(line, W - margin, y + 26 + i * 10, { align: 'right' })
   })
 
-  y += Math.max(logoSize, rightLines.length * 10) + 6
+  y += Math.max(logoSize, 26 + rightLines.length * 10) + 6
   pdf.setDrawColor(229, 231, 235)
   pdf.line(margin, y, W - margin, y)
   y += 12
@@ -363,23 +359,22 @@ async function buildPOPdf(data: POPdfData): Promise<string> {
 
   // ── Header ────────────────────────────────────────────────────────────────
   const logoSize = 80
-  let textStartX = margin
   if (data.logoDataUrl) {
-    try { pdf.addImage(data.logoDataUrl, 'JPEG', margin, y, logoSize, logoSize); textStartX = margin + logoSize + 10 }
+    try { pdf.addImage(data.logoDataUrl, 'JPEG', margin, y, logoSize, logoSize) }
     catch { /* skip */ }
   }
   setFont('bold')
   pdf.setFontSize(14)
   pdf.setTextColor(185, 28, 28)
-  pdf.text(data.companyName, textStartX, y + logoSize / 2 + 5)
+  pdf.text(data.companyName, W - margin, y + 14, { align: 'right' })
 
   setFont()
   pdf.setFontSize(8)
   pdf.setTextColor(107, 114, 128)
   const rightLines = [data.companyAddress, data.companyPhone, data.companyEmail, data.companyTin ? `TIN: ${data.companyTin}` : undefined].filter(Boolean) as string[]
-  rightLines.forEach((line, i) => pdf.text(line, W - margin, y + 8 + i * 10, { align: 'right' }))
+  rightLines.forEach((line, i) => pdf.text(line, W - margin, y + 26 + i * 10, { align: 'right' }))
 
-  y += Math.max(logoSize, rightLines.length * 10) + 6
+  y += Math.max(logoSize, 26 + rightLines.length * 10) + 6
   pdf.setDrawColor(229, 231, 235)
   pdf.line(margin, y, W - margin, y)
   y += 12
@@ -598,23 +593,22 @@ async function buildSOPdf(data: SOPdfData): Promise<string> {
   }
 
   const logoSize = 80
-  let textStartX = margin
   if (data.logoDataUrl) {
-    try { pdf.addImage(data.logoDataUrl, 'JPEG', margin, y, logoSize, logoSize); textStartX = margin + logoSize + 10 }
+    try { pdf.addImage(data.logoDataUrl, 'JPEG', margin, y, logoSize, logoSize) }
     catch { /* skip */ }
   }
   setFont('bold')
   pdf.setFontSize(14)
   pdf.setTextColor(185, 28, 28)
-  pdf.text(data.companyName, textStartX, y + logoSize / 2 + 5)
+  pdf.text(data.companyName, W - margin, y + 14, { align: 'right' })
 
   setFont()
   pdf.setFontSize(8)
   pdf.setTextColor(107, 114, 128)
   const rightLines = [data.companyAddress, data.companyPhone, data.companyEmail, data.companyTin ? `TIN: ${data.companyTin}` : undefined].filter(Boolean) as string[]
-  rightLines.forEach((line, i) => pdf.text(line, W - margin, y + 8 + i * 10, { align: 'right' }))
+  rightLines.forEach((line, i) => pdf.text(line, W - margin, y + 26 + i * 10, { align: 'right' }))
 
-  y += Math.max(logoSize, rightLines.length * 10) + 6
+  y += Math.max(logoSize, 26 + rightLines.length * 10) + 6
   pdf.setDrawColor(229, 231, 235)
   pdf.line(margin, y, W - margin, y)
   y += 12
