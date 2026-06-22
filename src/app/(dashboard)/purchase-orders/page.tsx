@@ -1075,23 +1075,22 @@ export default function PurchaseOrdersPage() {
                   </div>
 
                   <div ref={printRef} className="border rounded-lg bg-white text-[11px] p-5 shadow-sm space-y-3 font-sans">
-                    {/* Header: Logo + Company Name (left) | Address / Phone / TIN (right) */}
+                    {/* Header: Logo (left) | Company Name + Address (right) */}
                     <div className="flex justify-between items-start border-b pb-3">
-                      {/* Left: logo + company name */}
-                      <div className="flex items-center gap-2.5">
-                        <img src={companyInfo?.logo_url || '/cdsc-logo.jpg'} alt={companyInfo?.company_name || 'Logo'} className="h-12 w-12 rounded object-cover shrink-0" />
-                        <div className="text-[13px] font-bold text-red-700 leading-tight">
-                          {companyInfo?.company_name || 'CDSC INDUSTRIAL'}
-                        </div>
+                      <div>
+                        <img src={companyInfo?.logo_url || '/cdsc-logo.jpg'} alt={companyInfo?.company_name || 'Logo'} className="h-12 w-12 rounded object-cover" />
                       </div>
-
-                      {/* Right: address / phone / TIN */}
-                      <div className="text-right text-[9px] text-gray-500 space-y-0.5">
-                        {companyInfo?.address && <div>{companyInfo.address}</div>}
-                        {(companyInfo?.phone || companyInfo?.email) && (
-                          <div>{companyInfo.phone}{companyInfo.phone && companyInfo.email ? ' | ' : ''}{companyInfo.email}</div>
-                        )}
-                        {companyInfo?.tin && <div>TIN: {companyInfo.tin}</div>}
+                      <div className="text-right space-y-0.5">
+                        <div className="text-[13px] font-bold text-red-700 leading-tight">
+                          {companyInfo?.company_name || 'CDSC Industrial Supply'}
+                        </div>
+                        <div className="text-[9px] text-gray-500">
+                          {companyInfo?.address && <div>{companyInfo.address}</div>}
+                          {(companyInfo?.phone || companyInfo?.email) && (
+                            <div>{companyInfo.phone}{companyInfo.phone && companyInfo.email ? ' | ' : ''}{companyInfo.email}</div>
+                          )}
+                          {companyInfo?.tin && <div>TIN: {companyInfo.tin}</div>}
+                        </div>
                       </div>
                     </div>
 
