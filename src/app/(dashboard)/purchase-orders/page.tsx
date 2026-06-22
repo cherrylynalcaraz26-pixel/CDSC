@@ -214,7 +214,7 @@ export default function PurchaseOrdersPage() {
     // Load existing line items
     const { data: poItems } = await supabase
       .from('po_items')
-      .select('item_name, quantity, unit_of_measure, unit_cost')
+      .select('item_name, quantity, unit_of_measure, unit_cost, selling_price')
       .eq('po_id', po.id)
       .order('created_at')
     if (poItems && poItems.length > 0) {
@@ -223,7 +223,7 @@ export default function PurchaseOrdersPage() {
         quantity: String(r.quantity ?? 1),
         unit: r.unit_of_measure ?? '',
         unit_price: String(r.unit_cost ?? ''),
-        selling_price: '',
+        selling_price: r.selling_price != null ? String(r.selling_price) : '',
       })))
     }
 
@@ -288,6 +288,7 @@ export default function PurchaseOrdersPage() {
           quantity: parseFloat(l.quantity) || 1,
           unit_of_measure: l.unit || null,
           unit_cost: parseFloat(l.unit_price) || 0,
+          selling_price: parseFloat(l.selling_price) || null,
           total_cost: (parseFloat(l.unit_price) || 0) * (parseFloat(l.quantity) || 1),
         }))
         await supabase.from('po_items').insert(itemRows)
