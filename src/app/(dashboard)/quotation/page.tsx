@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Plus, MoreHorizontal, Loader2, Trash2, X, FileText, Printer, Mail, Send, Package, Search, Pencil, Eye, CheckCircle, XCircle, Clock, CheckCheck } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSearchContext } from '@/context/search-context'
-import { sendEmail } from '@/lib/send-email'
+import { sendEmail, QuotationPdfData } from '@/lib/send-email'
 import Image from 'next/image'
 
 interface Client { id: string; company_name: string; email: string | null }
@@ -289,6 +289,27 @@ export default function QuotationPage() {
     setOpen(false)
     load()
     setSaving(false)
+  }
+
+  function buildQuotePdfData(q: Quotation, items: { item_name: string; quantity: number; unit: string | null; unit_price: number; selling_price: number | null; total_amount: number }[]): QuotationPdfData {
+    return {
+      companyName: companyInfo?.company_name ?? 'CDSC INDUSTRIAL SUPPLY',
+      companyAddress: companyInfo?.address ?? undefined,
+      companyPhone: companyInfo?.phone ?? undefined,
+      companyEmail: companyInfo?.email ?? undefined,
+      companyTin: companyInfo?.tin ?? undefined,
+      quoteNumber: q.quote_number ?? '—',
+      quoteDate: q.quote_date ?? '—',
+      validUntil: q.valid_until ?? undefined,
+      clientName: q.client_name ?? undefined,
+      subject: q.subject ?? undefined,
+      items,
+      subtotal: q.subtotal ?? 0,
+      vatAmount: q.vat_amount ?? 0,
+      ewtAmount: q.ewt_amount ?? 0,
+      totalAmount: q.total_amount ?? 0,
+      notes: q.notes ?? undefined,
+    }
   }
 
   function buildQuoteHtml(q: Quotation, items: { item_name: string; quantity: number; unit: string | null; unit_price: number; selling_price: number | null; total_amount: number }[] = []) {
@@ -958,7 +979,7 @@ export default function QuotationPage() {
                       to: emailToQ,
                       subject: emailSubjectQ,
                       body: emailBodyQ,
-                      printHtml: buildQuoteHtml(formQ, formItems),
+                      pdfData: buildQuotePdfData(formQ, formItems),
                       pdfFilename: `Quotation-${quoteNumber || 'draft'}.pdf`,
                     })
                     toast.success('Email sent successfully!')
@@ -1038,7 +1059,7 @@ export default function QuotationPage() {
                       to: listEmailTo,
                       subject: listEmailSubject,
                       body: listEmailBody,
-                      printHtml: buildQuoteHtml(q, qItemsForEmail ?? []),
+                      pdfData: buildQuotePdfData(q, qItemsForEmail ?? []),
                       pdfFilename: `Quotation-${q.quote_number ?? 'draft'}.pdf`,
                     })
                     toast.success('Email sent successfully!')

@@ -1,172 +1,328 @@
 import jsPDF from 'jspdf'
-import html2canvas from 'html2canvas'
+
+export interface QuotationPdfData {
+  companyName: string
+  companyAddress?: string
+  companyPhone?: string
+  companyEmail?: string
+  companyTin?: string
+  logoDataUrl?: string
+  quoteNumber: string
+  quoteDate: string
+  validUntil?: string
+  clientName?: string
+  subject?: string
+  items: { item_name: string; quantity: number; unit?: string | null; unit_price: number; selling_price?: number | null; total_amount: number }[]
+  subtotal: number
+  vatAmount: number
+  ewtAmount: number
+  totalAmount: number
+  notes?: string | null
+}
 
 export interface SendEmailPayload {
   to: string
   subject: string
   body: string
+  pdfData?: QuotationPdfData
+  /** @deprecated pass pdfData instead for faster generation */
   printHtml?: string
   pdfFilename?: string
 }
 
-const SAFE_CSS = `
-  *, *::before, *::after { box-sizing: border-box; }
-  body { font-family: Arial, sans-serif; font-size: 11px; color: #111827; background: #fff; margin: 0; padding: 24px; }
-  .font-sans { font-family: Arial, sans-serif; }
-  .font-mono { font-family: monospace; }
-  .font-bold { font-weight: 700; }
-  .font-semibold { font-weight: 600; }
-  .font-medium { font-weight: 500; }
-  .font-extrabold { font-weight: 800; }
-  .font-normal { font-weight: 400; }
-  .italic { font-style: italic; }
-  .text-red-700 { color: #b91c1c; }
-  .text-blue-600 { color: #2563eb; }
-  .text-gray-800 { color: #1f2937; }
-  .text-gray-700 { color: #374151; }
-  .text-gray-500 { color: #6b7280; }
-  .text-gray-400 { color: #9ca3af; }
-  .text-gray-300 { color: #d1d5db; }
-  .text-white { color: #ffffff; }
-  .text-yellow-600 { color: #ca8a04; }
-  .text-orange-600 { color: #ea580c; }
-  .bg-white { background-color: #ffffff; }
-  .bg-gray-50 { background-color: #f9fafb; }
-  .bg-red-700 { background-color: #b91c1c; }
-  .bg-red-100 { background-color: #fee2e2; }
-  .bg-blue-100 { background-color: #dbeafe; }
-  .bg-green-100 { background-color: #dcfce7; }
-  .bg-yellow-100 { background-color: #fef9c3; }
-  .border { border: 1px solid #e5e7eb; }
-  .border-b { border-bottom: 1px solid #e5e7eb; }
-  .border-t { border-top: 1px solid #e5e7eb; }
-  .rounded { border-radius: 4px; }
-  .rounded-lg { border-radius: 8px; }
-  .shadow-sm { box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
-  .p-5 { padding: 20px; }
-  .p-6 { padding: 24px; }
-  .px-1\\.5 { padding-left: 6px; padding-right: 6px; }
-  .py-1 { padding-top: 4px; padding-bottom: 4px; }
-  .pt-2 { padding-top: 8px; }
-  .pt-0\\.5 { padding-top: 2px; }
-  .pb-3 { padding-bottom: 12px; }
-  .mt-1 { margin-top: 4px; }
-  .mt-1\\.5 { margin-top: 6px; }
-  .mb-1 { margin-bottom: 4px; }
-  .space-y-3 > * + * { margin-top: 12px; }
-  .space-y-0\\.5 > * + * { margin-top: 2px; }
-  .space-y-1 > * + * { margin-top: 4px; }
-  .flex { display: flex; }
-  .grid { display: grid; }
-  .items-center { align-items: center; }
-  .items-start { align-items: flex-start; }
-  .justify-between { justify-content: space-between; }
-  .justify-end { justify-content: flex-end; }
-  .justify-center { justify-content: center; }
-  .text-left { text-align: left; }
-  .text-right { text-align: right; }
-  .text-center { text-align: center; }
-  .w-full { width: 100%; }
-  .w-52 { width: 208px; }
-  .w-6 { width: 24px; }
-  .w-14 { width: 56px; }
-  .w-16 { width: 64px; }
-  .w-20 { width: 80px; }
-  .w-24 { width: 96px; }
-  .gap-2 { gap: 8px; }
-  .gap-2\\.5 { gap: 10px; }
-  .gap-3 { gap: 12px; }
-  .shrink-0 { flex-shrink: 0; }
-  .leading-tight { line-height: 1.25; }
-  .uppercase { text-transform: uppercase; }
-  .tracking-widest { letter-spacing: 0.1em; }
-  .whitespace-pre-wrap { white-space: pre-wrap; }
-  .grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
-  .border-collapse { border-collapse: collapse; }
-  table { width: 100%; border-collapse: collapse; }
-  .text-\\[13px\\] { font-size: 13px; }
-  .text-\\[11px\\] { font-size: 11px; }
-  .text-\\[10px\\] { font-size: 10px; }
-  .text-\\[9px\\] { font-size: 9px; }
-  .text-xs { font-size: 12px; }
-  .text-sm { font-size: 14px; }
-  .h-12 { height: 48px; }
-  .w-12 { width: 48px; }
-  .object-cover { object-fit: cover; }
-`
+function fmtAmt(n: number) {
+  return `₱${(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
+}
 
-/**
- * Renders an HTML string to PDF inside an isolated iframe so the main
- * document's Tailwind v4 CSS (which uses lab()/oklch()) never touches
- * the rendered content — avoiding the html2canvas parse error.
- */
+function buildQuotePdf(data: QuotationPdfData): string {
+  const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' })
+  const W = pdf.internal.pageSize.getWidth()
+  const margin = 36
+  const contentW = W - margin * 2
+  let y = margin
+
+  // ── Header ──────────────────────────────────────────────────────────────
+  const logoSize = 36
+  let textStartX = margin
+
+  if (data.logoDataUrl) {
+    try {
+      pdf.addImage(data.logoDataUrl, 'JPEG', margin, y, logoSize, logoSize)
+      textStartX = margin + logoSize + 8
+    } catch { /* skip logo on error */ }
+  }
+
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(13)
+  pdf.setTextColor(185, 28, 28)
+  pdf.text(data.companyName, textStartX, y + 14)
+
+  // Right: address/phone/tin
+  pdf.setFont('helvetica', 'normal')
+  pdf.setFontSize(8)
+  pdf.setTextColor(107, 114, 128)
+  const rightLines = [
+    data.companyAddress,
+    data.companyPhone,
+    data.companyEmail,
+    data.companyTin ? `TIN: ${data.companyTin}` : undefined,
+  ].filter(Boolean) as string[]
+  rightLines.forEach((line, i) => {
+    pdf.text(line, W - margin, y + 8 + i * 10, { align: 'right' })
+  })
+
+  y += Math.max(logoSize, rightLines.length * 10) + 6
+  pdf.setDrawColor(229, 231, 235)
+  pdf.line(margin, y, W - margin, y)
+  y += 12
+
+  // ── Bill To / QUOTATION / Quote# ─────────────────────────────────────────
+  const col = contentW / 3
+
+  // Left: Bill To
+  pdf.setFontSize(8)
+  pdf.setFont('helvetica', 'bold')
+  pdf.setTextColor(156, 163, 175)
+  pdf.text('BILL TO', margin, y)
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(10)
+  pdf.setTextColor(31, 41, 55)
+  pdf.text(data.clientName ?? '—', margin, y + 11)
+  if (data.subject) {
+    pdf.setFont('helvetica', 'normal')
+    pdf.setFontSize(8)
+    pdf.setTextColor(156, 163, 175)
+    pdf.text('SUBJECT', margin, y + 23)
+    pdf.setTextColor(55, 65, 81)
+    pdf.text(data.subject, margin, y + 32)
+  }
+
+  // Center: QUOTATION
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(16)
+  pdf.setTextColor(185, 28, 28)
+  pdf.text('QUOTATION', margin + col + col / 2, y + 14, { align: 'center' })
+
+  // Right: Quote#, Date, Valid Until
+  const rx = W - margin
+  pdf.setFontSize(8)
+  pdf.setFont('helvetica', 'bold')
+  pdf.setTextColor(156, 163, 175)
+  pdf.text('QUOTE NUMBER', rx, y, { align: 'right' })
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(10)
+  pdf.setTextColor(31, 41, 55)
+  pdf.text(data.quoteNumber, rx, y + 11, { align: 'right' })
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(8)
+  pdf.setTextColor(156, 163, 175)
+  pdf.text('DATE', rx, y + 23, { align: 'right' })
+  pdf.setFont('helvetica', 'normal')
+  pdf.setFontSize(9)
+  pdf.setTextColor(31, 41, 55)
+  pdf.text(data.quoteDate, rx, y + 32, { align: 'right' })
+  if (data.validUntil) {
+    pdf.setFont('helvetica', 'bold')
+    pdf.setFontSize(8)
+    pdf.setTextColor(156, 163, 175)
+    pdf.text('VALID UNTIL', rx, y + 44, { align: 'right' })
+    pdf.setFont('helvetica', 'normal')
+    pdf.setFontSize(9)
+    pdf.setTextColor(31, 41, 55)
+    pdf.text(data.validUntil, rx, y + 53, { align: 'right' })
+  }
+
+  y += 60
+  pdf.setDrawColor(229, 231, 235)
+  pdf.line(margin, y, W - margin, y)
+  y += 10
+
+  // ── Items Table ───────────────────────────────────────────────────────────
+  if (data.items.length > 0) {
+    const cols = { num: 20, desc: contentW - 20 - 50 - 60 - 80 - 70, qty: 50, unit: 60, price: 80, total: 70 }
+    const rowH = 16
+    const headerY = y
+
+    // Header background
+    pdf.setFillColor(185, 28, 28)
+    pdf.rect(margin, headerY, contentW, rowH, 'F')
+
+    pdf.setFont('helvetica', 'bold')
+    pdf.setFontSize(8)
+    pdf.setTextColor(255, 255, 255)
+
+    let cx = margin + 4
+    pdf.text('#', cx + cols.num / 2, headerY + 11, { align: 'center' }); cx += cols.num
+    pdf.text('Item Description', cx + 4, headerY + 11); cx += cols.desc
+    pdf.text('QTY', cx + cols.qty / 2, headerY + 11, { align: 'center' }); cx += cols.qty
+    pdf.text('Unit', cx + cols.unit / 2, headerY + 11, { align: 'center' }); cx += cols.unit
+    pdf.text('Unit Price', cx + cols.price / 2, headerY + 11, { align: 'center' }); cx += cols.price
+    pdf.text('Total', cx + cols.total / 2, headerY + 11, { align: 'center' })
+
+    y += rowH
+
+    data.items.forEach((item, i) => {
+      const rowBg = i % 2 === 0 ? [255, 255, 255] : [249, 250, 251]
+      pdf.setFillColor(rowBg[0], rowBg[1], rowBg[2])
+      pdf.rect(margin, y, contentW, rowH, 'F')
+
+      pdf.setFont('helvetica', 'normal')
+      pdf.setFontSize(8)
+      pdf.setTextColor(156, 163, 175)
+
+      let rx2 = margin + 4
+      pdf.text(String(i + 1), rx2 + cols.num / 2, y + 11, { align: 'center' }); rx2 += cols.num
+
+      pdf.setTextColor(31, 41, 55)
+      // Truncate long item names
+      const maxDescW = cols.desc - 8
+      const descText = pdf.splitTextToSize(item.item_name ?? '—', maxDescW)[0]
+      pdf.text(descText, rx2 + 4, y + 11); rx2 += cols.desc
+
+      pdf.setFont('helvetica', 'bold')
+      pdf.text(String(item.quantity), rx2 + cols.qty / 2, y + 11, { align: 'center' }); rx2 += cols.qty
+
+      pdf.setFont('helvetica', 'normal')
+      pdf.setTextColor(107, 114, 128)
+      pdf.text(item.unit ?? '—', rx2 + cols.unit / 2, y + 11, { align: 'center' }); rx2 += cols.unit
+
+      pdf.setTextColor(31, 41, 55)
+      const price = item.selling_price ?? item.unit_price ?? 0
+      pdf.text(fmtAmt(price), rx2 + cols.price - 2, y + 11, { align: 'right' }); rx2 += cols.price
+
+      pdf.setFont('helvetica', 'bold')
+      pdf.text(fmtAmt(item.total_amount), rx2 + cols.total - 2, y + 11, { align: 'right' })
+
+      y += rowH
+    })
+
+    y += 8
+  }
+
+  // ── Totals ────────────────────────────────────────────────────────────────
+  const totW = 180
+  const totX = W - margin - totW
+  const hasVat = (data.vatAmount ?? 0) > 0
+  const hasEwt = (data.ewtAmount ?? 0) > 0
+
+  pdf.setFont('helvetica', 'normal')
+  pdf.setFontSize(9)
+  pdf.setTextColor(107, 114, 128)
+  pdf.text('Subtotal', totX, y)
+  pdf.setTextColor(31, 41, 55)
+  pdf.text(fmtAmt(data.subtotal), W - margin, y, { align: 'right' })
+  y += 13
+
+  if (hasVat) {
+    pdf.setDrawColor(229, 231, 235)
+    pdf.line(totX, y - 3, W - margin, y - 3)
+    pdf.setTextColor(107, 114, 128)
+    pdf.text('VAT (12%)', totX, y)
+    pdf.setTextColor(37, 99, 235)
+    pdf.text(fmtAmt(data.vatAmount), W - margin, y, { align: 'right' })
+    y += 13
+  }
+
+  if (hasEwt) {
+    pdf.setDrawColor(229, 231, 235)
+    pdf.line(totX, y - 3, W - margin, y - 3)
+    pdf.setTextColor(107, 114, 128)
+    pdf.text('EWT', totX, y)
+    pdf.setTextColor(185, 28, 28)
+    pdf.text(`-${fmtAmt(data.ewtAmount)}`, W - margin, y, { align: 'right' })
+    y += 13
+  }
+
+  pdf.setDrawColor(229, 231, 235)
+  pdf.line(totX, y - 3, W - margin, y - 3)
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(10)
+  pdf.setTextColor(31, 41, 55)
+  pdf.text('Total', totX, y)
+  pdf.setTextColor(185, 28, 28)
+  pdf.text(fmtAmt(data.totalAmount), W - margin, y, { align: 'right' })
+  y += 16
+
+  // ── Notes ─────────────────────────────────────────────────────────────────
+  if (data.notes) {
+    y += 4
+    pdf.setDrawColor(229, 231, 235)
+    pdf.line(margin, y, W - margin, y)
+    y += 10
+    pdf.setFont('helvetica', 'bold')
+    pdf.setFontSize(8)
+    pdf.setTextColor(156, 163, 175)
+    pdf.text('NOTES / TERMS', margin, y)
+    y += 10
+    pdf.setFont('helvetica', 'normal')
+    pdf.setFontSize(9)
+    pdf.setTextColor(55, 65, 81)
+    const noteLines = pdf.splitTextToSize(data.notes, contentW)
+    pdf.text(noteLines, margin, y)
+    y += noteLines.length * 11
+  }
+
+  // ── Signatures ────────────────────────────────────────────────────────────
+  y += 40
+  const sigW = (contentW - 40) / 2
+  pdf.setDrawColor(55, 65, 81)
+  pdf.line(margin, y, margin + sigW, y)
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(9)
+  pdf.setTextColor(55, 65, 81)
+  pdf.text('Prepared by', margin + sigW / 2, y + 10, { align: 'center' })
+  pdf.setFont('helvetica', 'normal')
+  pdf.setFontSize(8)
+  pdf.setTextColor(156, 163, 175)
+  pdf.text('Signature over Printed Name', margin + sigW / 2, y + 19, { align: 'center' })
+
+  const sig2X = W - margin - sigW
+  pdf.setDrawColor(55, 65, 81)
+  pdf.line(sig2X, y, W - margin, y)
+  pdf.setFont('helvetica', 'bold')
+  pdf.setFontSize(9)
+  pdf.setTextColor(55, 65, 81)
+  pdf.text('Accepted by', sig2X + sigW / 2, y + 10, { align: 'center' })
+  pdf.setFont('helvetica', 'normal')
+  pdf.setFontSize(8)
+  pdf.setTextColor(156, 163, 175)
+  pdf.text('Signature over Printed Name / Date', sig2X + sigW / 2, y + 19, { align: 'center' })
+
+  return pdf.output('datauristring').split(',')[1]
+}
+
 async function htmlToPdfBase64(html: string): Promise<string> {
-  // Strip any external scripts from the HTML
+  const { default: html2canvas } = await import('html2canvas')
   const stripped = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
-
-  // Build a self-contained document with only our safe hex CSS
-  const iframeDoc = `<!DOCTYPE html><html><head><meta charset="utf-8">
-    <style>${SAFE_CSS}</style>
-  </head><body>${stripped}</body></html>`
-
   const iframe = document.createElement('iframe')
   iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;height:1px;border:none;visibility:hidden;'
   document.body.appendChild(iframe)
-
-  await new Promise<void>(resolve => {
-    iframe.onload = () => resolve()
-    iframe.srcdoc = iframeDoc
-  })
-
-  // Let layout settle
-  await new Promise(r => setTimeout(r, 300))
-
+  await new Promise<void>(resolve => { iframe.onload = () => resolve(); iframe.srcdoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;margin:0;padding:24px;font-size:11px;}</style></head><body>${stripped}</body></html>` })
+  await new Promise(r => setTimeout(r, 200))
   const iBody = iframe.contentDocument?.body
   if (!iBody) { document.body.removeChild(iframe); throw new Error('iframe body not found') }
-
-  // Size the iframe to full content height so nothing is cut off
   const contentH = iBody.scrollHeight || 1000
   iframe.style.height = contentH + 'px'
-  await new Promise(r => setTimeout(r, 100))
-
+  await new Promise(r => setTimeout(r, 50))
   try {
-    const canvas = await html2canvas(iBody, {
-      scale: 2,
-      useCORS: true,
-      allowTaint: true,
-      backgroundColor: '#ffffff',
-      windowWidth: 794,
-      windowHeight: contentH,
-      logging: false,
-    })
-
+    const canvas = await html2canvas(iBody, { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: 794, windowHeight: contentH, logging: false })
     const imgData = canvas.toDataURL('image/png')
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' })
     const pageW = pdf.internal.pageSize.getWidth()
     const pageH = pdf.internal.pageSize.getHeight()
     const imgH = (canvas.height / canvas.width) * pageW
-
-    if (imgH <= pageH) {
-      pdf.addImage(imgData, 'PNG', 0, 0, pageW, imgH)
-    } else {
-      const totalPages = Math.ceil(imgH / pageH)
-      for (let page = 0; page < totalPages; page++) {
-        if (page > 0) pdf.addPage()
-        pdf.addImage(imgData, 'PNG', 0, -(page * pageH), pageW, imgH)
-      }
-    }
-
+    if (imgH <= pageH) { pdf.addImage(imgData, 'PNG', 0, 0, pageW, imgH) }
+    else { const n = Math.ceil(imgH / pageH); for (let p = 0; p < n; p++) { if (p > 0) pdf.addPage(); pdf.addImage(imgData, 'PNG', 0, -(p * pageH), pageW, imgH) } }
     return pdf.output('datauristring').split(',')[1]
-  } finally {
-    document.body.removeChild(iframe)
-  }
+  } finally { document.body.removeChild(iframe) }
 }
 
 export async function sendEmail(payload: SendEmailPayload): Promise<void> {
-  let pdfBase64: string | undefined
   const pdfFilename = payload.pdfFilename ?? 'attachment.pdf'
-
-  if (payload.printHtml) {
+  let pdfBase64: string | undefined
+  if (payload.pdfData) {
+    pdfBase64 = buildQuotePdf(payload.pdfData)
+  } else if (payload.printHtml) {
     pdfBase64 = await htmlToPdfBase64(payload.printHtml)
   }
 
