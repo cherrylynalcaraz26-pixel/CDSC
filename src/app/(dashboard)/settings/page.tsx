@@ -1007,9 +1007,9 @@ export default function SettingsPage() {
               <div className="space-y-2">
                 <Label>Company Logo</Label>
                 <div className="flex items-start gap-4">
-                  <div className="relative h-16 w-16 rounded-lg border bg-muted/20 flex items-center justify-center overflow-hidden shrink-0">
+                  <div className="h-16 w-16 rounded-lg border bg-muted/20 flex items-center justify-center overflow-hidden shrink-0">
                     {settings.logo_url ? (
-                      <Image src={settings.logo_url} alt="logo" fill className="object-contain p-1" />
+                      <img src={settings.logo_url} alt="logo" className="w-full h-full object-contain p-1" />
                     ) : (
                       <Building2 className="h-8 w-8 text-muted-foreground/30" />
                     )}
