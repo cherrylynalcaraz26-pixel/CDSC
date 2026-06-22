@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { Building2, LogOut, FileText, Home, Loader2 } from 'lucide-react'
+import { Building2, LogOut, FileText, Home, Loader2, Package, Settings } from 'lucide-react'
 import Link from 'next/link'
 
 export default function PortalAppLayout({ children }: { children: React.ReactNode }) {
@@ -63,8 +63,14 @@ export default function PortalAppLayout({ children }: { children: React.ReactNod
             <Link href="/portal" className={`text-sm px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-colors ${pathname === '/portal' ? 'bg-red-50 text-red-600 font-medium' : 'text-muted-foreground hover:text-foreground hover:bg-gray-100'}`}>
               <Home className="h-3.5 w-3.5" /> Dashboard
             </Link>
+            <Link href="/portal/inventory" className={`text-sm px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-colors ${pathname?.startsWith('/portal/inventory') ? 'bg-red-50 text-red-600 font-medium' : 'text-muted-foreground hover:text-foreground hover:bg-gray-100'}`}>
+              <Package className="h-3.5 w-3.5" /> Inventory
+            </Link>
             <Link href="/portal/requests" className={`text-sm px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-colors ${pathname?.startsWith('/portal/requests') ? 'bg-red-50 text-red-600 font-medium' : 'text-muted-foreground hover:text-foreground hover:bg-gray-100'}`}>
               <FileText className="h-3.5 w-3.5" /> My Requests
+            </Link>
+            <Link href="/portal/settings" className={`text-sm px-3 py-1.5 rounded-md flex items-center gap-1.5 transition-colors ${pathname?.startsWith('/portal/settings') ? 'bg-red-50 text-red-600 font-medium' : 'text-muted-foreground hover:text-foreground hover:bg-gray-100'}`}>
+              <Settings className="h-3.5 w-3.5" /> Settings
             </Link>
           </nav>
           <div className="ml-auto flex items-center gap-3">
