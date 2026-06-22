@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Building2, LogOut, FileText, Home, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 
-export default function PortalLayout({ children }: { children: React.ReactNode }) {
+export default function PortalAppLayout({ children }: { children: React.ReactNode }) {
   const supabase = createClient()
   const router = useRouter()
   const pathname = usePathname()
@@ -34,10 +34,6 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
       setChecking(false)
     })
   }, [])
-
-  if (pathname === '/portal/login') {
-    return <>{children}</>
-  }
 
   if (checking) {
     return (
