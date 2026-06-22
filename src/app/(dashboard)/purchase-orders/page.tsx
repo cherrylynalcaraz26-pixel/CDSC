@@ -212,12 +212,24 @@ export default function PurchaseOrdersPage() {
     setPaymentTerms(po.payment_terms ?? '30 days')
     setRemarks(po.remarks ?? '')
 
+    // Restore discount
+    const dr = po.discount_rate ?? 0
+    if (dr === 0) setDiscountType('none')
+    else if (dr === 2) setDiscountType('2')
+    else if (dr === 5) setDiscountType('5')
+    else { setDiscountType('custom'); setDiscountCustom(String(dr)) }
+
+    // Restore EWT type based on saved ewt_amount vs subtotal ratio
+    if ((po.ewt_amount ?? 0) === 0) setEwtType('none')
+    else setEwtType('services')
+
     // Load existing line items
     const { data: poItems } = await supabase
       .from('po_items')
       .select('item_name, quantity, unit_of_measure, unit_cost, selling_price')
       .eq('po_id', po.id)
       .order('created_at')
+
     if (poItems && poItems.length > 0) {
       setLines(poItems.map(r => ({
         item_name: r.item_name ?? '',
@@ -226,6 +238,9 @@ export default function PurchaseOrdersPage() {
         unit_price: String(r.unit_cost ?? ''),
         selling_price: r.selling_price != null ? String(r.selling_price) : '',
       })))
+    } else {
+      setLines([emptyLine()])
+      toast.info('No saved line items found for this PO. Please re-enter and save to persist them.')
     }
 
     setOpen(true)
