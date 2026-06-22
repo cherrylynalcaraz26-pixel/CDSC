@@ -31,7 +31,7 @@ export interface SendEmailPayload {
 }
 
 function fmtAmt(n: number) {
-  return `₱${(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
+  return `PHP ${(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
 }
 
 function buildQuotePdf(data: QuotationPdfData): string {

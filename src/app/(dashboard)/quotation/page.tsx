@@ -291,15 +291,26 @@ export default function QuotationPage() {
     setSaving(false)
   }
 
-  function buildQuotePdfData(q: Quotation, items: { item_name: string; quantity: number; unit: string | null; unit_price: number; selling_price: number | null; total_amount: number }[]): QuotationPdfData {
+  async function buildQuotePdfData(q: Quotation, items: { item_name: string; quantity: number; unit: string | null; unit_price: number; selling_price: number | null; total_amount: number }[]): Promise<QuotationPdfData> {
+    let logoDataUrl: string | undefined
+    try {
+      const resp = await fetch('/cdsc-logo.jpg')
+      const blob = await resp.blob()
+      logoDataUrl = await new Promise<string>(resolve => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result as string)
+        reader.readAsDataURL(blob)
+      })
+    } catch { /* skip logo */ }
     return {
       companyName: companyInfo?.company_name ?? 'CDSC INDUSTRIAL SUPPLY',
       companyAddress: companyInfo?.address ?? undefined,
       companyPhone: companyInfo?.phone ?? undefined,
       companyEmail: companyInfo?.email ?? undefined,
       companyTin: companyInfo?.tin ?? undefined,
-      quoteNumber: q.quote_number ?? '—',
-      quoteDate: q.quote_date ?? '—',
+      logoDataUrl,
+      quoteNumber: q.quote_number ?? '-',
+      quoteDate: q.quote_date ?? '-',
       validUntil: q.valid_until ?? undefined,
       clientName: q.client_name ?? undefined,
       subject: q.subject ?? undefined,
@@ -979,7 +990,7 @@ export default function QuotationPage() {
                       to: emailToQ,
                       subject: emailSubjectQ,
                       body: emailBodyQ,
-                      pdfData: buildQuotePdfData(formQ, formItems),
+                      pdfData: await buildQuotePdfData(formQ, formItems),
                       pdfFilename: `Quotation-${quoteNumber || 'draft'}.pdf`,
                     })
                     toast.success('Email sent successfully!')
@@ -1059,7 +1070,7 @@ export default function QuotationPage() {
                       to: listEmailTo,
                       subject: listEmailSubject,
                       body: listEmailBody,
-                      pdfData: buildQuotePdfData(q, qItemsForEmail ?? []),
+                      pdfData: await buildQuotePdfData(q, qItemsForEmail ?? []),
                       pdfFilename: `Quotation-${q.quote_number ?? 'draft'}.pdf`,
                     })
                     toast.success('Email sent successfully!')
