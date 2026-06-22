@@ -83,6 +83,8 @@ export default function QuotationPage() {
   const [saving, setSaving] = useState(false)
   const [mobileTab, setMobileTab] = useState<'form' | 'preview'>('form')
   const [showEmailQ, setShowEmailQ] = useState(false)
+  const [sendingEmailQ, setSendingEmailQ] = useState(false)
+  const [sendingListEmail, setSendingListEmail] = useState(false)
   const [emailToQ, setEmailToQ] = useState('')
   const [emailSubjectQ, setEmailSubjectQ] = useState('')
   const [emailBodyQ, setEmailBodyQ] = useState('')
@@ -164,7 +166,7 @@ export default function QuotationPage() {
     setMobileTab('form')
   }
 
-  function openEdit(q: Quotation) {
+  async function openEdit(q: Quotation) {
     setEditingId(q.id)
     setQuoteNumber(q.quote_number ?? '')
     setQuoteDate(q.quote_date ?? today())
@@ -173,11 +175,26 @@ export default function QuotationPage() {
     setNotes(q.notes ?? '')
     setVatEnabled((q.vat_amount ?? 0) > 0)
     setEwtType('none')
-    setLines([emptyLine()])
     setPreparedBy(''); setAcceptedBy('')
-    // Try to match client by name
     const matched = clients.find(c => c.company_name === q.client_name)
     setClientId(matched?.id ?? '')
+
+    // Load saved line items
+    const { data: qItems } = await supabase
+      .from('quotation_items')
+      .select('item_name, quantity, unit, unit_price, selling_price')
+      .eq('quotation_id', q.id)
+      .order('created_at')
+    setLines(qItems && qItems.length > 0
+      ? qItems.map(r => ({
+          item_name: r.item_name ?? '',
+          quantity: String(r.quantity ?? 1),
+          unit: r.unit ?? '',
+          unit_price: String(r.unit_price ?? ''),
+          selling_price: r.selling_price != null ? String(r.selling_price) : '',
+        }))
+      : [emptyLine()])
+
     setOpen(true)
     setMobileTab('form')
   }
@@ -238,12 +255,34 @@ export default function QuotationPage() {
       notes: notes || null,
     }
     let error
+    let savedId = editingId
     if (editingId) {
       ;({ error } = await supabase.from('quotations').update(payload).eq('id', editingId))
     } else {
-      ;({ error } = await supabase.from('quotations').insert({ ...payload, status: 'draft' }))
+      const { data: inserted, error: insErr } = await supabase.from('quotations').insert({ ...payload, status: 'draft' }).select('id').single()
+      error = insErr
+      savedId = inserted?.id ?? null
     }
     if (error) { toast.error(error.message); setSaving(false); return }
+
+    // Save line items
+    if (savedId) {
+      await supabase.from('quotation_items').delete().eq('quotation_id', savedId)
+      const validLines = lines.filter(l => l.item_name.trim())
+      if (validLines.length > 0) {
+        const effectivePrice = (l: typeof lines[0]) => parseFloat(l.selling_price) || parseFloat(l.unit_price) || 0
+        await supabase.from('quotation_items').insert(validLines.map(l => ({
+          quotation_id: savedId,
+          item_name: l.item_name,
+          quantity: parseFloat(l.quantity) || 1,
+          unit: l.unit || null,
+          unit_price: parseFloat(l.unit_price) || 0,
+          selling_price: parseFloat(l.selling_price) || null,
+          total_amount: effectivePrice(l) * (parseFloat(l.quantity) || 1),
+        })))
+      }
+    }
+
     toast.success(editingId ? 'Quotation updated.' : 'Quotation saved.')
     resetForm()
     setOpen(false)
@@ -574,7 +613,7 @@ export default function QuotationPage() {
                                 </div>
                               </TableCell>
                               <TableCell className="py-1.5">
-                                <Input type="number" min="0" className="h-8 text-xs w-full" value={line.quantity} onChange={e => updateLine(idx, 'quantity', e.target.value)} />
+                                <Input type="number" min="0" className="h-8 text-xs w-full min-w-[80px]" value={line.quantity} onChange={e => updateLine(idx, 'quantity', e.target.value)} />
                               </TableCell>
                               <TableCell className="py-1.5">
                                 <div className="h-8 flex items-center px-2 text-xs bg-muted/40 rounded border text-muted-foreground">{line.unit || '—'}</div>
@@ -837,9 +876,10 @@ export default function QuotationPage() {
               The email will be sent from cdsc.gmot@gmail.com with the quotation attached as a PDF.
             </p>
             <div className="flex justify-end gap-2 pt-1">
-              <Button variant="outline" onClick={() => setShowEmailQ(false)}>Cancel</Button>
+              <Button variant="outline" disabled={sendingEmailQ} onClick={() => setShowEmailQ(false)}>Cancel</Button>
               <Button
                 className="bg-red-600 hover:bg-red-700 gap-1.5"
+                disabled={sendingEmailQ}
                 onClick={async () => {
                   if (!emailToQ) { toast.error('Please enter a recipient email address.'); return }
                   const el = printRef.current
@@ -847,8 +887,7 @@ export default function QuotationPage() {
                     <script src="https://cdn.tailwindcss.com"><\/script>
                     <style>body{font-family:Arial,sans-serif;}</style>
                   </head><body class="p-6 text-[11px]">${el.innerHTML}</body></html>` : undefined
-                  setShowEmailQ(false)
-                  toast.loading('Generating PDF…', { id: 'email-send-q' })
+                  setSendingEmailQ(true)
                   try {
                     await sendEmail({
                       to: emailToQ,
@@ -857,13 +896,16 @@ export default function QuotationPage() {
                       printHtml,
                       pdfFilename: `Quotation-${quoteNumber || 'draft'}.pdf`,
                     })
-                    toast.success('Email sent successfully!', { id: 'email-send-q' })
+                    toast.success('Email sent successfully!')
+                    setShowEmailQ(false)
                   } catch (err: unknown) {
-                    toast.error(err instanceof Error ? err.message : 'Failed to send email', { id: 'email-send-q' })
+                    toast.error(err instanceof Error ? err.message : 'Failed to send email')
+                  } finally {
+                    setSendingEmailQ(false)
                   }
                 }}
               >
-                <Send className="h-4 w-4" />Send Email
+                {sendingEmailQ ? <><Loader2 className="h-4 w-4 animate-spin" />Sending…</> : <><Send className="h-4 w-4" />Send Email</>}
               </Button>
             </div>
           </div>
@@ -928,14 +970,14 @@ export default function QuotationPage() {
             </div>
             <p className="text-xs text-muted-foreground">The email will be sent from cdsc.gmot@gmail.com and the quotation will be marked as Sent.</p>
             <div className="flex justify-end gap-2 pt-1">
-              <Button variant="outline" onClick={() => setListEmailQ(null)}>Cancel</Button>
+              <Button variant="outline" disabled={sendingListEmail} onClick={() => setListEmailQ(null)}>Cancel</Button>
               <Button
                 className="bg-red-600 hover:bg-red-700 gap-1.5"
+                disabled={sendingListEmail}
                 onClick={async () => {
                   if (!listEmailTo) { toast.error('Please enter a recipient email address.'); return }
                   const q = listEmailQ!
-                  setListEmailQ(null)
-                  toast.loading('Generating PDF…', { id: 'list-email-send' })
+                  setSendingListEmail(true)
                   try {
                     await sendEmail({
                       to: listEmailTo,
@@ -944,14 +986,17 @@ export default function QuotationPage() {
                       printHtml: buildQuoteHtml(q),
                       pdfFilename: `Quotation-${q.quote_number ?? 'draft'}.pdf`,
                     })
-                    toast.success('Email sent successfully!', { id: 'list-email-send' })
+                    toast.success('Email sent successfully!')
+                    setListEmailQ(null)
                     updateStatus(q.id, 'sent')
                   } catch (err: unknown) {
-                    toast.error(err instanceof Error ? err.message : 'Failed to send email', { id: 'list-email-send' })
+                    toast.error(err instanceof Error ? err.message : 'Failed to send email')
+                  } finally {
+                    setSendingListEmail(false)
                   }
                 }}
               >
-                <Send className="h-4 w-4" />Send Email
+                {sendingListEmail ? <><Loader2 className="h-4 w-4 animate-spin" />Sending…</> : <><Send className="h-4 w-4" />Send Email</>}
               </Button>
             </div>
           </div>
