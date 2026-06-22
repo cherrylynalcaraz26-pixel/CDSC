@@ -8,12 +8,12 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
-  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
+  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 import {
   Package, ShoppingCart, Truck, FileText, ClipboardList,
-  TrendingUp, Cpu, Users, ArrowRight, Loader2, ChevronDown, ChevronUp,
-  AlertTriangle, Clock, CheckCircle2, TrendingDown,
+  TrendingUp, TrendingDown, Cpu, Users, ArrowRight, Loader2, ChevronDown, ChevronUp,
+  AlertTriangle, CheckCircle2, Clock, Lightbulb,
 } from 'lucide-react'
 import Link from 'next/link'
 import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns'
@@ -31,13 +31,20 @@ interface KPI {
 
 interface MonthBar { month: string; dr: number; csi: number }
 interface RecentDR { id: string; dr_number: string | null; dr_date: string | null; supplier_name: string | null; status: string }
-interface RecentPR { id: string; pr_number: string | null; created_at: string; department: string | null; priority: string; status: string }
+interface RecentPO { id: string; po_number: string | null; created_at: string; supplier: { company_name: string | null } | null; status: string; total_amount: number }
 
 interface ORClientRow { client: string; collected: number; ewt: number; ors: number }
 interface CSIClientRow { client: string; billed: number; invoices: number; items: number }
 interface ReconRow { client: string; csi_billed: number; or_collected: number; diff: number; status: 'Balanced' | 'Outstanding' | 'Over-collected' }
 interface MonthlySOBar { month: string; revenue: number; orders: number }
 interface TopClient { client: string; revenue: number; orders: number }
+
+interface Insight {
+  priority: 'critical' | 'warning' | 'info' | 'good'
+  text: string
+  link: string
+  linkLabel: string
+}
 
 const STATUS_COLORS: Record<string, string> = {
   open:       'bg-blue-100 text-blue-700',
@@ -49,6 +56,8 @@ const STATUS_COLORS: Record<string, string> = {
   purchasing_approved: 'bg-purple-100 text-purple-700',
   converted_to_po: 'bg-green-100 text-green-700',
   rejected:   'bg-red-100 text-red-700',
+  partially_delivered: 'bg-yellow-100 text-yellow-700',
+  closed:     'bg-gray-100 text-gray-600',
 }
 
 function StatCard({ title, value, icon: Icon, sub, color, href }: {
@@ -75,13 +84,14 @@ export default function DashboardPage() {
   const [kpi, setKpi] = useState<KPI>({ totalItems: 0, activeSuppliers: 0, openPOs: 0, pendingPRs: 0, drLogsThisMonth: 0, csiThisMonth: 0, totalAssets: 0, totalDRs: 0 })
   const [monthlyData, setMonthlyData] = useState<MonthBar[]>([])
   const [recentDRs, setRecentDRs] = useState<RecentDR[]>([])
-  const [recentPRs, setRecentPRs] = useState<RecentPR[]>([])
+  const [recentPOs, setRecentPOs] = useState<RecentPO[]>([])
   const [pipelinePOs, setPipelinePOs] = useState<any[]>([])
   const [receivedPONumbers, setReceivedPONumbers] = useState<Set<string>>(new Set())
   const [pipelineSOs, setPipelineSOs] = useState<any[]>([])
   const [collectedClients, setCollectedClients] = useState<Set<string>>(new Set())
   const [poPipelineOpen, setPoPipelineOpen] = useState(true)
   const [soPipelineOpen, setSoPipelineOpen] = useState(true)
+  const [decisionMakerOpen, setDecisionMakerOpen] = useState(true)
   const [orRows, setOrRows] = useState<ORClientRow[]>([])
   const [csiRows, setCsiRows] = useState<CSIClientRow[]>([])
   const [reconRows, setReconRows] = useState<ReconRow[]>([])
@@ -89,8 +99,6 @@ export default function DashboardPage() {
   const [csiDetails, setCsiDetails] = useState<Record<string, any[]>>({})
   const [detailModal, setDetailModal] = useState<{ type: 'or' | 'csi' | 'recon'; client: string } | null>(null)
   const [loading, setLoading] = useState(true)
-  const [decisionOpen, setDecisionOpen] = useState(true)
-  const [decisionMakerOpen, setDecisionMakerOpen] = useState(true)
   const [overduePOCount, setOverduePOCount] = useState(0)
   const [lowStockCount, setLowStockCount] = useState(0)
   const [soMonthlyBars, setSoMonthlyBars] = useState<MonthlySOBar[]>([])
@@ -102,13 +110,12 @@ export default function DashboardPage() {
       const thisMonthStart = startOfMonth(now).toISOString()
       const thisMonthEnd = endOfMonth(now).toISOString()
 
-      // Build 6-month range for bar chart
       const months = Array.from({ length: 6 }, (_, i) => {
         const d = subMonths(now, 5 - i)
         return { label: format(d, 'MMM'), start: startOfMonth(d).toISOString(), end: endOfMonth(d).toISOString() }
       })
 
-      const [items, suppliers, pos, prs, assets, drLogs, csiRecs, recentDRData, recentPRData, collectionData, csiDetailData] = await Promise.all([
+      const [items, suppliers, pos, prs, assets, drLogs, csiRecs, recentDRData, recentPOData, collectionData, csiDetailData] = await Promise.all([
         supabase.from('items').select('id', { count: 'exact', head: true }).eq('status', 'active'),
         supabase.from('suppliers').select('id', { count: 'exact', head: true }).eq('is_active', true),
         supabase.from('purchase_orders').select('id, status', { count: 'exact' }),
@@ -117,7 +124,7 @@ export default function DashboardPage() {
         supabase.from('dr_logs').select('id, dr_date', { count: 'exact' }),
         supabase.from('csi_records').select('id, si_date', { count: 'exact' }),
         supabase.from('dr_logs').select('id, dr_number, dr_date, supplier_name, status').order('dr_date', { ascending: false }).limit(8),
-        supabase.from('purchase_requests').select('id, pr_number, created_at, department, priority, status').order('created_at', { ascending: false }).limit(6),
+        supabase.from('purchase_orders').select('id, po_number, created_at, status, total_amount, supplier:suppliers(company_name)').order('created_at', { ascending: false }).limit(6),
         supabase.from('collections').select('client_name, or_number, amount, form_2307, status, collection_date'),
         supabase.from('csi_records').select('client_name, si_number, item_name, quantity, unit_price, si_date'),
       ])
@@ -127,7 +134,6 @@ export default function DashboardPage() {
       const allDRs = drLogs.data ?? []
       const allCSI = csiRecs.data ?? []
 
-      // Monthly bar chart data
       const bars: MonthBar[] = months.map(m => ({
         month: m.label,
         dr: allDRs.filter(d => d.dr_date && d.dr_date >= m.start.slice(0, 10) && d.dr_date <= m.end.slice(0, 10)).length,
@@ -208,9 +214,9 @@ export default function DashboardPage() {
 
       setMonthlyData(bars)
       setRecentDRs((recentDRData.data ?? []) as RecentDR[])
-      setRecentPRs((recentPRData.data ?? []) as RecentPR[])
+      setRecentPOs((recentPOData.data ?? []) as unknown as RecentPO[])
 
-      // --- Decision Center: overdue POs & low stock ---
+      // --- Overdue POs & low stock (for Decision Maker) ---
       const today = new Date().toISOString().slice(0, 10)
       const overduePOs = (openPOsData.data ?? []).filter((p: any) => p.delivery_date && p.delivery_date < today)
       setOverduePOCount(overduePOs.length)
@@ -249,6 +255,60 @@ export default function DashboardPage() {
     load()
   }, [])
 
+  // Compute insights for Decision Maker
+  const insights: Insight[] = !loading ? (() => {
+    const result: Insight[] = []
+
+    const currRev = soMonthlyBars[5]?.revenue ?? 0
+    const prevRev = soMonthlyBars[4]?.revenue ?? 0
+    const revPct = prevRev > 0 ? ((currRev - prevRev) / prevRev * 100) : null
+
+    if (currRev > 0 || prevRev > 0) {
+      if (revPct !== null && revPct < -10) {
+        result.push({ priority: 'critical', text: `Sales revenue dropped ${Math.abs(revPct).toFixed(1)}% this month (₱${currRev.toLocaleString('en-PH', { minimumFractionDigits: 2 })})`, link: '/sales-orders', linkLabel: 'View Sales' })
+      } else if (revPct !== null && revPct >= 0) {
+        result.push({ priority: 'good', text: `Revenue ${revPct > 0 ? `up ${revPct.toFixed(1)}%` : 'flat'} vs last month — ₱${currRev.toLocaleString('en-PH', { minimumFractionDigits: 2 })} this month`, link: '/sales-orders', linkLabel: 'View Sales' })
+      } else {
+        result.push({ priority: 'warning', text: `Revenue slightly down this month vs last month (₱${currRev.toLocaleString('en-PH', { minimumFractionDigits: 2 })})`, link: '/sales-orders', linkLabel: 'View Sales' })
+      }
+    }
+
+    if (overduePOCount > 0) {
+      result.push({ priority: 'critical', text: `${overduePOCount} purchase order${overduePOCount > 1 ? 's are' : ' is'} past their delivery date — supplier follow-up needed`, link: '/purchase-orders', linkLabel: 'Review POs' })
+    }
+
+    if (kpi.pendingPRs > 0) {
+      result.push({ priority: 'warning', text: `${kpi.pendingPRs} purchase request${kpi.pendingPRs > 1 ? 's are' : ' is'} pending approval and may delay procurement`, link: '/purchase-requests', linkLabel: 'Approve PRs' })
+    }
+
+    if (lowStockCount > 0) {
+      result.push({ priority: 'critical', text: `${lowStockCount} item${lowStockCount > 1 ? 's are' : ' is'} low or out of stock — create a purchase order to replenish`, link: '/inventory', linkLabel: 'View Inventory' })
+    }
+
+    const outstandingBalance = reconRows.filter(r => r.status === 'Outstanding').reduce((s, r) => s + r.diff, 0)
+    if (outstandingBalance > 0) {
+      const outstandingClients = reconRows.filter(r => r.status === 'Outstanding').length
+      result.push({ priority: 'warning', text: `₱${outstandingBalance.toLocaleString('en-PH', { minimumFractionDigits: 2 })} uncollected across ${outstandingClients} client${outstandingClients > 1 ? 's' : ''} — follow up on collections`, link: '/accounting', linkLabel: 'View Accounting' })
+    }
+
+    if (topClients[0] && topClients[0].revenue > 0) {
+      result.push({ priority: 'info', text: `Top client: ${topClients[0].client} — ₱${topClients[0].revenue.toLocaleString('en-PH', { minimumFractionDigits: 2 })} across ${topClients[0].orders} order${topClients[0].orders !== 1 ? 's' : ''}`, link: '/sales-orders', linkLabel: 'View Orders' })
+    }
+
+    if (kpi.openPOs === 0 && overduePOCount === 0 && lowStockCount === 0 && kpi.pendingPRs === 0) {
+      result.push({ priority: 'good', text: 'All systems clear — no overdue POs, no stock issues, and no pending approvals', link: '/dashboard', linkLabel: 'Refresh' })
+    }
+
+    return result
+  })() : []
+
+  const INSIGHT_STYLE: Record<string, { border: string; icon: any; iconColor: string; badge: string }> = {
+    critical: { border: 'border-red-200 bg-red-50', icon: AlertTriangle, iconColor: 'text-red-500', badge: 'bg-red-100 text-red-700' },
+    warning:  { border: 'border-yellow-200 bg-yellow-50', icon: Clock, iconColor: 'text-yellow-500', badge: 'bg-yellow-100 text-yellow-700' },
+    info:     { border: 'border-blue-200 bg-blue-50', icon: Lightbulb, iconColor: 'text-blue-500', badge: 'bg-blue-100 text-blue-700' },
+    good:     { border: 'border-green-200 bg-green-50', icon: CheckCircle2, iconColor: 'text-green-500', badge: 'bg-green-100 text-green-700' },
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -270,53 +330,6 @@ export default function DashboardPage() {
         <StatCard title="CSI This Month" value={loading ? '—' : kpi.csiThisMonth} icon={TrendingUp} color="text-purple-600" href="/csi-monitoring" />
         <StatCard title="Assets" value={loading ? '—' : kpi.totalAssets} icon={Cpu} href="/assets" />
       </div>
-
-      {/* Decision Center */}
-      <Card>
-        <CardHeader className="pb-0 pt-4 px-4">
-          <button className="flex items-center justify-between w-full text-left" onClick={() => setDecisionOpen(o => !o)}>
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-amber-500" />
-              Decision Center — Action Required
-            </CardTitle>
-            {decisionOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-          </button>
-        </CardHeader>
-        {decisionOpen && (
-          <CardContent className="pt-4 pb-3 space-y-2">
-            {loading ? (
-              <div className="text-center py-4"><Loader2 className="h-4 w-4 animate-spin mx-auto text-muted-foreground" /></div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className={`flex items-center gap-3 rounded-lg border px-4 py-3 ${overduePOCount > 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
-                  <Clock className={`h-5 w-5 shrink-0 ${overduePOCount > 0 ? 'text-red-500' : 'text-green-500'}`} />
-                  <div>
-                    <div className={`text-lg font-bold ${overduePOCount > 0 ? 'text-red-700' : 'text-green-700'}`}>{overduePOCount}</div>
-                    <div className="text-xs text-muted-foreground">Overdue Purchase Orders</div>
-                  </div>
-                  {overduePOCount > 0 && <Link href="/purchase-orders" className="ml-auto text-xs text-red-600 hover:underline">Review →</Link>}
-                </div>
-                <div className={`flex items-center gap-3 rounded-lg border px-4 py-3 ${kpi.pendingPRs > 0 ? 'bg-yellow-50 border-yellow-200' : 'bg-green-50 border-green-200'}`}>
-                  <FileText className={`h-5 w-5 shrink-0 ${kpi.pendingPRs > 0 ? 'text-yellow-500' : 'text-green-500'}`} />
-                  <div>
-                    <div className={`text-lg font-bold ${kpi.pendingPRs > 0 ? 'text-yellow-700' : 'text-green-700'}`}>{kpi.pendingPRs}</div>
-                    <div className="text-xs text-muted-foreground">Purchase Requests Pending</div>
-                  </div>
-                  {kpi.pendingPRs > 0 && <Link href="/purchase-requests" className="ml-auto text-xs text-yellow-700 hover:underline">Review →</Link>}
-                </div>
-                <div className={`flex items-center gap-3 rounded-lg border px-4 py-3 ${lowStockCount > 0 ? 'bg-orange-50 border-orange-200' : 'bg-green-50 border-green-200'}`}>
-                  <Package className={`h-5 w-5 shrink-0 ${lowStockCount > 0 ? 'text-orange-500' : 'text-green-500'}`} />
-                  <div>
-                    <div className={`text-lg font-bold ${lowStockCount > 0 ? 'text-orange-700' : 'text-green-700'}`}>{lowStockCount}</div>
-                    <div className="text-xs text-muted-foreground">Low / Out of Stock Items</div>
-                  </div>
-                  {lowStockCount > 0 && <Link href="/items" className="ml-auto text-xs text-orange-600 hover:underline">Review →</Link>}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        )}
-      </Card>
 
       {/* PO Pipeline */}
       <Card>
@@ -442,24 +455,75 @@ export default function DashboardPage() {
         )}
       </Card>
 
-      {/* Decision Maker — Sales Performance */}
+      {/* Decision Maker — Business Intelligence */}
       <Card>
         <CardHeader className="pb-0 pt-4 px-4">
           <button className="flex items-center justify-between w-full text-left" onClick={() => setDecisionMakerOpen(o => !o)}>
             <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-blue-600" />
-              Decision Maker — Sales Performance
+              <TrendingUp className="h-4 w-4 text-indigo-600" />
+              Decision Maker — Business Intelligence
             </CardTitle>
             {decisionMakerOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
           </button>
         </CardHeader>
         {decisionMakerOpen && (
-          <CardContent className="pt-4">
+          <CardContent className="pt-4 space-y-5">
+
+            {/* Summary KPI tiles */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {(() => {
+                const currRev = soMonthlyBars[5]?.revenue ?? 0
+                const prevRev = soMonthlyBars[4]?.revenue ?? 0
+                const pct = prevRev > 0 ? ((currRev - prevRev) / prevRev * 100) : null
+                const outstandingBal = reconRows.filter(r => r.status === 'Outstanding').reduce((s, r) => s + r.diff, 0)
+                const totalBilled = csiRows.reduce((s, r) => s + r.billed, 0)
+                const totalCollected = orRows.reduce((s, r) => s + r.collected, 0)
+                return (
+                  <>
+                    <div className="rounded-lg border p-3 space-y-0.5">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">This Month Revenue</div>
+                      <div className="text-xl font-bold tabular-nums">₱{(currRev / 1000).toFixed(1)}k</div>
+                      {pct !== null ? (
+                        <div className={`flex items-center gap-1 text-xs font-medium ${pct >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {pct >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+                          {pct >= 0 ? '+' : ''}{pct.toFixed(1)}% vs last month
+                        </div>
+                      ) : <div className="text-xs text-muted-foreground">No prior data</div>}
+                    </div>
+                    <div className="rounded-lg border p-3 space-y-0.5">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Total CSI Billed</div>
+                      <div className="text-xl font-bold tabular-nums">₱{(totalBilled / 1000).toFixed(1)}k</div>
+                      <div className="text-xs text-muted-foreground">{csiRows.length} client{csiRows.length !== 1 ? 's' : ''}</div>
+                    </div>
+                    <div className="rounded-lg border p-3 space-y-0.5">
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Total Collected</div>
+                      <div className="text-xl font-bold tabular-nums">₱{(totalCollected / 1000).toFixed(1)}k</div>
+                      <div className="text-xs text-muted-foreground">{orRows.reduce((s, r) => s + r.ors, 0)} OR{orRows.reduce((s, r) => s + r.ors, 0) !== 1 ? 's' : ''}</div>
+                    </div>
+                    <div className={`rounded-lg border p-3 space-y-0.5 ${outstandingBal > 0 ? 'border-orange-200 bg-orange-50' : 'border-green-200 bg-green-50'}`}>
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Outstanding Balance</div>
+                      <div className={`text-xl font-bold tabular-nums ${outstandingBal > 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                        ₱{(outstandingBal / 1000).toFixed(1)}k
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {outstandingBal > 0 ? `${reconRows.filter(r => r.status === 'Outstanding').length} client${reconRows.filter(r => r.status === 'Outstanding').length !== 1 ? 's' : ''} unpaid` : 'All balanced'}
+                      </div>
+                    </div>
+                  </>
+                )
+              })()}
+            </div>
+
+            {/* Chart + Recommendations */}
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-              <div className="lg:col-span-3">
-                <p className="text-xs text-muted-foreground mb-3">Monthly Sales Orders Revenue (Last 6 Months)</p>
+              {/* Revenue chart */}
+              <div className="lg:col-span-3 space-y-2">
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground">Monthly Sales Revenue — Last 6 Months</p>
+                  <p className="text-[10px] text-muted-foreground">Based on confirmed sales orders</p>
+                </div>
                 {loading || soMonthlyBars.every(m => m.revenue === 0) ? (
-                  <div className="h-40 flex items-center justify-center text-muted-foreground text-xs">{loading ? 'Loading…' : 'No sales data yet'}</div>
+                  <div className="h-44 flex items-center justify-center text-muted-foreground text-xs border rounded-lg">{loading ? 'Loading…' : 'No revenue data yet'}</div>
                 ) : (
                   <ResponsiveContainer width="100%" height={180}>
                     <BarChart data={soMonthlyBars} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
@@ -467,29 +531,67 @@ export default function DashboardPage() {
                       <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                       <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `₱${(v / 1000).toFixed(0)}k`} />
                       <Tooltip formatter={(v: any) => [`₱${(v ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, 'Revenue']} />
-                      <Bar dataKey="revenue" name="Revenue" fill="#2563eb" radius={[3, 3, 0, 0]} />
+                      <Bar dataKey="revenue" name="Revenue" fill="#4f46e5" radius={[3, 3, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 )}
+
+                {/* Top clients */}
+                {topClients.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-2">Top Clients by Revenue</p>
+                    <div className="space-y-1.5">
+                      {topClients.map((c, i) => {
+                        const maxRev = topClients[0]?.revenue || 1
+                        return (
+                          <div key={c.client} className="flex items-center gap-2">
+                            <div className="h-4 w-4 rounded-full bg-indigo-100 text-indigo-700 text-[9px] font-bold flex items-center justify-center shrink-0">{i + 1}</div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-xs font-medium truncate">{c.client}</span>
+                                <span className="text-xs font-semibold text-indigo-600 tabular-nums shrink-0">₱{(c.revenue / 1000).toFixed(1)}k</span>
+                              </div>
+                              <div className="h-1 bg-gray-100 rounded-full mt-0.5">
+                                <div className="h-1 bg-indigo-400 rounded-full" style={{ width: `${(c.revenue / maxRev) * 100}%` }} />
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
-              <div className="lg:col-span-2">
-                <p className="text-xs text-muted-foreground mb-3">Top 5 Clients by Revenue</p>
+
+              {/* Recommendations */}
+              <div className="lg:col-span-2 space-y-2">
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground">Recommendations</p>
+                  <p className="text-[10px] text-muted-foreground">AI-generated insights based on current data</p>
+                </div>
                 {loading ? (
-                  <div className="text-xs text-muted-foreground">Loading…</div>
-                ) : topClients.length === 0 ? (
-                  <div className="text-xs text-muted-foreground">No data yet</div>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground"><Loader2 className="h-3 w-3 animate-spin" />Analyzing…</div>
+                ) : insights.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">No insights available yet.</div>
                 ) : (
                   <div className="space-y-2">
-                    {topClients.map((c, i) => (
-                      <div key={c.client} className="flex items-center gap-2">
-                        <div className="h-5 w-5 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold flex items-center justify-center shrink-0">{i + 1}</div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-xs font-medium truncate">{c.client}</div>
-                          <div className="text-[10px] text-muted-foreground">{c.orders} order{c.orders !== 1 ? 's' : ''}</div>
+                    {insights.map((ins, i) => {
+                      const s = INSIGHT_STYLE[ins.priority]
+                      const Icon = s.icon
+                      return (
+                        <div key={i} className={`rounded-lg border px-3 py-2.5 ${s.border}`}>
+                          <div className="flex items-start gap-2">
+                            <Icon className={`h-3.5 w-3.5 shrink-0 mt-0.5 ${s.iconColor}`} />
+                            <div className="flex-1 min-w-0 space-y-1">
+                              <p className="text-xs leading-snug">{ins.text}</p>
+                              <Link href={ins.link} className={`inline-flex items-center gap-0.5 text-[10px] font-semibold rounded px-1.5 py-0.5 ${s.badge}`}>
+                                {ins.linkLabel} <ArrowRight className="h-2.5 w-2.5" />
+                              </Link>
+                            </div>
+                          </div>
                         </div>
-                        <div className="text-xs font-semibold text-blue-600 tabular-nums">₱{(c.revenue / 1000).toFixed(1)}k</div>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 )}
               </div>
@@ -839,13 +941,13 @@ export default function DashboardPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Recent PRs + Quick Links */}
+      {/* Recent POs + Quick Actions */}
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        {/* Recent PRs */}
+        {/* Recent Purchase Orders */}
         <Card className="lg:col-span-3">
           <CardHeader className="pb-2 flex flex-row items-center justify-between">
-            <CardTitle className="text-sm font-medium">Recent Purchase Requests</CardTitle>
-            <Link href="/purchase-requests">
+            <CardTitle className="text-sm font-medium">Recent Purchase Orders</CardTitle>
+            <Link href="/purchase-orders">
               <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground">
                 View all <ArrowRight className="h-3 w-3" />
               </Button>
@@ -855,29 +957,27 @@ export default function DashboardPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b">
-                  <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">PR #</th>
-                  <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Department</th>
-                  <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Priority</th>
+                  <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">PO #</th>
+                  <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Supplier</th>
+                  <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Date</th>
                   <th className="text-left px-4 py-2 text-xs font-medium text-muted-foreground">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {loading ? (
                   <tr><td colSpan={4} className="text-center py-6 text-muted-foreground text-xs">Loading…</td></tr>
-                ) : recentPRs.length === 0 ? (
-                  <tr><td colSpan={4} className="text-center py-6 text-muted-foreground text-xs">No purchase requests yet</td></tr>
-                ) : recentPRs.map(pr => (
-                  <tr key={pr.id} className="border-b last:border-0 hover:bg-muted/30">
-                    <td className="px-4 py-2 font-mono text-xs font-semibold text-red-600">{pr.pr_number ?? '—'}</td>
-                    <td className="px-4 py-2 text-xs">{pr.department ?? '—'}</td>
-                    <td className="px-4 py-2">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${pr.priority === 'urgent' ? 'bg-red-100 text-red-700' : pr.priority === 'high' ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-600'}`}>
-                        {pr.priority}
-                      </span>
+                ) : recentPOs.length === 0 ? (
+                  <tr><td colSpan={4} className="text-center py-6 text-muted-foreground text-xs">No purchase orders yet</td></tr>
+                ) : recentPOs.map(po => (
+                  <tr key={po.id} className="border-b last:border-0 hover:bg-muted/30 cursor-pointer" onClick={() => router.push('/purchase-orders')}>
+                    <td className="px-4 py-2 font-mono text-xs font-semibold text-red-600">{po.po_number ?? '—'}</td>
+                    <td className="px-4 py-2 text-xs max-w-[140px] truncate">{(po.supplier as any)?.company_name ?? '—'}</td>
+                    <td className="px-4 py-2 text-xs text-muted-foreground whitespace-nowrap">
+                      {format(new Date(po.created_at), 'MMM d, yyyy')}
                     </td>
                     <td className="px-4 py-2">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[pr.status] ?? 'bg-gray-100 text-gray-600'}`}>
-                        {pr.status.replace(/_/g, ' ')}
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[po.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                        {po.status.replace(/_/g, ' ')}
                       </span>
                     </td>
                   </tr>
@@ -887,15 +987,15 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Quick Links */}
+        {/* Quick Actions */}
         <Card className="lg:col-span-2">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium">Quick Actions</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             {[
-              { label: 'New Purchase Request', href: '/purchase-requests', icon: FileText, color: 'text-blue-600' },
-              { label: 'Create Purchase Order', href: '/purchase-orders', icon: ShoppingCart, color: 'text-green-600' },
+              { label: 'New Purchase Order', href: '/purchase-orders', icon: ShoppingCart, color: 'text-blue-600' },
+              { label: 'Create Sales Order', href: '/sales-orders', icon: FileText, color: 'text-green-600' },
               { label: 'Add DR Log', href: '/dr-logs', icon: Truck, color: 'text-red-600' },
               { label: 'CSI Monitoring', href: '/csi-monitoring', icon: TrendingUp, color: 'text-purple-600' },
               { label: 'View Inventory', href: '/inventory', icon: Package, color: 'text-orange-600' },
