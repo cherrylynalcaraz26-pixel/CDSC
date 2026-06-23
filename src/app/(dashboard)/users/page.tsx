@@ -94,23 +94,20 @@ export default function UsersPage() {
     if (!inviteForm.email.trim()) { toast.error('Email is required'); return }
     setInviting(true)
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email: inviteForm.email.trim().toLowerCase(),
-        password: Math.random().toString(36).slice(-12) + 'A1!',
-        options: { data: { full_name: inviteForm.full_name, role: inviteForm.role } },
-      })
-      if (error) throw error
-      if (data.user) {
-        await supabase.from('profiles').upsert({
-          id: data.user.id,
+      const res = await fetch('/api/invite-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           email: inviteForm.email.trim().toLowerCase(),
-          full_name: inviteForm.full_name || null,
+          full_name: inviteForm.full_name.trim() || null,
           role: inviteForm.role,
           department: inviteForm.department || null,
           company: inviteForm.company || null,
-        })
-      }
-      toast.success(`Invite sent to ${inviteForm.email}`)
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Failed to invite user')
+      toast.success(`User account created for ${inviteForm.email}`)
       setInviteOpen(false)
       setInviteForm({ email: '', full_name: '', role: 'client', department: '', company: '' })
       load()
