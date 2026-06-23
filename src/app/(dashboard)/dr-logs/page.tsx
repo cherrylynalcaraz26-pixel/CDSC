@@ -103,6 +103,8 @@ export default function DRLogsPage() {
   const [viewMode, setViewMode] = useState<'by-dr' | 'all-items'>('by-dr')
   const [drActiveTab, setDrActiveTab] = useState<'form' | 'preview'>('form')
   const [companyInfo, setCompanyInfo] = useState<{ company_name: string; address: string; phone: string; email: string; tin: string } | null>(null)
+  const [itemSearches, setItemSearches] = useState<Record<number, string>>({})
+  const [itemDropdowns, setItemDropdowns] = useState<Record<number, boolean>>({})
   const printRef = useRef<HTMLDivElement>(null)
 
   function handlePrint() {
@@ -205,6 +207,8 @@ export default function DRLogsPage() {
     setForm(emptyForm())
     setDeliveredToId('')
     setItems([emptyItem()])
+    setItemSearches({})
+    setItemDropdowns({})
     setDrActiveTab('form')
     setOpen(true)
   }
@@ -225,7 +229,10 @@ export default function DRLogsPage() {
     const matchedClient = clients.find(c => c.company_name === log.supplier_name)
     setDeliveredToId(matchedClient?.id ?? '')
     const existing = getItems(log.dr_number)
-    setItems(existing.length > 0 ? existing : [emptyItem()])
+    const loaded = existing.length > 0 ? existing : [emptyItem()]
+    setItems(loaded)
+    setItemSearches(Object.fromEntries(loaded.map((it, i) => [i, it.item_name])))
+    setItemDropdowns({})
     setDrActiveTab('form')
     setOpen(true)
   }
@@ -675,27 +682,48 @@ export default function DRLogsPage() {
                       <TableBody>
                         {items.map((item, i) => (
                           <TableRow key={i}>
-                            <TableCell className="py-1.5">
-                              <Select
-                                value={item.item_name}
-                                onValueChange={val => {
-                                  const selected = itemOptions.find(it => it.item_name === val)
-                                  setItems(prev => prev.map((it, idx) => idx === i
-                                    ? { ...it, item_name: val ?? '', unit: selected?.unit_of_measure || it.unit }
-                                    : it))
-                                }}
-                              >
-                                <SelectTrigger className="h-8 text-sm">
-                                  <SelectValue placeholder="Select item…" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {itemOptions.map(it => (
-                                    <SelectItem key={it.item_code} value={it.item_name}>
-                                      {it.item_name} <span className="text-xs text-muted-foreground ml-1">({it.unit_of_measure})</span>
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                            <TableCell className="py-1.5 relative">
+                              <div className="relative">
+                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                                <input
+                                  value={itemSearches[i] ?? item.item_name}
+                                  onChange={e => {
+                                    setItemSearches(s => ({ ...s, [i]: e.target.value }))
+                                    setItemDropdowns(d => ({ ...d, [i]: true }))
+                                  }}
+                                  onFocus={() => setItemDropdowns(d => ({ ...d, [i]: true }))}
+                                  onBlur={() => setTimeout(() => setItemDropdowns(d => ({ ...d, [i]: false })), 150)}
+                                  placeholder="Search item…"
+                                  className="w-full h-8 pl-8 pr-3 rounded border border-input text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                                />
+                                {itemDropdowns[i] && (
+                                  <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-44 overflow-y-auto">
+                                    {itemOptions
+                                      .filter(it => !itemSearches[i] || it.item_name.toLowerCase().includes((itemSearches[i] ?? '').toLowerCase()))
+                                      .slice(0, 40)
+                                      .map(it => (
+                                        <button
+                                          key={it.item_code}
+                                          type="button"
+                                          onMouseDown={() => {
+                                            setItems(prev => prev.map((row, idx) => idx === i
+                                              ? { ...row, item_name: it.item_name, unit: it.unit_of_measure }
+                                              : row))
+                                            setItemSearches(s => ({ ...s, [i]: it.item_name }))
+                                            setItemDropdowns(d => ({ ...d, [i]: false }))
+                                          }}
+                                          className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between"
+                                        >
+                                          <span>{it.item_name}</span>
+                                          <span className="text-xs text-muted-foreground ml-2">{it.unit_of_measure}</span>
+                                        </button>
+                                      ))}
+                                    {itemOptions.filter(it => !itemSearches[i] || it.item_name.toLowerCase().includes((itemSearches[i] ?? '').toLowerCase())).length === 0 && (
+                                      <div className="px-3 py-2 text-xs text-muted-foreground">No items found</div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
                             </TableCell>
                             <TableCell className="py-1.5">
                               <Input
@@ -783,9 +811,9 @@ export default function DRLogsPage() {
                       <thead>
                         <tr className="bg-red-700 text-white">
                           <th className="text-left px-1.5 py-1">#</th>
-                          <th className="text-right px-1.5 py-1">Qty</th>
-                          <th className="text-left px-1.5 py-1">Unit</th>
                           <th className="text-left px-1.5 py-1">Item Description</th>
+                          <th className="text-left px-1.5 py-1">Unit</th>
+                          <th className="text-right px-1.5 py-1">Qty</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -797,17 +825,22 @@ export default function DRLogsPage() {
                           item.item_name ? (
                             <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                               <td className="px-1.5 py-1 text-gray-400">{i + 1}</td>
-                              <td className="px-1.5 py-1 text-right font-medium">{Number(item.quantity) || '—'}</td>
-                              <td className="px-1.5 py-1 text-gray-500">{item.unit || '—'}</td>
                               <td className="px-1.5 py-1">{item.item_name}</td>
+                              <td className="px-1.5 py-1 text-gray-500">{item.unit || '—'}</td>
+                              <td className="px-1.5 py-1 text-right font-medium">{Number(item.quantity) || '—'}</td>
                             </tr>
                           ) : null
                         ))}
                       </tbody>
                     </table>
 
-                    {form.remarks && (
+                    {form.received_by_name && (
                       <div className="border-t pt-2 text-[10px]">
+                        <span className="text-gray-400 font-semibold">Received By: </span>{form.received_by_name}
+                      </div>
+                    )}
+                    {form.remarks && (
+                      <div className={`${form.received_by_name ? '' : 'border-t '}pt-2 text-[10px]`}>
                         <span className="text-gray-400 font-semibold">Remarks: </span>{form.remarks}
                       </div>
                     )}

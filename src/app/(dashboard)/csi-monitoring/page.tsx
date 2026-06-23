@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Fragment } from 'react'
+import { useState, useEffect, useRef, Fragment } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -18,7 +18,7 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Plus, X, Search, MoreHorizontal, Loader2, FileText, LayoutGrid, List, ChevronDown, ChevronRight, Package, Trash2 } from 'lucide-react'
+import { Plus, X, Search, MoreHorizontal, Loader2, FileText, LayoutGrid, List, ChevronDown, ChevronRight, Package, Trash2, Printer } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
@@ -83,6 +83,9 @@ export default function CSIMonitoringPage() {
   const [expandedSIs, setExpandedSIs] = useState<Set<string>>(new Set())
   const [inventoryItem, setInventoryItem] = useState<string>('')
   const [inventoryOpen, setInventoryOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState<'form' | 'preview'>('form')
+  const [companyInfo, setCompanyInfo] = useState<{ company_name: string; address: string; phone: string; email: string; tin: string } | null>(null)
+  const printRef = useRef<HTMLDivElement>(null)
 
   async function load() {
     setLoading(true)
@@ -128,6 +131,25 @@ export default function CSIMonitoringPage() {
   }
 
   useEffect(() => { load() }, [])
+
+  async function loadCompanyInfo() {
+    const { data } = await supabase.from('system_settings').select('company_name, address, phone, email, tin').single()
+    if (data) setCompanyInfo(data)
+  }
+  useEffect(() => { loadCompanyInfo() }, [])
+
+  function handlePrint() {
+    const el = printRef.current
+    if (!el) return
+    const win = window.open('', '_blank', 'width=900,height=700')
+    if (!win) return
+    win.document.write(`<!DOCTYPE html><html><head><title>Sales Invoice</title>
+    <script src="https://cdn.tailwindcss.com"><\/script>
+    <style>body { font-family: Arial, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }</style>
+  </head><body class="p-6 text-[11px]">${el.innerHTML}</body></html>`)
+    win.document.close()
+    setTimeout(() => { win.focus(); win.print(); win.close() }, 800)
+  }
 
   const filtered = records.filter(r => {
     const q = search.toLowerCase()
@@ -261,141 +283,233 @@ export default function CSIMonitoringPage() {
 
       {open && (
         <Card>
-          <CardHeader className="pb-2">
+          <CardHeader className="pb-3 flex flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2 text-base">
               <FileText className="h-5 w-5 text-red-600" />
               {editingSiNumber ? 'Edit CSI Record' : 'New CSI Record'}
             </CardTitle>
+            <div className="flex rounded-md border overflow-hidden w-fit lg:hidden">
+              <button onClick={() => setActiveTab('form')} className={`px-4 py-1.5 text-sm font-medium ${activeTab === 'form' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}>Form</button>
+              <button onClick={() => setActiveTab('preview')} className={`px-4 py-1.5 text-sm font-medium border-l ${activeTab === 'preview' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}>Preview</button>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Header fields */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>Date <span className="text-destructive">*</span></Label>
-                <Input type="date" value={header.si_date}
-                  onChange={e => setHeader(h => ({ ...h, si_date: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>SI Number <span className="text-destructive">*</span></Label>
-                <Input placeholder="e.g. 00001" value={header.si_number}
-                  onChange={e => setHeader(h => ({ ...h, si_number: e.target.value }))} />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>Client</Label>
-                <Select value={header.client_name} onValueChange={v => setHeader(h => ({ ...h, client_name: v ?? '' }))}>
-                  <SelectTrigger><SelectValue placeholder="Select client…" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">— None —</SelectItem>
-                    {clientOptions.map(c => <SelectItem key={c.id} value={c.company_name}>{c.company_name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>DR Number</Label>
-                <Input placeholder="e.g. 00001" value={header.dr_number}
-                  onChange={e => setHeader(h => ({ ...h, dr_number: e.target.value }))} />
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label>PO Number</Label>
-              <Select value={header.po_number} onValueChange={v => setHeader(h => ({ ...h, po_number: v ?? '' }))}>
-                <SelectTrigger><SelectValue placeholder="Select PO…" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">— None —</SelectItem>
-                  {poNumbers.map(po => <SelectItem key={po} value={po}>{po}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              {header.po_number && poItemsMap[header.po_number]?.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setItems(poItemsMap[header.po_number].map(i => ({ item_name: i.item_name, unit: i.unit, quantity: String(i.quantity), unit_price: '' })))}
-                  className="w-full h-7 text-xs border border-dashed border-blue-400 text-blue-600 hover:bg-blue-50 rounded-md mt-1 font-medium"
-                >
-                  Load items from PO
-                </button>
-              )}
-            </div>
-
-            {/* Items */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label className="text-sm font-semibold">Items <span className="text-destructive">*</span></Label>
-                <Button type="button" variant="outline" size="sm" onClick={() => setItems(prev => [...prev, emptyItem()])}>
-                  <Plus className="h-3.5 w-3.5 mr-1" />Add Item
-                </Button>
-              </div>
-              <div className="border rounded-lg">
-                <div className="grid grid-cols-[32px_1fr_80px_100px_110px_110px_36px] gap-2 px-3 py-2 bg-muted/50 border-b text-xs font-medium text-muted-foreground">
-                  <span />
-                  <span>Item Name</span>
-                  <span>Unit</span>
-                  <span>Qty</span>
-                  <span>Unit Price (₱)</span>
-                  <span className="text-right">Amount</span>
-                  <span />
+          <CardContent>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* LEFT: form */}
+              <div className={`space-y-4 ${activeTab === 'preview' ? 'hidden lg:block' : 'block'}`}>
+                <div className="space-y-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">SI Details</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label>Date <span className="text-destructive">*</span></Label>
+                      <Input type="date" value={header.si_date} onChange={e => setHeader(h => ({ ...h, si_date: e.target.value }))} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>SI Number <span className="text-destructive">*</span></Label>
+                      <Input placeholder="e.g. 00001" value={header.si_number} onChange={e => setHeader(h => ({ ...h, si_number: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Client</Label>
+                    <Select value={header.client_name} onValueChange={v => setHeader(h => ({ ...h, client_name: v ?? '' }))}>
+                      <SelectTrigger><SelectValue placeholder="Select client…" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">— None —</SelectItem>
+                        {clientOptions.map(c => <SelectItem key={c.id} value={c.company_name}>{c.company_name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label>PO Number</Label>
+                      <Select value={header.po_number} onValueChange={v => setHeader(h => ({ ...h, po_number: v ?? '' }))}>
+                        <SelectTrigger><SelectValue placeholder="Select PO…" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">— None —</SelectItem>
+                          {poNumbers.map(po => <SelectItem key={po} value={po}>{po}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      {header.po_number && poItemsMap[header.po_number]?.length > 0 && (
+                        <button type="button" onClick={() => setItems(poItemsMap[header.po_number].map(i => ({ item_name: i.item_name, unit: i.unit, quantity: String(i.quantity), unit_price: '' })))}
+                          className="w-full h-7 text-xs border border-dashed border-blue-400 text-blue-600 hover:bg-blue-50 rounded-md mt-1 font-medium">
+                          Load items from PO
+                        </button>
+                      )}
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>DR Number</Label>
+                      <Input placeholder="e.g. 00001" value={header.dr_number} onChange={e => setHeader(h => ({ ...h, dr_number: e.target.value }))} />
+                    </div>
+                  </div>
                 </div>
-                <div className="divide-y">
-                  {items.map((item, i) => {
-                    const amt = (Number(item.quantity) || 0) * (Number(item.unit_price) || 0)
-                    return (
-                      <div key={i} className="grid grid-cols-[32px_1fr_80px_100px_110px_110px_36px] gap-2 items-center px-3 py-2">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-blue-600"
-                          title="View inventory"
-                          onClick={() => { setInventoryItem(item.item_name); setInventoryOpen(true) }}
-                        >
-                          <Package className="h-3.5 w-3.5" />
-                        </Button>
-                        <Select
-                          value={item.item_name}
-                          onValueChange={val => {
-                            const opt = itemOptions.find(o => o.item_name === (val ?? ''))
-                            setItems(prev => prev.map((it, idx) => idx === i
-                              ? { ...it, item_name: val ?? '', unit: opt?.unit_of_measure ?? it.unit }
-                              : it))
-                          }}
-                        >
-                          <SelectTrigger className="h-8 text-sm">
-                            <SelectValue placeholder="Select item…" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {itemOptions.map(opt => (
-                              <SelectItem key={opt.item_name} value={opt.item_name}>
-                                {opt.item_name} <span className="text-xs text-muted-foreground ml-1">({opt.unit_of_measure})</span>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <div className="h-8 flex items-center px-2 text-sm bg-muted/30 rounded border text-muted-foreground truncate">
-                          {item.unit || '—'}
-                        </div>
-                        <Input type="number" min={0} className="h-8 text-sm" placeholder="0" value={item.quantity}
-                          onChange={e => setItems(prev => prev.map((it, idx) => idx === i ? { ...it, quantity: e.target.value } : it))} />
-                        <Input type="number" min={0} step="0.01" className="h-8 text-sm" placeholder="0.00" value={item.unit_price}
-                          onChange={e => setItems(prev => prev.map((it, idx) => idx === i ? { ...it, unit_price: e.target.value } : it))} />
-                        <div className="text-right text-sm font-medium pr-1 tabular-nums">
-                          ₱{amt.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                        </div>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
-                          onClick={() => setItems(prev => prev.filter((_, idx) => idx !== i))} disabled={items.length === 1}>
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+
+                {/* Items */}
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">Line Items</p>
+                  <div className="border rounded-lg overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/40">
+                          <TableHead className="w-8"></TableHead>
+                          <TableHead>Item Description</TableHead>
+                          <TableHead className="w-16">Unit</TableHead>
+                          <TableHead className="w-20">Qty</TableHead>
+                          <TableHead className="w-28">Unit Price (₱)</TableHead>
+                          <TableHead className="w-24 text-right">Amount</TableHead>
+                          <TableHead className="w-8"></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {items.map((item, i) => {
+                          const amt = (Number(item.quantity) || 0) * (Number(item.unit_price) || 0)
+                          return (
+                            <TableRow key={i}>
+                              <TableCell className="py-1.5">
+                                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-blue-600"
+                                  title="View inventory" onClick={() => { setInventoryItem(item.item_name); setInventoryOpen(true) }}>
+                                  <Package className="h-3.5 w-3.5" />
+                                </Button>
+                              </TableCell>
+                              <TableCell className="py-1.5">
+                                <Select value={item.item_name} onValueChange={val => {
+                                  const opt = itemOptions.find(o => o.item_name === (val ?? ''))
+                                  setItems(prev => prev.map((it, idx) => idx === i ? { ...it, item_name: val ?? '', unit: opt?.unit_of_measure ?? it.unit } : it))
+                                }}>
+                                  <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select item…" /></SelectTrigger>
+                                  <SelectContent>
+                                    {itemOptions.map(opt => (
+                                      <SelectItem key={opt.item_name} value={opt.item_name}>
+                                        {opt.item_name} <span className="text-xs text-muted-foreground ml-1">({opt.unit_of_measure})</span>
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </TableCell>
+                              <TableCell className="py-1.5">
+                                <div className="h-8 flex items-center px-2 text-sm bg-muted/30 rounded border text-muted-foreground">{item.unit || '—'}</div>
+                              </TableCell>
+                              <TableCell className="py-1.5">
+                                <Input type="number" min={0} className="h-8 text-sm" placeholder="0" value={item.quantity}
+                                  onChange={e => setItems(prev => prev.map((it, idx) => idx === i ? { ...it, quantity: e.target.value } : it))} />
+                              </TableCell>
+                              <TableCell className="py-1.5">
+                                <Input type="number" min={0} step="0.01" className="h-8 text-sm" placeholder="0.00" value={item.unit_price}
+                                  onChange={e => setItems(prev => prev.map((it, idx) => idx === i ? { ...it, unit_price: e.target.value } : it))} />
+                              </TableCell>
+                              <TableCell className="py-1.5 text-right text-sm font-medium tabular-nums">
+                                ₱{amt.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                              </TableCell>
+                              <TableCell className="py-1.5">
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
+                                  onClick={() => setItems(prev => prev.filter((_, idx) => idx !== i))} disabled={items.length === 1}>
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          )
+                        })}
+                      </TableBody>
+                    </Table>
+                    <div className="flex items-center justify-between px-3 py-2 bg-muted/20 border-t">
+                      <Button type="button" variant="outline" size="sm" onClick={() => setItems(prev => [...prev, emptyItem()])}>
+                        <Plus className="h-3.5 w-3.5 mr-1" />Add Item
+                      </Button>
+                      <span className="text-sm font-semibold">Total: ₱{totalItems.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* RIGHT: live preview */}
+              <div className={`${activeTab === 'form' ? 'hidden lg:block' : 'block'}`}>
+                <div className="sticky top-0">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Live Preview</p>
+                    <Button type="button" variant="outline" size="sm" onClick={handlePrint} className="h-7 px-2 text-xs gap-1">
+                      <Printer className="h-3.5 w-3.5" /> Print
+                    </Button>
+                  </div>
+                  <div ref={printRef} className="border rounded-lg bg-white text-[11px] p-4 shadow-sm space-y-3 font-sans">
+                    {/* Header */}
+                    <div className="flex justify-between items-start border-b pb-3">
+                      <img src="/cdsc-logo.jpg" alt="CDSC" className="h-12 w-12 rounded object-cover" />
+                      <div className="text-right">
+                        <div className="text-[13px] font-bold text-red-700 mb-0.5">{companyInfo?.company_name || 'CDSC Industrial Supply'}</div>
+                        {companyInfo?.address && <div className="text-[9px] text-gray-500">{companyInfo.address}</div>}
+                        {(companyInfo?.phone || companyInfo?.email) && (
+                          <div className="text-[9px] text-gray-500">{companyInfo.phone}{companyInfo.phone && companyInfo.email ? ' | ' : ''}{companyInfo.email}</div>
+                        )}
+                        {companyInfo?.tin && <div className="text-[9px] text-gray-500">TIN: {companyInfo.tin}</div>}
                       </div>
-                    )
-                  })}
-                </div>
-                <div className="flex justify-end px-3 py-2 bg-muted/20 border-t text-sm font-semibold">
-                  Total: ₱{totalItems.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                    </div>
+
+                    {/* Party info */}
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <div className="text-[9px] font-semibold uppercase text-gray-400 mb-0.5">Client</div>
+                        <div className="font-semibold text-gray-800">{header.client_name || <span className="text-gray-400 italic">—</span>}</div>
+                        {header.po_number && <>
+                          <div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5 mb-0.5">PO Reference</div>
+                          <div className="font-mono text-gray-800">{header.po_number}</div>
+                        </>}
+                        {header.dr_number && <>
+                          <div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5 mb-0.5">DR Number</div>
+                          <div className="font-mono text-gray-800">{header.dr_number}</div>
+                        </>}
+                      </div>
+                      <div className="text-center flex items-center justify-center">
+                        <div className="text-[15px] font-extrabold text-red-700 uppercase tracking-widest">Sales Invoice</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[9px] font-semibold uppercase text-gray-400">SI Number</div>
+                        <div className="font-mono font-bold text-gray-800">{header.si_number || '—'}</div>
+                        <div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5">Date</div>
+                        <div className="text-gray-800">{header.si_date ? new Date(header.si_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</div>
+                      </div>
+                    </div>
+
+                    {/* Items table */}
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr className="bg-red-700 text-white">
+                          <th className="text-left px-1.5 py-1">#</th>
+                          <th className="text-left px-1.5 py-1">Item Description</th>
+                          <th className="text-left px-1.5 py-1">Unit</th>
+                          <th className="text-right px-1.5 py-1">Qty</th>
+                          <th className="text-right px-1.5 py-1">Unit Price</th>
+                          <th className="text-right px-1.5 py-1">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {items.filter(it => it.item_name).length === 0 ? (
+                          <tr><td colSpan={6} className="px-1.5 py-3 text-center text-gray-300 italic">No items added yet</td></tr>
+                        ) : items.map((item, i) => {
+                          const amt = (Number(item.quantity) || 0) * (Number(item.unit_price) || 0)
+                          return item.item_name ? (
+                            <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                              <td className="px-1.5 py-1 text-gray-400">{i + 1}</td>
+                              <td className="px-1.5 py-1">{item.item_name}</td>
+                              <td className="px-1.5 py-1 text-gray-500">{item.unit || '—'}</td>
+                              <td className="px-1.5 py-1 text-right">{Number(item.quantity) || '—'}</td>
+                              <td className="px-1.5 py-1 text-right">{item.unit_price ? formatPeso(Number(item.unit_price)) : '—'}</td>
+                              <td className="px-1.5 py-1 text-right font-medium">{formatPeso(amt)}</td>
+                            </tr>
+                          ) : null
+                        })}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 border-gray-300">
+                          <td colSpan={5} className="px-1.5 py-1 text-right font-bold text-gray-700">Total</td>
+                          <td className="px-1.5 py-1 text-right font-bold text-red-700">{formatPeso(totalItems)}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2">
+            <div className="flex justify-end gap-2 pt-4 border-t mt-4">
               <Button variant="outline" onClick={() => { setOpen(false); setHeader(emptyHeader()); setItems([emptyItem()]); setEditingSiNumber(null) }}>Cancel</Button>
               <Button onClick={save} disabled={saving} className="bg-red-600 hover:bg-red-700">
                 {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : editingSiNumber ? 'Update' : 'Save'}
