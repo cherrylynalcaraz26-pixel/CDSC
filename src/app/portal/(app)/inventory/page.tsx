@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Package, Loader2, Search, Tag, ShoppingCart, Plus, Minus, X, Send, ChevronDown, ChevronUp, ShoppingBag } from 'lucide-react'
+import { Package, Loader2, Tag, ShoppingCart, Plus, Minus, X, Send, ChevronDown, ChevronUp, ShoppingBag } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
+import { useSearchContext } from '@/context/search-context'
 
 interface InventoryItem {
   id: string
@@ -28,8 +29,8 @@ export default function PortalInventoryPage() {
   const supabase = createClient()
   const router = useRouter()
   const [items, setItems] = useState<InventoryItem[]>([])
+  const { query: search } = useSearchContext()
   const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
   const [category, setCategory] = useState('')
   const [stockFilter, setStockFilter] = useState(false)
 
@@ -189,15 +190,6 @@ export default function PortalInventoryPage() {
       {/* Search + filters */}
       <div className="space-y-3">
         <div className="flex gap-2 flex-wrap items-center">
-          <div className="relative flex-1 min-w-[200px] max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-            <input
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              placeholder="Search products, codes..."
-              className="w-full h-10 pl-9 pr-4 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-            />
-          </div>
           <button
             onClick={() => setStockFilter(v => !v)}
             className={cn(

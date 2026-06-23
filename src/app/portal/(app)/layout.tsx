@@ -7,6 +7,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 import { LayoutDashboard, FileText, Package, User, LogOut, Menu, X, Loader2, Boxes, ClipboardList, Search } from 'lucide-react'
+import { SearchProvider, useSearchContext } from '@/context/search-context'
 
 const NAV = [
   { label: 'Dashboard',      href: '/portal',             icon: LayoutDashboard, exact: true },
@@ -17,10 +18,11 @@ const NAV = [
   { label: 'Account',        href: '/portal/settings',    icon: User,            exact: false },
 ]
 
-export default function PortalLayout({ children }: { children: React.ReactNode }) {
+function PortalLayoutInner({ children }: { children: React.ReactNode }) {
   const supabase = createClient()
   const router = useRouter()
   const pathname = usePathname()
+  const { query, setQuery } = useSearchContext()
   const [loading, setLoading] = useState(true)
   const [clientName, setClientName] = useState('')
   const [userName, setUserName] = useState('')
@@ -82,12 +84,14 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
             </div>
           </Link>
 
-          {/* Search bar — desktop only */}
-          <div className="hidden md:flex flex-1 max-w-md">
-            <div className="relative w-full">
+          {/* Search bar — desktop only, centered */}
+          <div className="hidden md:flex flex-1 justify-center">
+            <div className="relative w-full max-w-sm">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
               <input
                 type="search"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
                 placeholder="Search orders, quotations, items…"
                 className="w-full h-9 pl-9 pr-4 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
               />
@@ -198,5 +202,13 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
         </main>
       </div>
     </div>
+  )
+}
+
+export default function PortalLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <SearchProvider>
+      <PortalLayoutInner>{children}</PortalLayoutInner>
+    </SearchProvider>
   )
 }

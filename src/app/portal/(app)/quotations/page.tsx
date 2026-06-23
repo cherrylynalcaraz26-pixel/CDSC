@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { format } from 'date-fns'
 import { Loader2, FileText, ChevronDown, ChevronUp, Package, CheckCircle, Clock, XCircle, Send } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useSearchContext } from '@/context/search-context'
 
 interface QuoteItem {
   id: string
@@ -52,6 +53,7 @@ export default function PortalQuotations() {
   const supabase = createClient()
   const [quotations, setQuotations] = useState<Quotation[]>([])
   const [loading, setLoading] = useState(true)
+  const { query: search } = useSearchContext()
   const [filter, setFilter] = useState('')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
@@ -83,7 +85,12 @@ export default function PortalQuotations() {
     })
   }
 
-  const filtered = filter ? quotations.filter(q => q.status === filter) : quotations
+  const filtered = quotations.filter(q => {
+    const s = search.toLowerCase()
+    const matchSearch = !s || (q.quote_number ?? '').toLowerCase().includes(s) || (q.subject ?? '').toLowerCase().includes(s) || q.quotation_items.some(i => i.item_name.toLowerCase().includes(s))
+    const matchFilter = !filter || q.status === filter
+    return matchSearch && matchFilter
+  })
 
   return (
     <div className="space-y-6">

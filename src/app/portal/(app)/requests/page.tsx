@@ -6,6 +6,7 @@ import { format } from 'date-fns'
 import Link from 'next/link'
 import { Plus, Loader2, FileText, ChevronDown, ChevronUp, Package } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { useSearchContext } from '@/context/search-context'
 
 interface SOItem {
   id: string
@@ -51,6 +52,7 @@ export default function PortalRequests() {
   const supabase = createClient()
   const [orders, setOrders] = useState<SalesOrder[]>([])
   const [loading, setLoading] = useState(true)
+  const { query: search } = useSearchContext()
   const [filter, setFilter] = useState('')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
@@ -81,7 +83,12 @@ export default function PortalRequests() {
     })
   }
 
-  const filtered = filter ? orders.filter(o => o.status === filter) : orders
+  const filtered = orders.filter(o => {
+    const s = search.toLowerCase()
+    const matchSearch = !s || (o.so_number ?? '').toLowerCase().includes(s) || (o.client_po_number ?? '').toLowerCase().includes(s) || o.so_items.some(i => i.item_name.toLowerCase().includes(s))
+    const matchFilter = !filter || o.status === filter
+    return matchSearch && matchFilter
+  })
 
   return (
     <div className="space-y-6">
