@@ -193,17 +193,30 @@ export default function PortalStockPage() {
             <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
               {filteredStockItems.length === 0 ? (
                 <div className="px-3 py-2 text-xs text-gray-400">No items found</div>
-              ) : filteredStockItems.map(s => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onMouseDown={() => selectStockItem(s)}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between"
-                >
-                  <span className="font-medium text-gray-800">{s.item_name}</span>
-                  <span className="text-xs text-gray-400">{s.quantity_on_hand} {s.unit ?? 'pcs'}</span>
-                </button>
-              ))}
+              ) : filteredStockItems.map(s => {
+                const isOut = s.quantity_on_hand === 0
+                const isLow = !isOut && s.quantity_on_hand <= s.low_stock_threshold
+                const isNew = s.quantity_on_hand > s.low_stock_threshold * 3 && s.quantity_on_hand <= 10
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onMouseDown={() => selectStockItem(s)}
+                    className="w-full text-left px-3 py-2.5 text-sm hover:bg-gray-50 flex items-center justify-between gap-2 border-b border-gray-50 last:border-0"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-gray-800 truncate">{s.item_name}</div>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="text-xs text-gray-400">{s.quantity_on_hand} {s.unit ?? 'pcs'}</span>
+                        {isOut && <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-semibold">Out of Stock</span>}
+                        {isLow && <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-semibold">Low Stock</span>}
+                        {modal === 'receive' && isOut && <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-semibold">New Order Needed</span>}
+                      </div>
+                    </div>
+                    {(isOut || isLow) && <AlertTriangle className={`h-3.5 w-3.5 shrink-0 ${isOut ? 'text-red-500' : 'text-amber-500'}`} />}
+                  </button>
+                )
+              })}
             </div>
           )}
         </div>
