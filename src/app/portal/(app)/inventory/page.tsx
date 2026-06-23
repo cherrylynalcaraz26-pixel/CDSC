@@ -29,7 +29,7 @@ export default function PortalInventoryPage() {
   const supabase = createClient()
   const router = useRouter()
   const [items, setItems] = useState<InventoryItem[]>([])
-  const { query: search } = useSearchContext()
+  const { query: search, setQuery: setSearch } = useSearchContext()
   const [loading, setLoading] = useState(true)
   const [category, setCategory] = useState('')
   const [stockFilter, setStockFilter] = useState(false)
