@@ -13,7 +13,7 @@ import {
 import {
   Package, ShoppingCart, Truck, FileText, ClipboardList,
   TrendingUp, TrendingDown, Cpu, Users, ArrowRight, Loader2, ChevronDown, ChevronUp,
-  AlertTriangle, CheckCircle2, Clock, Lightbulb,
+  AlertTriangle, CheckCircle2, Clock, Lightbulb, Bell,
 } from 'lucide-react'
 import Link from 'next/link'
 import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns'
@@ -104,6 +104,8 @@ export default function DashboardPage() {
   const [lowStockCount, setLowStockCount] = useState(0)
   const [soMonthlyBars, setSoMonthlyBars] = useState<MonthlySOBar[]>([])
   const [topClients, setTopClients] = useState<TopClient[]>([])
+  const [clientLowStock, setClientLowStock] = useState<{ client_name: string; item_name: string; quantity_on_hand: number; low_stock_threshold: number; unit: string | null }[]>([])
+  const [clientLowStockOpen, setClientLowStockOpen] = useState(true)
 
   useEffect(() => {
     async function load() {
@@ -252,6 +254,20 @@ export default function DashboardPage() {
         clientMap[name].orders += 1
       }
       setTopClients(Object.entries(clientMap).map(([client, v]) => ({ client, ...v })).sort((a, b) => b.revenue - a.revenue).slice(0, 5))
+
+      // --- Client low stock alerts ---
+      const { data: lowStockData } = await supabase
+        .from('client_inventory')
+        .select('client_id, item_name, unit, quantity_on_hand, low_stock_threshold')
+        .filter('quantity_on_hand', 'lte', 'low_stock_threshold')
+      const { data: clientsData } = await supabase.from('clients').select('id, company_name')
+      const clientNameMap: Record<string, string> = {}
+      for (const c of clientsData ?? []) clientNameMap[c.id] = c.company_name
+      const lowRows = (lowStockData ?? [])
+        .filter((r: any) => r.quantity_on_hand <= r.low_stock_threshold)
+        .map((r: any) => ({ client_name: clientNameMap[r.client_id] ?? 'Unknown', item_name: r.item_name, quantity_on_hand: r.quantity_on_hand, low_stock_threshold: r.low_stock_threshold, unit: r.unit }))
+        .sort((a: any, b: any) => a.quantity_on_hand - b.quantity_on_hand)
+      setClientLowStock(lowRows)
 
       setLoading(false)
     }
@@ -454,6 +470,71 @@ export default function DashboardPage() {
           </CardContent>
         )}
       </Card>
+
+      {/* Client Low Stock Alerts */}
+      {(loading || clientLowStock.length > 0) && (
+        <Card className={clientLowStock.length > 0 ? 'border-amber-200' : ''}>
+          <CardHeader className="pb-0 pt-4 px-4">
+            <button className="flex items-center justify-between w-full text-left" onClick={() => setClientLowStockOpen(o => !o)}>
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Bell className="h-4 w-4 text-amber-500" />
+                Client Low Stock Alerts
+                {!loading && clientLowStock.length > 0 && (
+                  <span className="ml-1 bg-amber-100 text-amber-700 text-xs font-bold px-2 py-0.5 rounded-full">
+                    {clientLowStock.length}
+                  </span>
+                )}
+              </CardTitle>
+              {clientLowStockOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+            </button>
+          </CardHeader>
+          {clientLowStockOpen && (
+            <CardContent className="p-0 mt-3">
+              {loading ? (
+                <div className="text-center py-6"><Loader2 className="h-4 w-4 animate-spin mx-auto text-muted-foreground" /></div>
+              ) : clientLowStock.length === 0 ? (
+                <div className="text-center py-6 text-xs text-muted-foreground flex items-center justify-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-green-500" /> All client stock levels are healthy
+                </div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-amber-50 border-b border-amber-100 text-xs">
+                      <th className="px-4 py-2.5 text-left font-semibold text-amber-800 uppercase tracking-wide">Client</th>
+                      <th className="px-4 py-2.5 text-left font-semibold text-amber-800 uppercase tracking-wide">Item</th>
+                      <th className="px-4 py-2.5 text-center font-semibold text-amber-800 uppercase tracking-wide">On Hand</th>
+                      <th className="px-4 py-2.5 text-center font-semibold text-amber-800 uppercase tracking-wide">Threshold</th>
+                      <th className="px-4 py-2.5 text-center font-semibold text-amber-800 uppercase tracking-wide">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-amber-50">
+                    {clientLowStock.map((r, i) => {
+                      const isOut = r.quantity_on_hand === 0
+                      return (
+                        <tr key={i} className="hover:bg-amber-50/50 transition-colors">
+                          <td className="px-4 py-2.5 text-xs font-medium text-gray-900">{r.client_name}</td>
+                          <td className="px-4 py-2.5 text-xs text-gray-700">{r.item_name}</td>
+                          <td className="px-4 py-2.5 text-center text-xs font-bold text-red-600">
+                            {r.quantity_on_hand} {r.unit ?? 'pcs'}
+                          </td>
+                          <td className="px-4 py-2.5 text-center text-xs text-gray-500">
+                            {r.low_stock_threshold} {r.unit ?? 'pcs'}
+                          </td>
+                          <td className="px-4 py-2.5 text-center">
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${isOut ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
+                              {isOut ? 'Out of Stock' : 'Low Stock'}
+                            </span>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              )}
+            </CardContent>
+          )}
+        </Card>
+      )}
 
       {/* Decision Maker — Business Intelligence */}
       <Card>
