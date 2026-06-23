@@ -22,7 +22,19 @@ export default function PortalLoginPage() {
     setLoading(true)
     try {
       const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password })
-      if (signInError) { setError('Invalid email or password.'); return }
+      if (signInError) {
+        const msg = signInError.message?.toLowerCase() ?? ''
+        if (msg.includes('email not confirmed') || msg.includes('not confirmed')) {
+          setError('Your account email has not been confirmed yet. Please check your inbox for a confirmation link, or contact your CDSC administrator.')
+        } else if (msg.includes('invalid login') || msg.includes('invalid credentials') || msg.includes('wrong password')) {
+          setError('Incorrect email or password. Please check your credentials and try again.')
+        } else if (msg.includes('user not found') || msg.includes('no user')) {
+          setError('No account found with this email address. Please contact your CDSC administrator.')
+        } else {
+          setError(signInError.message ?? 'Sign in failed. Please try again.')
+        }
+        return
+      }
       const { data: profile } = await supabase.from('profiles').select('role').eq('id', data.user.id).single()
       if (profile?.role !== 'client') {
         await supabase.auth.signOut()

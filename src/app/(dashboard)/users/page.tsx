@@ -18,7 +18,7 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { UserPlus, MoreHorizontal, Search, Loader2, Users } from 'lucide-react'
+import { UserPlus, MoreHorizontal, Search, Loader2, Users, KeyRound } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
@@ -63,6 +63,10 @@ export default function UsersPage() {
   const [inviting, setInviting] = useState(false)
   const [inviteForm, setInviteForm] = useState({ email: '', full_name: '', role: 'client', department: '', company: '' })
   const [editForm, setEditForm] = useState({ full_name: '', role: 'client', department: '', company: '' })
+  const [portalOpen, setPortalOpen] = useState(false)
+  const [portalForm, setPortalForm] = useState({ email: '', full_name: '', company: '', password: '', confirmPassword: '' })
+  const [portalCreating, setPortalCreating] = useState(false)
+  const [showPortalPw, setShowPortalPw] = useState(false)
   const [clientNames, setClientNames] = useState<string[]>([])
 
   async function load() {
@@ -108,12 +112,41 @@ export default function UsersPage() {
       }
       toast.success(`Invite sent to ${inviteForm.email}`)
       setInviteOpen(false)
-      setInviteForm({ email: '', full_name: '', role: 'employee', department: '', company: '' })
+      setInviteForm({ email: '', full_name: '', role: 'client', department: '', company: '' })
       load()
     } catch (err: any) {
       toast.error(err.message ?? 'Failed to invite user')
     }
     setInviting(false)
+  }
+
+  async function handleCreatePortal() {
+    if (!portalForm.email.trim()) { toast.error('Email is required'); return }
+    if (!portalForm.password) { toast.error('Password is required'); return }
+    if (portalForm.password.length < 6) { toast.error('Password must be at least 6 characters'); return }
+    if (portalForm.password !== portalForm.confirmPassword) { toast.error('Passwords do not match'); return }
+    setPortalCreating(true)
+    try {
+      const res = await fetch('/api/create-portal-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: portalForm.email.trim().toLowerCase(),
+          password: portalForm.password,
+          full_name: portalForm.full_name.trim() || null,
+          company: portalForm.company || null,
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Failed to create account')
+      toast.success(`Portal account created for ${portalForm.email}`)
+      setPortalOpen(false)
+      setPortalForm({ email: '', full_name: '', company: '', password: '', confirmPassword: '' })
+      load()
+    } catch (err: any) {
+      toast.error(err.message ?? 'Failed to create portal account')
+    }
+    setPortalCreating(false)
   }
 
   function openEdit(p: Profile) {
@@ -160,9 +193,14 @@ export default function UsersPage() {
             <p className="text-muted-foreground text-sm mt-0.5">Manage system access and roles</p>
           </div>
         </div>
-        <Button onClick={() => setInviteOpen(true)} className="bg-red-600 hover:bg-red-700">
-          <UserPlus className="h-4 w-4 mr-2" />Invite User
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={() => setPortalOpen(true)} variant="outline" className="border-blue-300 text-blue-700 hover:bg-blue-50">
+            <KeyRound className="h-4 w-4 mr-2" />Create Portal Account
+          </Button>
+          <Button onClick={() => setInviteOpen(true)} className="bg-red-600 hover:bg-red-700">
+            <UserPlus className="h-4 w-4 mr-2" />Invite User
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}
@@ -267,6 +305,77 @@ export default function UsersPage() {
           </TableBody>
         </Table>
       </div>
+
+      {/* Create Portal Account Dialog */}
+      <Dialog open={portalOpen} onOpenChange={setPortalOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="h-5 w-5 text-blue-600" />Create Client Portal Account
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-sm text-blue-800">
+              The account will be activated immediately. Share the email and password with the client — they can log in right away without email confirmation.
+            </div>
+            <div className="space-y-1.5">
+              <Label>Email Address <span className="text-destructive">*</span></Label>
+              <Input type="email" placeholder="client@company.com" value={portalForm.email}
+                onChange={e => setPortalForm(f => ({ ...f, email: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Full Name</Label>
+              <Input placeholder="Client contact person" value={portalForm.full_name}
+                onChange={e => setPortalForm(f => ({ ...f, full_name: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Company</Label>
+              <Select value={portalForm.company || '_none'} onValueChange={v => setPortalForm(f => ({ ...f, company: v === '_none' ? '' : (v ?? '') }))}>
+                <SelectTrigger><SelectValue placeholder="Select company…" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">— None —</SelectItem>
+                  {clientNames.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Password <span className="text-destructive">*</span></Label>
+              <div className="relative">
+                <Input
+                  type={showPortalPw ? 'text' : 'password'}
+                  placeholder="Minimum 6 characters"
+                  value={portalForm.password}
+                  onChange={e => setPortalForm(f => ({ ...f, password: e.target.value }))}
+                  className="pr-10"
+                />
+                <button type="button" onClick={() => setShowPortalPw(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                  {showPortalPw ? <span className="text-xs">Hide</span> : <span className="text-xs">Show</span>}
+                </button>
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Confirm Password <span className="text-destructive">*</span></Label>
+              <Input
+                type={showPortalPw ? 'text' : 'password'}
+                placeholder="Re-enter password"
+                value={portalForm.confirmPassword}
+                onChange={e => setPortalForm(f => ({ ...f, confirmPassword: e.target.value }))}
+              />
+            </div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted px-3 py-2 rounded-md">
+              <span className="bg-blue-100 text-blue-700 text-[10px] font-bold px-1.5 py-0.5 rounded">ROLE</span>
+              Automatically set to <strong>Client</strong> — portal access only
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPortalOpen(false)}>Cancel</Button>
+            <Button onClick={handleCreatePortal} disabled={portalCreating} className="bg-blue-600 hover:bg-blue-700">
+              {portalCreating ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Creating…</> : 'Create Account'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Invite Dialog */}
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
