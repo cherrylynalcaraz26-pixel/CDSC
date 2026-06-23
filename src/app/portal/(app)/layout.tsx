@@ -27,6 +27,7 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
   const [clientName, setClientName] = useState('')
   const [userName, setUserName] = useState('')
   const [mobileOpen, setMobileOpen] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(true)
 
   useEffect(() => {
     async function check() {
@@ -70,6 +71,12 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
           {/* Mobile hamburger */}
           <button className="md:hidden p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors shrink-0"
             onClick={() => setMobileOpen(true)}>
+            <Menu className="h-5 w-5" />
+          </button>
+
+          {/* Desktop sidebar toggle */}
+          <button className="hidden md:flex p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors shrink-0"
+            onClick={() => setSidebarOpen(v => !v)}>
             <Menu className="h-5 w-5" />
           </button>
 
@@ -118,8 +125,15 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
 
       <div className="flex flex-1">
         {/* Desktop sidebar */}
+        {sidebarOpen && (
         <aside className="hidden md:flex flex-col w-56 shrink-0 bg-white border-r border-gray-200 sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto">
-          <nav className="flex-1 p-3 space-y-0.5 pt-4">
+          <div className="flex items-center justify-between px-3 pt-3 pb-1">
+            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-1">Menu</span>
+            <button onClick={() => setSidebarOpen(false)} className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 transition-colors">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <nav className="flex-1 p-3 space-y-0.5">
             {NAV.map(link => {
               const active = isActive(link.href, link.exact)
               return (
@@ -143,6 +157,7 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
             </button>
           </div>
         </aside>
+        )}
 
         {/* Mobile drawer */}
         {mobileOpen && (
