@@ -230,9 +230,9 @@ export default function DRLogsPage() {
     setOpen(true)
   }
 
-  function handleClientChange(clientId: string) {
+  function handleClientChange(clientId: string | null) {
     const client = clients.find(c => c.id === clientId)
-    setDeliveredToId(clientId)
+    setDeliveredToId(clientId ?? '')
     setForm(f => ({ ...f, supplier_name: client?.company_name ?? '' }))
   }
 
