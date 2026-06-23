@@ -96,6 +96,7 @@ export default function DRLogsPage() {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<DRLog | null>(null)
   const [form, setForm] = useState<DRForm>(emptyForm())
+  const [deliveredToId, setDeliveredToId] = useState('')
   const [items, setItems] = useState<DRItem[]>([emptyItem()])
   const [saving, setSaving] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
@@ -202,6 +203,7 @@ export default function DRLogsPage() {
   function openAdd() {
     setEditing(null)
     setForm(emptyForm())
+    setDeliveredToId('')
     setItems([emptyItem()])
     setDrActiveTab('form')
     setOpen(true)
@@ -212,22 +214,26 @@ export default function DRLogsPage() {
     setForm({
       dr_number: log.dr_number,
       dr_date: log.dr_date,
-      supplier_id: log.supplier_id ?? '',
+      supplier_id: '',
       supplier_name: log.supplier_name ?? '',
       po_number: log.po_number ?? '',
       remarks: log.remarks ?? '',
       status: log.status,
       received_by_name: log.received_by_name ?? '',
     })
+    // pre-select the client dropdown by matching company name
+    const matchedClient = clients.find(c => c.company_name === log.supplier_name)
+    setDeliveredToId(matchedClient?.id ?? '')
     const existing = getItems(log.dr_number)
     setItems(existing.length > 0 ? existing : [emptyItem()])
     setDrActiveTab('form')
     setOpen(true)
   }
 
-  function handleClientChange(clientId: string | null) {
+  function handleClientChange(clientId: string) {
     const client = clients.find(c => c.id === clientId)
-    setForm(f => ({ ...f, supplier_id: clientId ?? '', supplier_name: client?.company_name ?? '' }))
+    setDeliveredToId(clientId)
+    setForm(f => ({ ...f, supplier_name: client?.company_name ?? '' }))
   }
 
   function updateItem(index: number, field: keyof DRItem, value: string) {
@@ -599,7 +605,7 @@ export default function DRLogsPage() {
                   </div>
                   <div className="space-y-1.5">
                     <Label>Delivered To</Label>
-                    <Select value={form.supplier_id} onValueChange={handleClientChange}>
+                    <Select value={deliveredToId} onValueChange={handleClientChange}>
                       <SelectTrigger><SelectValue placeholder="Select client / delivered to" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="">— None —</SelectItem>
@@ -643,58 +649,80 @@ export default function DRLogsPage() {
                     </div>
                   </div>
                   <div className="space-y-1.5">
+                    <Label>Received By</Label>
+                    <Input placeholder="Name of receiver" value={form.received_by_name}
+                      onChange={e => setForm(f => ({ ...f, received_by_name: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1.5">
                     <Label>Remarks</Label>
-                    <Textarea rows={3} className="resize-y" placeholder="Notes, discrepancies, condition of goods…" value={form.remarks}
+                    <Textarea rows={2} className="resize-y" placeholder="Notes, discrepancies, condition of goods…" value={form.remarks}
                       onChange={e => setForm(f => ({ ...f, remarks: e.target.value }))} />
                   </div>
                 </div>
 
                 <div className="space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">Delivery Items</p>
-                  <div className="space-y-2">
-                    <div className="grid grid-cols-[80px_90px_1fr_32px] gap-2 text-xs font-medium text-muted-foreground px-1">
-                      <span>Qty</span><span>Unit</span><span>Item Description</span><span />
-                    </div>
-                    {items.map((item, i) => (
-                      <div key={i} className="grid grid-cols-[80px_90px_1fr_32px] gap-2 items-center">
-                        <Input
-                          type="number" min={0} placeholder="0"
-                          value={item.quantity}
-                          onChange={e => updateItem(i, 'quantity', e.target.value)}
-                          className="h-8 text-sm"
-                        />
-                        <div className="h-8 flex items-center px-2 text-sm bg-muted/30 rounded border text-muted-foreground truncate">
-                          {item.unit || '—'}
-                        </div>
-                        <Select
-                          value={item.item_name}
-                          onValueChange={val => {
-                            const selected = itemOptions.find(it => it.item_name === val)
-                            setItems(prev => prev.map((it, idx) => idx === i
-                              ? { ...it, item_name: val ?? '', unit: selected?.unit_of_measure || it.unit }
-                              : it))
-                          }}
-                        >
-                          <SelectTrigger className="h-8 text-sm">
-                            <SelectValue placeholder="Select item…" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {itemOptions.map(it => (
-                              <SelectItem key={it.item_code} value={it.item_name}>
-                                {it.item_name} <span className="text-xs text-muted-foreground ml-1">({it.unit_of_measure})</span>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <button
-                          type="button"
-                          onClick={() => removeItemRow(i)}
-                          className="h-8 w-8 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                    ))}
+                  <div className="border rounded-lg overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/40">
+                          <TableHead className="min-w-[200px]">Item Description</TableHead>
+                          <TableHead className="w-20">Qty</TableHead>
+                          <TableHead className="w-24">Unit</TableHead>
+                          <TableHead className="w-8"></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {items.map((item, i) => (
+                          <TableRow key={i}>
+                            <TableCell className="py-1.5">
+                              <Select
+                                value={item.item_name}
+                                onValueChange={val => {
+                                  const selected = itemOptions.find(it => it.item_name === val)
+                                  setItems(prev => prev.map((it, idx) => idx === i
+                                    ? { ...it, item_name: val ?? '', unit: selected?.unit_of_measure || it.unit }
+                                    : it))
+                                }}
+                              >
+                                <SelectTrigger className="h-8 text-sm">
+                                  <SelectValue placeholder="Select item…" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {itemOptions.map(it => (
+                                    <SelectItem key={it.item_code} value={it.item_name}>
+                                      {it.item_name} <span className="text-xs text-muted-foreground ml-1">({it.unit_of_measure})</span>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </TableCell>
+                            <TableCell className="py-1.5">
+                              <Input
+                                type="number" min={0} placeholder="0"
+                                value={item.quantity}
+                                onChange={e => updateItem(i, 'quantity', e.target.value)}
+                                className="h-8 text-sm w-full"
+                              />
+                            </TableCell>
+                            <TableCell className="py-1.5">
+                              <div className="h-8 flex items-center px-2 text-sm bg-muted/30 rounded border text-muted-foreground">
+                                {item.unit || '—'}
+                              </div>
+                            </TableCell>
+                            <TableCell className="py-1.5">
+                              <button
+                                type="button"
+                                onClick={() => removeItemRow(i)}
+                                className="h-8 w-8 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
                   </div>
                   <Button type="button" variant="outline" size="sm" onClick={addItemRow} className="mt-1">
                     <Plus className="h-3.5 w-3.5 mr-1" /> Add Item
