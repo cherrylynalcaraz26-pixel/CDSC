@@ -564,6 +564,104 @@ interface PortfolioTabProps {
   saving: boolean
 }
 
+function PortfolioPreview({ s }: { s: Settings }) {
+  const fullName = [s.company_name || 'Company Name', s.legal_suffix].filter(Boolean).join(' ')
+  return (
+    <div className="sticky top-4">
+      <div className="flex items-center gap-2 mb-3">
+        <Eye className="h-4 w-4 text-muted-foreground" />
+        <span className="text-sm font-medium text-muted-foreground">Portfolio Preview</span>
+        <span className="ml-auto text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">● LIVE</span>
+      </div>
+      <div className="border rounded-xl overflow-hidden bg-white shadow-sm">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-slate-800 to-slate-900 p-5">
+          <div className="flex items-center gap-3">
+            <div className="h-10 w-10 rounded-lg bg-white/10 flex items-center justify-center overflow-hidden shrink-0">
+              {s.logo_url
+                // eslint-disable-next-line @next/next/no-img-element
+                ? <img src={s.logo_url} alt="logo" className="w-full h-full object-contain p-1" />
+                : <Building2 className="h-5 w-5 text-white/50" />}
+            </div>
+            <div>
+              <div className="text-white font-bold text-sm leading-tight">{fullName}</div>
+              {s.tagline && <div className="text-white/50 text-[11px] italic mt-0.5">{s.tagline}</div>}
+            </div>
+          </div>
+          <div className="mt-3 border-t border-white/10 pt-3">
+            <div className="text-white/40 text-[10px] uppercase tracking-widest">Company Portfolio</div>
+          </div>
+        </div>
+
+        <div className="p-5 space-y-4 text-sm">
+          {/* About */}
+          {s.about_company ? (
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">About Us</div>
+              <p className="text-xs text-slate-600 whitespace-pre-line leading-relaxed line-clamp-6">{s.about_company}</p>
+            </div>
+          ) : (
+            <div className="text-center py-4 text-xs text-muted-foreground border border-dashed rounded-lg">
+              Fill in the form to see your portfolio preview
+            </div>
+          )}
+
+          {/* Years + Core Services */}
+          {(s.years_of_experience || s.core_services.length > 0) && (
+            <div className="border-t pt-4">
+              {s.years_of_experience && (
+                <div className="mb-3">
+                  <span className="inline-flex items-center gap-1 bg-red-50 text-red-700 text-xs font-semibold px-2.5 py-1 rounded-full border border-red-100">
+                    {s.years_of_experience}+ Years of Experience
+                  </span>
+                </div>
+              )}
+              {s.core_services.length > 0 && (
+                <div>
+                  <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Core Services</div>
+                  <div className="space-y-2">
+                    {s.core_services.map((svc, i) => (
+                      <div key={i} className="flex items-start gap-2">
+                        <div className="h-1.5 w-1.5 rounded-full bg-red-500 mt-1.5 shrink-0" />
+                        <div>
+                          {svc.name && <div className="text-xs font-semibold text-slate-700">{svc.name}</div>}
+                          {svc.description && <div className="text-[11px] text-slate-500 leading-relaxed">{svc.description}</div>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Key Clients */}
+          {s.key_clients && (
+            <div className="border-t pt-4">
+              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Key Clients</div>
+              <p className="text-xs text-slate-600 whitespace-pre-line leading-relaxed">{s.key_clients}</p>
+            </div>
+          )}
+
+          {/* Certifications */}
+          {s.certifications && (
+            <div className="border-t pt-4">
+              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Certifications &amp; Accreditations</div>
+              <div className="flex flex-wrap gap-1.5">
+                {s.certifications.split('\n').filter(Boolean).map((cert, i) => (
+                  <span key={i} className="text-[11px] bg-green-50 text-green-700 border border-green-100 px-2 py-0.5 rounded-full font-medium">
+                    ✓ {cert.trim()}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function PortfolioTab({ settings, setSettings, onSave, onReset, saving }: PortfolioTabProps) {
   function setField(field: keyof Settings, value: string | CoreService[]) {
     setSettings(s => ({ ...s, [field]: value }))
@@ -585,7 +683,8 @@ function PortfolioTab({ settings, setSettings, onSave, onReset, saving }: Portfo
   }
 
   return (
-    <div className="space-y-0 max-w-3xl">
+    <div className="grid grid-cols-1 xl:grid-cols-[1fr_420px] gap-8">
+    <div className="space-y-0">
       <div className="flex items-center justify-between mb-6 pb-4 border-b">
         <h2 className="font-bold text-base uppercase tracking-wider text-slate-700">Company Portfolio</h2>
         <div className="flex gap-2">
@@ -699,6 +798,11 @@ function PortfolioTab({ settings, setSettings, onSave, onReset, saving }: Portfo
           Save Portfolio
         </Button>
       </div>
+    </div>
+    {/* Live preview column */}
+    <div className="hidden xl:block">
+      <PortfolioPreview s={settings} />
+    </div>
     </div>
   )
 }

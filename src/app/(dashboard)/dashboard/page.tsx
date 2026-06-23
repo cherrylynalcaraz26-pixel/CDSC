@@ -425,11 +425,10 @@ export default function DashboardPage() {
         </CardHeader>
         {soPipelineOpen && (
           <CardContent className="p-0 mt-3">
-            <div className="grid grid-cols-3 text-center text-[10px] font-semibold uppercase tracking-wider border-b border-t">
+            <div className="grid grid-cols-2 text-center text-[10px] font-semibold uppercase tracking-wider border-b border-t">
               {[
-                { label: 'SO Created',     color: 'text-blue-600 bg-blue-50' },
-                { label: 'DR Logs',        color: 'text-orange-600 bg-orange-50' },
-                { label: 'CSI Monitoring', color: 'text-purple-600 bg-purple-50' },
+                { label: 'SO Created', color: 'text-blue-600 bg-blue-50' },
+                { label: 'DR Logged',  color: 'text-orange-600 bg-orange-50' },
               ].map(s => (
                 <div key={s.label} className={`py-2 ${s.color}`}>{s.label}</div>
               ))}
@@ -441,18 +440,13 @@ export default function DashboardPage() {
             ) : (
               <div className="divide-y">
                 {pipelineSOs.map(so => {
-                  const statusOrder = ['draft', 'confirmed', 'processing', 'shipped', 'delivered']
-                  const stageIdx = statusOrder.indexOf(so.status)
-                  const clientName = (so.client_name ?? '').trim()
                   const hasDR = drLogSONumbers.has(so.so_number ?? '') || (!!so.client_po_number && drLogSONumbers.has(so.client_po_number))
-                  const hasCSI = csiRows.some(r => r.client === clientName)
                   const stages = [
-                    { done: true,    label: so.so_number ?? '—', sub: so.client_name ?? '' },
-                    { done: hasDR,   label: hasDR ? 'Logged' : 'Pending' },
-                    { done: hasCSI,  label: hasCSI ? 'Issued' : 'Pending' },
+                    { done: true,  label: so.so_number ?? '—', sub: so.client_name ?? '' },
+                    { done: hasDR, label: hasDR ? 'Logged' : 'Pending' },
                   ]
                   return (
-                    <div key={so.id} className="grid grid-cols-3 text-center text-xs cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => router.push('/sales-orders')}>
+                    <div key={so.id} className="grid grid-cols-2 text-center text-xs cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => router.push('/sales-orders')}>
                       {stages.map((s, i) => (
                         <div key={i} className={`py-2.5 px-1 border-r last:border-r-0 ${s.done ? '' : 'opacity-40'}`}>
                           <div className={`inline-flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold mx-auto mb-0.5 ${s.done ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
@@ -563,7 +557,7 @@ export default function DashboardPage() {
                   <>
                     <div className="rounded-lg border p-3 space-y-0.5">
                       <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">This Month Revenue</div>
-                      <div className="text-xl font-bold tabular-nums">₱{(currRev / 1000).toFixed(1)}k</div>
+                      <div className="text-xl font-bold tabular-nums">₱{currRev.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</div>
                       {pct !== null ? (
                         <div className={`flex items-center gap-1 text-xs font-medium ${pct >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                           {pct >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
@@ -573,18 +567,18 @@ export default function DashboardPage() {
                     </div>
                     <div className="rounded-lg border p-3 space-y-0.5">
                       <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Total CSI Billed</div>
-                      <div className="text-xl font-bold tabular-nums">₱{(totalBilled / 1000).toFixed(1)}k</div>
+                      <div className="text-xl font-bold tabular-nums">₱{totalBilled.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</div>
                       <div className="text-xs text-muted-foreground">{csiRows.length} client{csiRows.length !== 1 ? 's' : ''}</div>
                     </div>
                     <div className="rounded-lg border p-3 space-y-0.5">
                       <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Total Collected</div>
-                      <div className="text-xl font-bold tabular-nums">₱{(totalCollected / 1000).toFixed(1)}k</div>
+                      <div className="text-xl font-bold tabular-nums">₱{totalCollected.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</div>
                       <div className="text-xs text-muted-foreground">{orRows.reduce((s, r) => s + r.ors, 0)} OR{orRows.reduce((s, r) => s + r.ors, 0) !== 1 ? 's' : ''}</div>
                     </div>
                     <div className={`rounded-lg border p-3 space-y-0.5 ${outstandingBal > 0 ? 'border-orange-200 bg-orange-50' : 'border-green-200 bg-green-50'}`}>
                       <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Outstanding Balance</div>
                       <div className={`text-xl font-bold tabular-nums ${outstandingBal > 0 ? 'text-orange-600' : 'text-green-600'}`}>
-                        ₱{(outstandingBal / 1000).toFixed(1)}k
+                        ₱{outstandingBal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                       </div>
                       <div className="text-xs text-muted-foreground">
                         {outstandingBal > 0 ? `${reconRows.filter(r => r.status === 'Outstanding').length} client${reconRows.filter(r => r.status === 'Outstanding').length !== 1 ? 's' : ''} unpaid` : 'All balanced'}
@@ -630,7 +624,7 @@ export default function DashboardPage() {
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center justify-between gap-2">
                                 <span className="text-xs font-medium truncate">{c.client}</span>
-                                <span className="text-xs font-semibold text-indigo-600 tabular-nums shrink-0">₱{(c.revenue / 1000).toFixed(1)}k</span>
+                                <span className="text-xs font-semibold text-indigo-600 tabular-nums shrink-0">₱{c.revenue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
                               </div>
                               <div className="h-1 bg-gray-100 rounded-full mt-0.5">
                                 <div className="h-1 bg-indigo-400 rounded-full" style={{ width: `${(c.revenue / maxRev) * 100}%` }} />
