@@ -231,7 +231,7 @@ export default function PortalDashboard() {
                 <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} allowDecimals={false} />
                 <Tooltip
                   contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
-                  formatter={(v: number, name: string) => [name === 'Amount' ? fmt(v) : v, name]}
+                  formatter={(v: number | string, name: string) => [name === 'Amount' ? fmt(Number(v)) : v, name]}
                 />
                 <Area type="monotone" dataKey="Orders" stroke="#dc2626" strokeWidth={2} fill="url(#orderGrad)" dot={false} activeDot={{ r: 4 }} />
               </AreaChart>
