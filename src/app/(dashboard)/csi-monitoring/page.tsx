@@ -24,6 +24,8 @@ import { format, parseISO } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
 
 interface ItemOption { item_name: string; unit_of_measure: string }
+interface ClientOption { id: string; company_name: string }
+interface POItemOption { item_name: string; unit: string; quantity: number }
 
 interface CSIRecord {
   id: number
@@ -67,6 +69,9 @@ export default function CSIMonitoringPage() {
   const { query: search } = useSearchContext()
   const [records, setRecords] = useState<CSIRecord[]>([])
   const [itemOptions, setItemOptions] = useState<ItemOption[]>([])
+  const [clientOptions, setClientOptions] = useState<ClientOption[]>([])
+  const [poNumbers, setPoNumbers] = useState<string[]>([])
+  const [poItemsMap, setPoItemsMap] = useState<Record<string, POItemOption[]>>({})
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [editingSiNumber, setEditingSiNumber] = useState<string | null>(null)
@@ -81,10 +86,28 @@ export default function CSIMonitoringPage() {
 
   async function load() {
     setLoading(true)
-    const [{ data: itemOptData }] = await Promise.all([
+    const [{ data: itemOptData }, { data: clientData }, { data: poData }] = await Promise.all([
       supabase.from('items').select('item_name, unit_of_measure').order('item_name'),
+      supabase.from('clients').select('id, company_name').eq('status', 'active').order('company_name'),
+      supabase.from('purchase_orders').select('po_number').not('po_number', 'is', null).order('created_at', { ascending: false }),
     ])
     setItemOptions((itemOptData ?? []) as ItemOption[])
+    setClientOptions((clientData ?? []) as ClientOption[])
+    setPoNumbers((poData ?? []).map((p: any) => p.po_number).filter(Boolean))
+    const { data: poItemsData } = await supabase
+      .from('po_items')
+      .select('item_name, unit_of_measure, quantity, purchase_orders!inner(po_number)')
+      .not('purchase_orders.po_number', 'is', null)
+    if (poItemsData) {
+      const map: Record<string, POItemOption[]> = {}
+      for (const row of poItemsData as any[]) {
+        const poNum = row.purchase_orders?.po_number
+        if (!poNum) continue
+        if (!map[poNum]) map[poNum] = []
+        map[poNum].push({ item_name: row.item_name, unit: row.unit_of_measure, quantity: Number(row.quantity) })
+      }
+      setPoItemsMap(map)
+    }
     const allFetched: CSIRecord[] = []
     const PAGE = 1000
     let from = 0
@@ -261,8 +284,13 @@ export default function CSIMonitoringPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Client</Label>
-                <Input placeholder="Client name" value={header.client_name}
-                  onChange={e => setHeader(h => ({ ...h, client_name: e.target.value }))} />
+                <Select value={header.client_name} onValueChange={v => setHeader(h => ({ ...h, client_name: v ?? '' }))}>
+                  <SelectTrigger><SelectValue placeholder="Select client…" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">— None —</SelectItem>
+                    {clientOptions.map(c => <SelectItem key={c.id} value={c.company_name}>{c.company_name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="space-y-1.5">
                 <Label>DR Number</Label>
@@ -272,8 +300,22 @@ export default function CSIMonitoringPage() {
             </div>
             <div className="space-y-1.5">
               <Label>PO Number</Label>
-              <Input placeholder="e.g. PO-2025-00001" value={header.po_number}
-                onChange={e => setHeader(h => ({ ...h, po_number: e.target.value }))} />
+              <Select value={header.po_number} onValueChange={v => setHeader(h => ({ ...h, po_number: v ?? '' }))}>
+                <SelectTrigger><SelectValue placeholder="Select PO…" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">— None —</SelectItem>
+                  {poNumbers.map(po => <SelectItem key={po} value={po}>{po}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {header.po_number && poItemsMap[header.po_number]?.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setItems(poItemsMap[header.po_number].map(i => ({ item_name: i.item_name, unit: i.unit, quantity: String(i.quantity), unit_price: '' })))}
+                  className="w-full h-7 text-xs border border-dashed border-blue-400 text-blue-600 hover:bg-blue-50 rounded-md mt-1 font-medium"
+                >
+                  Load items from PO
+                </button>
+              )}
             </div>
 
             {/* Items */}

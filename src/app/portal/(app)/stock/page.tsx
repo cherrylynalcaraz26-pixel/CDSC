@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import {
   Package, Loader2, Search, AlertTriangle, ArrowDownCircle, ArrowUpCircle,
-  SlidersHorizontal, History, Plus, ChevronDown, ChevronUp, X
+  SlidersHorizontal, History, ChevronDown, ChevronUp, X, Check
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -27,6 +27,7 @@ interface TxRow {
   transaction_type: string
   quantity: number
   issued_to: string | null
+  department: string | null
   notes: string | null
   reference_no: string | null
   created_at: string
@@ -40,6 +41,7 @@ export default function PortalStockPage() {
   const [clientId, setClientId] = useState<string | null>(null)
   const [stock, setStock] = useState<StockRow[]>([])
   const [transactions, setTransactions] = useState<TxRow[]>([])
+  const [departments, setDepartments] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [modal, setModal] = useState<ModalType>(null)
@@ -49,11 +51,16 @@ export default function PortalStockPage() {
   const [historyOpen, setHistoryOpen] = useState(false)
   const [thresholdItem, setThresholdItem] = useState<StockRow | null>(null)
 
+  // Item search dropdown state
+  const [itemSearch, setItemSearch] = useState('')
+  const [itemDropdownOpen, setItemDropdownOpen] = useState(false)
+
   // Form fields
   const [txItemName, setTxItemName] = useState('')
   const [txUnit, setTxUnit] = useState('')
   const [txQty, setTxQty] = useState('1')
   const [txIssuedTo, setTxIssuedTo] = useState('')
+  const [txDepartment, setTxDepartment] = useState('')
   const [txNotes, setTxNotes] = useState('')
   const [txRef, setTxRef] = useState('')
   const [newThreshold, setNewThreshold] = useState('')
@@ -72,12 +79,14 @@ export default function PortalStockPage() {
 
   async function fetchData(cid: string) {
     setLoading(true)
-    const [{ data: stockData }, { data: txData }] = await Promise.all([
+    const [{ data: stockData }, { data: txData }, { data: deptData }] = await Promise.all([
       supabase.from('client_inventory').select('*').eq('client_id', cid).order('item_name'),
       supabase.from('client_inventory_transactions').select('*').eq('client_id', cid).order('created_at', { ascending: false }).limit(100),
+      supabase.from('client_departments').select('name').eq('client_id', cid).order('name'),
     ])
     setStock(stockData ?? [])
     setTransactions(txData ?? [])
+    setDepartments((deptData ?? []).map((d: any) => d.name))
     setLoading(false)
   }
 
@@ -88,16 +97,30 @@ export default function PortalStockPage() {
     setTxUnit(item?.unit ?? '')
     setTxQty('1')
     setTxIssuedTo('')
+    setTxDepartment('')
     setTxNotes('')
     setTxRef('')
+    setItemSearch(item?.item_name ?? '')
+    setItemDropdownOpen(false)
   }
+
+  function selectStockItem(item: StockRow) {
+    setTxItemName(item.item_name)
+    setTxUnit(item.unit ?? '')
+    setItemSearch(item.item_name)
+    setItemDropdownOpen(false)
+  }
+
+  const filteredStockItems = stock.filter(s =>
+    !itemSearch || s.item_name.toLowerCase().includes(itemSearch.toLowerCase())
+  )
 
   async function submitTransaction() {
     if (!clientId) return
     const qty = parseFloat(txQty)
-    if (!txItemName.trim()) { toast.error('Item name is required'); return }
+    if (!txItemName.trim()) { toast.error('Item is required'); return }
     if (!qty || qty <= 0) { toast.error('Quantity must be greater than 0'); return }
-    if (modal === 'issue' && !txIssuedTo.trim()) { toast.error('Issued To is required'); return }
+    if (modal === 'issue' && !txIssuedTo.trim()) { toast.error('Care of is required'); return }
     setSubmitting(true)
     try {
       const { error } = await supabase.from('client_inventory_transactions').insert({
@@ -107,6 +130,7 @@ export default function PortalStockPage() {
         transaction_type: modal === 'receive' ? 'received' : modal === 'issue' ? 'issued' : 'adjusted',
         quantity: qty,
         issued_to: txIssuedTo.trim() || null,
+        department: txDepartment.trim() || null,
         notes: txNotes.trim() || null,
         reference_no: txRef.trim() || null,
       })
@@ -130,7 +154,7 @@ export default function PortalStockPage() {
     if (error) { toast.error(error.message); return }
     toast.success('Threshold updated')
     setThresholdItem(null)
-    await fetchData(clientId)
+    await fetchData(clientId!)
   }
 
   const filtered = stock.filter(s =>
@@ -146,6 +170,45 @@ export default function PortalStockPage() {
     received: 'bg-green-100 text-green-700',
     issued:   'bg-orange-100 text-orange-700',
     adjusted: 'bg-blue-100 text-blue-700',
+  }
+
+  // Item picker component used inside modals
+  function ItemPicker() {
+    return (
+      <div className="space-y-1.5">
+        <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Item *</label>
+        <div className="relative">
+          <div className="relative flex items-center">
+            <Search className="absolute left-3 h-4 w-4 text-gray-400 pointer-events-none" />
+            <input
+              value={itemSearch}
+              onChange={e => { setItemSearch(e.target.value); setTxItemName(''); setItemDropdownOpen(true) }}
+              onFocus={() => setItemDropdownOpen(true)}
+              placeholder="Search item…"
+              className="w-full h-10 pl-9 pr-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+            />
+            {txItemName && <Check className="absolute right-3 h-4 w-4 text-green-600" />}
+          </div>
+          {itemDropdownOpen && (
+            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+              {filteredStockItems.length === 0 ? (
+                <div className="px-3 py-2 text-xs text-gray-400">No items found</div>
+              ) : filteredStockItems.map(s => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onMouseDown={() => selectStockItem(s)}
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between"
+                >
+                  <span className="font-medium text-gray-800">{s.item_name}</span>
+                  <span className="text-xs text-gray-400">{s.quantity_on_hand} {s.unit ?? 'pcs'}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -327,7 +390,7 @@ export default function PortalStockPage() {
                     <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase">Item</th>
                     <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase">Type</th>
                     <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase">Qty</th>
-                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase hidden sm:table-cell">Issued To / Notes</th>
+                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase hidden sm:table-cell">Care of / Dept / Notes</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -347,7 +410,8 @@ export default function PortalStockPage() {
                       </td>
                       <td className="px-4 py-2.5 text-xs text-gray-500 hidden sm:table-cell">
                         {t.issued_to && <span className="font-medium text-gray-700">{t.issued_to}</span>}
-                        {t.issued_to && t.notes && ' — '}
+                        {t.department && <span className="ml-1 text-gray-400">({t.department})</span>}
+                        {(t.issued_to || t.department) && t.notes && ' — '}
                         {t.notes}
                         {t.reference_no && <span className="ml-1 text-gray-400">({t.reference_no})</span>}
                       </td>
@@ -362,9 +426,9 @@ export default function PortalStockPage() {
 
       {/* Transaction modal */}
       {modal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md">
-            <div className="flex items-center justify-between px-6 py-4 border-b">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={e => { if (e.target === e.currentTarget) setModal(null) }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b sticky top-0 bg-white rounded-t-2xl">
               <h3 className="font-bold text-gray-900">
                 {modal === 'receive' ? '📥 Receive Stock' : modal === 'issue' ? '📤 Issue Item' : '⚖️ Adjust Stock'}
               </h3>
@@ -378,24 +442,16 @@ export default function PortalStockPage() {
                   Adjust sets the quantity on hand to the exact number you enter.
                 </p>
               )}
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Item Name *</label>
-                <input
-                  value={txItemName}
-                  onChange={e => setTxItemName(e.target.value)}
-                  placeholder="e.g. Safety Gloves"
-                  className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-                />
-              </div>
+
+              <ItemPicker />
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">
                     {modal === 'adjust' ? 'New Quantity *' : 'Quantity *'}
                   </label>
                   <input
-                    type="number"
-                    min="0"
-                    step="1"
+                    type="number" min="0" step="1"
                     value={txQty}
                     onChange={e => setTxQty(e.target.value)}
                     className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
@@ -405,23 +461,45 @@ export default function PortalStockPage() {
                   <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Unit</label>
                   <input
                     value={txUnit}
-                    onChange={e => setTxUnit(e.target.value)}
-                    placeholder="pcs, sets, boxes..."
-                    className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                    readOnly
+                    placeholder="Auto from item"
+                    className="w-full h-10 px-3 rounded-lg border border-gray-200 text-sm bg-gray-50 text-gray-500 cursor-not-allowed"
                   />
                 </div>
               </div>
-              {modal === 'issue' && (
+
+              {modal === 'issue' && (<>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Issued To (Employee) *</label>
+                  <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Care of *</label>
                   <input
                     value={txIssuedTo}
                     onChange={e => setTxIssuedTo(e.target.value)}
-                    placeholder="Employee name"
+                    placeholder="Name of person"
                     className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                   />
                 </div>
-              )}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Department</label>
+                  {departments.length > 0 ? (
+                    <select
+                      value={txDepartment}
+                      onChange={e => setTxDepartment(e.target.value)}
+                      className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 bg-white"
+                    >
+                      <option value="">— Select department —</option>
+                      {departments.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
+                  ) : (
+                    <input
+                      value={txDepartment}
+                      onChange={e => setTxDepartment(e.target.value)}
+                      placeholder="Department name"
+                      className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                    />
+                  )}
+                </div>
+              </>)}
+
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Reference No.</label>
                 <input
@@ -441,7 +519,7 @@ export default function PortalStockPage() {
                 />
               </div>
             </div>
-            <div className="px-6 pb-5 flex gap-3 justify-end">
+            <div className="px-6 pb-5 flex gap-3 justify-end sticky bottom-0 bg-white pt-3 border-t">
               <button
                 onClick={() => setModal(null)}
                 className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">
@@ -506,6 +584,7 @@ export default function PortalStockPage() {
                         </td>
                         <td className="px-4 py-2.5 text-xs text-gray-600">
                           {t.issued_to && <div className="font-medium">→ {t.issued_to}</div>}
+                          {t.department && <div className="text-gray-400">{t.department}</div>}
                           {t.notes && <div className="text-gray-400">{t.notes}</div>}
                           {t.reference_no && <div className="text-gray-400">{t.reference_no}</div>}
                         </td>
@@ -534,8 +613,7 @@ export default function PortalStockPage() {
                 Alert when <strong>{thresholdItem.item_name}</strong> drops to or below:
               </p>
               <input
-                type="number"
-                min="0"
+                type="number" min="0"
                 value={newThreshold}
                 onChange={e => setNewThreshold(e.target.value)}
                 className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"

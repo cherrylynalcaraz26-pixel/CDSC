@@ -250,7 +250,7 @@ export default function DRLogsPage() {
     const payload = {
       dr_number: drNumber,
       dr_date: form.dr_date,
-      supplier_id: form.supplier_id || null,
+      supplier_id: null,               // client IDs would violate suppliers FK — store name only
       supplier_name: form.supplier_name || null,
       po_number: form.po_number || null,
       remarks: form.remarks || null,
@@ -643,11 +643,6 @@ export default function DRLogsPage() {
                     </div>
                   </div>
                   <div className="space-y-1.5">
-                    <Label>Received By</Label>
-                    <Input placeholder="Name of person who received" value={form.received_by_name}
-                      onChange={e => setForm(f => ({ ...f, received_by_name: e.target.value }))} />
-                  </div>
-                  <div className="space-y-1.5">
                     <Label>Remarks</Label>
                     <Textarea rows={3} className="resize-y" placeholder="Notes, discrepancies, condition of goods…" value={form.remarks}
                       onChange={e => setForm(f => ({ ...f, remarks: e.target.value }))} />
@@ -783,39 +778,11 @@ export default function DRLogsPage() {
                       </tbody>
                     </table>
 
-                    {/* Footer info */}
-                    <div className="grid grid-cols-2 gap-3 text-[10px]">
-                      {form.received_by_name && (
-                        <div>
-                          <span className="text-gray-400">Received By: </span>
-                          <span className="font-medium">{form.received_by_name}</span>
-                        </div>
-                      )}
-                      {form.status && (
-                        <div>
-                          <span className="text-gray-400">Status: </span>
-                          <span className="font-medium capitalize">{form.status}</span>
-                        </div>
-                      )}
-                    </div>
-
                     {form.remarks && (
                       <div className="border-t pt-2 text-[10px]">
                         <span className="text-gray-400 font-semibold">Remarks: </span>{form.remarks}
                       </div>
                     )}
-
-                    {/* Signatures */}
-                    <div className="grid grid-cols-2 gap-4 border-t pt-3 mt-2">
-                      <div className="text-center">
-                        <div className="border-b border-gray-400 mb-1 h-6" />
-                        <div className="text-[9px] text-gray-400 uppercase">Delivered By</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="border-b border-gray-400 mb-1 h-6" />
-                        <div className="text-[9px] text-gray-400 uppercase">Received By</div>
-                      </div>
-                    </div>
                   </div>
                 </div>
               </div>
