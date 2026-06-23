@@ -6,14 +6,15 @@ import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
-import { LayoutDashboard, FileText, Package, User, LogOut, Menu, X, Loader2, Boxes } from 'lucide-react'
+import { LayoutDashboard, FileText, Package, User, LogOut, Menu, X, Loader2, Boxes, ClipboardList } from 'lucide-react'
 
 const NAV = [
-  { label: 'Dashboard',      href: '/portal',            icon: LayoutDashboard, exact: true },
-  { label: 'My Orders',      href: '/portal/requests',   icon: FileText,        exact: false },
-  { label: 'Browse Catalog', href: '/portal/inventory',  icon: Package,         exact: false },
-  { label: 'My Stock',       href: '/portal/stock',      icon: Boxes,           exact: false },
-  { label: 'Account',        href: '/portal/settings',   icon: User,            exact: false },
+  { label: 'Dashboard',      href: '/portal',             icon: LayoutDashboard, exact: true },
+  { label: 'Quotations',     href: '/portal/quotations',  icon: ClipboardList,   exact: false },
+  { label: 'My Orders',      href: '/portal/requests',    icon: FileText,        exact: false },
+  { label: 'Browse Catalog', href: '/portal/inventory',   icon: Package,         exact: false },
+  { label: 'My Stock',       href: '/portal/stock',       icon: Boxes,           exact: false },
+  { label: 'Account',        href: '/portal/settings',    icon: User,            exact: false },
 ]
 
 export default function PortalLayout({ children }: { children: React.ReactNode }) {
