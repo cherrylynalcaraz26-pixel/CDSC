@@ -41,7 +41,7 @@ export default function NewRequestPage() {
   useEffect(() => {
     async function init() {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) { router.push('/portal/login'); return }
+      if (!session) { router.push('/login'); return }
       const { data: clientRow } = await supabase
         .from('clients').select('id, company_name').eq('auth_user_id', session.user.id).single()
       if (clientRow) { setClientId(clientRow.id); setClientName(clientRow.company_name) }

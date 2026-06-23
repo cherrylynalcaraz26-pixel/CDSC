@@ -23,8 +23,16 @@ export default function LoginPage() {
     try {
       const supabase = createClient()
       const { data, error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) throw error
-      // Redirect clients to the portal
+      if (error) {
+        const msg = error.message?.toLowerCase() ?? ''
+        if (msg.includes('email not confirmed') || msg.includes('not confirmed')) {
+          throw new Error('Your account email has not been confirmed. Please check your inbox or contact your administrator.')
+        } else if (msg.includes('invalid login') || msg.includes('invalid credentials')) {
+          throw new Error('Incorrect email or password. Please try again.')
+        }
+        throw error
+      }
+      // Redirect based on role
       const { data: profile } = await supabase
         .from('profiles')
         .select('role')
@@ -55,7 +63,7 @@ export default function LoginPage() {
             <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="rounded-xl object-contain shadow-2xl" priority />
           </div>
           <h1 className="text-white font-bold text-xl tracking-tight">CDSC Industrial Supply</h1>
-          <p className="text-white/40 text-sm mt-0.5">Enterprise Resource Planning System</p>
+          <p className="text-white/40 text-sm mt-0.5">Management System &amp; Client Portal</p>
         </div>
 
         {/* Form card */}

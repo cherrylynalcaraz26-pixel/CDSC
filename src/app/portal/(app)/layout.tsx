@@ -28,9 +28,9 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
   useEffect(() => {
     async function check() {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) { router.replace('/portal/login'); return }
+      if (!session) { router.replace('/login'); return }
       const { data: profile } = await supabase.from('profiles').select('full_name, role').eq('id', session.user.id).single()
-      if (profile?.role !== 'client') { await supabase.auth.signOut(); router.replace('/portal/login'); return }
+      if (profile?.role !== 'client') { await supabase.auth.signOut(); router.replace('/login'); return }
       setUserName(profile?.full_name ?? session.user.email?.split('@')[0] ?? 'Client')
       const { data: clientRow } = await supabase.from('clients').select('company_name').eq('auth_user_id', session.user.id).single()
       setClientName(clientRow?.company_name ?? '')
@@ -41,7 +41,7 @@ export default function PortalLayout({ children }: { children: React.ReactNode }
 
   async function signOut() {
     await supabase.auth.signOut()
-    router.replace('/portal/login')
+    router.replace('/login')
   }
 
   function isActive(href: string, exact: boolean) {

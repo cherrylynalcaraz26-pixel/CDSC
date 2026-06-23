@@ -61,9 +61,9 @@ export default function PortalStockPage() {
   useEffect(() => {
     async function init() {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) { router.push('/portal/login'); return }
+      if (!session) { router.push('/login'); return }
       const { data: clientRow } = await supabase.from('clients').select('id').eq('auth_user_id', session.user.id).single()
-      if (!clientRow) { router.push('/portal/login'); return }
+      if (!clientRow) { router.push('/login'); return }
       setClientId(clientRow.id)
       await fetchData(clientRow.id)
     }
