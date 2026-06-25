@@ -1021,7 +1021,7 @@ export default function QuotationPage() {
 ${emailBodyQ.replace(/\n/g, '<br/>')}
 <br/><br/>
 <div style="text-align:center;margin:24px 0">
-  <a href="${confirmUrlQ}" style="display:inline-block;background:#6366f1;color:#fff;text-decoration:none;font-weight:600;font-size:15px;padding:12px 32px;border-radius:8px">Confirm Quotation</a>
+  <a href="${confirmUrlQ}" style="display:inline-block;background:#dc2626;color:#fff;text-decoration:none;font-weight:600;font-size:15px;padding:12px 32px;border-radius:8px">Confirm Quotation</a>
 </div>
 <p style="color:#6b7280;font-size:12px;text-align:center">Clicking the button above confirms your acceptance of this quotation and creates a Sales Order.</p>
 </div>`
@@ -1112,7 +1112,7 @@ ${emailBodyQ.replace(/\n/g, '<br/>')}
 ${listEmailBody.replace(/\n/g, '<br/>')}
 <br/><br/>
 <div style="text-align:center;margin:24px 0">
-  <a href="${confirmUrlList}" style="display:inline-block;background:#6366f1;color:#fff;text-decoration:none;font-weight:600;font-size:15px;padding:12px 32px;border-radius:8px">Confirm Quotation</a>
+  <a href="${confirmUrlList}" style="display:inline-block;background:#dc2626;color:#fff;text-decoration:none;font-weight:600;font-size:15px;padding:12px 32px;border-radius:8px">Confirm Quotation</a>
 </div>
 <p style="color:#6b7280;font-size:12px;text-align:center">Clicking the button above confirms your acceptance of this quotation and creates a Sales Order.</p>
 </div>`
