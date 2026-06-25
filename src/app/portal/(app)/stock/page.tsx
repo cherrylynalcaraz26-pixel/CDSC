@@ -679,40 +679,6 @@ export default function PortalStockPage() {
                       </div>
                     )}
 
-                    {!selectedPO && (
-                      <>
-                        <div className="text-xs text-gray-500 font-medium">By DR Number (single item)</div>
-                        <select
-                          value={selectedDR?.dr_number ?? ''}
-                          onChange={e => {
-                            const dr = availableDRs.find(d => d.dr_number === e.target.value) ?? null
-                            setSelectedDR(dr)
-                            if (dr) setTxRef(dr.dr_number)
-                          }}
-                          className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 bg-white"
-                        >
-                          <option value="">— Select a delivery record —</option>
-                          {availableDRs.map(dr => (
-                            <option key={dr.dr_number} value={dr.dr_number}>
-                              DR {dr.dr_number} — {dr.dr_date ? new Date(dr.dr_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : ''} ({dr.status})
-                            </option>
-                          ))}
-                        </select>
-                        {selectedDR && selectedDR.items.length > 0 && (
-                          <div className="bg-green-50 border border-green-200 rounded-lg p-3 space-y-1.5">
-                            <div className="text-xs font-semibold text-green-700 mb-1">Items in DR {selectedDR.dr_number}:</div>
-                            {selectedDR.items.map((it, idx) => (
-                              <button key={idx} type="button"
-                                onClick={() => { setTxItemName(it.item_name); setTxUnit(it.unit ?? ''); setTxQty(String(it.quantity)); setItemSearch(it.item_name) }}
-                                className="w-full flex items-center justify-between text-xs px-2.5 py-1.5 rounded-lg border border-green-200 bg-white hover:bg-green-50 transition-colors text-left">
-                                <span className="font-medium text-gray-800">{it.item_name}</span>
-                                <span className="text-gray-500">{it.quantity} {it.unit ?? 'pcs'}</span>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </>
-                    )}
                   </div>
                 )
               })()}
