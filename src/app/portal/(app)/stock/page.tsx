@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Package, Loader2, Search, AlertTriangle, ArrowDownCircle, ArrowUpCircle,
-  SlidersHorizontal, History, ChevronDown, ChevronUp, X, Check, Plus, Truck
+  SlidersHorizontal, History, ChevronDown, ChevronUp, X, Check, Plus, Truck, CheckCircle2
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -39,6 +39,7 @@ interface DRRow {
   dr_number: string
   dr_date: string
   status: string
+  po_number: string | null
   items: { item_name: string; unit: string | null; quantity: number }[]
 }
 
@@ -47,6 +48,7 @@ type ModalType = 'receive' | 'issue' | 'adjust' | null
 export default function PortalStockPage() {
   const supabase = createClient()
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [clientId, setClientId] = useState<string | null>(null)
   const [clientName, setClientName] = useState<string>('')
   const [stock, setStock] = useState<StockRow[]>([])
@@ -80,6 +82,11 @@ export default function PortalStockPage() {
   const [selectedDR, setSelectedDR] = useState<DRRow | null>(null)
   const [refMode, setRefMode] = useState<'dr' | 'manual'>('manual')
 
+  // PO-based bulk receive
+  const [selectedPO, setSelectedPO] = useState('')
+  const [bulkSelectedItems, setBulkSelectedItems] = useState<{ item_name: string; unit: string | null; quantity: number; dr_number: string }[]>([])
+  const [bulkSubmitting, setBulkSubmitting] = useState(false)
+
   // Add department modal
   const [addDeptOpen, setAddDeptOpen] = useState(false)
   const [newDeptName, setNewDeptName] = useState('')
@@ -94,6 +101,10 @@ export default function PortalStockPage() {
       setClientId(clientRow.id)
       setClientName((clientRow as any).company_name ?? '')
       await fetchData(clientRow.id, (clientRow as any).company_name ?? '')
+      const drParam = searchParams?.get('dr')
+      if (drParam) {
+        openModal('receive')
+      }
     }
     init()
   }, [])
@@ -105,7 +116,7 @@ export default function PortalStockPage() {
       supabase.from('client_inventory').select('*').eq('client_id', cid).order('item_name'),
       supabase.from('client_inventory_transactions').select('*').eq('client_id', cid).order('created_at', { ascending: false }).limit(100),
       supabase.from('client_departments').select('name').eq('client_id', cid).order('name'),
-      companyName ? supabase.from('dr_logs').select('id,dr_number,dr_date,status').eq('supplier_name', companyName).in('status', ['received', 'partial']).order('dr_date', { ascending: false }).limit(20) : Promise.resolve({ data: [] }),
+      companyName ? supabase.from('dr_logs').select('id,dr_number,dr_date,status,po_number').eq('supplier_name', companyName).in('status', ['received', 'partial']).order('dr_date', { ascending: false }).limit(50) : Promise.resolve({ data: [] }),
       Promise.resolve({ data: [] as any[] }),
     ])
     setStock(stockData ?? [])
@@ -118,7 +129,7 @@ export default function PortalStockPage() {
       drItemsFetched = drItemsFetch ?? []
     }
     const drs: DRRow[] = (drData ?? []).map((d: any) => ({
-      id: d.id, dr_number: d.dr_number, dr_date: d.dr_date, status: d.status,
+      id: d.id, dr_number: d.dr_number, dr_date: d.dr_date, status: d.status, po_number: d.po_number ?? null,
       items: drItemsFetched.filter((i: any) => i.dr_number === d.dr_number).map((i: any) => ({ item_name: i.item_name, unit: i.unit ?? null, quantity: Number(i.quantity) })),
     }))
     setAvailableDRs(drs)
@@ -151,6 +162,8 @@ export default function PortalStockPage() {
     setItemDropdownOpen(false)
     setSelectedDR(null)
     setRefMode('manual')
+    setSelectedPO('')
+    setBulkSelectedItems([])
   }
 
   function selectStockItem(item: StockRow) {
@@ -191,6 +204,32 @@ export default function PortalStockPage() {
       toast.error(err.message ?? 'Failed to save transaction')
     }
     setSubmitting(false)
+  }
+
+  async function submitBulkTransactions() {
+    if (!clientId || bulkSelectedItems.length === 0) return
+    setBulkSubmitting(true)
+    try {
+      const rows = bulkSelectedItems.map(it => ({
+        client_id: clientId,
+        item_name: it.item_name,
+        unit: it.unit || null,
+        transaction_type: 'received',
+        quantity: it.quantity,
+        reference_no: it.dr_number,
+        notes: `From PO ${selectedPO}`,
+      }))
+      const { error } = await supabase.from('client_inventory_transactions').insert(rows)
+      if (error) throw error
+      toast.success(`${rows.length} item${rows.length > 1 ? 's' : ''} received into stock`)
+      setModal(null)
+      setSelectedPO('')
+      setBulkSelectedItems([])
+      await fetchData(clientId)
+    } catch (err: any) {
+      toast.error(err.message ?? 'Failed to save transactions')
+    }
+    setBulkSubmitting(false)
   }
 
   async function saveThreshold() {
@@ -497,43 +536,121 @@ export default function PortalStockPage() {
                 </p>
               )}
 
-              {/* Available deliveries for receive modal */}
-              {modal === 'receive' && availableDRs.length > 0 && (
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide flex items-center gap-1.5">
-                    <Truck className="h-3.5 w-3.5" /> Accept from Delivery
-                  </label>
-                  <select
-                    value={selectedDR?.dr_number ?? ''}
-                    onChange={e => {
-                      const dr = availableDRs.find(d => d.dr_number === e.target.value) ?? null
-                      setSelectedDR(dr)
-                      if (dr) setTxRef(dr.dr_number)
-                    }}
-                    className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 bg-white"
-                  >
-                    <option value="">— Select a delivery record —</option>
-                    {availableDRs.map(dr => (
-                      <option key={dr.dr_number} value={dr.dr_number}>
-                        DR {dr.dr_number} — {dr.dr_date ? new Date(dr.dr_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : ''} ({dr.status})
-                      </option>
-                    ))}
-                  </select>
-                  {selectedDR && selectedDR.items.length > 0 && (
-                    <div className="bg-green-50 border border-green-200 rounded-lg p-3 space-y-1.5">
-                      <div className="text-xs font-semibold text-green-700 mb-1">Items in DR {selectedDR.dr_number}:</div>
-                      {selectedDR.items.map((it, idx) => (
-                        <button key={idx} type="button"
-                          onClick={() => { setTxItemName(it.item_name); setTxUnit(it.unit ?? ''); setTxQty(String(it.quantity)); setItemSearch(it.item_name) }}
-                          className="w-full flex items-center justify-between text-xs px-2.5 py-1.5 rounded-lg border border-green-200 bg-white hover:bg-green-50 transition-colors text-left">
-                          <span className="font-medium text-gray-800">{it.item_name}</span>
-                          <span className="text-gray-500">{it.quantity} {it.unit ?? 'pcs'}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+              {/* Accept from Delivery — PO-based or single DR */}
+              {modal === 'receive' && availableDRs.length > 0 && (() => {
+                const poNumbers = [...new Set(availableDRs.map(d => d.po_number).filter(Boolean) as string[])]
+                const poDRs = selectedPO ? availableDRs.filter(d => d.po_number === selectedPO) : []
+                const allPOItems = poDRs.flatMap(dr => dr.items.map(it => ({ ...it, dr_number: dr.dr_number })))
+
+                function toggleBulkItem(it: { item_name: string; unit: string | null; quantity: number; dr_number: string }) {
+                  setBulkSelectedItems(prev => {
+                    const key = `${it.dr_number}:${it.item_name}`
+                    const exists = prev.some(x => `${x.dr_number}:${x.item_name}` === key)
+                    return exists ? prev.filter(x => `${x.dr_number}:${x.item_name}` !== key) : [...prev, it]
+                  })
+                }
+
+                return (
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide flex items-center gap-1.5">
+                      <Truck className="h-3.5 w-3.5" /> Accept from Delivery
+                    </label>
+
+                    {poNumbers.length > 0 && (
+                      <div className="space-y-1.5">
+                        <div className="text-xs text-gray-500 font-medium">By PO Number (multi-item)</div>
+                        <select
+                          value={selectedPO}
+                          onChange={e => { setSelectedPO(e.target.value); setBulkSelectedItems([]) }}
+                          className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 bg-white"
+                        >
+                          <option value="">— Select PO Number —</option>
+                          {poNumbers.map(po => (
+                            <option key={po} value={po}>{po} ({availableDRs.filter(d => d.po_number === po).length} DR{availableDRs.filter(d => d.po_number === po).length !== 1 ? 's' : ''})</option>
+                          ))}
+                        </select>
+                        {selectedPO && allPOItems.length > 0 && (
+                          <div className="bg-green-50 border border-green-200 rounded-lg p-3 space-y-1.5">
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="text-xs font-semibold text-green-700">Items for PO {selectedPO}:</div>
+                              <button type="button" onClick={() => setBulkSelectedItems(allPOItems)}
+                                className="text-xs text-green-700 hover:text-green-800 font-medium underline underline-offset-2">
+                                Select All
+                              </button>
+                            </div>
+                            {allPOItems.map((it, idx) => {
+                              const key = `${it.dr_number}:${it.item_name}`
+                              const isSelected = bulkSelectedItems.some(x => `${x.dr_number}:${x.item_name}` === key)
+                              return (
+                                <button key={idx} type="button"
+                                  onClick={() => toggleBulkItem(it)}
+                                  className={cn('w-full flex items-center justify-between text-xs px-2.5 py-1.5 rounded-lg border transition-colors text-left',
+                                    isSelected ? 'border-green-500 bg-green-100' : 'border-green-200 bg-white hover:bg-green-50')}>
+                                  <div>
+                                    <span className="font-medium text-gray-800">{it.item_name}</span>
+                                    <span className="ml-2 text-gray-400 font-mono text-[10px]">{it.dr_number}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-gray-500">{it.quantity} {it.unit ?? 'pcs'}</span>
+                                    {isSelected && <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />}
+                                  </div>
+                                </button>
+                              )
+                            })}
+                            {bulkSelectedItems.length > 0 && (
+                              <div className="pt-1 flex justify-end">
+                                <button type="button" onClick={submitBulkTransactions} disabled={bulkSubmitting}
+                                  className="inline-flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-xs font-semibold px-4 py-1.5 rounded-lg disabled:opacity-60">
+                                  {bulkSubmitting && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+                                  Receive {bulkSelectedItems.length} Item{bulkSelectedItems.length !== 1 ? 's' : ''}
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        {selectedPO && allPOItems.length === 0 && (
+                          <p className="text-xs text-gray-400 italic">No items found for this PO.</p>
+                        )}
+                      </div>
+                    )}
+
+                    {!selectedPO && (
+                      <>
+                        <div className="text-xs text-gray-500 font-medium">By DR Number (single item)</div>
+                        <select
+                          value={selectedDR?.dr_number ?? ''}
+                          onChange={e => {
+                            const dr = availableDRs.find(d => d.dr_number === e.target.value) ?? null
+                            setSelectedDR(dr)
+                            if (dr) setTxRef(dr.dr_number)
+                          }}
+                          className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 bg-white"
+                        >
+                          <option value="">— Select a delivery record —</option>
+                          {availableDRs.map(dr => (
+                            <option key={dr.dr_number} value={dr.dr_number}>
+                              DR {dr.dr_number} — {dr.dr_date ? new Date(dr.dr_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : ''} ({dr.status})
+                            </option>
+                          ))}
+                        </select>
+                        {selectedDR && selectedDR.items.length > 0 && (
+                          <div className="bg-green-50 border border-green-200 rounded-lg p-3 space-y-1.5">
+                            <div className="text-xs font-semibold text-green-700 mb-1">Items in DR {selectedDR.dr_number}:</div>
+                            {selectedDR.items.map((it, idx) => (
+                              <button key={idx} type="button"
+                                onClick={() => { setTxItemName(it.item_name); setTxUnit(it.unit ?? ''); setTxQty(String(it.quantity)); setItemSearch(it.item_name) }}
+                                className="w-full flex items-center justify-between text-xs px-2.5 py-1.5 rounded-lg border border-green-200 bg-white hover:bg-green-50 transition-colors text-left">
+                                <span className="font-medium text-gray-800">{it.item_name}</span>
+                                <span className="text-gray-500">{it.quantity} {it.unit ?? 'pcs'}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )
+              })()}
 
               <ItemPicker />
 
