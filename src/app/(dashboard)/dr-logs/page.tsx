@@ -375,6 +375,39 @@ export default function DRLogsPage() {
         ))}
       </div>
 
+      {/* Pending / Incomplete banner */}
+      {!loading && (() => {
+        const pending = logs.filter(l => l.status === 'partial' || l.status === 'rejected')
+        if (pending.length === 0) return null
+        return (
+          <Card className="border-yellow-300 bg-yellow-50">
+            <CardContent className="py-3 px-4">
+              <div className="flex items-center gap-2 mb-2">
+                <Truck className="h-4 w-4 text-yellow-600" />
+                <span className="text-sm font-semibold text-yellow-800">Pending / Incomplete Deliveries</span>
+                <span className="ml-auto text-xs text-yellow-700 bg-yellow-200 px-2 py-0.5 rounded-full font-medium">{pending.length}</span>
+              </div>
+              <div className="space-y-1">
+                {pending.map(l => {
+                  const sc = STATUS_CFG[l.status] ?? STATUS_CFG.received
+                  const items = getItems(l.dr_number)
+                  return (
+                    <div key={l.id} className="flex items-center gap-3 text-xs py-1 border-b border-yellow-200 last:border-0">
+                      <span className="font-mono font-semibold text-red-600 w-28 shrink-0">{l.dr_number}</span>
+                      <span className="text-gray-700 flex-1 truncate">{l.supplier_name ?? '—'}</span>
+                      {l.po_number && <span className="text-gray-500 hidden sm:block">SO: {l.po_number}</span>}
+                      <span className="text-gray-400 hidden sm:block">{items.length} item{items.length !== 1 ? 's' : ''}</span>
+                      <span className={`px-2 py-0.5 rounded-full font-medium shrink-0 ${sc.cls}`}>{sc.label}</span>
+                      <button className="text-blue-600 hover:underline shrink-0" onClick={() => openEdit(l)}>Edit</button>
+                    </div>
+                  )
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )
+      })()}
+
       <div className="flex flex-wrap gap-3 items-center">
         <Select value={statusFilter} onValueChange={v => setStatusFilter(v ?? 'all')}>
           <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>

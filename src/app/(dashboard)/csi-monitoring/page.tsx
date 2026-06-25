@@ -25,7 +25,7 @@ import { useSearchContext } from '@/context/search-context'
 
 interface ItemOption { item_name: string; unit_of_measure: string }
 interface ClientOption { id: string; company_name: string }
-interface POItemOption { item_name: string; unit: string; quantity: number }
+interface SOItemOption { item_name: string; unit: string; quantity: number }
 
 interface CSIRecord {
   id: number
@@ -70,8 +70,8 @@ export default function CSIMonitoringPage() {
   const [records, setRecords] = useState<CSIRecord[]>([])
   const [itemOptions, setItemOptions] = useState<ItemOption[]>([])
   const [clientOptions, setClientOptions] = useState<ClientOption[]>([])
-  const [poNumbers, setPoNumbers] = useState<string[]>([])
-  const [poItemsMap, setPoItemsMap] = useState<Record<string, POItemOption[]>>({})
+  const [soNumbers, setSoNumbers] = useState<{ id: string; so_number: string }[]>([])
+  const [soItemsMap, setSoItemsMap] = useState<Record<string, SOItemOption[]>>({})
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [editingSiNumber, setEditingSiNumber] = useState<string | null>(null)
@@ -89,27 +89,31 @@ export default function CSIMonitoringPage() {
 
   async function load() {
     setLoading(true)
-    const [{ data: itemOptData }, { data: clientData }, { data: poData }] = await Promise.all([
+    const [{ data: itemOptData }, { data: clientData }, { data: soData }] = await Promise.all([
       supabase.from('items').select('item_name, unit_of_measure').order('item_name'),
       supabase.from('clients').select('id, company_name').eq('status', 'active').order('company_name'),
-      supabase.from('purchase_orders').select('po_number').not('po_number', 'is', null).order('created_at', { ascending: false }),
+      supabase.from('sales_orders').select('id, so_number').not('so_number', 'is', null).order('created_at', { ascending: false }),
     ])
     setItemOptions((itemOptData ?? []) as ItemOption[])
     setClientOptions((clientData ?? []) as ClientOption[])
-    setPoNumbers((poData ?? []).map((p: any) => p.po_number).filter(Boolean))
-    const { data: poItemsData } = await supabase
-      .from('po_items')
-      .select('item_name, unit_of_measure, quantity, purchase_orders!inner(po_number)')
-      .not('purchase_orders.po_number', 'is', null)
-    if (poItemsData) {
-      const map: Record<string, POItemOption[]> = {}
-      for (const row of poItemsData as any[]) {
-        const poNum = row.purchase_orders?.po_number
-        if (!poNum) continue
-        if (!map[poNum]) map[poNum] = []
-        map[poNum].push({ item_name: row.item_name, unit: row.unit_of_measure, quantity: Number(row.quantity) })
+    const filteredSOs = (soData ?? []).filter((s: any) => s.so_number) as { id: string; so_number: string }[]
+    setSoNumbers(filteredSOs)
+    const soIds = filteredSOs.map(s => s.id)
+    if (soIds.length > 0) {
+      const { data: soItemsData } = await supabase
+        .from('so_items')
+        .select('item_name, unit, quantity, so_id, sales_orders!inner(so_number)')
+        .in('so_id', soIds)
+      if (soItemsData) {
+        const map: Record<string, SOItemOption[]> = {}
+        for (const row of soItemsData as any[]) {
+          const soNum = row.sales_orders?.so_number
+          if (!soNum) continue
+          if (!map[soNum]) map[soNum] = []
+          map[soNum].push({ item_name: row.item_name, unit: row.unit ?? '', quantity: Number(row.quantity) })
+        }
+        setSoItemsMap(map)
       }
-      setPoItemsMap(map)
     }
     const allFetched: CSIRecord[] = []
     const PAGE = 1000
@@ -321,18 +325,18 @@ export default function CSIMonitoringPage() {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <Label>PO Number</Label>
+                      <Label>SO Number</Label>
                       <Select value={header.po_number} onValueChange={v => setHeader(h => ({ ...h, po_number: v ?? '' }))}>
-                        <SelectTrigger><SelectValue placeholder="Select PO…" /></SelectTrigger>
+                        <SelectTrigger><SelectValue placeholder="Select SO…" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="">— None —</SelectItem>
-                          {poNumbers.map(po => <SelectItem key={po} value={po}>{po}</SelectItem>)}
+                          {soNumbers.map(s => <SelectItem key={s.id} value={s.so_number}>{s.so_number}</SelectItem>)}
                         </SelectContent>
                       </Select>
-                      {header.po_number && poItemsMap[header.po_number]?.length > 0 && (
-                        <button type="button" onClick={() => setItems(poItemsMap[header.po_number].map(i => ({ item_name: i.item_name, unit: i.unit, quantity: String(i.quantity), unit_price: '' })))}
+                      {header.po_number && soItemsMap[header.po_number]?.length > 0 && (
+                        <button type="button" onClick={() => setItems(soItemsMap[header.po_number].map(i => ({ item_name: i.item_name, unit: i.unit, quantity: String(i.quantity), unit_price: '' })))}
                           className="w-full h-7 text-xs border border-dashed border-blue-400 text-blue-600 hover:bg-blue-50 rounded-md mt-1 font-medium">
-                          Load items from PO
+                          Load items from SO
                         </button>
                       )}
                     </div>
@@ -449,7 +453,7 @@ export default function CSIMonitoringPage() {
                         <div className="text-[9px] font-semibold uppercase text-gray-400 mb-0.5">Client</div>
                         <div className="font-semibold text-gray-800">{header.client_name || <span className="text-gray-400 italic">—</span>}</div>
                         {header.po_number && <>
-                          <div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5 mb-0.5">PO Reference</div>
+                          <div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5 mb-0.5">SO Reference</div>
                           <div className="font-mono text-gray-800">{header.po_number}</div>
                         </>}
                         {header.dr_number && <>
@@ -574,7 +578,7 @@ export default function CSIMonitoringPage() {
                     <TableHead className="w-8" />
                     <TableHead>Date</TableHead>
                     <TableHead>SI Number</TableHead>
-                    <TableHead>PO Number</TableHead>
+                    <TableHead>SO Number</TableHead>
                     <TableHead>Client</TableHead>
                     <TableHead>DR Number</TableHead>
                     <TableHead className="text-right">Items</TableHead>
