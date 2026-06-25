@@ -988,9 +988,10 @@ export default function QuotationPage() {
                 disabled={sendingEmailQ}
                 onClick={async () => {
                   if (!emailToQ) { toast.error('Please enter a recipient email address.'); return }
+                  if (!editingId) { toast.error('Please save the quotation first before sending.'); return }
                   // Build a quotation-like object from current form state
                   const formQ: Quotation = {
-                    id: editingId ?? '',
+                    id: editingId,
                     quote_number: quoteNumber,
                     quote_date: quoteDate,
                     valid_until: validUntil || null,
