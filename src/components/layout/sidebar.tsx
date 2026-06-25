@@ -41,6 +41,7 @@ const navigation: NavItem[] = [
       { label: 'Receiving', href: '/receiving', icon: Truck },
       { label: 'Inventory', href: '/inventory', icon: BoxesIcon },
       { label: 'DR Logs', href: '/dr-logs', icon: ClipboardList },
+      { label: 'Sales Deliveries', href: '/sales-deliveries', icon: Truck },
       { label: 'CSI Monitoring', href: '/csi-monitoring', icon: FileText },
       { label: 'Pull Out & Billing', href: '/pull-out-billing', icon: FileText },
     ],
