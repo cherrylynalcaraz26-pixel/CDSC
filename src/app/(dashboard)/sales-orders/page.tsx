@@ -379,7 +379,7 @@ export default function SalesOrdersPage() {
         ? supabase.from('sales_deliveries').select('delivery_number,delivery_date,dr_number,status,client_name').eq('so_number', so.so_number).order('delivery_date', { ascending: false })
         : Promise.resolve({ data: [] }),
       so.so_number
-        ? supabase.from('dr_logs').select('dr_number,dr_date,status,client_name').eq('po_number', so.so_number).order('dr_date', { ascending: false })
+        ? supabase.from('dr_logs').select('dr_number,dr_date,status,supplier_name').eq('po_number', so.so_number).order('dr_date', { ascending: false })
         : Promise.resolve({ data: [] }),
     ])
     setViewSOItems((soItemsData ?? []) as SOItem[])
@@ -389,7 +389,7 @@ export default function SalesOrdersPage() {
     const mergedDRs: { dr_number: string; dr_date: string; status: string; client_name: string | null; source: 'dr_logs' | 'sales_deliveries' }[] = []
     for (const d of (drLogData ?? [])) {
       if (d.dr_number) seenDRs.add(d.dr_number)
-      mergedDRs.push({ dr_number: d.dr_number, dr_date: d.dr_date, status: d.status, client_name: d.client_name, source: 'dr_logs' })
+      mergedDRs.push({ dr_number: d.dr_number, dr_date: d.dr_date, status: d.status, client_name: (d as any).supplier_name ?? null, source: 'dr_logs' })
     }
     for (const d of (sdData ?? [])) {
       if (d.dr_number && seenDRs.has(d.dr_number)) continue
@@ -1063,12 +1063,7 @@ export default function SalesOrdersPage() {
                               <CheckCircle2 className="mr-2 h-4 w-4" />Mark Processing
                             </DropdownMenuItem>
                           )}
-                          {so.status === 'processing' && (
-                            <DropdownMenuItem onClick={() => updateStatus(so.id, 'shipped')} className="text-purple-600">
-                              <CheckCircle2 className="mr-2 h-4 w-4" />Mark Shipped
-                            </DropdownMenuItem>
-                          )}
-                          {so.status === 'shipped' && (
+                          {(so.status === 'processing' || so.status === 'shipped') && (
                             <DropdownMenuItem onClick={() => updateStatus(so.id, 'delivered')} className="text-green-600">
                               <CheckCircle2 className="mr-2 h-4 w-4" />Mark Delivered
                             </DropdownMenuItem>
