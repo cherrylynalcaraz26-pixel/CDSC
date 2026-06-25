@@ -2,8 +2,9 @@
 
 import { useSearchParams } from 'next/navigation'
 import { CheckCircle2, XCircle, AlertCircle } from 'lucide-react'
+import { Suspense } from 'react'
 
-export default function ConfirmPage() {
+function ConfirmContent() {
   const params = useSearchParams()
   const status = params?.get('status') ?? 'error'
   const type = params?.get('type') ?? 'so'
@@ -87,5 +88,13 @@ export default function ConfirmPage() {
         <p className="text-gray-500 text-sm">{msg || 'Unable to process your confirmation. Please contact us directly.'}</p>
       </div>
     </div>
+  )
+}
+
+export default function ConfirmPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-gray-50"><div className="text-gray-400 text-sm">Loading…</div></div>}>
+      <ConfirmContent />
+    </Suspense>
   )
 }
