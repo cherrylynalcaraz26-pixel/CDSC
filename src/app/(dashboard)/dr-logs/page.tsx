@@ -124,6 +124,72 @@ export default function DRLogsPage() {
     setTimeout(() => { win.focus(); win.print(); win.close() }, 800)
   }
 
+  async function printDR(log: DRLog) {
+    const { data: drItems } = await supabase.from('dr_items').select('item_name,unit,quantity').eq('dr_number', log.dr_number).order('id')
+    const items = drItems ?? []
+    const co = companyInfo
+    const html = `<!DOCTYPE html><html><head><title>DR ${log.dr_number}</title>
+    <script src="https://cdn.tailwindcss.com"><\/script>
+    <style>body{font-family:Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact;}</style>
+    </head><body class="p-6 text-[11px]">
+    <div class="border rounded-lg bg-white p-4 space-y-3 font-sans text-[11px]">
+      <div class="flex justify-between items-start border-b pb-3">
+        <img src="/cdsc-logo.jpg" alt="CDSC" class="h-12 w-12 rounded object-cover" />
+        <div class="text-right">
+          <div class="text-[13px] font-bold text-red-700">${co?.company_name ?? 'CDSC Industrial Supply'}</div>
+          ${co?.address ? `<div class="text-[9px] text-gray-500">${co.address}</div>` : ''}
+          ${co?.phone || co?.email ? `<div class="text-[9px] text-gray-500">${co?.phone ?? ''}${co?.phone && co?.email ? ' | ' : ''}${co?.email ?? ''}</div>` : ''}
+          ${co?.tin ? `<div class="text-[9px] text-gray-500">TIN: ${co.tin}</div>` : ''}
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-3">
+        <div>
+          <div class="text-[9px] font-semibold uppercase text-gray-400 mb-0.5">Delivered To</div>
+          <div class="font-semibold text-gray-800">${log.supplier_name ?? '—'}</div>
+          ${log.po_number ? `<div class="text-[9px] font-semibold uppercase text-gray-400 mt-1.5 mb-0.5">SO Reference</div><div class="font-mono text-gray-800">${log.po_number}</div>` : ''}
+          ${log.received_by_name ? `<div class="text-[9px] font-semibold uppercase text-gray-400 mt-1.5 mb-0.5">Received By</div><div class="text-gray-800">${log.received_by_name}</div>` : ''}
+        </div>
+        <div class="text-center flex items-center justify-center">
+          <div class="text-[16px] font-extrabold text-red-700 uppercase tracking-widest">Delivery Receipt</div>
+        </div>
+        <div class="text-right">
+          <div class="text-[9px] font-semibold uppercase text-gray-400">DR Number</div>
+          <div class="font-mono font-bold text-gray-800">${log.dr_number}</div>
+          <div class="text-[9px] font-semibold uppercase text-gray-400 mt-1.5">Date</div>
+          <div class="text-gray-800">${log.dr_date ? new Date(log.dr_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</div>
+          <div class="text-[9px] font-semibold uppercase text-gray-400 mt-1.5">Status</div>
+          <div class="text-gray-800">${log.status}</div>
+        </div>
+      </div>
+      <table class="w-full border-collapse">
+        <thead>
+          <tr class="bg-red-700 text-white">
+            <th class="text-left px-1.5 py-1">#</th>
+            <th class="text-left px-1.5 py-1">Item Description</th>
+            <th class="text-left px-1.5 py-1">Unit</th>
+            <th class="text-right px-1.5 py-1">Qty</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${items.length === 0 ? '<tr><td colspan="4" class="px-1.5 py-3 text-center text-gray-400 italic">No items</td></tr>' :
+            items.map((it, i) => `<tr class="${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}">
+              <td class="px-1.5 py-1 text-gray-400">${i + 1}</td>
+              <td class="px-1.5 py-1">${it.item_name}</td>
+              <td class="px-1.5 py-1 text-gray-500">${it.unit ?? '—'}</td>
+              <td class="px-1.5 py-1 text-right font-medium">${Number(it.quantity)}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+      ${log.remarks ? `<div class="text-[9px] text-gray-500 border-t pt-2">Remarks: ${log.remarks}</div>` : ''}
+    </div>
+    </body></html>`
+    const win = window.open('', '_blank', 'width=900,height=700')
+    if (!win) return
+    win.document.write(html)
+    win.document.close()
+    setTimeout(() => { win.focus(); win.print(); win.close() }, 800)
+  }
+
   async function load() {
     setLoading(true)
     const [{ data: drData }, { data: supData }, { data: clientData }, { data: itemData }, { data: soData }] = await Promise.all([
@@ -602,6 +668,7 @@ export default function DRLogsPage() {
                                 <MoreHorizontal className="h-4 w-4" />
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => printDR(log)}><Printer className="h-3.5 w-3.5 mr-1.5" />Print DR</DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => openEdit(log)}>Edit</DropdownMenuItem>
                                 <DropdownMenuItem className="text-destructive" onClick={() => setDeleteId(log.id)}>Delete</DropdownMenuItem>
                               </DropdownMenuContent>

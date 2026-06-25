@@ -143,6 +143,77 @@ export default function CSIMonitoringPage() {
   }
   useEffect(() => { loadCompanyInfo() }, [])
 
+  function printCSI(group: typeof siGroups[0]) {
+    const co = companyInfo
+    const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'
+    const html = `<!DOCTYPE html><html><head><title>SI ${group.si_number}</title>
+    <script src="https://cdn.tailwindcss.com"><\/script>
+    <style>body{font-family:Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact;}</style>
+    </head><body class="p-6 text-[11px]">
+    <div class="border rounded-lg bg-white p-4 space-y-3 font-sans text-[11px]">
+      <div class="flex justify-between items-start border-b pb-3">
+        <img src="/cdsc-logo.jpg" alt="CDSC" class="h-12 w-12 rounded object-cover" />
+        <div class="text-right">
+          <div class="text-[13px] font-bold text-red-700">${co?.company_name ?? 'CDSC Industrial Supply'}</div>
+          ${co?.address ? `<div class="text-[9px] text-gray-500">${co.address}</div>` : ''}
+          ${co?.phone || co?.email ? `<div class="text-[9px] text-gray-500">${co?.phone ?? ''}${co?.phone && co?.email ? ' | ' : ''}${co?.email ?? ''}</div>` : ''}
+          ${co?.tin ? `<div class="text-[9px] text-gray-500">TIN: ${co.tin}</div>` : ''}
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-3">
+        <div>
+          <div class="text-[9px] font-semibold uppercase text-gray-400 mb-0.5">Bill To</div>
+          <div class="font-semibold text-gray-800">${group.client}</div>
+          ${group.po ? `<div class="text-[9px] font-semibold uppercase text-gray-400 mt-1.5 mb-0.5">PO / SO Reference</div><div class="font-mono text-gray-800">${group.po}</div>` : ''}
+          ${group.dr ? `<div class="text-[9px] font-semibold uppercase text-gray-400 mt-1.5 mb-0.5">DR Number</div><div class="font-mono text-gray-800">${group.dr}</div>` : ''}
+        </div>
+        <div class="text-center flex items-center justify-center">
+          <div class="text-[16px] font-extrabold text-red-700 uppercase tracking-widest">Sales Invoice</div>
+        </div>
+        <div class="text-right">
+          <div class="text-[9px] font-semibold uppercase text-gray-400">SI Number</div>
+          <div class="font-mono font-bold text-gray-800">${group.si_number}</div>
+          <div class="text-[9px] font-semibold uppercase text-gray-400 mt-1.5">Date</div>
+          <div class="text-gray-800">${fmtDate(group.date)}</div>
+        </div>
+      </div>
+      <table class="w-full border-collapse">
+        <thead>
+          <tr class="bg-red-700 text-white">
+            <th class="text-left px-1.5 py-1">#</th>
+            <th class="text-left px-1.5 py-1">Item Description</th>
+            <th class="text-left px-1.5 py-1">Unit</th>
+            <th class="text-right px-1.5 py-1">Qty</th>
+            <th class="text-right px-1.5 py-1">Unit Price</th>
+            <th class="text-right px-1.5 py-1">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${group.items.map((it, i) => `<tr class="${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}">
+            <td class="px-1.5 py-1 text-gray-400">${i + 1}</td>
+            <td class="px-1.5 py-1">${it.item_name}</td>
+            <td class="px-1.5 py-1 text-gray-500">${it.unit ?? '—'}</td>
+            <td class="px-1.5 py-1 text-right">${Number(it.quantity)}</td>
+            <td class="px-1.5 py-1 text-right">₱${Number(it.unit_price).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+            <td class="px-1.5 py-1 text-right font-medium">₱${Number(it.amount).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+          </tr>`).join('')}
+        </tbody>
+        <tfoot>
+          <tr class="border-t-2 border-gray-300">
+            <td colspan="5" class="px-1.5 py-2 text-right font-bold text-gray-700">Total</td>
+            <td class="px-1.5 py-2 text-right font-bold text-red-700">₱${group.total.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+    </body></html>`
+    const win = window.open('', '_blank', 'width=900,height=700')
+    if (!win) return
+    win.document.write(html)
+    win.document.close()
+    setTimeout(() => { win.focus(); win.print(); win.close() }, 800)
+  }
+
   function handlePrint() {
     const el = printRef.current
     if (!el) return
@@ -648,6 +719,7 @@ export default function CSIMonitoringPage() {
                               <MoreHorizontal className="h-4 w-4" />
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => printCSI(group)}><Printer className="h-3.5 w-3.5 mr-1.5" />Print CSI</DropdownMenuItem>
                               <DropdownMenuItem onClick={() => openEdit(group.si_number)}>Edit</DropdownMenuItem>
                               <DropdownMenuItem className="text-destructive" onClick={() => setDeleteId(group.items[0].id)}>Delete</DropdownMenuItem>
                             </DropdownMenuContent>
