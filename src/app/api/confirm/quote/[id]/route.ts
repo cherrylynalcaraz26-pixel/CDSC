@@ -21,7 +21,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     .single()
 
   if (qErr || !quote) {
-    return NextResponse.redirect(new URL(`/confirm?status=error&msg=Quotation+not+found`, req.url))
+    const msg = qErr ? encodeURIComponent(qErr.message) : 'Quotation+not+found'
+    return NextResponse.redirect(new URL(`/confirm?status=error&msg=${msg}&id=${id}`, req.url))
   }
 
   if (quote.status === 'confirmed') {
