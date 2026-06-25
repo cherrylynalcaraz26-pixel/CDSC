@@ -528,10 +528,21 @@ export default function SalesOrdersPage() {
     setSendingEmailSO(true)
     try {
       const pdfData = await buildSOPdfData(emailSO, emailSOItems)
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
+      const confirmUrl = `${appUrl}/api/confirm/so/${emailSO.id}`
+      const htmlBody = `<div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px">
+${emailBodySO.replace(/\n/g, '<br/>')}
+<br/><br/>
+<div style="text-align:center;margin:24px 0">
+  <a href="${confirmUrl}" style="display:inline-block;background:#dc2626;color:#fff;text-decoration:none;font-weight:600;font-size:15px;padding:12px 32px;border-radius:8px">Confirm Order</a>
+</div>
+<p style="color:#6b7280;font-size:12px;text-align:center">Clicking the button above confirms your acceptance of this Sales Order.</p>
+</div>`
       await sendEmail({
         to: emailToSO.trim(),
         subject: emailSubjectSO,
         body: emailBodySO,
+        htmlBody,
         soPdfData: pdfData,
         pdfFilename: `SO-${emailSO.so_number ?? emailSO.id}.pdf`,
       })

@@ -63,6 +63,7 @@ export interface SendEmailPayload {
   to: string
   subject: string
   body: string
+  htmlBody?: string
   pdfData?: QuotationPdfData
   poPdfData?: POPdfData
   soPdfData?: SOPdfData
@@ -797,7 +798,7 @@ export async function sendEmail(payload: SendEmailPayload): Promise<void> {
   const res = await fetch('/api/send-email', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ to: payload.to, subject: payload.subject, body: payload.body, pdfBase64, pdfFilename }),
+    body: JSON.stringify({ to: payload.to, subject: payload.subject, body: payload.body, htmlBody: payload.htmlBody, pdfBase64, pdfFilename }),
   })
 
   if (!res.ok) {

@@ -1,0 +1,128 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from '@supabase/supabase-js'
+import nodemailer from 'nodemailer'
+
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+
+  if (!url || !serviceKey) {
+    return NextResponse.json({ error: 'Server not configured.' }, { status: 500 })
+  }
+
+  const supabase = createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
+
+  // Fetch the quotation
+  const { data: quote, error: qErr } = await supabase
+    .from('quotations')
+    .select('id, quote_number, client_name, client_po_number, total_amount, status, remarks')
+    .eq('id', id)
+    .single()
+
+  if (qErr || !quote) {
+    return NextResponse.redirect(new URL(`/confirm?status=error&msg=Quotation+not+found`, req.url))
+  }
+
+  if (quote.status === 'confirmed') {
+    return NextResponse.redirect(new URL(`/confirm?status=already&type=quote&ref=${quote.quote_number ?? id}`, req.url))
+  }
+
+  // Fetch quotation items
+  const { data: qItems } = await supabase
+    .from('quotation_items')
+    .select('item_name, quantity, unit, unit_price, selling_price, total_amount')
+    .eq('quotation_id', id)
+    .order('created_at')
+
+  // Create SO from quotation
+  const today = new Date().toISOString().split('T')[0]
+  const soNumber = `SO-${Date.now().toString().slice(-8)}`
+
+  const { data: soData, error: soErr } = await supabase
+    .from('sales_orders')
+    .insert({
+      so_number: soNumber,
+      so_date: today,
+      client_name: quote.client_name,
+      client_po_number: quote.client_po_number ?? null,
+      status: 'confirmed',
+      total_amount: quote.total_amount ?? 0,
+      remarks: `Created from Quotation ${quote.quote_number ?? id}${quote.remarks ? '. ' + quote.remarks : ''}`,
+    })
+    .select('id')
+    .single()
+
+  if (soErr || !soData) {
+    return NextResponse.redirect(new URL(`/confirm?status=error&msg=Failed+to+create+order`, req.url))
+  }
+
+  // Insert SO items
+  if (qItems && qItems.length > 0) {
+    await supabase.from('so_items').insert(
+      qItems.map(i => ({
+        so_id: soData.id,
+        item_name: i.item_name,
+        quantity: i.quantity,
+        unit: i.unit ?? null,
+        unit_price: i.unit_price ?? 0,
+        selling_price: i.selling_price ?? null,
+        total_amount: i.total_amount ?? 0,
+      }))
+    )
+  }
+
+  // Mark quotation as confirmed
+  await supabase.from('quotations').update({ status: 'confirmed' }).eq('id', id)
+
+  // Send thank-you email to client
+  try {
+    const { data: clientRow } = await supabase
+      .from('clients')
+      .select('email')
+      .eq('company_name', quote.client_name ?? '')
+      .single()
+
+    const { data: settings } = await supabase
+      .from('system_settings')
+      .select('company_name, email, phone')
+      .single()
+
+    const gmailUser = process.env.GMAIL_USER
+    const gmailPass = process.env.GMAIL_APP_PASSWORD
+
+    if (gmailUser && gmailPass && clientRow?.email) {
+      const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: { user: gmailUser, pass: gmailPass },
+      })
+      const companyName = settings?.company_name ?? 'CDSC Industrial Supply'
+      const subject = `Thank you for confirming Quotation ${quote.quote_number ?? ''}`
+      const html = `
+        <div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px">
+          <h2 style="color:#1f2937;margin-bottom:4px">Thank you for confirming your quotation!</h2>
+          <p style="color:#6b7280;margin-bottom:24px">Your Sales Order has been created and is now being processed:</p>
+          <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:16px 20px;margin-bottom:24px">
+            <div style="margin-bottom:8px"><span style="color:#9ca3af;font-size:13px">Quotation</span><br/><strong style="font-family:monospace;color:#6366f1">${quote.quote_number ?? '—'}</strong></div>
+            <div style="margin-bottom:8px"><span style="color:#9ca3af;font-size:13px">Sales Order Created</span><br/><strong style="font-family:monospace;color:#dc2626">${soNumber}</strong></div>
+            ${quote.client_po_number ? `<div style="margin-bottom:8px"><span style="color:#9ca3af;font-size:13px">Your PO Reference</span><br/><strong>${quote.client_po_number}</strong></div>` : ''}
+            <div><span style="color:#9ca3af;font-size:13px">Status</span><br/><strong style="color:#16a34a">✓ Confirmed</strong></div>
+          </div>
+          <p style="color:#374151">We will process your order and keep you updated on the delivery status.</p>
+          <p style="color:#374151;margin-top:16px">For any questions, reach us at <a href="mailto:${settings?.email ?? gmailUser}" style="color:#dc2626">${settings?.email ?? gmailUser}</a>${settings?.phone ? ` or call ${settings.phone}` : ''}.</p>
+          <p style="color:#6b7280;margin-top:24px;font-size:13px">— ${companyName}</p>
+        </div>
+      `
+      await transporter.sendMail({
+        from: `${companyName} <${gmailUser}>`,
+        to: clientRow.email,
+        subject,
+        html,
+      })
+    }
+  } catch {
+    // Non-fatal
+  }
+
+  return NextResponse.redirect(new URL(`/confirm?status=ok&type=quote&ref=${quote.quote_number ?? id}&so=${soNumber}`, req.url))
+}

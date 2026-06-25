@@ -6,7 +6,7 @@ export const maxDuration = 30
 
 export async function POST(req: NextRequest) {
   try {
-    const { to, subject, body, pdfBase64, pdfFilename } = await req.json()
+    const { to, subject, body, htmlBody, pdfBase64, pdfFilename } = await req.json()
 
     if (!to || !subject) {
       return NextResponse.json({ error: 'Missing required fields: to, subject' }, { status: 400 })
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
       to,
       subject,
       text: body,
-      html: body.replace(/\n/g, '<br/>'),
+      html: htmlBody ?? body.replace(/\n/g, '<br/>'),
       attachments,
     })
 

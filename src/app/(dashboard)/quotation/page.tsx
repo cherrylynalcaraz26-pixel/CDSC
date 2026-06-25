@@ -1014,10 +1014,21 @@ export default function QuotationPage() {
                   }))
                   setSendingEmailQ(true)
                   try {
+                    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
+                    const confirmUrlQ = `${appUrl}/api/confirm/quote/${formQ.id}`
+                    const htmlBodyQ = `<div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px">
+${emailBodyQ.replace(/\n/g, '<br/>')}
+<br/><br/>
+<div style="text-align:center;margin:24px 0">
+  <a href="${confirmUrlQ}" style="display:inline-block;background:#6366f1;color:#fff;text-decoration:none;font-weight:600;font-size:15px;padding:12px 32px;border-radius:8px">Confirm Quotation</a>
+</div>
+<p style="color:#6b7280;font-size:12px;text-align:center">Clicking the button above confirms your acceptance of this quotation and creates a Sales Order.</p>
+</div>`
                     await sendEmail({
                       to: emailToQ,
                       subject: emailSubjectQ,
                       body: emailBodyQ,
+                      htmlBody: htmlBodyQ,
                       pdfData: await buildQuotePdfData(formQ, formItems),
                       pdfFilename: `Quotation-${quoteNumber || 'draft'}.pdf`,
                     })
@@ -1094,10 +1105,21 @@ export default function QuotationPage() {
                   setSendingListEmail(true)
                   try {
                     const { data: qItemsForEmail } = await supabase.from('quotation_items').select('item_name,quantity,unit,unit_price,selling_price,total_amount').eq('quotation_id', q.id).order('created_at')
+                    const appUrlList = process.env.NEXT_PUBLIC_APP_URL ?? ''
+                    const confirmUrlList = `${appUrlList}/api/confirm/quote/${q.id}`
+                    const htmlBodyList = `<div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px">
+${listEmailBody.replace(/\n/g, '<br/>')}
+<br/><br/>
+<div style="text-align:center;margin:24px 0">
+  <a href="${confirmUrlList}" style="display:inline-block;background:#6366f1;color:#fff;text-decoration:none;font-weight:600;font-size:15px;padding:12px 32px;border-radius:8px">Confirm Quotation</a>
+</div>
+<p style="color:#6b7280;font-size:12px;text-align:center">Clicking the button above confirms your acceptance of this quotation and creates a Sales Order.</p>
+</div>`
                     await sendEmail({
                       to: listEmailTo,
                       subject: listEmailSubject,
                       body: listEmailBody,
+                      htmlBody: htmlBodyList,
                       pdfData: await buildQuotePdfData(q, qItemsForEmail ?? []),
                       pdfFilename: `Quotation-${q.quote_number ?? 'draft'}.pdf`,
                     })
