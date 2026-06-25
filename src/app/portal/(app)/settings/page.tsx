@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { Loader2, Save, Eye, EyeOff, User, Lock, Building2, Tag, Plus, Trash2 } from 'lucide-react'
 
+type Tab = 'account' | 'department' | 'password'
+
 export default function PortalSettingsPage() {
   const supabase = createClient()
   const [loading, setLoading] = useState(true)
@@ -19,6 +21,7 @@ export default function PortalSettingsPage() {
   const [showPw, setShowPw] = useState(false)
   const [userId, setUserId] = useState('')
   const [clientId, setClientId] = useState('')
+  const [tab, setTab] = useState<Tab>('account')
 
   // Departments
   const [departments, setDepartments] = useState<{ id: string; name: string }[]>([])
@@ -104,6 +107,12 @@ export default function PortalSettingsPage() {
 
   const initials = (companyName || fullName).split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'C'
 
+  const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
+    { key: 'account',    label: 'Account',         icon: <User className="h-4 w-4" /> },
+    { key: 'department', label: 'Department',       icon: <Tag className="h-4 w-4" /> },
+    { key: 'password',   label: 'Change Password',  icon: <Lock className="h-4 w-4" /> },
+  ]
+
   return (
     <div className="max-w-xl space-y-6">
       <div>
@@ -111,29 +120,47 @@ export default function PortalSettingsPage() {
         <p className="text-sm text-gray-500 mt-1">Manage your profile, departments, and security settings.</p>
       </div>
 
-      {/* Account identity */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <div className="flex items-center gap-4 mb-6">
-          <div className="h-14 w-14 rounded-full bg-red-600 text-white text-lg font-bold flex items-center justify-center shrink-0">
-            {initials}
-          </div>
-          <div>
-            <div className="font-semibold text-gray-900">{fullName || '—'}</div>
-            <div className="text-sm text-gray-500">{email}</div>
-            {companyName && (
-              <div className="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
-                <Building2 className="h-3 w-3" /> {companyName}
-              </div>
-            )}
-          </div>
+      {/* Avatar + identity */}
+      <div className="flex items-center gap-4">
+        <div className="h-14 w-14 rounded-full bg-red-600 text-white text-lg font-bold flex items-center justify-center shrink-0">
+          {initials}
         </div>
-
-        <div className="flex items-center gap-2 mb-4">
-          <User className="h-4 w-4 text-gray-400" />
-          <span className="text-sm font-semibold text-gray-700">Profile Information</span>
+        <div>
+          <div className="font-semibold text-gray-900">{fullName || '—'}</div>
+          <div className="text-sm text-gray-500">{email}</div>
+          {companyName && (
+            <div className="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
+              <Building2 className="h-3 w-3" /> {companyName}
+            </div>
+          )}
         </div>
+      </div>
 
-        <div className="space-y-4">
+      {/* Tab bar */}
+      <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
+        {TABS.map(t => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
+              tab === t.key
+                ? 'bg-white text-red-600 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {t.icon}
+            <span className="hidden sm:inline">{t.label}</span>
+          </button>
+        ))}
+      </div>
+
+      {/* Account tab */}
+      {tab === 'account' && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+          <div className="flex items-center gap-2 mb-2">
+            <User className="h-4 w-4 text-gray-400" />
+            <span className="text-sm font-semibold text-gray-700">Profile Information</span>
+          </div>
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-gray-700">Full Name</label>
             <input
@@ -170,57 +197,62 @@ export default function PortalSettingsPage() {
             Save Profile
           </button>
         </div>
-      </div>
+      )}
 
-      {/* Departments */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Tag className="h-4 w-4 text-gray-400" />
-          <span className="text-sm font-semibold text-gray-700">Departments</span>
-        </div>
-        <p className="text-xs text-gray-400 mb-4">Departments appear in the Issue Item form for stock tracking.</p>
-
-        {departments.length > 0 && (
-          <div className="space-y-1.5 mb-4">
-            {departments.map(d => (
-              <div key={d.id} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg border border-gray-100">
-                <span className="text-sm text-gray-800">{d.name}</span>
-                <button
-                  onClick={() => deleteDepartment(d.id)}
-                  className="text-gray-300 hover:text-red-500 transition-colors">
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            ))}
+      {/* Department tab */}
+      {tab === 'department' && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Tag className="h-4 w-4 text-gray-400" />
+            <span className="text-sm font-semibold text-gray-700">Departments</span>
           </div>
-        )}
+          <p className="text-xs text-gray-400">Departments appear in the Issue Item form for stock tracking.</p>
 
-        <div className="flex gap-2">
-          <input
-            value={newDept}
-            onChange={e => setNewDept(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && addDepartment()}
-            placeholder="New department name"
-            className="flex-1 h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-          />
-          <button
-            onClick={addDepartment}
-            disabled={addingDept}
-            className="inline-flex items-center gap-1.5 bg-gray-900 hover:bg-gray-700 disabled:opacity-60 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
-            {addingDept ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-            Add
-          </button>
+          {departments.length > 0 && (
+            <div className="space-y-1.5">
+              {departments.map(d => (
+                <div key={d.id} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg border border-gray-100">
+                  <span className="text-sm text-gray-800">{d.name}</span>
+                  <button
+                    onClick={() => deleteDepartment(d.id)}
+                    className="text-gray-300 hover:text-red-500 transition-colors">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {departments.length === 0 && (
+            <p className="text-sm text-gray-400 italic">No departments yet. Add one below.</p>
+          )}
+
+          <div className="flex gap-2">
+            <input
+              value={newDept}
+              onChange={e => setNewDept(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && addDepartment()}
+              placeholder="New department name"
+              className="flex-1 h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+            />
+            <button
+              onClick={addDepartment}
+              disabled={addingDept}
+              className="inline-flex items-center gap-1.5 bg-gray-900 hover:bg-gray-700 disabled:opacity-60 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
+              {addingDept ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+              Add
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Change password */}
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Lock className="h-4 w-4 text-gray-400" />
-          <span className="text-sm font-semibold text-gray-700">Change Password</span>
-        </div>
-
-        <div className="space-y-4">
+      {/* Change Password tab */}
+      {tab === 'password' && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Lock className="h-4 w-4 text-gray-400" />
+            <span className="text-sm font-semibold text-gray-700">Change Password</span>
+          </div>
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-gray-700">Current Password</label>
             <div className="relative">
@@ -265,7 +297,7 @@ export default function PortalSettingsPage() {
             Change Password
           </button>
         </div>
-      </div>
+      )}
     </div>
   )
 }

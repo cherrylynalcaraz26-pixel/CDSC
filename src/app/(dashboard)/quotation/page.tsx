@@ -83,6 +83,8 @@ export default function QuotationPage() {
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [discardOpen, setDiscardOpen] = useState(false)
+  const [discardCallback, setDiscardCallback] = useState<(() => void) | null>(null)
   const [mobileTab, setMobileTab] = useState<'form' | 'preview'>('form')
   const [showEmailQ, setShowEmailQ] = useState(false)
   const [sendingEmailQ, setSendingEmailQ] = useState(false)
@@ -569,7 +571,7 @@ export default function QuotationPage() {
         {open ? (
           <Button variant="outline" onClick={() => {
             const hasData = clientId || quoteNumber || lines.some(l => l.item_name)
-            if (hasData && !window.confirm('You have unsaved changes. Discard them?')) return
+            if (hasData) { setDiscardCallback(() => () => { setOpen(false); resetForm() }); setDiscardOpen(true); return }
             setOpen(false); resetForm()
           }}>
             <X className="h-4 w-4 mr-2" />Cancel
@@ -816,7 +818,7 @@ export default function QuotationPage() {
                   <div className="flex justify-end gap-2 pt-2">
                     <Button variant="outline" onClick={() => {
                       const hasData = clientId || quoteNumber || lines.some(l => l.item_name)
-                      if (hasData && !window.confirm('You have unsaved changes. Discard them?')) return
+                      if (hasData) { setDiscardCallback(() => () => { setOpen(false); resetForm() }); setDiscardOpen(true); return }
                       setOpen(false); resetForm()
                     }}>Cancel</Button>
                     <Button onClick={handleSave} disabled={saving} className="bg-red-600 hover:bg-red-700">
@@ -1188,6 +1190,20 @@ ${listEmailBody.replace(/\n/g, '<br/>')}
                 ))}
               </tbody>
             </table>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Discard Unsaved Changes Dialog */}
+      <Dialog open={discardOpen} onOpenChange={setDiscardOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Discard Changes?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-600">You have unsaved changes. Are you sure you want to discard them?</p>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setDiscardOpen(false)}>Keep Editing</Button>
+            <Button className="bg-red-600 hover:bg-red-700 text-white" onClick={() => { setDiscardOpen(false); discardCallback?.() }}>Discard</Button>
           </div>
         </DialogContent>
       </Dialog>

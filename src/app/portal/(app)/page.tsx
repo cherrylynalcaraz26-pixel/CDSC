@@ -57,7 +57,7 @@ const QUOTE_STATUS: Record<string, { label: string; color: string }> = {
 }
 
 function fmt(n: number) {
-  return '₱' + n.toLocaleString('en-PH', { minimumFractionDigits: 0, maximumFractionDigits: 0 })
+  return '₱' + n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 // Build last-6-months order activity data
