@@ -17,17 +17,18 @@ import { useSearchContext } from '@/context/search-context'
 
 interface SalesDelivery {
   id: string
-  so_number: string
-  dr_number: string
-  dr_date: string | null
+  delivery_number: string
+  so_number: string | null
+  dr_number: string | null
+  delivery_date: string | null
   status: string
   client_name: string | null
   created_at: string
 }
 
 interface DeliveryItem {
-  id: number
-  delivery_id: string
+  id: string
+  delivery_number: string
   item_name: string
   unit: string
   quantity: number
@@ -69,19 +70,19 @@ export default function SalesDeliveriesPage() {
       return
     }
 
-    const ids = dvs.map((d: SalesDelivery) => d.id)
+    const nums = dvs.map((d: SalesDelivery) => d.delivery_number)
     const { data: items } = await supabase
       .from('sales_delivery_items')
       .select('*')
-      .in('delivery_id', ids)
+      .in('delivery_number', nums)
 
     const itemsMap: Record<string, DeliveryItem[]> = {}
     for (const it of (items ?? [])) {
-      if (!itemsMap[it.delivery_id]) itemsMap[it.delivery_id] = []
-      itemsMap[it.delivery_id].push(it)
+      if (!itemsMap[it.delivery_number]) itemsMap[it.delivery_number] = []
+      itemsMap[it.delivery_number].push(it)
     }
 
-    setDeliveries(dvs.map((d: SalesDelivery) => ({ ...d, items: itemsMap[d.id] ?? [] })))
+    setDeliveries(dvs.map((d: SalesDelivery) => ({ ...d, items: itemsMap[d.delivery_number] ?? [] })))
     setLoading(false)
   }
 
@@ -98,6 +99,7 @@ export default function SalesDeliveriesPage() {
     if (statusFilter !== '_all' && d.status !== statusFilter) return false
     if (!q) return true
     return (
+      d.delivery_number?.toLowerCase().includes(q) ||
       d.so_number?.toLowerCase().includes(q) ||
       d.dr_number?.toLowerCase().includes(q) ||
       d.client_name?.toLowerCase().includes(q) ||
@@ -165,9 +167,10 @@ export default function SalesDeliveriesPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-8" />
+                  <TableHead>Delivery #</TableHead>
                   <TableHead>SO Number</TableHead>
                   <TableHead>DR Number</TableHead>
-                  <TableHead>DR Date</TableHead>
+                  <TableHead>Delivery Date</TableHead>
                   <TableHead>Client</TableHead>
                   <TableHead>Items</TableHead>
                   <TableHead>Status</TableHead>
@@ -180,9 +183,10 @@ export default function SalesDeliveriesPage() {
                       <TableCell>
                         {expanded.has(d.id) ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                       </TableCell>
-                      <TableCell className="font-mono text-blue-600">{d.so_number}</TableCell>
-                      <TableCell className="font-mono">{d.dr_number}</TableCell>
-                      <TableCell>{d.dr_date ? format(parseISO(d.dr_date), 'MMM d, yyyy') : '—'}</TableCell>
+                      <TableCell className="font-mono">{d.delivery_number}</TableCell>
+                      <TableCell className="font-mono text-blue-600">{d.so_number ?? '—'}</TableCell>
+                      <TableCell className="font-mono">{d.dr_number ?? '—'}</TableCell>
+                      <TableCell>{d.delivery_date ? format(parseISO(d.delivery_date), 'MMM d, yyyy') : '—'}</TableCell>
                       <TableCell>{d.client_name ?? '—'}</TableCell>
                       <TableCell>{d.items.length} item{d.items.length !== 1 ? 's' : ''}</TableCell>
                       <TableCell>
@@ -193,7 +197,7 @@ export default function SalesDeliveriesPage() {
                     </TableRow>
                     {expanded.has(d.id) && (
                       <TableRow key={`${d.id}-items`} className="bg-muted/30">
-                        <TableCell colSpan={7} className="p-0">
+                        <TableCell colSpan={8} className="p-0">
                           <div className="px-10 py-3">
                             <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Items Delivered</p>
                             <table className="text-sm w-full">
