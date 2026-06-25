@@ -1014,7 +1014,7 @@ export default function QuotationPage() {
                   }))
                   setSendingEmailQ(true)
                   try {
-                    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
+                    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? window.location.origin
                     const confirmUrlQ = `${appUrl}/api/confirm/quote/${formQ.id}`
                     const htmlBodyQ = `<div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px">
 ${emailBodyQ.replace(/\n/g, '<br/>')}
@@ -1105,7 +1105,7 @@ ${emailBodyQ.replace(/\n/g, '<br/>')}
                   setSendingListEmail(true)
                   try {
                     const { data: qItemsForEmail } = await supabase.from('quotation_items').select('item_name,quantity,unit,unit_price,selling_price,total_amount').eq('quotation_id', q.id).order('created_at')
-                    const appUrlList = process.env.NEXT_PUBLIC_APP_URL ?? ''
+                    const appUrlList = process.env.NEXT_PUBLIC_APP_URL ?? window.location.origin
                     const confirmUrlList = `${appUrlList}/api/confirm/quote/${q.id}`
                     const htmlBodyList = `<div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px">
 ${listEmailBody.replace(/\n/g, '<br/>')}

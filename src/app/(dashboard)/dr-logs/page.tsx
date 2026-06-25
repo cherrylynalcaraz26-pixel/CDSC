@@ -125,7 +125,7 @@ export default function DRLogsPage() {
   }
 
   async function printDR(log: DRLog) {
-    const { data: drItems } = await supabase.from('dr_items').select('item_name,unit,quantity').eq('dr_number', log.dr_number).order('id')
+    const { data: drItems } = await supabase.from('dr_log_items').select('item_name,unit,quantity').eq('dr_number', log.dr_number).order('id')
     const items = drItems ?? []
     const co = companyInfo
     const html = `<!DOCTYPE html><html><head><title>DR ${log.dr_number}</title>

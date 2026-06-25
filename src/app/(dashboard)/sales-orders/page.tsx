@@ -514,9 +514,14 @@ export default function SalesOrdersPage() {
   }
 
   async function openEmailSO(so: SO) {
-    const { data } = await supabase.from('so_items').select('*').eq('so_id', so.id)
+    const [{ data }, { data: clientRow }] = await Promise.all([
+      supabase.from('so_items').select('*').eq('so_id', so.id),
+      so.client_name
+        ? supabase.from('clients').select('email').eq('company_name', so.client_name).single()
+        : Promise.resolve({ data: null }),
+    ])
     setEmailSOItems((data ?? []) as SOItem[])
-    setEmailToSO('')
+    setEmailToSO((clientRow as any)?.email ?? '')
     setEmailSubjectSO(`Sales Order ${so.so_number ?? ''} — ${companyInfo?.company_name ?? 'CDSC Industrial Supply'}`)
     setEmailBodySO(`Dear ${so.client_name ?? 'Client'},\n\nPlease find attached Sales Order ${so.so_number ?? ''}.\n\nKindly confirm receipt and advise on any concerns.\n\nBest regards,\n${companyInfo?.company_name ?? 'CDSC Industrial Supply'}`)
     setEmailSO(so)
@@ -528,7 +533,7 @@ export default function SalesOrdersPage() {
     setSendingEmailSO(true)
     try {
       const pdfData = await buildSOPdfData(emailSO, emailSOItems)
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? window.location.origin
       const confirmUrl = `${appUrl}/api/confirm/so/${emailSO.id}`
       const htmlBody = `<div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px">
 ${emailBodySO.replace(/\n/g, '<br/>')}

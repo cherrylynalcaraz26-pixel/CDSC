@@ -143,7 +143,13 @@ export default function CSIMonitoringPage() {
   }
   useEffect(() => { loadCompanyInfo() }, [])
 
-  function printCSI(group: typeof siGroups[0]) {
+  async function printCSI(group: typeof siGroups[0]) {
+    const { data: allItems } = await supabase
+      .from('csi_records')
+      .select('item_name,unit,quantity,unit_price,amount')
+      .eq('si_number', group.si_number)
+      .order('id')
+    const items = allItems ?? group.items
     const co = companyInfo
     const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'
     const html = `<!DOCTYPE html><html><head><title>SI ${group.si_number}</title>
@@ -189,7 +195,7 @@ export default function CSIMonitoringPage() {
           </tr>
         </thead>
         <tbody>
-          ${group.items.map((it, i) => `<tr class="${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}">
+          ${items.map((it: any, i: number) => `<tr class="${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}">
             <td class="px-1.5 py-1 text-gray-400">${i + 1}</td>
             <td class="px-1.5 py-1">${it.item_name}</td>
             <td class="px-1.5 py-1 text-gray-500">${it.unit ?? '—'}</td>
@@ -201,7 +207,7 @@ export default function CSIMonitoringPage() {
         <tfoot>
           <tr class="border-t-2 border-gray-300">
             <td colspan="5" class="px-1.5 py-2 text-right font-bold text-gray-700">Total</td>
-            <td class="px-1.5 py-2 text-right font-bold text-red-700">₱${group.total.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+            <td class="px-1.5 py-2 text-right font-bold text-red-700">₱${items.reduce((s: number, it: any) => s + (Number(it.amount) || 0), 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
           </tr>
         </tfoot>
       </table>

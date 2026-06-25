@@ -8,7 +8,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
   if (!url || !serviceKey) {
-    return NextResponse.json({ error: 'Server not configured.' }, { status: 500 })
+    return NextResponse.redirect(new URL(`/confirm?status=error&msg=Server+not+configured`, req.url))
   }
 
   const supabase = createClient(url, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
