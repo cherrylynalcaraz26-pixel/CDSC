@@ -66,6 +66,11 @@ export default function SalesOrdersPage() {
   const [viewSOItems, setViewSOItems] = useState<SOItem[]>([])
   const [viewSODeliveries, setViewSODeliveries] = useState<{ dr_number: string; dr_date: string; status: string; client_name: string | null; items: { item_name: string; unit: string; quantity: number }[] }[]>([])
 
+  // Link DR to SO
+  const [linkDROptions, setLinkDROptions] = useState<{ dr_number: string; dr_date: string; status: string; supplier_name: string | null }[]>([])
+  const [linkDRSelected, setLinkDRSelected] = useState('')
+  const [linkDRSaving, setLinkDRSaving] = useState(false)
+
   // delivery summary per so_number for list display
   const [soDeliveryMap, setSoDeliveryMap] = useState<Record<string, { total: number; pending: number; partial: number; delivered: number }>>({})
 
@@ -408,6 +413,38 @@ export default function SalesOrdersPage() {
     }
     setViewSODeliveries(deliveries)
     setViewSO(so)
+    setLinkDRSelected('')
+
+    // Load DRs that can be linked — matching client, no PO or PO is this SO
+    if (so.client_name) {
+      const { data: linkableDRs } = await supabase.from('dr_logs')
+        .select('dr_number,dr_date,status,supplier_name')
+        .eq('supplier_name', so.client_name)
+        .or('po_number.is.null,po_number.eq.')
+        .order('dr_date', { ascending: false })
+        .limit(50)
+      setLinkDROptions((linkableDRs ?? []).filter((d: any) => !mergedDRs.some(m => m.dr_number === d.dr_number)))
+    }
+  }
+
+  async function linkDRToSO() {
+    if (!viewSO?.so_number || !linkDRSelected) return
+    setLinkDRSaving(true)
+    const { error } = await supabase.from('dr_logs').update({ po_number: viewSO.so_number }).eq('dr_number', linkDRSelected)
+    if (error) { toast.error(error.message); setLinkDRSaving(false); return }
+    toast.success(`DR ${linkDRSelected} linked to SO ${viewSO.so_number}`)
+    setLinkDRSaving(false)
+    await openViewSO(viewSO)
+    load()
+  }
+
+  async function unlinkDRFromSO(drNumber: string) {
+    if (!viewSO) return
+    const { error } = await supabase.from('dr_logs').update({ po_number: null }).eq('dr_number', drNumber)
+    if (error) { toast.error(error.message); return }
+    toast.success(`DR ${drNumber} unlinked`)
+    await openViewSO(viewSO)
+    load()
   }
 
   async function openEmailSO(so: SO) {
@@ -1122,6 +1159,7 @@ export default function SalesOrdersPage() {
                           <span className="font-mono font-semibold text-red-600">{d.dr_number}</span>
                           <span className="text-muted-foreground">{d.dr_date ? new Date(d.dr_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</span>
                           <span className={`px-2 py-0.5 rounded-full font-medium capitalize ${statusCls}`}>{d.status}</span>
+                          <button onClick={() => unlinkDRFromSO(d.dr_number)} className="ml-auto text-[10px] text-red-400 hover:text-red-600 px-1.5 py-0.5 rounded hover:bg-red-50">Unlink</button>
                         </div>
                         <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-muted-foreground">
                           {d.items.map((it, i) => (
@@ -1133,6 +1171,32 @@ export default function SalesOrdersPage() {
                   })}
                 </div>
               )}
+            </div>
+
+            {/* Link DR to SO */}
+            <div className="border rounded-lg overflow-hidden">
+              <div className="bg-muted/40 px-4 py-2.5 flex items-center gap-2">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Link a DR to this SO</span>
+              </div>
+              <div className="px-4 py-3 flex gap-2 items-center">
+                <Select value={linkDRSelected} onValueChange={(v) => setLinkDRSelected(v ?? '')}>
+                  <SelectTrigger className="flex-1 text-xs h-8">
+                    <SelectValue placeholder={linkDROptions.length === 0 ? 'No unlinked DRs for this client' : 'Select DR to link…'} />
+                  </SelectTrigger>
+                  <SelectContent className="min-w-[320px]">
+                    {linkDROptions.map(dr => (
+                      <SelectItem key={dr.dr_number} value={dr.dr_number ?? ''} className="text-xs">
+                        <span className="font-mono text-red-600">{dr.dr_number}</span>
+                        <span className="ml-2 text-muted-foreground">{dr.dr_date ? new Date(dr.dr_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}</span>
+                        <span className={`ml-2 px-1.5 py-0.5 rounded-full text-[10px] font-medium capitalize ${dr.status === 'received' ? 'bg-green-100 text-green-700' : dr.status === 'partial' ? 'bg-yellow-100 text-yellow-700' : 'bg-orange-100 text-orange-700'}`}>{dr.status}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button size="sm" className="h-8 text-xs shrink-0" disabled={!linkDRSelected || linkDRSaving} onClick={linkDRToSO}>
+                  {linkDRSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Link DR'}
+                </Button>
+              </div>
             </div>
           </div>
         </DialogContent>

@@ -318,7 +318,10 @@ export default function DRLogsPage() {
         }
       }
       if (stockIssues.length > 0) {
-        toast.warning(`⚠ Insufficient / unavailable stock:\n${stockIssues.join('\n')}`, { duration: 8000, description: 'DR was saved but warehouse stock may be insufficient.' })
+        toast.warning('Insufficient stock for some items', {
+          duration: 8000,
+          description: stockIssues.join(' • '),
+        })
       }
     }
 
