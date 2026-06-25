@@ -386,7 +386,7 @@ export default function DRLogsPage() {
             <SelectItem value="returned">Returned</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={clientFilter || '_all'} onValueChange={v => setClientFilter(v === '_all' ? '' : v)}>
+        <Select value={clientFilter || '_all'} onValueChange={(v: string | null) => setClientFilter(!v || v === '_all' ? '' : v)}>
           <SelectTrigger className="w-48"><SelectValue placeholder="All Clients" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="_all">All Clients</SelectItem>
