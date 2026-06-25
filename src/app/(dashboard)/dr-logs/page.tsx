@@ -265,12 +265,14 @@ export default function DRLogsPage() {
     if (!form.dr_date) { toast.error('DR Date is required'); return }
     setSaving(true)
     const drNumber = form.dr_number.trim().toUpperCase()
+    const soNumber = form.po_number || null
+    const clientName = form.supplier_name || null
     const payload = {
       dr_number: drNumber,
       dr_date: form.dr_date,
-      supplier_id: null,               // client IDs would violate suppliers FK — store name only
-      supplier_name: form.supplier_name || null,
-      po_number: form.po_number || null,
+      supplier_id: null,
+      supplier_name: clientName,
+      po_number: soNumber,
       remarks: form.remarks || null,
       status: form.status,
       received_by_name: form.received_by_name || null,
@@ -296,6 +298,52 @@ export default function DRLogsPage() {
           item_name: it.item_name.trim(),
         }))
       )
+    }
+
+    // Mirror to sales_deliveries when linked to an SO
+    if (soNumber) {
+      await supabase.from('sales_deliveries').delete().eq('dr_number', drNumber)
+      const { data: sdRow } = await supabase.from('sales_deliveries').insert({
+        so_number: soNumber,
+        dr_number: drNumber,
+        client_name: clientName,
+        delivery_date: form.dr_date,
+        delivered_by: form.received_by_name || null,
+        notes: form.remarks || null,
+        status: form.status === 'received' ? 'delivered' : form.status === 'partial' ? 'partial' : 'pending',
+      }).select('delivery_number').single()
+
+      if (sdRow && validItems.length > 0) {
+        await supabase.from('sales_delivery_items').delete().eq('delivery_number', sdRow.delivery_number)
+        await supabase.from('sales_delivery_items').insert(
+          validItems.map(it => ({
+            delivery_number: sdRow.delivery_number,
+            item_name: it.item_name.trim(),
+            unit: it.unit || '',
+            quantity: Number(it.quantity) || 0,
+          }))
+        )
+      }
+
+      // Update warehouse_stock: decrement for each delivered item
+      if (form.status === 'received' || form.status === 'partial') {
+        for (const it of validItems) {
+          const qty = Number(it.quantity) || 0
+          if (qty <= 0) continue
+          const { data: wsRow } = await supabase
+            .from('warehouse_stock')
+            .select('id, quantity')
+            .eq('item_name', it.item_name.trim())
+            .eq('client_name', clientName ?? '')
+            .maybeSingle()
+          if (wsRow) {
+            await supabase.from('warehouse_stock').update({
+              quantity: Math.max(0, Number(wsRow.quantity) - qty),
+              updated_at: new Date().toISOString(),
+            }).eq('id', wsRow.id)
+          }
+        }
+      }
     }
 
     toast.success(editing ? 'DR Log updated' : 'DR Log recorded')
@@ -551,6 +599,58 @@ export default function DRLogsPage() {
                                     </table>
                                   </div>
                                 )}
+                                {/* SO Pending Items — show outstanding qty vs ordered */}
+                                {log.po_number && (() => {
+                                  const soItems = soItemsMap[log.po_number] ?? []
+                                  if (soItems.length === 0) return null
+                                  // Sum all dr_log_items for DRs referencing this SO
+                                  const deliveredMap: Record<string, number> = {}
+                                  allItems
+                                    .filter(di => {
+                                      const dl = logs.find(l => l.dr_number === di.dr_number)
+                                      return dl?.po_number === log.po_number && (dl.status === 'received' || dl.status === 'partial')
+                                    })
+                                    .forEach(di => {
+                                      deliveredMap[di.item_name] = (deliveredMap[di.item_name] ?? 0) + Number(di.quantity)
+                                    })
+                                  const pending = soItems.filter(si => (deliveredMap[si.item_name] ?? 0) < si.quantity)
+                                  if (pending.length === 0) return (
+                                    <div className="mt-2 flex items-center gap-1.5 text-xs text-green-600 font-medium">
+                                      <span className="inline-block h-2 w-2 rounded-full bg-green-500" />
+                                      All SO items fully delivered
+                                    </div>
+                                  )
+                                  return (
+                                    <div className="mt-2">
+                                      <p className="text-xs font-semibold text-yellow-700 mb-1">Pending from SO {log.po_number}</p>
+                                      <div className="border border-yellow-200 rounded-md overflow-hidden text-xs bg-yellow-50">
+                                        <table className="w-full">
+                                          <thead className="bg-yellow-100">
+                                            <tr>
+                                              <th className="text-left px-3 py-1 font-medium">Item</th>
+                                              <th className="text-right px-3 py-1 font-medium">Ordered</th>
+                                              <th className="text-right px-3 py-1 font-medium">Delivered</th>
+                                              <th className="text-right px-3 py-1 font-medium text-yellow-800">Remaining</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {pending.map((si, pi) => {
+                                              const del = deliveredMap[si.item_name] ?? 0
+                                              return (
+                                                <tr key={pi} className="border-t border-yellow-200">
+                                                  <td className="px-3 py-1">{si.item_name}</td>
+                                                  <td className="px-3 py-1 text-right">{si.quantity}</td>
+                                                  <td className="px-3 py-1 text-right text-green-700">{del}</td>
+                                                  <td className="px-3 py-1 text-right font-semibold text-yellow-800">{si.quantity - del}</td>
+                                                </tr>
+                                              )
+                                            })}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    </div>
+                                  )
+                                })()}
                               </div>
                             </TableCell>
                           </TableRow>

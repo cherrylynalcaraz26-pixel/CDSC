@@ -64,6 +64,7 @@ export default function SalesOrdersPage() {
   // View SO
   const [viewSO, setViewSO] = useState<SO | null>(null)
   const [viewSOItems, setViewSOItems] = useState<SOItem[]>([])
+  const [viewSODeliveries, setViewSODeliveries] = useState<{ dr_number: string; dr_date: string; status: string; client_name: string | null; items: { item_name: string; unit: string; quantity: number }[] }[]>([])
 
   // Email SO
   const [emailSO, setEmailSO] = useState<SO | null>(null)
@@ -333,8 +334,31 @@ export default function SalesOrdersPage() {
   }
 
   async function openViewSO(so: SO) {
-    const { data } = await supabase.from('so_items').select('*').eq('so_id', so.id)
-    setViewSOItems((data ?? []) as SOItem[])
+    const [{ data: soItemsData }, { data: drData }] = await Promise.all([
+      supabase.from('so_items').select('*').eq('so_id', so.id),
+      so.so_number
+        ? supabase.from('dr_logs').select('dr_number, dr_date, status, supplier_name').eq('po_number', so.so_number).order('dr_date', { ascending: false })
+        : Promise.resolve({ data: [] }),
+    ])
+    setViewSOItems((soItemsData ?? []) as SOItem[])
+
+    const drNumbers = (drData ?? []).map((d: any) => d.dr_number)
+    let deliveries: typeof viewSODeliveries = []
+    if (drNumbers.length > 0) {
+      const { data: drItemsData } = await supabase.from('dr_log_items').select('*').in('dr_number', drNumbers)
+      deliveries = (drData ?? []).map((d: any) => ({
+        dr_number: d.dr_number,
+        dr_date: d.dr_date,
+        status: d.status,
+        client_name: d.supplier_name,
+        items: (drItemsData ?? []).filter((i: any) => i.dr_number === d.dr_number).map((i: any) => ({
+          item_name: i.item_name,
+          unit: i.unit ?? '',
+          quantity: Number(i.quantity),
+        })),
+      }))
+    }
+    setViewSODeliveries(deliveries)
     setViewSO(so)
   }
 
@@ -971,18 +995,48 @@ export default function SalesOrdersPage() {
       </Card>
 
       {/* View SO Dialog */}
-      <Dialog open={!!viewSO} onOpenChange={o => { if (!o) setViewSO(null) }}>
+      <Dialog open={!!viewSO} onOpenChange={o => { if (!o) { setViewSO(null); setViewSODeliveries([]) } }}>
         <DialogContent className="w-[98vw] sm:!max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Eye className="h-4 w-4" />Sales Order — {viewSO?.so_number ?? '—'}</DialogTitle>
           </DialogHeader>
-          <div className="flex-1 overflow-hidden">
+          <div className="flex-1 overflow-y-auto space-y-4">
             {viewSO && (
               <iframe
                 srcDoc={buildSOHtml(viewSO, viewSOItems)}
-                style={{ width: '100%', minHeight: '560px', border: 'none' }}
+                style={{ width: '100%', minHeight: '480px', border: 'none' }}
               />
             )}
+            {/* Delivery History */}
+            <div className="border rounded-lg overflow-hidden">
+              <div className="bg-muted/40 px-4 py-2 flex items-center gap-2">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Delivery History</span>
+                <span className="ml-auto text-xs text-muted-foreground">{viewSODeliveries.length} DR{viewSODeliveries.length !== 1 ? 's' : ''}</span>
+              </div>
+              {viewSODeliveries.length === 0 ? (
+                <p className="px-4 py-3 text-xs text-muted-foreground italic">No deliveries recorded for this SO yet.</p>
+              ) : (
+                <div className="divide-y text-xs">
+                  {viewSODeliveries.map(d => {
+                    const statusCls = d.status === 'received' ? 'bg-green-100 text-green-700' : d.status === 'partial' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'
+                    return (
+                      <div key={d.dr_number} className="px-4 py-2.5 space-y-1.5">
+                        <div className="flex items-center gap-3">
+                          <span className="font-mono font-semibold text-red-600">{d.dr_number}</span>
+                          <span className="text-muted-foreground">{d.dr_date ? new Date(d.dr_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</span>
+                          <span className={`px-2 py-0.5 rounded-full font-medium capitalize ${statusCls}`}>{d.status}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-muted-foreground">
+                          {d.items.map((it, i) => (
+                            <span key={i}>{it.item_name} × {it.quantity} {it.unit}</span>
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </DialogContent>
       </Dialog>

@@ -27,6 +27,7 @@ interface EnrichedDrItem {
   item_name: string
   unit: string
   quantity: number
+  so_number: string | null
 }
 
 interface CsiRecord {
@@ -171,7 +172,7 @@ export default function PullOutBillingPage() {
       { data: itemsData },
       { data: clientsData },
     ] = await Promise.all([
-      supabase.from('dr_logs').select('dr_number, dr_date, supplier_name').order('dr_date', { ascending: false }),
+      supabase.from('dr_logs').select('dr_number, dr_date, supplier_name, po_number').order('dr_date', { ascending: false }),
       supabase.from('dr_log_items').select('dr_number, item_name, quantity, unit'),
       supabase.from('csi_records').select('id, si_number, si_date, client_name, item_name, unit, quantity, unit_price, amount, collection_status').order('si_date', { ascending: false }),
       supabase.from('pull_out_requests').select('*').order('created_at', { ascending: false }),
@@ -180,9 +181,9 @@ export default function PullOutBillingPage() {
     ])
 
     // Build enriched DR items
-    const drMap = new Map<string, { dr_date: string; client_name: string }>()
+    const drMap = new Map<string, { dr_date: string; client_name: string; so_number: string | null }>()
     for (const log of drLogs ?? []) {
-      drMap.set(log.dr_number, { dr_date: log.dr_date ?? '', client_name: log.supplier_name ?? '' })
+      drMap.set(log.dr_number, { dr_date: log.dr_date ?? '', client_name: log.supplier_name ?? '', so_number: log.po_number ?? null })
     }
     const enriched: EnrichedDrItem[] = (drLogItems ?? []).map(it => ({
       dr_number: it.dr_number ?? '',
@@ -191,6 +192,7 @@ export default function PullOutBillingPage() {
       item_name: it.item_name ?? '',
       unit: it.unit ?? '',
       quantity: Number(it.quantity) || 0,
+      so_number: drMap.get(it.dr_number)?.so_number ?? null,
     }))
 
     // Flatten pull_out_requests items
@@ -285,11 +287,11 @@ export default function PullOutBillingPage() {
     const drMoves = drItems
       .filter(r => !clientFilter || r.client_name.toLowerCase().includes(clientFilter))
       .filter(r => !productSearch || r.item_name.toLowerCase().includes(productSearch.toLowerCase()))
-      .map(r => ({ date: r.dr_date, type: 'DR' as const, ref: r.dr_number, client: r.client_name, product: r.item_name, unit: r.unit, qty: r.quantity, dir: 'IN' as const }))
+      .map(r => ({ date: r.dr_date, type: 'DR' as const, ref: r.dr_number, so: r.so_number, client: r.client_name, product: r.item_name, unit: r.unit, qty: r.quantity, dir: 'IN' as const }))
     const csiMoves = csiItems
       .filter(r => !clientFilter || (r.client_name ?? '').toLowerCase().includes(clientFilter))
       .filter(r => !productSearch || r.item_name.toLowerCase().includes(productSearch.toLowerCase()))
-      .map(r => ({ date: r.si_date, type: 'CSI' as const, ref: r.si_number, client: r.client_name ?? '', product: r.item_name, unit: r.unit ?? '', qty: r.quantity, dir: 'OUT' as const }))
+      .map(r => ({ date: r.si_date, type: 'CSI' as const, ref: r.si_number, so: null as string | null, client: r.client_name ?? '', product: r.item_name, unit: r.unit ?? '', qty: r.quantity, dir: 'OUT' as const }))
     return [...drMoves, ...csiMoves].sort((a, b) => b.date.localeCompare(a.date))
   }, [drItems, csiItems, clientFilter, productSearch])
 
@@ -667,6 +669,7 @@ export default function PullOutBillingPage() {
                   <th className="px-3 py-2.5 text-left">Type</th>
                   <th className="px-3 py-2.5 text-left">Dir</th>
                   <th className="px-3 py-2.5 text-left">Ref #</th>
+                  <th className="px-3 py-2.5 text-left">SO #</th>
                   <th className="px-3 py-2.5 text-left">Client</th>
                   <th className="px-3 py-2.5 text-left">Product</th>
                   <th className="px-3 py-2.5 text-right">Qty</th>
@@ -684,12 +687,13 @@ export default function PullOutBillingPage() {
                       <span className={`text-xs px-2 py-0.5 rounded font-bold ${m.dir === 'IN' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{m.dir === 'IN' ? '▲ IN' : '▼ OUT'}</span>
                     </td>
                     <td className="px-3 py-2 font-mono text-xs font-semibold text-red-700">{m.ref || '—'}</td>
+                    <td className="px-3 py-2 font-mono text-xs text-blue-700">{m.so || '—'}</td>
                     <td className="px-3 py-2 font-medium">{m.client}</td>
                     <td className="px-3 py-2 text-gray-700">{m.product}</td>
                     <td className={`px-3 py-2 text-right font-semibold ${m.dir === 'IN' ? 'text-green-700' : 'text-red-700'}`}>{m.dir === 'IN' ? '+' : '-'}{fmtNum(m.qty)}</td>
                   </tr>
                 ))}
-                {movements.length === 0 && <tr><td colSpan={8} className="px-3 py-8 text-center text-gray-400">No movements found.</td></tr>}
+                {movements.length === 0 && <tr><td colSpan={9} className="px-3 py-8 text-center text-gray-400">No movements found.</td></tr>}
               </tbody>
             </table>
           </div>
