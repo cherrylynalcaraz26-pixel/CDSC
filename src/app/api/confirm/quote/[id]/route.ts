@@ -105,7 +105,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
           <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:16px 20px;margin-bottom:24px">
             <div style="margin-bottom:8px"><span style="color:#9ca3af;font-size:13px">Quotation</span><br/><strong style="font-family:monospace;color:#6366f1">${quote.quote_number ?? '—'}</strong></div>
             <div style="margin-bottom:8px"><span style="color:#9ca3af;font-size:13px">Sales Order Created</span><br/><strong style="font-family:monospace;color:#dc2626">${soNumber}</strong></div>
-            ${quote.client_po_number ? `<div style="margin-bottom:8px"><span style="color:#9ca3af;font-size:13px">Your PO Reference</span><br/><strong>${quote.client_po_number}</strong></div>` : ''}
             <div><span style="color:#9ca3af;font-size:13px">Status</span><br/><strong style="color:#16a34a">✓ Confirmed</strong></div>
           </div>
           <p style="color:#374151">We will process your order and keep you updated on the delivery status.</p>
