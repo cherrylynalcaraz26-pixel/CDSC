@@ -66,6 +66,10 @@ export default function SalesOrdersPage() {
   const [viewSOItems, setViewSOItems] = useState<SOItem[]>([])
   const [viewSODeliveries, setViewSODeliveries] = useState<{ dr_number: string; dr_date: string; status: string; client_name: string | null; items: { item_name: string; unit: string; quantity: number }[] }[]>([])
 
+  // delivery summary per so_number for list display
+  const [soDeliveryMap, setSoDeliveryMap] = useState<Record<string, { total: number; pending: number; partial: number; delivered: number }>>({})
+
+
   // Email SO
   const [emailSO, setEmailSO] = useState<SO | null>(null)
   const [emailSOItems, setEmailSOItems] = useState<SOItem[]>([])
@@ -109,10 +113,27 @@ export default function SalesOrdersPage() {
       supabase.from('clients').select('id,company_name,payment_terms').eq('status', 'active').order('company_name'),
       supabase.from('system_settings').select('company_name, address, phone, email, tin, logo_url').single(),
     ])
-    setSOs((soData ?? []) as SO[])
+    const soList = (soData ?? []) as SO[]
+    setSOs(soList)
     setItems((itemData ?? []) as ItemOption[])
     setClients((cliData ?? []) as ClientOption[])
     if (sysData) setCompanyInfo(sysData as SystemSettings)
+
+    // Load delivery summary for all SOs that have an so_number
+    const soNums = soList.map(s => s.so_number).filter(Boolean) as string[]
+    if (soNums.length > 0) {
+      const { data: dvData } = await supabase.from('sales_deliveries').select('so_number,status').in('so_number', soNums)
+      const map: Record<string, { total: number; pending: number; partial: number; delivered: number }> = {}
+      for (const d of (dvData ?? [])) {
+        if (!d.so_number) continue
+        if (!map[d.so_number]) map[d.so_number] = { total: 0, pending: 0, partial: 0, delivered: 0 }
+        map[d.so_number].total++
+        if (d.status === 'delivered') map[d.so_number].delivered++
+        else if (d.status === 'partial') map[d.so_number].partial++
+        else map[d.so_number].pending++
+      }
+      setSoDeliveryMap(map)
+    }
 
     setLoading(false)
   }
@@ -334,24 +355,24 @@ export default function SalesOrdersPage() {
   }
 
   async function openViewSO(so: SO) {
-    const [{ data: soItemsData }, { data: drData }] = await Promise.all([
+    const [{ data: soItemsData }, { data: sdData }] = await Promise.all([
       supabase.from('so_items').select('*').eq('so_id', so.id),
       so.so_number
-        ? supabase.from('dr_logs').select('dr_number, dr_date, status, supplier_name').eq('po_number', so.so_number).order('dr_date', { ascending: false })
+        ? supabase.from('sales_deliveries').select('delivery_number,delivery_date,dr_number,status,client_name').eq('so_number', so.so_number).order('delivery_date', { ascending: false })
         : Promise.resolve({ data: [] }),
     ])
     setViewSOItems((soItemsData ?? []) as SOItem[])
 
-    const drNumbers = (drData ?? []).map((d: any) => d.dr_number)
+    const deliveryNums = (sdData ?? []).map((d: any) => d.delivery_number).filter(Boolean)
     let deliveries: typeof viewSODeliveries = []
-    if (drNumbers.length > 0) {
-      const { data: drItemsData } = await supabase.from('dr_log_items').select('*').in('dr_number', drNumbers)
-      deliveries = (drData ?? []).map((d: any) => ({
-        dr_number: d.dr_number,
-        dr_date: d.dr_date,
+    if (deliveryNums.length > 0) {
+      const { data: sdItemsData } = await supabase.from('sales_delivery_items').select('*').in('delivery_number', deliveryNums)
+      deliveries = (sdData ?? []).map((d: any) => ({
+        dr_number: d.dr_number ?? d.delivery_number,
+        dr_date: d.delivery_date,
         status: d.status,
-        client_name: d.supplier_name,
-        items: (drItemsData ?? []).filter((i: any) => i.dr_number === d.dr_number).map((i: any) => ({
+        client_name: d.client_name,
+        items: (sdItemsData ?? []).filter((i: any) => i.delivery_number === d.delivery_number).map((i: any) => ({
           item_name: i.item_name,
           unit: i.unit ?? '',
           quantity: Number(i.quantity),
@@ -900,16 +921,17 @@ export default function SalesOrdersPage() {
                 <TableHead>Client PO #</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Delivery</TableHead>
                 <TableHead className="w-10" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-10">
+                <TableRow><TableCell colSpan={8} className="text-center py-10">
                   <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                 </TableCell></TableRow>
               ) : displayedSOs.length === 0 ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                <TableRow><TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
                   No sales orders match your search.
                 </TableCell></TableRow>
               ) : displayedSOs.map(so => {
@@ -925,6 +947,19 @@ export default function SalesOrdersPage() {
                     <TableCell className="text-right font-semibold">{fmt(so.total_amount ?? 0)}</TableCell>
                     <TableCell>
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${sCfg.cls}`}>{sCfg.label}</span>
+                    </TableCell>
+                    <TableCell>
+                      {(() => {
+                        const dm = so.so_number ? soDeliveryMap[so.so_number] : null
+                        if (!dm || dm.total === 0) return <span className="text-xs text-muted-foreground">No DR</span>
+                        const incomplete = dm.pending + dm.partial
+                        if (incomplete === 0) return <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700">{dm.total} DR{dm.total !== 1 ? 's' : ''} — Done</span>
+                        return (
+                          <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-orange-100 text-orange-700">
+                            {incomplete} Pending{dm.partial > 0 ? ` / ${dm.partial} Partial` : ''}
+                          </span>
+                        )
+                      })()}
                     </TableCell>
                     <TableCell>
                       <DropdownMenu>
@@ -1007,10 +1042,45 @@ export default function SalesOrdersPage() {
                 style={{ width: '100%', minHeight: '480px', border: 'none' }}
               />
             )}
+            {/* Pending / Incomplete Deliveries */}
+            {(() => {
+              const pending = viewSODeliveries.filter(d => d.status !== 'delivered' && d.status !== 'received')
+              if (pending.length === 0) return null
+              return (
+                <div className="border border-orange-200 rounded-lg overflow-hidden bg-orange-50">
+                  <div className="bg-orange-100 px-4 py-2 flex items-center gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-orange-700">⚠ Pending / Incomplete Deliveries</span>
+                    <span className="ml-auto text-xs text-orange-600">{pending.length} DR{pending.length !== 1 ? 's' : ''}</span>
+                  </div>
+                  <div className="divide-y divide-orange-100 text-xs">
+                    {pending.map(d => {
+                      const statusCls = d.status === 'partial' ? 'bg-yellow-100 text-yellow-700' : 'bg-orange-100 text-orange-700'
+                      return (
+                        <div key={d.dr_number} className="px-4 py-2.5 space-y-1.5">
+                          <div className="flex items-center gap-3">
+                            <span className="font-mono font-semibold text-red-600">{d.dr_number}</span>
+                            <span className="text-muted-foreground">{d.dr_date ? new Date(d.dr_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</span>
+                            <span className={`px-2 py-0.5 rounded-full font-medium capitalize ${statusCls}`}>{d.status}</span>
+                          </div>
+                          {d.items.length > 0 && (
+                            <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-muted-foreground">
+                              {d.items.map((it, i) => (
+                                <span key={i}>{it.item_name} × {it.quantity} {it.unit}</span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })()}
+
             {/* Delivery History */}
             <div className="border rounded-lg overflow-hidden">
               <div className="bg-muted/40 px-4 py-2 flex items-center gap-2">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Delivery History</span>
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">All Deliveries</span>
                 <span className="ml-auto text-xs text-muted-foreground">{viewSODeliveries.length} DR{viewSODeliveries.length !== 1 ? 's' : ''}</span>
               </div>
               {viewSODeliveries.length === 0 ? (
@@ -1018,7 +1088,7 @@ export default function SalesOrdersPage() {
               ) : (
                 <div className="divide-y text-xs">
                   {viewSODeliveries.map(d => {
-                    const statusCls = d.status === 'received' ? 'bg-green-100 text-green-700' : d.status === 'partial' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-500'
+                    const statusCls = d.status === 'delivered' || d.status === 'received' ? 'bg-green-100 text-green-700' : d.status === 'partial' ? 'bg-yellow-100 text-yellow-700' : 'bg-orange-100 text-orange-700'
                     return (
                       <div key={d.dr_number} className="px-4 py-2.5 space-y-1.5">
                         <div className="flex items-center gap-3">

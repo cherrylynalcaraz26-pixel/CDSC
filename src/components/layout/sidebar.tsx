@@ -41,7 +41,6 @@ const navigation: NavItem[] = [
       { label: 'Receiving', href: '/receiving', icon: Truck },
       { label: 'Inventory', href: '/inventory', icon: BoxesIcon },
       { label: 'DR Logs', href: '/dr-logs', icon: ClipboardList },
-      { label: 'Sales Deliveries', href: '/sales-deliveries', icon: Truck },
       { label: 'CSI Monitoring', href: '/csi-monitoring', icon: FileText },
       { label: 'Pull Out & Billing', href: '/pull-out-billing', icon: FileText },
     ],
@@ -200,13 +199,13 @@ function SidebarContent({
     <div className="flex flex-col h-full bg-[#111111]">
       <div className={cn('py-4 flex items-center gap-3 transition-all', collapsed ? 'px-3 justify-center' : 'px-4')}>
         {collapsed ? (
-          <button onClick={onToggleCollapse} title="Expand sidebar" className="relative h-8 w-8 shrink-0">
-            <Image src={logoSrc} alt={displayName} fill className="rounded-md object-cover" priority />
+          <button onClick={onToggleCollapse} title="Expand sidebar" className="relative h-8 w-8 shrink-0 rounded-md overflow-hidden">
+            <Image src={logoSrc} alt={displayName} fill className="object-cover" priority />
           </button>
         ) : (
           <>
-            <div className="relative h-8 w-8 shrink-0">
-              <Image src={logoSrc} alt={displayName} fill className="rounded-md object-cover" priority />
+            <div className="relative h-8 w-8 shrink-0 rounded-md overflow-hidden">
+              <Image src={logoSrc} alt={displayName} fill className="object-cover" priority />
             </div>
             <div className="min-w-0 flex-1">
               <div className="text-white font-semibold text-sm leading-tight truncate">{displayName}</div>
@@ -283,12 +282,6 @@ export function MobileSidebar({ open, onClose }: { open: boolean; onClose: () =>
         'fixed inset-y-0 left-0 z-50 w-60 transition-transform duration-300 ease-in-out lg:hidden',
         open ? 'translate-x-0' : '-translate-x-full',
       )}>
-        <button
-          onClick={onClose}
-          className="absolute top-3 right-3 h-7 w-7 flex items-center justify-center rounded text-white/40 hover:text-white hover:bg-white/10 z-10"
-        >
-          <X className="h-4 w-4" />
-        </button>
         <SidebarContent collapsed={false} onToggleCollapse={onClose} onNavigate={onClose} />
       </aside>
     </>
