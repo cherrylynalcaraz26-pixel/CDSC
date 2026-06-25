@@ -85,7 +85,12 @@ export default function PortalRequests() {
 
   const filtered = orders.filter(o => {
     const s = search.toLowerCase()
-    const matchSearch = !s || (o.so_number ?? '').toLowerCase().includes(s) || (o.client_po_number ?? '').toLowerCase().includes(s) || o.so_items.some(i => i.item_name.toLowerCase().includes(s))
+    const matchSearch = !s ||
+      (o.so_number ?? '').toLowerCase().includes(s) ||
+      (o.client_po_number ?? '').toLowerCase().includes(s) ||
+      (o.remarks ?? '').toLowerCase().includes(s) ||
+      (o.status ? (STATUS[o.status]?.label ?? o.status).toLowerCase().includes(s) : false) ||
+      o.so_items.some(i => i.item_name.toLowerCase().includes(s) || (i.unit ?? '').toLowerCase().includes(s))
     const matchFilter = !filter || o.status === filter
     return matchSearch && matchFilter
   })

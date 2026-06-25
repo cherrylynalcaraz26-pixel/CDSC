@@ -87,7 +87,13 @@ export default function PortalQuotations() {
 
   const filtered = quotations.filter(q => {
     const s = search.toLowerCase()
-    const matchSearch = !s || (q.quote_number ?? '').toLowerCase().includes(s) || (q.subject ?? '').toLowerCase().includes(s) || q.quotation_items.some(i => i.item_name.toLowerCase().includes(s))
+    const matchSearch = !s ||
+      (q.quote_number ?? '').toLowerCase().includes(s) ||
+      (q.subject ?? '').toLowerCase().includes(s) ||
+      (q.notes ?? '').toLowerCase().includes(s) ||
+      (q.client_name ?? '').toLowerCase().includes(s) ||
+      (q.status ? (STATUS[q.status]?.label ?? q.status).toLowerCase().includes(s) : false) ||
+      q.quotation_items.some(i => i.item_name.toLowerCase().includes(s) || (i.unit ?? '').toLowerCase().includes(s))
     const matchFilter = !filter || q.status === filter
     return matchSearch && matchFilter
   })

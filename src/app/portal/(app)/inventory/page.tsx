@@ -69,6 +69,8 @@ export default function PortalInventoryPage() {
     const matchSearch = !q ||
       i.item_name.toLowerCase().includes(q) ||
       (i.item_code ?? '').toLowerCase().includes(q) ||
+      (i.category ?? '').toLowerCase().includes(q) ||
+      (i.unit ?? '').toLowerCase().includes(q) ||
       (i.description ?? '').toLowerCase().includes(q)
     const matchCat = !category || i.category === category
     const matchStock = !stockFilter || (i.quantity_on_hand ?? 0) > 0

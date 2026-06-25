@@ -10,6 +10,7 @@ import {
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
+import { useSearchContext } from '@/context/search-context'
 
 interface StockRow {
   id: string
@@ -43,7 +44,7 @@ export default function PortalStockPage() {
   const [transactions, setTransactions] = useState<TxRow[]>([])
   const [departments, setDepartments] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
+  const { query: search } = useSearchContext()
   const [modal, setModal] = useState<ModalType>(null)
   const [selectedItem, setSelectedItem] = useState<StockRow | null>(null)
   const [historyItem, setHistoryItem] = useState<StockRow | null>(null)
@@ -157,9 +158,12 @@ export default function PortalStockPage() {
     await fetchData(clientId!)
   }
 
-  const filtered = stock.filter(s =>
-    !search || s.item_name.toLowerCase().includes(search.toLowerCase())
-  )
+  const filtered = stock.filter(s => {
+    if (!search) return true
+    const q = search.toLowerCase()
+    return s.item_name.toLowerCase().includes(q) ||
+      (s.unit ?? '').toLowerCase().includes(q)
+  })
 
   const lowStockItems = stock.filter(s => s.quantity_on_hand <= s.low_stock_threshold)
   const itemHistory = historyItem
@@ -282,17 +286,6 @@ export default function PortalStockPage() {
           <div className="text-xl font-bold text-gray-900">{loading ? '—' : transactions.length}</div>
           <div className="text-xs text-gray-500">Transactions</div>
         </div>
-      </div>
-
-      {/* Search */}
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-        <input
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          placeholder="Search items..."
-          className="w-full h-10 pl-9 pr-4 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-        />
       </div>
 
       {/* Stock table */}
