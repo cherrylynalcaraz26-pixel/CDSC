@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Package, Loader2, Tag, ShoppingCart, Plus, Minus, X, Send, ChevronDown, ChevronUp, ShoppingBag } from 'lucide-react'
+import { Package, Loader2, Tag, ShoppingCart, Plus, Minus, X, Send, ChevronDown, ChevronUp, ShoppingBag, LayoutGrid, List, Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
@@ -42,6 +42,8 @@ export default function PortalInventoryPage() {
   const [submitting, setSubmitting] = useState(false)
   const [clientId, setClientId] = useState<string | null>(null)
   const [clientName, setClientName] = useState('')
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
+  const [localSearch, setLocalSearch] = useState('')
 
   useEffect(() => {
     async function load() {
@@ -65,7 +67,7 @@ export default function PortalInventoryPage() {
   const categories = ['', ...Array.from(new Set(items.map(i => i.category).filter(Boolean) as string[])).sort()]
 
   const filtered = items.filter(i => {
-    const q = search.toLowerCase()
+    const q = (search || localSearch).toLowerCase()
     const matchSearch = !q ||
       i.item_name.toLowerCase().includes(q) ||
       (i.item_code ?? '').toLowerCase().includes(q) ||
@@ -192,6 +194,20 @@ export default function PortalInventoryPage() {
       {/* Search + filters */}
       <div className="space-y-3">
         <div className="flex gap-2 flex-wrap items-center">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+            <input
+              value={localSearch}
+              onChange={e => setLocalSearch(e.target.value)}
+              placeholder="Search products…"
+              className="w-full h-10 pl-9 pr-9 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-red-500"
+            />
+            {localSearch && (
+              <button onClick={() => setLocalSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
           <button
             onClick={() => setStockFilter(v => !v)}
             className={cn(
@@ -202,6 +218,18 @@ export default function PortalInventoryPage() {
             )}>
             In Stock Only
           </button>
+          <div className="flex border border-gray-300 rounded-lg overflow-hidden">
+            <button onClick={() => setViewMode('grid')}
+              className={cn('h-10 w-10 flex items-center justify-center transition-colors',
+                viewMode === 'grid' ? 'bg-red-600 text-white' : 'bg-white text-gray-500 hover:bg-gray-50')}>
+              <LayoutGrid className="h-4 w-4" />
+            </button>
+            <button onClick={() => setViewMode('list')}
+              className={cn('h-10 w-10 flex items-center justify-center border-l border-gray-300 transition-colors',
+                viewMode === 'list' ? 'bg-red-600 text-white' : 'bg-white text-gray-500 hover:bg-gray-50')}>
+              <List className="h-4 w-4" />
+            </button>
+          </div>
         </div>
         {categories.length > 1 && (
           <div className="flex gap-2 flex-wrap">
@@ -214,6 +242,9 @@ export default function PortalInventoryPage() {
                     : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                 )}>
                 {cat === '' ? 'All Categories' : cat}
+                {cat !== '' && (
+                  <span className="ml-1 opacity-60">{items.filter(i => i.category === cat).length}</span>
+                )}
               </button>
             ))}
           </div>
@@ -224,7 +255,10 @@ export default function PortalInventoryPage() {
       {!loading && (
         <p className="text-xs text-gray-400">
           {filtered.length} product{filtered.length !== 1 ? 's' : ''}
-          {(search || category || stockFilter) ? ' found' : ' available'}
+          {(search || localSearch || category || stockFilter) ? ' found' : ' available'}
+          {filtered.filter(i => (i.quantity_on_hand ?? 0) > 0).length !== filtered.length && (
+            <span className="ml-1 text-green-600">· {filtered.filter(i => (i.quantity_on_hand ?? 0) > 0).length} in stock</span>
+          )}
         </p>
       )}
 
@@ -246,10 +280,11 @@ export default function PortalInventoryPage() {
             </button>
           )}
         </div>
-      ) : (
+      ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map(item => {
             const inStock = (item.quantity_on_hand ?? 0) > 0
+            const stockQty = item.quantity_on_hand ?? 0
             const price = item.selling_price ?? item.unit_price
             const qty = cartQty(item.id)
             return (
@@ -268,7 +303,7 @@ export default function PortalInventoryPage() {
                     'text-xs px-2 py-0.5 rounded-full font-medium shrink-0',
                     inStock ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
                   )}>
-                    {inStock ? 'In Stock' : 'Out of Stock'}
+                    {inStock ? `${stockQty} ${item.unit ?? 'pcs'}` : 'Out of Stock'}
                   </span>
                 </div>
 
@@ -279,20 +314,16 @@ export default function PortalInventoryPage() {
                 <div className="flex items-center justify-between mt-auto pt-1">
                   <div className="flex items-center gap-2">
                     {item.category && (
-                      <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">{item.category}</span>
-                    )}
-                    {item.unit && (
-                      <span className="text-xs text-gray-400">per {item.unit}</span>
+                      <span className="text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full font-medium">{item.category}</span>
                     )}
                   </div>
                   {price != null && (
                     <span className="text-sm font-bold text-red-600">
-                      {fmt(price)}
+                      {fmt(price)}{item.unit ? `/${item.unit}` : ''}
                     </span>
                   )}
                 </div>
 
-                {/* Add to cart controls */}
                 {qty === 0 ? (
                   <button
                     onClick={() => addToCart(item)}
@@ -303,20 +334,17 @@ export default function PortalInventoryPage() {
                 ) : (
                   <div className="mt-1 flex items-center gap-2">
                     <div className="flex items-center gap-1 border border-gray-200 rounded-lg overflow-hidden flex-1">
-                      <button
-                        onClick={() => updateQty(item.id, -1)}
+                      <button onClick={() => updateQty(item.id, -1)}
                         className="h-9 w-9 flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors">
                         <Minus className="h-3.5 w-3.5" />
                       </button>
                       <span className="flex-1 text-center text-sm font-bold text-gray-900">{qty}</span>
-                      <button
-                        onClick={() => updateQty(item.id, 1)}
+                      <button onClick={() => updateQty(item.id, 1)}
                         className="h-9 w-9 flex items-center justify-center text-gray-500 hover:bg-gray-100 transition-colors">
                         <Plus className="h-3.5 w-3.5" />
                       </button>
                     </div>
-                    <button
-                      onClick={() => removeFromCart(item.id)}
+                    <button onClick={() => removeFromCart(item.id)}
                       className="h-9 w-9 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors border border-gray-200">
                       <X className="h-3.5 w-3.5" />
                     </button>
@@ -325,6 +353,71 @@ export default function PortalInventoryPage() {
               </div>
             )
           })}
+        </div>
+      ) : (
+        /* List view */
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-200">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Product</th>
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase hidden sm:table-cell">Category</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Stock</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Price</th>
+                <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Order</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {filtered.map(item => {
+                const inStock = (item.quantity_on_hand ?? 0) > 0
+                const price = item.selling_price ?? item.unit_price
+                const qty = cartQty(item.id)
+                return (
+                  <tr key={item.id} className={cn('hover:bg-gray-50 transition-colors', qty > 0 && 'bg-red-50/40')}>
+                    <td className="px-4 py-3">
+                      <div className="font-medium text-gray-900">{item.item_name}</div>
+                      {item.item_code && <div className="text-xs text-gray-400">{item.item_code}</div>}
+                      {item.description && <div className="text-xs text-gray-500 mt-0.5 line-clamp-1">{item.description}</div>}
+                    </td>
+                    <td className="px-4 py-3 hidden sm:table-cell">
+                      {item.category && (
+                        <span className="text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full font-medium">{item.category}</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-center">
+                      <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium',
+                        inStock ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600')}>
+                        {inStock ? `${item.quantity_on_hand} ${item.unit ?? 'pcs'}` : 'Out'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {price != null ? (
+                        <span className="font-bold text-red-600 text-sm">{fmt(price)}</span>
+                      ) : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      {qty === 0 ? (
+                        <button onClick={() => addToCart(item)}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-red-600 border border-red-300 px-3 py-1.5 rounded-lg hover:bg-red-600 hover:text-white transition-colors">
+                          <Plus className="h-3 w-3" /> Add
+                        </button>
+                      ) : (
+                        <div className="inline-flex items-center gap-1 border border-gray-200 rounded-lg overflow-hidden">
+                          <button onClick={() => updateQty(item.id, -1)} className="h-7 w-7 flex items-center justify-center text-gray-500 hover:bg-gray-100">
+                            <Minus className="h-3 w-3" />
+                          </button>
+                          <span className="w-6 text-center text-sm font-bold text-gray-900">{qty}</span>
+                          <button onClick={() => updateQty(item.id, 1)} className="h-7 w-7 flex items-center justify-center text-gray-500 hover:bg-gray-100">
+                            <Plus className="h-3 w-3" />
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
       )}
 

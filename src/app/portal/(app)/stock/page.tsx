@@ -5,7 +5,8 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Package, Loader2, Search, AlertTriangle, ArrowDownCircle, ArrowUpCircle,
-  SlidersHorizontal, History, ChevronDown, ChevronUp, X, Check, Plus, Truck, CheckCircle2
+  SlidersHorizontal, History, ChevronDown, ChevronUp, X, Check, Plus, Truck, CheckCircle2,
+  MoreHorizontal, Undo2, Printer
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -91,6 +92,15 @@ export default function PortalStockPage() {
   const [addDeptOpen, setAddDeptOpen] = useState(false)
   const [newDeptName, setNewDeptName] = useState('')
   const [savingDept, setSavingDept] = useState(false)
+
+  // Action dropdown per row
+  const [openActionId, setOpenActionId] = useState<string | null>(null)
+
+  // Issue slip (shown after issue submit)
+  const [issuedSlip, setIssuedSlip] = useState<{ item_name: string; unit: string | null; quantity: number; issued_to: string; department: string; notes: string; reference_no: string; date: string } | null>(null)
+
+  // Undo transaction
+  const [undoingId, setUndoingId] = useState<string | null>(null)
 
   useEffect(() => {
     async function init() {
@@ -197,8 +207,22 @@ export default function PortalStockPage() {
         reference_no: txRef.trim() || null,
       })
       if (error) throw error
-      toast.success(modal === 'receive' ? 'Stock received!' : modal === 'issue' ? 'Item issued!' : 'Stock adjusted!')
-      setModal(null)
+      if (modal === 'issue') {
+        setIssuedSlip({
+          item_name: txItemName.trim(),
+          unit: txUnit.trim() || null,
+          quantity: qty,
+          issued_to: txIssuedTo.trim(),
+          department: txDepartment.trim(),
+          notes: txNotes.trim(),
+          reference_no: txRef.trim(),
+          date: new Date().toISOString(),
+        })
+        setModal(null)
+      } else {
+        toast.success(modal === 'receive' ? 'Stock received!' : 'Stock adjusted!')
+        setModal(null)
+      }
       await fetchData(clientId)
     } catch (err: any) {
       toast.error(err.message ?? 'Failed to save transaction')
@@ -230,6 +254,32 @@ export default function PortalStockPage() {
       toast.error(err.message ?? 'Failed to save transactions')
     }
     setBulkSubmitting(false)
+  }
+
+  async function undoTransaction(tx: TxRow) {
+    if (!clientId) return
+    setUndoingId(tx.id)
+    try {
+      // Delete the original transaction record
+      const { error: delErr } = await supabase.from('client_inventory_transactions').delete().eq('id', tx.id)
+      if (delErr) throw delErr
+      // Insert a reversal note
+      const reverseType = tx.transaction_type === 'issued' ? 'received' : tx.transaction_type === 'received' ? 'issued' : 'adjusted'
+      await supabase.from('client_inventory_transactions').insert({
+        client_id: clientId,
+        item_name: tx.item_name,
+        unit: tx.unit || null,
+        transaction_type: reverseType,
+        quantity: tx.quantity,
+        notes: `Undo of ${tx.transaction_type} transaction`,
+        reference_no: tx.reference_no || null,
+      })
+      toast.success('Transaction undone')
+      await fetchData(clientId)
+    } catch (err: any) {
+      toast.error(err.message ?? 'Failed to undo transaction')
+    }
+    setUndoingId(null)
   }
 
   async function saveThreshold() {
@@ -427,31 +477,35 @@ export default function PortalStockPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <div className="flex items-center justify-end gap-1">
+                    <div className="relative inline-block">
                       <button
-                        onClick={() => { setHistoryItem(s); setHistoryOpen(true) }}
-                        title="View history"
-                        className="h-7 w-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors">
-                        <History className="h-3.5 w-3.5" />
+                        onClick={() => setOpenActionId(openActionId === s.id ? null : s.id)}
+                        className="h-8 w-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors">
+                        <MoreHorizontal className="h-4 w-4" />
                       </button>
-                      <button
-                        onClick={() => openModal('receive', s)}
-                        title="Receive stock"
-                        className="h-7 w-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors">
-                        <ArrowDownCircle className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        onClick={() => openModal('issue', s)}
-                        title="Issue item"
-                        className="h-7 w-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-orange-600 hover:bg-orange-50 transition-colors">
-                        <ArrowUpCircle className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        onClick={() => openModal('adjust', s)}
-                        title="Adjust quantity"
-                        className="h-7 w-7 flex items-center justify-center rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors">
-                        <SlidersHorizontal className="h-3.5 w-3.5" />
-                      </button>
+                      {openActionId === s.id && (
+                        <>
+                          <div className="fixed inset-0 z-10" onClick={() => setOpenActionId(null)} />
+                          <div className="absolute right-0 z-20 mt-1 w-44 bg-white border border-gray-200 rounded-xl shadow-lg py-1 text-sm">
+                            <button onClick={() => { setHistoryItem(s); setHistoryOpen(true); setOpenActionId(null) }}
+                              className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-700 hover:bg-gray-50">
+                              <History className="h-3.5 w-3.5 text-indigo-500" /> View History
+                            </button>
+                            <button onClick={() => { openModal('receive', s); setOpenActionId(null) }}
+                              className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-700 hover:bg-gray-50">
+                              <ArrowDownCircle className="h-3.5 w-3.5 text-green-600" /> Receive Stock
+                            </button>
+                            <button onClick={() => { openModal('issue', s); setOpenActionId(null) }}
+                              className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-700 hover:bg-gray-50">
+                              <ArrowUpCircle className="h-3.5 w-3.5 text-orange-500" /> Issue Item
+                            </button>
+                            <button onClick={() => { openModal('adjust', s); setOpenActionId(null) }}
+                              className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-700 hover:bg-gray-50">
+                              <SlidersHorizontal className="h-3.5 w-3.5 text-blue-500" /> Adjust Stock
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -484,6 +538,7 @@ export default function PortalStockPage() {
                     <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase">Type</th>
                     <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase">Qty</th>
                     <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase hidden sm:table-cell">Care of / Dept / Notes</th>
+                    <th className="px-4 py-2.5 w-16" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -507,6 +562,16 @@ export default function PortalStockPage() {
                         {(t.issued_to || t.department) && t.notes && ' — '}
                         {t.notes}
                         {t.reference_no && <span className="ml-1 text-gray-400">({t.reference_no})</span>}
+                      </td>
+                      <td className="px-4 py-2.5 text-right">
+                        <button
+                          onClick={() => undoTransaction(t)}
+                          disabled={undoingId === t.id}
+                          title="Undo this transaction"
+                          className="inline-flex items-center gap-1 text-[10px] text-gray-400 hover:text-red-600 hover:bg-red-50 px-2 py-1 rounded-lg transition-colors disabled:opacity-40">
+                          {undoingId === t.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Undo2 className="h-3 w-3" />}
+                          Undo
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -840,6 +905,7 @@ export default function PortalStockPage() {
                       <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-500">Type</th>
                       <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-500">Qty</th>
                       <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Details</th>
+                      <th className="px-4 py-2.5 w-14" />
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100">
@@ -861,6 +927,15 @@ export default function PortalStockPage() {
                           {t.department && <div className="text-gray-400">{t.department}</div>}
                           {t.notes && <div className="text-gray-400">{t.notes}</div>}
                           {t.reference_no && <div className="text-gray-400">{t.reference_no}</div>}
+                        </td>
+                        <td className="px-4 py-2.5 text-right">
+                          <button
+                            onClick={() => undoTransaction(t)}
+                            disabled={undoingId === t.id}
+                            title="Undo"
+                            className="inline-flex items-center gap-1 text-[10px] text-gray-400 hover:text-red-600 hover:bg-red-50 px-2 py-1 rounded-lg transition-colors disabled:opacity-40">
+                            {undoingId === t.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Undo2 className="h-3 w-3" />}
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -896,6 +971,90 @@ export default function PortalStockPage() {
             <div className="px-6 pb-5 flex gap-3 justify-end">
               <button onClick={() => setThresholdItem(null)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
               <button onClick={saveThreshold} className="bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-5 py-2 rounded-lg">Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Issue Slip modal */}
+      {issuedSlip && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="flex items-center justify-between px-6 py-4 border-b">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-green-600" /> Item Issued
+              </h3>
+              <button onClick={() => setIssuedSlip(null)} className="text-gray-400 hover:text-gray-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="px-6 py-4 space-y-3">
+              <div className="bg-orange-50 border border-orange-100 rounded-xl p-4 space-y-2.5">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Date</span>
+                  <span className="font-medium text-gray-800">{format(new Date(issuedSlip.date), 'MMM d, yyyy — h:mm a')}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Item</span>
+                  <span className="font-semibold text-gray-900">{issuedSlip.item_name}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Quantity</span>
+                  <span className="font-bold text-orange-700">{issuedSlip.quantity} {issuedSlip.unit ?? 'pcs'}</span>
+                </div>
+                {issuedSlip.issued_to && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Care of</span>
+                    <span className="font-medium text-gray-800">{issuedSlip.issued_to}</span>
+                  </div>
+                )}
+                {issuedSlip.department && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Department</span>
+                    <span className="font-medium text-gray-800">{issuedSlip.department}</span>
+                  </div>
+                )}
+                {issuedSlip.reference_no && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Reference</span>
+                    <span className="font-medium text-gray-800">{issuedSlip.reference_no}</span>
+                  </div>
+                )}
+                {issuedSlip.notes && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Notes</span>
+                    <span className="font-medium text-gray-800 text-right max-w-[60%]">{issuedSlip.notes}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="px-6 pb-5 flex gap-3 justify-end border-t pt-3">
+              <button
+                onClick={() => {
+                  const w = window.open('', '_blank')
+                  if (!w) return
+                  w.document.write(`<html><body style="font-family:sans-serif;padding:24px;max-width:320px">
+                    <h2 style="margin:0 0 4px">Issue Slip</h2>
+                    <p style="color:#666;margin:0 0 16px;font-size:13px">${format(new Date(issuedSlip.date), 'MMM d, yyyy — h:mm a')}</p>
+                    <table style="width:100%;border-collapse:collapse;font-size:13px">
+                      <tr><td style="padding:4px 0;color:#888">Item</td><td style="text-align:right;font-weight:600">${issuedSlip.item_name}</td></tr>
+                      <tr><td style="padding:4px 0;color:#888">Quantity</td><td style="text-align:right;font-weight:700;color:#c2410c">${issuedSlip.quantity} ${issuedSlip.unit ?? 'pcs'}</td></tr>
+                      ${issuedSlip.issued_to ? `<tr><td style="padding:4px 0;color:#888">Care of</td><td style="text-align:right">${issuedSlip.issued_to}</td></tr>` : ''}
+                      ${issuedSlip.department ? `<tr><td style="padding:4px 0;color:#888">Dept</td><td style="text-align:right">${issuedSlip.department}</td></tr>` : ''}
+                      ${issuedSlip.reference_no ? `<tr><td style="padding:4px 0;color:#888">Ref</td><td style="text-align:right">${issuedSlip.reference_no}</td></tr>` : ''}
+                      ${issuedSlip.notes ? `<tr><td style="padding:4px 0;color:#888">Notes</td><td style="text-align:right">${issuedSlip.notes}</td></tr>` : ''}
+                    </table>
+                  </body></html>`)
+                  w.document.close()
+                  setTimeout(() => { w.focus(); w.print(); w.close() }, 500)
+                }}
+                className="inline-flex items-center gap-1.5 text-sm text-gray-600 border border-gray-300 px-4 py-2 rounded-lg hover:bg-gray-50">
+                <Printer className="h-3.5 w-3.5" /> Print Slip
+              </button>
+              <button onClick={() => setIssuedSlip(null)}
+                className="bg-green-600 hover:bg-green-700 text-white text-sm font-semibold px-5 py-2 rounded-lg">
+                Done
+              </button>
             </div>
           </div>
         </div>
