@@ -16,13 +16,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   // Fetch the quotation
   const { data: quote, error: qErr } = await supabase
     .from('quotations')
-    .select('id, quote_number, client_name, client_po_number, total_amount, status, remarks')
+    .select('id, quote_number, client_name, total_amount, status')
     .eq('id', id)
     .single()
 
   if (qErr || !quote) {
     const msg = qErr ? encodeURIComponent(qErr.message) : 'Quotation+not+found'
-    return NextResponse.redirect(new URL(`/confirm?status=error&msg=${msg}&id=${id}`, req.url))
+    return NextResponse.redirect(new URL(`/confirm?status=error&msg=${msg}`, req.url))
   }
 
   if (quote.status === 'confirmed') {
@@ -46,10 +46,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       so_number: soNumber,
       so_date: today,
       client_name: quote.client_name,
-      client_po_number: quote.client_po_number ?? null,
       status: 'confirmed',
       total_amount: quote.total_amount ?? 0,
-      remarks: `Created from Quotation ${quote.quote_number ?? id}${quote.remarks ? '. ' + quote.remarks : ''}`,
+      remarks: `Created from Quotation ${quote.quote_number ?? id}`,
     })
     .select('id')
     .single()
