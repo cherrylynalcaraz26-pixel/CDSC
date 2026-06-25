@@ -71,6 +71,12 @@ export default function SalesOrdersPage() {
   const [linkDRSelected, setLinkDRSelected] = useState('')
   const [linkDRSaving, setLinkDRSaving] = useState(false)
 
+  // CSI linked to SO
+  const [viewSOCSIs, setViewSOCSIs] = useState<{ si_number: string; si_date: string; total: number; items: { item_name: string; unit: string | null; quantity: number; unit_price: number }[] }[]>([])
+  const [linkCSIOptions, setLinkCSIOptions] = useState<{ si_number: string; si_date: string; total: number }[]>([])
+  const [linkCSISelected, setLinkCSISelected] = useState('')
+  const [linkCSISaving, setLinkCSISaving] = useState(false)
+
   // delivery summary per so_number for list display
   const [soDeliveryMap, setSoDeliveryMap] = useState<Record<string, { total: number; pending: number; partial: number; delivered: number }>>({})
 
@@ -414,9 +420,49 @@ export default function SalesOrdersPage() {
     setViewSODeliveries(deliveries)
     setViewSO(so)
     setLinkDRSelected('')
+    setLinkCSISelected('')
 
     // Load DRs that can be linked — matching client, no PO or PO is this SO
-    if (so.client_name) {
+    if (so.client_name && so.so_number) {
+      const [{ data: linkableDRs }, { data: linkedCSIData }, { data: linkableCSIData }] = await Promise.all([
+        supabase.from('dr_logs')
+          .select('dr_number,dr_date,status,supplier_name')
+          .eq('supplier_name', so.client_name)
+          .or('po_number.is.null,po_number.eq.')
+          .order('dr_date', { ascending: false })
+          .limit(50),
+        supabase.from('csi_records')
+          .select('si_number,si_date,item_name,unit,quantity,unit_price,amount')
+          .eq('po_number', so.so_number)
+          .order('si_date', { ascending: false }),
+        supabase.from('csi_records')
+          .select('si_number,si_date,amount')
+          .eq('client_name', so.client_name)
+          .or('po_number.is.null,po_number.eq.')
+          .order('si_date', { ascending: false })
+          .limit(100),
+      ])
+      setLinkDROptions((linkableDRs ?? []).filter((d: any) => !mergedDRs.some(m => m.dr_number === d.dr_number)))
+
+      // Group linked CSIs by si_number
+      const csiMap: Record<string, { si_number: string; si_date: string; total: number; items: { item_name: string; unit: string | null; quantity: number; unit_price: number }[] }> = {}
+      for (const r of (linkedCSIData ?? [])) {
+        if (!csiMap[r.si_number]) csiMap[r.si_number] = { si_number: r.si_number, si_date: r.si_date, total: 0, items: [] }
+        csiMap[r.si_number].items.push({ item_name: r.item_name, unit: r.unit ?? null, quantity: Number(r.quantity), unit_price: Number(r.unit_price) })
+        csiMap[r.si_number].total += Number(r.amount)
+      }
+      setViewSOCSIs(Object.values(csiMap))
+
+      // Unique linkable CSI si_numbers not already linked
+      const linkedSINums = new Set(Object.keys(csiMap))
+      const linkableMap: Record<string, { si_number: string; si_date: string; total: number }> = {}
+      for (const r of (linkableCSIData ?? [])) {
+        if (!linkedSINums.has(r.si_number) && !linkableMap[r.si_number]) {
+          linkableMap[r.si_number] = { si_number: r.si_number, si_date: r.si_date, total: Number(r.amount) }
+        }
+      }
+      setLinkCSIOptions(Object.values(linkableMap))
+    } else if (so.client_name) {
       const { data: linkableDRs } = await supabase.from('dr_logs')
         .select('dr_number,dr_date,status,supplier_name')
         .eq('supplier_name', so.client_name)
@@ -424,6 +470,8 @@ export default function SalesOrdersPage() {
         .order('dr_date', { ascending: false })
         .limit(50)
       setLinkDROptions((linkableDRs ?? []).filter((d: any) => !mergedDRs.some(m => m.dr_number === d.dr_number)))
+      setViewSOCSIs([])
+      setLinkCSIOptions([])
     }
   }
 
@@ -445,6 +493,24 @@ export default function SalesOrdersPage() {
     toast.success(`DR ${drNumber} unlinked`)
     await openViewSO(viewSO)
     load()
+  }
+
+  async function linkCSIToSO() {
+    if (!viewSO?.so_number || !linkCSISelected) return
+    setLinkCSISaving(true)
+    const { error } = await supabase.from('csi_records').update({ po_number: viewSO.so_number }).eq('si_number', linkCSISelected)
+    if (error) { toast.error(error.message); setLinkCSISaving(false); return }
+    toast.success(`SI ${linkCSISelected} linked to SO ${viewSO.so_number}`)
+    setLinkCSISaving(false)
+    await openViewSO(viewSO)
+  }
+
+  async function unlinkCSIFromSO(siNumber: string) {
+    if (!viewSO) return
+    const { error } = await supabase.from('csi_records').update({ po_number: null }).eq('si_number', siNumber)
+    if (error) { toast.error(error.message); return }
+    toast.success(`SI ${siNumber} unlinked`)
+    await openViewSO(viewSO)
   }
 
   async function openEmailSO(so: SO) {
@@ -1089,7 +1155,7 @@ export default function SalesOrdersPage() {
       </Card>
 
       {/* View SO Dialog */}
-      <Dialog open={!!viewSO} onOpenChange={o => { if (!o) { setViewSO(null); setViewSODeliveries([]) } }}>
+      <Dialog open={!!viewSO} onOpenChange={o => { if (!o) { setViewSO(null); setViewSODeliveries([]); setViewSOCSIs([]) } }}>
         <DialogContent className="w-[98vw] sm:!max-w-3xl max-h-[90vh] flex flex-col overflow-hidden p-0">
           <DialogHeader className="px-6 pt-6 pb-3 shrink-0">
             <DialogTitle className="flex items-center gap-2"><Eye className="h-4 w-4" />Sales Order — {viewSO?.so_number ?? '—'}</DialogTitle>
@@ -1200,6 +1266,62 @@ export default function SalesOrdersPage() {
                 </Select>
                 <Button size="sm" className="h-8 text-xs shrink-0" disabled={!linkDRSelected || linkDRSaving} onClick={linkDRToSO}>
                   {linkDRSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Link DR'}
+                </Button>
+              </div>
+            </div>
+
+            {/* Linked CSIs */}
+            <div className="border rounded-lg overflow-hidden">
+              <div className="bg-muted/40 px-4 py-2 flex items-center gap-2">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Sales Invoices (CSI)</span>
+                <span className="ml-auto text-xs text-muted-foreground">{viewSOCSIs.length} SI{viewSOCSIs.length !== 1 ? 's' : ''}</span>
+              </div>
+              {viewSOCSIs.length === 0 ? (
+                <p className="px-4 py-3 text-xs text-muted-foreground italic">No invoices linked to this SO yet.</p>
+              ) : (
+                <div className="divide-y text-xs">
+                  {viewSOCSIs.map(si => (
+                    <div key={si.si_number} className="px-4 py-2.5 space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono font-semibold text-blue-600">{si.si_number}</span>
+                        <span className="text-muted-foreground">{si.si_date ? new Date(si.si_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</span>
+                        <span className="px-2 py-0.5 rounded-full font-medium bg-blue-50 text-blue-700 border border-blue-100">
+                          ₱{si.total.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                        </span>
+                        <button onClick={() => unlinkCSIFromSO(si.si_number)} className="ml-auto text-[10px] text-red-400 hover:text-red-600 px-1.5 py-0.5 rounded hover:bg-red-50">Unlink</button>
+                      </div>
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-muted-foreground">
+                        {si.items.map((it, i) => (
+                          <span key={i}>{it.item_name} × {it.quantity} {it.unit ?? ''}</span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Link CSI to SO */}
+            <div className="border rounded-lg overflow-hidden">
+              <div className="bg-muted/40 px-4 py-2.5 flex items-center gap-2">
+                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Link a CSI to this SO</span>
+              </div>
+              <div className="px-4 py-3 flex gap-2 items-center">
+                <Select value={linkCSISelected} onValueChange={(v) => setLinkCSISelected(v ?? '')}>
+                  <SelectTrigger className="flex-1 text-xs h-8">
+                    <SelectValue placeholder={linkCSIOptions.length === 0 ? 'No unlinked CSIs for this client' : 'Select SI to link…'} />
+                  </SelectTrigger>
+                  <SelectContent className="min-w-[320px]">
+                    {linkCSIOptions.map(si => (
+                      <SelectItem key={si.si_number} value={si.si_number} className="text-xs">
+                        <span className="font-mono text-blue-600">{si.si_number}</span>
+                        <span className="ml-2 text-muted-foreground">{si.si_date ? new Date(si.si_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}</span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button size="sm" className="h-8 text-xs shrink-0" disabled={!linkCSISelected || linkCSISaving} onClick={linkCSIToSO}>
+                  {linkCSISaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Link CSI'}
                 </Button>
               </div>
             </div>
