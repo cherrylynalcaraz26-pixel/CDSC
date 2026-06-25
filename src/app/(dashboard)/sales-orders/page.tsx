@@ -64,7 +64,7 @@ export default function SalesOrdersPage() {
   // View SO
   const [viewSO, setViewSO] = useState<SO | null>(null)
   const [viewSOItems, setViewSOItems] = useState<SOItem[]>([])
-  const [viewSODeliveries, setViewSODeliveries] = useState<{ dr_number: string; dr_date: string; status: string; client_name: string | null; items: { item_name: string; unit: string; quantity: number }[] }[]>([])
+  const [viewSODeliveries, setViewSODeliveries] = useState<{ dr_number: string; dr_date: string; status: string; client_name: string | null; client_accepted_at: string | null; client_accepted_by: string | null; items: { item_name: string; unit: string; quantity: number }[] }[]>([])
 
   // Link DR to SO
   const [linkDROptions, setLinkDROptions] = useState<{ dr_number: string; dr_date: string; status: string; supplier_name: string | null }[]>([])
@@ -379,21 +379,21 @@ export default function SalesOrdersPage() {
         ? supabase.from('sales_deliveries').select('delivery_number,delivery_date,dr_number,status,client_name').eq('so_number', so.so_number).order('delivery_date', { ascending: false })
         : Promise.resolve({ data: [] }),
       so.so_number
-        ? supabase.from('dr_logs').select('dr_number,dr_date,status,supplier_name').eq('po_number', so.so_number).order('dr_date', { ascending: false })
+        ? supabase.from('dr_logs').select('dr_number,dr_date,status,supplier_name,client_accepted_at,client_accepted_by').eq('po_number', so.so_number).order('dr_date', { ascending: false })
         : Promise.resolve({ data: [] }),
     ])
     setViewSOItems((soItemsData ?? []) as SOItem[])
 
     // Merge dr_logs + sales_deliveries (dr_logs is source of truth)
     const seenDRs = new Set<string>()
-    const mergedDRs: { dr_number: string; dr_date: string; status: string; client_name: string | null; source: 'dr_logs' | 'sales_deliveries' }[] = []
+    const mergedDRs: { dr_number: string; dr_date: string; status: string; client_name: string | null; client_accepted_at: string | null; client_accepted_by: string | null; source: 'dr_logs' | 'sales_deliveries' }[] = []
     for (const d of (drLogData ?? [])) {
       if (d.dr_number) seenDRs.add(d.dr_number)
-      mergedDRs.push({ dr_number: d.dr_number, dr_date: d.dr_date, status: d.status, client_name: (d as any).supplier_name ?? null, source: 'dr_logs' })
+      mergedDRs.push({ dr_number: d.dr_number, dr_date: d.dr_date, status: d.status, client_name: (d as any).supplier_name ?? null, client_accepted_at: (d as any).client_accepted_at ?? null, client_accepted_by: (d as any).client_accepted_by ?? null, source: 'dr_logs' })
     }
     for (const d of (sdData ?? [])) {
       if (d.dr_number && seenDRs.has(d.dr_number)) continue
-      mergedDRs.push({ dr_number: d.dr_number ?? d.delivery_number, dr_date: d.delivery_date, status: d.status, client_name: d.client_name, source: 'sales_deliveries' })
+      mergedDRs.push({ dr_number: d.dr_number ?? d.delivery_number, dr_date: d.delivery_date, status: d.status, client_name: d.client_name, client_accepted_at: null, client_accepted_by: null, source: 'sales_deliveries' })
     }
 
     const deliveryNums = (sdData ?? []).map((d: any) => d.delivery_number).filter(Boolean)
@@ -408,7 +408,7 @@ export default function SalesOrdersPage() {
         const items = d.source === 'dr_logs'
           ? (drItemsData ?? []).filter((i: any) => i.dr_number === d.dr_number).map((i: any) => ({ item_name: i.item_name, unit: i.unit ?? '', quantity: Number(i.quantity) }))
           : (sdItemsData ?? []).filter((i: any) => i.delivery_number === d.dr_number).map((i: any) => ({ item_name: i.item_name, unit: i.unit ?? '', quantity: Number(i.quantity) }))
-        return { dr_number: d.dr_number, dr_date: d.dr_date, status: d.status, client_name: d.client_name, items }
+        return { dr_number: d.dr_number, dr_date: d.dr_date, status: d.status, client_name: d.client_name, client_accepted_at: d.client_accepted_at, client_accepted_by: d.client_accepted_by, items }
       })
     }
     setViewSODeliveries(deliveries)
@@ -1090,11 +1090,11 @@ export default function SalesOrdersPage() {
 
       {/* View SO Dialog */}
       <Dialog open={!!viewSO} onOpenChange={o => { if (!o) { setViewSO(null); setViewSODeliveries([]) } }}>
-        <DialogContent className="w-[98vw] sm:!max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
-          <DialogHeader>
+        <DialogContent className="w-[98vw] sm:!max-w-3xl max-h-[90vh] flex flex-col overflow-hidden p-0">
+          <DialogHeader className="px-6 pt-6 pb-3 shrink-0">
             <DialogTitle className="flex items-center gap-2"><Eye className="h-4 w-4" />Sales Order — {viewSO?.so_number ?? '—'}</DialogTitle>
           </DialogHeader>
-          <div className="flex-1 overflow-y-auto space-y-4">
+          <div className="flex-1 min-h-0 overflow-y-auto space-y-4 px-6 pb-6">
             {viewSO && (
               <iframe
                 srcDoc={buildSOHtml(viewSO, viewSOItems)}
@@ -1147,16 +1147,26 @@ export default function SalesOrdersPage() {
               ) : (
                 <div className="divide-y text-xs">
                   {viewSODeliveries.map(d => {
-                    const statusCls = d.status === 'delivered' || d.status === 'received' ? 'bg-green-100 text-green-700' : d.status === 'partial' ? 'bg-yellow-100 text-yellow-700' : 'bg-orange-100 text-orange-700'
+                    const isDone = d.status === 'delivered' || d.status === 'received'
+                    const statusCls = isDone ? 'bg-green-100 text-green-700' : d.status === 'partial' ? 'bg-yellow-100 text-yellow-700' : 'bg-orange-100 text-orange-700'
+                    const statusLabel = d.status === 'received' ? 'Delivered' : d.status === 'partial' ? 'Partial' : d.status === 'pending' ? 'Pending' : d.status
                     return (
                       <div key={d.dr_number} className="px-4 py-2.5 space-y-1.5">
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-mono font-semibold text-red-600">{d.dr_number}</span>
-                          <span className="text-muted-foreground">{d.dr_date ? new Date(d.dr_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</span>
-                          <span className={`px-2 py-0.5 rounded-full font-medium capitalize ${statusCls}`}>{d.status}</span>
+                          <span className="text-muted-foreground text-xs">{d.dr_date ? new Date(d.dr_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</span>
+                          <span className={`px-2 py-0.5 rounded-full font-medium text-xs capitalize ${statusCls}`}>{statusLabel}</span>
+                          {isDone && !d.client_accepted_at && (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700 border border-orange-200">Awaiting Client Acceptance</span>
+                          )}
+                          {isDone && d.client_accepted_at && (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 border border-green-200">
+                              ✓ Accepted by {d.client_accepted_by} · {new Date(d.client_accepted_at).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' })}
+                            </span>
+                          )}
                           <button onClick={() => unlinkDRFromSO(d.dr_number)} className="ml-auto text-[10px] text-red-400 hover:text-red-600 px-1.5 py-0.5 rounded hover:bg-red-50">Unlink</button>
                         </div>
-                        <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-muted-foreground">
+                        <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-muted-foreground text-xs">
                           {d.items.map((it, i) => (
                             <span key={i}>{it.item_name} × {it.quantity} {it.unit}</span>
                           ))}
