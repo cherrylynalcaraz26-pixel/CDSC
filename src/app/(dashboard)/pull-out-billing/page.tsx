@@ -7,7 +7,7 @@ import { format } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
 import {
   Plus, Trash2, Loader2, FileText, RefreshCw, Users, TrendingUp,
-  RotateCcw, Eye, X, Save, Search,
+  RotateCcw, Eye, X, Save, Search, Truck, Package, BarChart3,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -461,17 +461,17 @@ export default function PullOutBillingPage() {
       {/* KPI Cards */}
       <div className="grid grid-cols-7 gap-3 mb-4">
         {[
-          { label: 'Total Products',    value: rows.length,        color: '',          border: 'border-gray-800' },
-          { label: 'On-Hand SKUs',      value: onHandSkus,         color: 'text-amber-600', border: 'border-amber-500' },
-          { label: 'Negative SKUs',     value: negSkus,            color: 'text-red-600', border: 'border-red-500' },
-          { label: 'Est. On-Hand Value',value: peso(estValue),     color: 'text-green-700', border: 'border-green-600' },
-          { label: '📋 CSI Invoices',   value: counts.csi,         color: 'text-indigo-600', border: 'border-indigo-500' },
-          { label: '🚚 DR Logs',        value: counts.dr,          color: '',          border: 'border-gray-800' },
-          { label: '🔄 Pull-Out Reqs',  value: counts.pr,          color: '',          border: 'border-gray-800' },
+          { label: 'Total Products',    value: rows.length,    color: '',               border: 'border-gray-800',   icon: <Package className="h-3.5 w-3.5 text-gray-500" /> },
+          { label: 'On-Hand SKUs',      value: onHandSkus,     color: 'text-amber-600', border: 'border-amber-500',  icon: <BarChart3 className="h-3.5 w-3.5 text-amber-500" /> },
+          { label: 'Negative SKUs',     value: negSkus,        color: 'text-red-600',   border: 'border-red-500',    icon: <TrendingUp className="h-3.5 w-3.5 text-red-500 rotate-180" /> },
+          { label: 'Est. On-Hand Value',value: peso(estValue), color: 'text-green-700', border: 'border-green-600',  icon: <TrendingUp className="h-3.5 w-3.5 text-green-600" /> },
+          { label: 'CSI Invoices',      value: counts.csi,     color: 'text-indigo-600',border: 'border-indigo-500', icon: <FileText className="h-3.5 w-3.5 text-indigo-500" /> },
+          { label: 'DR Logs',           value: counts.dr,      color: '',               border: 'border-gray-800',   icon: <Truck className="h-3.5 w-3.5 text-gray-500" /> },
+          { label: 'Pull-Out Reqs',     value: counts.pr,      color: '',               border: 'border-gray-800',   icon: <RotateCcw className="h-3.5 w-3.5 text-gray-500" /> },
         ].map(k => (
           <div key={k.label} className={`bg-white rounded-xl border-l-4 ${k.border} shadow-sm p-3`}>
             <div className={`text-xl font-black ${k.color}`}>{k.value}</div>
-            <div className="text-xs text-gray-500 mt-0.5 leading-tight">{k.label}</div>
+            <div className="flex items-center gap-1 text-xs text-gray-500 mt-0.5 leading-tight">{k.icon}{k.label}</div>
           </div>
         ))}
       </div>
@@ -522,9 +522,9 @@ export default function PullOutBillingPage() {
       {/* ── Stock Tab ─────────────────────────────────────────────────────────── */}
       {tab === 'stock' && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-          <div className="px-4 py-3 border-b border-gray-100 text-sm font-semibold text-gray-700">
-            📦 Stock On-Hand ({filteredRows.length} products)
-            <span className="text-xs font-normal text-gray-400 ml-2">Click a row to see DR &amp; CSI details</span>
+          <div className="px-4 py-3 border-b border-gray-100 text-sm font-semibold text-gray-700 flex items-center gap-2">
+            <Package className="h-4 w-4 text-gray-500" />Stock On-Hand ({filteredRows.length} products)
+            <span className="text-xs font-normal text-gray-400 ml-1">Click a row to see DR &amp; CSI details</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm border-collapse">
@@ -570,7 +570,7 @@ export default function PullOutBillingPage() {
         <div className="space-y-4">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200">
             <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-              <span className="font-semibold text-gray-700 text-sm">📦 Stock by Client ({clientStock.length} clients)</span>
+              <span className="font-semibold text-gray-700 text-sm flex items-center gap-2"><Package className="h-4 w-4 text-gray-500" />Stock by Client ({clientStock.length} clients)</span>
               <span className="text-xs text-gray-400">Click a client to drill into their items</span>
             </div>
             <div className="overflow-x-auto">
@@ -667,8 +667,8 @@ export default function PullOutBillingPage() {
       {/* ── Movements Tab ────────────────────────────────────────────────────── */}
       {tab === 'movements' && (
         <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-          <div className="px-4 py-3 border-b border-gray-100 font-semibold text-gray-700 text-sm">
-            📦 Stock Movements ({movements.length})
+          <div className="px-4 py-3 border-b border-gray-100 font-semibold text-gray-700 text-sm flex items-center gap-2">
+            <TrendingUp className="h-4 w-4 text-gray-500" />Stock Movements ({movements.length})
           </div>
           <div className="overflow-x-auto max-h-[60vh] overflow-y-auto">
             <table className="w-full text-sm border-collapse">
