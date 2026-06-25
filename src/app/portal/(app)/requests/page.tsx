@@ -14,6 +14,7 @@ interface SOItem {
   quantity: number
   unit: string | null
   unit_price: number
+  selling_price: number | null
   total_amount: number
 }
 
@@ -73,7 +74,7 @@ export default function PortalRequests() {
       if (clientRow) {
         const { data } = await supabase
           .from('sales_orders')
-          .select('id, so_number, client_po_number, so_date, created_at, status, total_amount, remarks, so_items(id, item_name, quantity, unit, unit_price, total_amount)')
+          .select('id, so_number, client_po_number, so_date, created_at, status, total_amount, remarks, so_items(id, item_name, quantity, unit, unit_price, selling_price, total_amount)')
           .eq('client_name', clientRow.company_name)
           .order('created_at', { ascending: false })
         const soList = (data ?? []) as unknown as SalesOrder[]
@@ -277,8 +278,8 @@ export default function PortalRequests() {
                                 <td className="py-2 pr-4 text-right text-gray-600">{item.quantity}</td>
                                 <td className="py-2 pr-4 text-gray-500">{item.unit ?? '—'}</td>
                                 <td className="py-2 pr-4 text-right text-gray-600">
-                                  {item.unit_price > 0
-                                    ? `₱${item.unit_price.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
+                                  {((item.selling_price ?? 0) > 0 || item.unit_price > 0)
+                                    ? `₱${(item.selling_price ?? item.unit_price).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
                                     : '—'}
                                 </td>
                                 <td className="py-2 text-right font-semibold text-gray-800">

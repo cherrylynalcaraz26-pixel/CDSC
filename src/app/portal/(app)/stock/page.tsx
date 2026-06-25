@@ -105,7 +105,7 @@ export default function PortalStockPage() {
       supabase.from('client_inventory').select('*').eq('client_id', cid).order('item_name'),
       supabase.from('client_inventory_transactions').select('*').eq('client_id', cid).order('created_at', { ascending: false }).limit(100),
       supabase.from('client_departments').select('name').eq('client_id', cid).order('name'),
-      companyName ? supabase.from('dr_logs').select('id,dr_number,dr_date,status').eq('client_name', companyName).in('status', ['received', 'partial']).order('dr_date', { ascending: false }).limit(20) : Promise.resolve({ data: [] }),
+      companyName ? supabase.from('dr_logs').select('id,dr_number,dr_date,status').eq('supplier_name', companyName).in('status', ['received', 'partial']).order('dr_date', { ascending: false }).limit(20) : Promise.resolve({ data: [] }),
       Promise.resolve({ data: [] as any[] }),
     ])
     setStock(stockData ?? [])
