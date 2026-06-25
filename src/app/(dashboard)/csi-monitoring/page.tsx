@@ -75,6 +75,7 @@ export default function CSIMonitoringPage() {
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [editingSiNumber, setEditingSiNumber] = useState<string | null>(null)
+  const [siFilter, setSiFilter] = useState('')
   const [header, setHeader] = useState(emptyHeader())
   const [items, setItems] = useState<CSIItem[]>([emptyItem()])
   const [saving, setSaving] = useState(false)
@@ -157,12 +158,14 @@ export default function CSIMonitoringPage() {
 
   const filtered = records.filter(r => {
     const q = search.toLowerCase()
-    return (
+    const matchSearch = !q || (
       r.si_number.toLowerCase().includes(q) ||
       (r.client_name ?? '').toLowerCase().includes(q) ||
       r.item_name.toLowerCase().includes(q) ||
       (r.dr_number ?? '').toLowerCase().includes(q)
     )
+    const matchSI = !siFilter || r.si_number.toLowerCase().includes(siFilter.toLowerCase())
+    return matchSearch && matchSI
   })
 
   const totalAmount = filtered.reduce((s, r) => s + (Number(r.amount) || 0), 0)
@@ -546,7 +549,27 @@ export default function CSIMonitoringPage() {
       </div>
       )}
 
-      {!open && <div className="flex gap-3 items-center">
+      {!open && <div className="flex flex-wrap gap-3 items-center">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+          <input
+            list="si-number-list"
+            value={siFilter}
+            onChange={e => setSiFilter(e.target.value)}
+            placeholder="Filter by SI Number…"
+            className="h-9 pl-8 pr-8 text-sm border rounded-md bg-background w-52 focus:outline-none focus:ring-2 focus:ring-red-500"
+          />
+          <datalist id="si-number-list">
+            {[...new Set(records.map(r => r.si_number))].sort().map(si => (
+              <option key={si} value={si} />
+            ))}
+          </datalist>
+          {siFilter && (
+            <button onClick={() => setSiFilter('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
         <div className="flex border rounded-md overflow-hidden">
           <button
             onClick={() => setViewMode('by-si')}

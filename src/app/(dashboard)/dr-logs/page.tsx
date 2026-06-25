@@ -93,6 +93,7 @@ export default function DRLogsPage() {
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState('all')
   const [clientFilter, setClientFilter] = useState('')
+  const [drFilter, setDrFilter] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<DRLog | null>(null)
@@ -200,7 +201,8 @@ export default function DRLogsPage() {
       (l.po_number ?? '').toLowerCase().includes(search.toLowerCase())
     const matchStatus = statusFilter === 'all' || l.status === statusFilter
     const matchClient = !clientFilter || (l.supplier_name ?? '') === clientFilter
-    return matchSearch && matchStatus && matchClient
+    const matchDR = !drFilter || l.dr_number.toLowerCase().includes(drFilter.toLowerCase())
+    return matchSearch && matchStatus && matchClient && matchDR
   })
 
   function toggleExpand(id: string) {
@@ -482,6 +484,24 @@ export default function DRLogsPage() {
       })()}
 
       <div className="flex flex-wrap gap-3 items-center">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+          <input
+            list="dr-number-list"
+            value={drFilter}
+            onChange={e => setDrFilter(e.target.value)}
+            placeholder="Filter by DR Number…"
+            className="h-9 pl-8 pr-8 text-sm border rounded-md bg-background w-52 focus:outline-none focus:ring-2 focus:ring-red-500"
+          />
+          <datalist id="dr-number-list">
+            {logs.map(l => <option key={l.id} value={l.dr_number} />)}
+          </datalist>
+          {drFilter && (
+            <button onClick={() => setDrFilter('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
         <Select value={statusFilter} onValueChange={v => setStatusFilter(v ?? 'all')}>
           <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
           <SelectContent>
