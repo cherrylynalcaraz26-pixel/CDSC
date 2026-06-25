@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { format } from 'date-fns'
 import Link from 'next/link'
-import { Plus, Loader2, FileText, ChevronDown, ChevronUp, Package, Truck } from 'lucide-react'
+import { Plus, Loader2, FileText, ChevronDown, ChevronUp, Package, Truck, CheckCircle2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useSearchContext } from '@/context/search-context'
 
@@ -30,18 +30,24 @@ interface SalesOrder {
   so_items: SOItem[]
 }
 
+interface DeliveryItem {
+  item_name: string
+  unit: string | null
+  quantity: number
+}
+
 interface Delivery {
   dr_number: string
   dr_date: string | null
   status: string
   so_number: string | null
+  items: DeliveryItem[]
 }
 
 const STATUS: Record<string, { label: string; cls: string }> = {
   draft:      { label: 'Pending Review', cls: 'bg-yellow-100 text-yellow-700 border-yellow-200' },
   confirmed:  { label: 'Confirmed',      cls: 'bg-blue-100 text-blue-700 border-blue-200' },
   processing: { label: 'In Progress',    cls: 'bg-indigo-100 text-indigo-700 border-indigo-200' },
-  shipped:    { label: 'Shipped',        cls: 'bg-purple-100 text-purple-700 border-purple-200' },
   delivered:  { label: 'Delivered',      cls: 'bg-green-100 text-green-700 border-green-200' },
   cancelled:  { label: 'Cancelled',      cls: 'bg-red-100 text-red-600 border-red-200' },
 }
@@ -51,7 +57,6 @@ const FILTERS = [
   { value: 'draft',      label: 'Pending' },
   { value: 'confirmed',  label: 'Confirmed' },
   { value: 'processing', label: 'In Progress' },
-  { value: 'shipped',    label: 'Shipped' },
   { value: 'delivered',  label: 'Delivered' },
   { value: 'cancelled',  label: 'Cancelled' },
 ]
@@ -79,12 +84,29 @@ export default function PortalRequests() {
           .order('created_at', { ascending: false })
         const soList = (data ?? []) as unknown as SalesOrder[]
         setOrders(soList)
-        // Load deliveries for these SOs from dr_logs (source of truth)
+
         const soNums = soList.map(o => o.so_number).filter(Boolean) as string[]
         if (soNums.length > 0) {
           const { data: drData } = await supabase
             .from('dr_logs').select('dr_number,dr_date,status,po_number').in('po_number', soNums)
-          setDeliveries((drData ?? []).map((d: any) => ({ dr_number: d.dr_number, dr_date: d.dr_date, status: d.status, so_number: d.po_number })))
+          const drNums = (drData ?? []).map((d: any) => d.dr_number).filter(Boolean)
+          let drItems: any[] = []
+          if (drNums.length > 0) {
+            const { data: itemsData } = await supabase
+              .from('dr_log_items').select('dr_number,item_name,unit,quantity').in('dr_number', drNums)
+            drItems = itemsData ?? []
+          }
+          setDeliveries((drData ?? []).map((d: any) => ({
+            dr_number: d.dr_number,
+            dr_date: d.dr_date,
+            status: d.status,
+            so_number: d.po_number,
+            items: drItems.filter((i: any) => i.dr_number === d.dr_number).map((i: any) => ({
+              item_name: i.item_name,
+              unit: i.unit ?? null,
+              quantity: Number(i.quantity),
+            })),
+          })))
         }
       }
       setLoading(false)
@@ -100,15 +122,27 @@ export default function PortalRequests() {
     })
   }
 
+  // Effective status: if all DRs received → delivered, regardless of SO status field
+  function effectiveStatus(o: SalesOrder): string {
+    const orderDRs = deliveries.filter(d => d.so_number === o.so_number)
+    if (orderDRs.length > 0 && orderDRs.every(d => d.status === 'received' || d.status === 'delivered')) {
+      return 'delivered'
+    }
+    // Treat 'shipped' as 'processing' for display
+    if (o.status === 'shipped') return 'processing'
+    return o.status
+  }
+
   const filtered = orders.filter(o => {
     const s = search.toLowerCase()
+    const eff = effectiveStatus(o)
     const matchSearch = !s ||
       (o.so_number ?? '').toLowerCase().includes(s) ||
       (o.client_po_number ?? '').toLowerCase().includes(s) ||
       (o.remarks ?? '').toLowerCase().includes(s) ||
-      (o.status ? (STATUS[o.status]?.label ?? o.status).toLowerCase().includes(s) : false) ||
-      o.so_items.some(i => i.item_name.toLowerCase().includes(s) || (i.unit ?? '').toLowerCase().includes(s))
-    const matchFilter = !filter || o.status === filter
+      (STATUS[eff]?.label ?? eff).toLowerCase().includes(s) ||
+      o.so_items.some(i => i.item_name.toLowerCase().includes(s))
+    const matchFilter = !filter || eff === filter
     return matchSearch && matchFilter
   })
 
@@ -165,13 +199,15 @@ export default function PortalRequests() {
       ) : (
         <div className="space-y-3">
           {filtered.map(o => {
-            const st = STATUS[o.status] ?? { label: o.status, cls: 'bg-gray-100 text-gray-600 border-gray-200' }
+            const eff = effectiveStatus(o)
+            const st = STATUS[eff] ?? { label: eff, cls: 'bg-gray-100 text-gray-600 border-gray-200' }
             const date = o.so_date ?? o.created_at
             const isOpen = expanded.has(o.id)
             const hasItems = o.so_items?.length > 0
             const orderDRs = deliveries.filter(d => d.so_number === o.so_number)
-            const deliveredCount = orderDRs.filter(d => d.status === 'received' || d.status === 'delivered').length
+            const deliveredDRs = orderDRs.filter(d => d.status === 'received' || d.status === 'delivered')
             const pendingDRs = orderDRs.filter(d => d.status !== 'received' && d.status !== 'delivered')
+            const hasDeliveries = orderDRs.length > 0
 
             return (
               <div key={o.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -189,6 +225,15 @@ export default function PortalRequests() {
                         <span className={cn('text-xs px-2.5 py-0.5 rounded-full font-medium border', st.cls)}>
                           {st.label}
                         </span>
+                        {hasDeliveries && (
+                          <span className={cn('inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium border',
+                            pendingDRs.length === 0
+                              ? 'bg-green-50 text-green-700 border-green-200'
+                              : 'bg-orange-50 text-orange-700 border-orange-200')}>
+                            <Truck className="h-3 w-3" />
+                            {deliveredDRs.length}/{orderDRs.length} delivered
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-3 mt-1.5 flex-wrap">
                         <span className="text-xs text-gray-400">
@@ -204,96 +249,105 @@ export default function PortalRequests() {
                             {o.so_items.length} item{o.so_items.length !== 1 ? 's' : ''}
                           </span>
                         )}
-                        {orderDRs.length > 0 && (
-                          <span className={cn('inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium border', pendingDRs.length > 0 ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-green-50 text-green-700 border-green-200')}>
-                            <Truck className="h-3 w-3" />
-                            {deliveredCount}/{orderDRs.length} DR{orderDRs.length !== 1 ? 's' : ''} delivered
-                          </span>
-                        )}
                       </div>
                       {o.remarks && (
                         <p className="text-xs text-gray-500 mt-1.5 line-clamp-2">{o.remarks}</p>
                       )}
                     </div>
-                    {hasItems && (
+                    {(hasItems || hasDeliveries) && (
                       <button
                         onClick={() => toggleExpand(o.id)}
                         className="shrink-0 flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 px-2.5 py-1.5 rounded-lg hover:bg-gray-100 transition-colors">
                         {isOpen ? (
-                          <><ChevronUp className="h-3.5 w-3.5" /> Hide items</>
+                          <><ChevronUp className="h-3.5 w-3.5" /> Hide</>
                         ) : (
-                          <><ChevronDown className="h-3.5 w-3.5" /> View items</>
+                          <><ChevronDown className="h-3.5 w-3.5" /> Details</>
                         )}
                       </button>
                     )}
                   </div>
                 </div>
 
-                {/* Delivery status section */}
-                {isOpen && orderDRs.length > 0 && (
-                  <div className="border-t border-gray-100 bg-blue-50/40 px-5 py-3">
-                    <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                      <Truck className="h-3 w-3" /> Delivery Records
-                    </div>
-                    <div className="space-y-1.5">
-                      {orderDRs.map(dr => {
-                        const isDelivered = dr.status === 'received' || dr.status === 'delivered'
-                        const isPartial = dr.status === 'partial'
-                        return (
-                          <div key={dr.dr_number} className="flex items-center gap-3 text-xs">
-                            <span className="font-mono font-semibold text-red-600">{dr.dr_number}</span>
-                            <span className="text-gray-400">{dr.dr_date ? format(new Date(dr.dr_date), 'MMM d, yyyy') : '—'}</span>
-                            <span className={cn('px-2 py-0.5 rounded-full font-medium capitalize', isDelivered ? 'bg-green-100 text-green-700' : isPartial ? 'bg-yellow-100 text-yellow-700' : 'bg-orange-100 text-orange-700')}>
-                              {isDelivered ? 'Delivered' : isPartial ? 'Partial' : 'Pending'}
-                            </span>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
+                {isOpen && (
+                  <>
+                    {/* Delivery records with item details */}
+                    {orderDRs.length > 0 && (
+                      <div className="border-t border-gray-100">
+                        {orderDRs.map(dr => {
+                          const isDone = dr.status === 'received' || dr.status === 'delivered'
+                          const isPartial = dr.status === 'partial'
+                          return (
+                            <div key={dr.dr_number} className={cn('px-5 py-3 border-b border-gray-100 last:border-b-0', isDone ? 'bg-green-50/40' : isPartial ? 'bg-yellow-50/40' : 'bg-orange-50/40')}>
+                              <div className="flex items-center gap-2 mb-2">
+                                {isDone
+                                  ? <CheckCircle2 className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                                  : <Truck className="h-3.5 w-3.5 text-orange-500 shrink-0" />
+                                }
+                                <span className="font-mono text-xs font-semibold text-red-600">{dr.dr_number}</span>
+                                <span className="text-xs text-gray-400">{dr.dr_date ? format(new Date(dr.dr_date), 'MMM d, yyyy') : '—'}</span>
+                                <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium capitalize ml-auto',
+                                  isDone ? 'bg-green-100 text-green-700' : isPartial ? 'bg-yellow-100 text-yellow-700' : 'bg-orange-100 text-orange-700')}>
+                                  {isDone ? 'Delivered' : isPartial ? 'Partial' : 'Pending'}
+                                </span>
+                              </div>
+                              {dr.items.length > 0 && (
+                                <div className="ml-5 space-y-1">
+                                  {dr.items.map((it, idx) => (
+                                    <div key={idx} className="flex items-center gap-2 text-xs text-gray-600">
+                                      <span className="text-gray-400">•</span>
+                                      <span className="font-medium">{it.item_name}</span>
+                                      <span className="text-gray-400 ml-auto">{it.quantity} {it.unit ?? 'pcs'}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
 
-                {/* Expandable items */}
-                {isOpen && hasItems && (
-                  <div className="border-t border-gray-100 bg-gray-50">
-                    <div className="px-5 py-3">
-                      <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                        <Package className="h-3 w-3" /> Order Items
-                      </div>
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="text-xs text-gray-400">
-                              <th className="text-left pb-2 font-medium pr-4">Item</th>
-                              <th className="text-right pb-2 font-medium pr-4">Qty</th>
-                              <th className="text-left pb-2 font-medium pr-4">Unit</th>
-                              <th className="text-right pb-2 font-medium pr-4">Unit Price</th>
-                              <th className="text-right pb-2 font-medium">Total</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gray-100">
-                            {o.so_items.map(item => (
-                              <tr key={item.id}>
-                                <td className="py-2 pr-4 font-medium text-gray-800">{item.item_name}</td>
-                                <td className="py-2 pr-4 text-right text-gray-600">{item.quantity}</td>
-                                <td className="py-2 pr-4 text-gray-500">{item.unit ?? '—'}</td>
-                                <td className="py-2 pr-4 text-right text-gray-600">
-                                  {((item.selling_price ?? 0) > 0 || item.unit_price > 0)
-                                    ? `₱${(item.selling_price ?? item.unit_price).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
-                                    : '—'}
-                                </td>
-                                <td className="py-2 text-right font-semibold text-gray-800">
-                                  {item.total_amount > 0
-                                    ? `₱${item.total_amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
-                                    : '—'}
-                                </td>
+                    {/* Order items */}
+                    {hasItems && (
+                      <div className="border-t border-gray-100 bg-gray-50 px-5 py-3">
+                        <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                          <Package className="h-3 w-3" /> Order Items
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="text-xs text-gray-400">
+                                <th className="text-left pb-2 font-medium pr-4">Item</th>
+                                <th className="text-right pb-2 font-medium pr-4">Qty</th>
+                                <th className="text-left pb-2 font-medium pr-4">Unit</th>
+                                <th className="text-right pb-2 font-medium pr-4">Price</th>
+                                <th className="text-right pb-2 font-medium">Total</th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                              {o.so_items.map(item => (
+                                <tr key={item.id}>
+                                  <td className="py-2 pr-4 font-medium text-gray-800">{item.item_name}</td>
+                                  <td className="py-2 pr-4 text-right text-gray-600">{item.quantity}</td>
+                                  <td className="py-2 pr-4 text-gray-500">{item.unit ?? '—'}</td>
+                                  <td className="py-2 pr-4 text-right text-gray-600">
+                                    {((item.selling_price ?? 0) > 0 || item.unit_price > 0)
+                                      ? `₱${(item.selling_price ?? item.unit_price).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
+                                      : '—'}
+                                  </td>
+                                  <td className="py-2 text-right font-semibold text-gray-800">
+                                    {item.total_amount > 0
+                                      ? `₱${item.total_amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
+                                      : '—'}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
-                    </div>
-                  </div>
+                    )}
+                  </>
                 )}
               </div>
             )
