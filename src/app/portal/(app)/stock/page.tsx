@@ -95,6 +95,7 @@ export default function PortalStockPage() {
 
   // Action dropdown per row
   const [openActionId, setOpenActionId] = useState<string | null>(null)
+  const [actionDropdownPos, setActionDropdownPos] = useState<{ top: number; right: number } | null>(null)
 
   // Issue slip (shown after issue submit)
   const [issuedSlip, setIssuedSlip] = useState<{ item_name: string; unit: string | null; quantity: number; issued_to: string; department: string; notes: string; reference_no: string; date: string } | null>(null)
@@ -479,33 +480,19 @@ export default function PortalStockPage() {
                   <td className="px-4 py-3 text-right">
                     <div className="relative inline-block">
                       <button
-                        onClick={() => setOpenActionId(openActionId === s.id ? null : s.id)}
+                        onClick={e => {
+                          const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect()
+                          if (openActionId === s.id) {
+                            setOpenActionId(null)
+                            setActionDropdownPos(null)
+                          } else {
+                            setOpenActionId(s.id)
+                            setActionDropdownPos({ top: rect.bottom + 4, right: window.innerWidth - rect.right })
+                          }
+                        }}
                         className="h-8 w-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors">
                         <MoreHorizontal className="h-4 w-4" />
                       </button>
-                      {openActionId === s.id && (
-                        <>
-                          <div className="fixed inset-0 z-10" onClick={() => setOpenActionId(null)} />
-                          <div className="absolute right-0 z-20 mt-1 w-44 bg-white border border-gray-200 rounded-xl shadow-lg py-1 text-sm">
-                            <button onClick={() => { setHistoryItem(s); setHistoryOpen(true); setOpenActionId(null) }}
-                              className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-700 hover:bg-gray-50">
-                              <History className="h-3.5 w-3.5 text-indigo-500" /> View History
-                            </button>
-                            <button onClick={() => { openModal('receive', s); setOpenActionId(null) }}
-                              className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-700 hover:bg-gray-50">
-                              <ArrowDownCircle className="h-3.5 w-3.5 text-green-600" /> Receive Stock
-                            </button>
-                            <button onClick={() => { openModal('issue', s); setOpenActionId(null) }}
-                              className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-700 hover:bg-gray-50">
-                              <ArrowUpCircle className="h-3.5 w-3.5 text-orange-500" /> Issue Item
-                            </button>
-                            <button onClick={() => { openModal('adjust', s); setOpenActionId(null) }}
-                              className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-700 hover:bg-gray-50">
-                              <SlidersHorizontal className="h-3.5 w-3.5 text-blue-500" /> Adjust Stock
-                            </button>
-                          </div>
-                        </>
-                      )}
                     </div>
                   </td>
                 </tr>
@@ -514,6 +501,37 @@ export default function PortalStockPage() {
           </tbody>
         </table>
       </div>
+
+      {/* Action dropdown portal — rendered fixed so it escapes overflow:hidden containers */}
+      {openActionId && actionDropdownPos && (() => {
+        const s = stock.find((x: StockRow) => x.id === openActionId)
+        if (!s) return null
+        return (
+          <>
+            <div className="fixed inset-0 z-40" onClick={() => { setOpenActionId(null); setActionDropdownPos(null) }} />
+            <div
+              className="fixed z-50 w-48 bg-white border border-gray-200 rounded-xl shadow-xl py-1 text-sm"
+              style={{ top: actionDropdownPos.top, right: actionDropdownPos.right }}>
+              <button onClick={() => { setHistoryItem(s); setHistoryOpen(true); setOpenActionId(null); setActionDropdownPos(null) }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-700 hover:bg-gray-50">
+                <History className="h-3.5 w-3.5 text-indigo-500" /> View History
+              </button>
+              <button onClick={() => { openModal('receive', s); setOpenActionId(null); setActionDropdownPos(null) }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-700 hover:bg-gray-50">
+                <ArrowDownCircle className="h-3.5 w-3.5 text-green-600" /> Receive Stock
+              </button>
+              <button onClick={() => { openModal('issue', s); setOpenActionId(null); setActionDropdownPos(null) }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-700 hover:bg-gray-50">
+                <ArrowUpCircle className="h-3.5 w-3.5 text-orange-500" /> Issue Item
+              </button>
+              <button onClick={() => { openModal('adjust', s); setOpenActionId(null); setActionDropdownPos(null) }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-700 hover:bg-gray-50">
+                <SlidersHorizontal className="h-3.5 w-3.5 text-blue-500" /> Adjust Stock
+              </button>
+            </div>
+          </>
+        )
+      })()}
 
       {/* Recent transactions */}
       {transactions.length > 0 && (
