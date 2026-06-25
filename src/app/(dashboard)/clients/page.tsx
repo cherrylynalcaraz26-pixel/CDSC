@@ -71,6 +71,7 @@ interface Client {
 }
 
 type FormData = {
+  client_code: string
   company_name: string
   contact_person: string
   position: string
@@ -93,6 +94,7 @@ type FormData = {
 
 function blankForm(): FormData {
   return {
+    client_code: '',
     company_name: '', contact_person: '', position: '',
     email: '', phone: '', mobile: '',
     address: '', city: '', province: '', zip_code: '',
@@ -161,6 +163,7 @@ export default function ClientsPage() {
   function openEdit(c: Client) {
     setEditingId(c.id)
     setForm({
+      client_code: c.client_code ?? c.client_number ?? '',
       company_name: c.company_name,
       contact_person: c.contact_person ?? '',
       position: c.position ?? '',
@@ -188,6 +191,7 @@ export default function ClientsPage() {
     setSaving(true)
     try {
       const payload = {
+        client_code: form.client_code.trim() || null,
         company_name: form.company_name.trim(),
         contact_person: form.contact_person || null,
         position: form.position || null,
@@ -219,7 +223,7 @@ export default function ClientsPage() {
         const { error } = await supabase.from('clients').insert({
           ...payload,
           client_number: clientNum,
-          client_code: clientNum,
+          client_code: form.client_code.trim() || clientNum,
         })
         if (error) throw error
         toast.success('Client account created')
@@ -553,6 +557,10 @@ export default function ClientsPage() {
                 <div className="sm:col-span-2 space-y-1.5">
                   <Label>Company Name <span className="text-red-500">*</span></Label>
                   <Input value={form.company_name} onChange={e => f('company_name', e.target.value)} placeholder="e.g. ABC Trading Corp." />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Client Code</Label>
+                  <Input value={form.client_code} onChange={e => f('client_code', e.target.value)} placeholder="e.g. CLT-001 (auto if blank)" />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Business Type</Label>

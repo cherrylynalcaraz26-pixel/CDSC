@@ -86,12 +86,13 @@ export default function DRLogsPage() {
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [itemOptions, setItemOptions] = useState<ItemOption[]>([])
-  const [poNumbers, setPoNumbers] = useState<string[]>([])
-  const [poItemsMap, setPoItemsMap] = useState<Record<string, { item_name: string; unit: string; quantity: number }[]>>({})
+  const [soNumbers, setSoNumbers] = useState<{ id: string; so_number: string }[]>([])
+  const [soItemsMap, setSoItemsMap] = useState<Record<string, { item_name: string; unit: string; quantity: number }[]>>({})
   const [allItems, setAllItems] = useState<DRItem[]>([])
   const { query: search } = useSearchContext()
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState('all')
+  const [clientFilter, setClientFilter] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<DRLog | null>(null)
@@ -124,32 +125,35 @@ export default function DRLogsPage() {
 
   async function load() {
     setLoading(true)
-    const [{ data: drData }, { data: supData }, { data: clientData }, { data: itemData }, { data: poData }] = await Promise.all([
+    const [{ data: drData }, { data: supData }, { data: clientData }, { data: itemData }, { data: soData }] = await Promise.all([
       supabase.from('dr_logs').select('*').order('dr_date', { ascending: false }),
       supabase.from('suppliers').select('id, company_name').order('company_name'),
       supabase.from('clients').select('id, company_name').order('company_name'),
       supabase.from('items').select('item_code, item_name, unit_of_measure').eq('status', 'active').order('item_name'),
-      supabase.from('purchase_orders').select('po_number').not('po_number', 'is', null).order('created_at', { ascending: false }),
+      supabase.from('sales_orders').select('id, so_number').not('so_number', 'is', null).order('created_at', { ascending: false }),
     ])
     setLogs(drData ?? [])
     setSuppliers(supData ?? [])
     setClients(clientData ?? [])
     setItemOptions((itemData ?? []) as ItemOption[])
-    setPoNumbers((poData ?? []).map((p: any) => p.po_number).filter(Boolean))
+    setSoNumbers((soData ?? []).filter((s: any) => s.so_number) as { id: string; so_number: string }[])
 
-    const { data: poItemsData } = await supabase
-      .from('po_items')
-      .select('item_name, unit_of_measure, quantity, purchase_orders!inner(po_number)')
-      .not('purchase_orders.po_number', 'is', null)
-    if (poItemsData) {
-      const map: Record<string, { item_name: string; unit: string; quantity: number }[]> = {}
-      for (const row of poItemsData as any[]) {
-        const poNum = row.purchase_orders?.po_number
-        if (!poNum) continue
-        if (!map[poNum]) map[poNum] = []
-        map[poNum].push({ item_name: row.item_name, unit: row.unit_of_measure, quantity: Number(row.quantity) })
+    const soIds = (soData ?? []).map((s: any) => s.id).filter(Boolean)
+    if (soIds.length > 0) {
+      const { data: soItemsData } = await supabase
+        .from('so_items')
+        .select('item_name, unit, quantity, so_id, sales_orders!inner(so_number)')
+        .in('so_id', soIds)
+      if (soItemsData) {
+        const map: Record<string, { item_name: string; unit: string; quantity: number }[]> = {}
+        for (const row of soItemsData as any[]) {
+          const soNum = row.sales_orders?.so_number
+          if (!soNum) continue
+          if (!map[soNum]) map[soNum] = []
+          map[soNum].push({ item_name: row.item_name, unit: row.unit ?? '', quantity: Number(row.quantity) })
+        }
+        setSoItemsMap(map)
       }
-      setPoItemsMap(map)
     }
 
     const drNumbers = (drData ?? []).map(d => d.dr_number)
@@ -195,7 +199,8 @@ export default function DRLogsPage() {
       (l.supplier_name ?? '').toLowerCase().includes(search.toLowerCase()) ||
       (l.po_number ?? '').toLowerCase().includes(search.toLowerCase())
     const matchStatus = statusFilter === 'all' || l.status === statusFilter
-    return matchSearch && matchStatus
+    const matchClient = !clientFilter || (l.supplier_name ?? '') === clientFilter
+    return matchSearch && matchStatus && matchClient
   })
 
   function toggleExpand(id: string) {
@@ -381,6 +386,13 @@ export default function DRLogsPage() {
             <SelectItem value="returned">Returned</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={clientFilter || '_all'} onValueChange={v => setClientFilter(v === '_all' ? '' : v)}>
+          <SelectTrigger className="w-48"><SelectValue placeholder="All Clients" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="_all">All Clients</SelectItem>
+            {clients.map(c => <SelectItem key={c.id} value={c.company_name}>{c.company_name}</SelectItem>)}
+          </SelectContent>
+        </Select>
         <div className="flex rounded-md border overflow-hidden">
           <button
             onClick={() => setViewMode('by-dr')}
@@ -476,7 +488,7 @@ export default function DRLogsPage() {
                             <TableCell colSpan={7} className="py-3 px-6">
                               <div className="space-y-3">
                                 <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
-                                  {log.po_number && <span>PO: <span className="font-mono text-foreground">{log.po_number}</span></span>}
+                                  {log.po_number && <span>SO: <span className="font-mono text-foreground">{log.po_number}</span></span>}
                                   {log.received_by_name && <span>Received by: <span className="text-foreground">{log.received_by_name}</span></span>}
                                   {log.remarks && <span>Remarks: <span className="text-foreground">{log.remarks}</span></span>}
                                 </div>
@@ -622,23 +634,23 @@ export default function DRLogsPage() {
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
-                      <Label>PO Reference</Label>
+                      <Label>SO Reference</Label>
                       <Select value={form.po_number} onValueChange={v => setForm(f => ({ ...f, po_number: v ?? '' }))}>
-                        <SelectTrigger><SelectValue placeholder="Select PO…" /></SelectTrigger>
+                        <SelectTrigger><SelectValue placeholder="Select SO…" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="">— None —</SelectItem>
-                          {poNumbers.map(po => <SelectItem key={po} value={po}>{po}</SelectItem>)}
+                          {soNumbers.map(s => <SelectItem key={s.id} value={s.so_number}>{s.so_number}</SelectItem>)}
                         </SelectContent>
                       </Select>
-                      {form.po_number && poItemsMap[form.po_number]?.length > 0 && (
+                      {form.po_number && soItemsMap[form.po_number]?.length > 0 && (
                         <Button
                           type="button"
                           variant="outline"
                           size="sm"
                           className="w-full h-7 text-xs mt-1"
-                          onClick={() => setItems(poItemsMap[form.po_number].map(i => ({ dr_number: '', item_name: i.item_name, unit: i.unit, quantity: String(i.quantity) })))}
+                          onClick={() => setItems(soItemsMap[form.po_number].map(i => ({ dr_number: '', item_name: i.item_name, unit: i.unit, quantity: String(i.quantity) })))}
                         >
-                          Load from PO
+                          Load from SO
                         </Button>
                       )}
                     </div>
@@ -791,7 +803,7 @@ export default function DRLogsPage() {
                         <div className="text-[9px] font-semibold uppercase text-gray-400 mb-0.5">Delivered To</div>
                         <div className="font-semibold text-gray-800">{form.supplier_name || <span className="text-gray-400 italic">—</span>}</div>
                         {form.po_number && <>
-                          <div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5 mb-0.5">PO Reference</div>
+                          <div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5 mb-0.5">SO Reference</div>
                           <div className="font-mono text-gray-800">{form.po_number}</div>
                         </>}
                       </div>
