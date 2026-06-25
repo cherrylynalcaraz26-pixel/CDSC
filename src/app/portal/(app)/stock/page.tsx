@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
 import {
   Package, Loader2, Search, AlertTriangle, ArrowDownCircle, ArrowUpCircle,
-  SlidersHorizontal, History, ChevronDown, ChevronUp, X, Check
+  SlidersHorizontal, History, ChevronDown, ChevronUp, X, Check, Plus, Truck
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -34,15 +34,25 @@ interface TxRow {
   created_at: string
 }
 
+interface DRRow {
+  id: string
+  dr_number: string
+  dr_date: string
+  status: string
+  items: { item_name: string; unit: string | null; quantity: number }[]
+}
+
 type ModalType = 'receive' | 'issue' | 'adjust' | null
 
 export default function PortalStockPage() {
   const supabase = createClient()
   const router = useRouter()
   const [clientId, setClientId] = useState<string | null>(null)
+  const [clientName, setClientName] = useState<string>('')
   const [stock, setStock] = useState<StockRow[]>([])
   const [transactions, setTransactions] = useState<TxRow[]>([])
   const [departments, setDepartments] = useState<string[]>([])
+  const [availableDRs, setAvailableDRs] = useState<DRRow[]>([])
   const [loading, setLoading] = useState(true)
   const { query: search } = useSearchContext()
   const [modal, setModal] = useState<ModalType>(null)
@@ -66,29 +76,65 @@ export default function PortalStockPage() {
   const [txRef, setTxRef] = useState('')
   const [newThreshold, setNewThreshold] = useState('')
 
+  // DR selection for receive modal
+  const [selectedDR, setSelectedDR] = useState<DRRow | null>(null)
+  const [refMode, setRefMode] = useState<'dr' | 'manual'>('manual')
+
+  // Add department modal
+  const [addDeptOpen, setAddDeptOpen] = useState(false)
+  const [newDeptName, setNewDeptName] = useState('')
+  const [savingDept, setSavingDept] = useState(false)
+
   useEffect(() => {
     async function init() {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) { router.push('/login'); return }
-      const { data: clientRow } = await supabase.from('clients').select('id').eq('auth_user_id', session.user.id).single()
+      const { data: clientRow } = await supabase.from('clients').select('id, company_name').eq('auth_user_id', session.user.id).single()
       if (!clientRow) { router.push('/login'); return }
       setClientId(clientRow.id)
-      await fetchData(clientRow.id)
+      setClientName((clientRow as any).company_name ?? '')
+      await fetchData(clientRow.id, (clientRow as any).company_name ?? '')
     }
     init()
   }, [])
 
-  async function fetchData(cid: string) {
+  async function fetchData(cid: string, cname?: string) {
     setLoading(true)
-    const [{ data: stockData }, { data: txData }, { data: deptData }] = await Promise.all([
+    const companyName = cname ?? clientName
+    const [{ data: stockData }, { data: txData }, { data: deptData }, { data: drData }, { data: drItemsData }] = await Promise.all([
       supabase.from('client_inventory').select('*').eq('client_id', cid).order('item_name'),
       supabase.from('client_inventory_transactions').select('*').eq('client_id', cid).order('created_at', { ascending: false }).limit(100),
       supabase.from('client_departments').select('name').eq('client_id', cid).order('name'),
+      companyName ? supabase.from('dr_logs').select('id,dr_number,dr_date,status').eq('client_name', companyName).in('status', ['received', 'partial']).order('dr_date', { ascending: false }).limit(20) : Promise.resolve({ data: [] }),
+      Promise.resolve({ data: [] as any[] }),
     ])
     setStock(stockData ?? [])
     setTransactions(txData ?? [])
     setDepartments((deptData ?? []).map((d: any) => d.name))
+    const drNums = (drData ?? []).map((d: any) => d.dr_number).filter(Boolean)
+    let drItemsFetched: any[] = []
+    if (drNums.length > 0) {
+      const { data: drItemsFetch } = await supabase.from('dr_log_items').select('dr_number,item_name,unit,quantity').in('dr_number', drNums)
+      drItemsFetched = drItemsFetch ?? []
+    }
+    const drs: DRRow[] = (drData ?? []).map((d: any) => ({
+      id: d.id, dr_number: d.dr_number, dr_date: d.dr_date, status: d.status,
+      items: drItemsFetched.filter((i: any) => i.dr_number === d.dr_number).map((i: any) => ({ item_name: i.item_name, unit: i.unit ?? null, quantity: Number(i.quantity) })),
+    }))
+    setAvailableDRs(drs)
     setLoading(false)
+  }
+
+  async function addDepartment() {
+    if (!clientId || !newDeptName.trim()) return
+    setSavingDept(true)
+    const { error } = await supabase.from('client_departments').insert({ client_id: clientId, name: newDeptName.trim() })
+    if (error) { toast.error(error.message); setSavingDept(false); return }
+    toast.success('Department added')
+    setNewDeptName('')
+    setAddDeptOpen(false)
+    setSavingDept(false)
+    await fetchData(clientId)
   }
 
   function openModal(type: ModalType, item?: StockRow) {
@@ -103,6 +149,8 @@ export default function PortalStockPage() {
     setTxRef('')
     setItemSearch(item?.item_name ?? '')
     setItemDropdownOpen(false)
+    setSelectedDR(null)
+    setRefMode('manual')
   }
 
   function selectStockItem(item: StockRow) {
@@ -449,6 +497,44 @@ export default function PortalStockPage() {
                 </p>
               )}
 
+              {/* Available deliveries for receive modal */}
+              {modal === 'receive' && availableDRs.length > 0 && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide flex items-center gap-1.5">
+                    <Truck className="h-3.5 w-3.5" /> Accept from Delivery
+                  </label>
+                  <select
+                    value={selectedDR?.dr_number ?? ''}
+                    onChange={e => {
+                      const dr = availableDRs.find(d => d.dr_number === e.target.value) ?? null
+                      setSelectedDR(dr)
+                      if (dr) setTxRef(dr.dr_number)
+                    }}
+                    className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 bg-white"
+                  >
+                    <option value="">— Select a delivery record —</option>
+                    {availableDRs.map(dr => (
+                      <option key={dr.dr_number} value={dr.dr_number}>
+                        DR {dr.dr_number} — {dr.dr_date ? new Date(dr.dr_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : ''} ({dr.status})
+                      </option>
+                    ))}
+                  </select>
+                  {selectedDR && selectedDR.items.length > 0 && (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-3 space-y-1.5">
+                      <div className="text-xs font-semibold text-green-700 mb-1">Items in DR {selectedDR.dr_number}:</div>
+                      {selectedDR.items.map((it, idx) => (
+                        <button key={idx} type="button"
+                          onClick={() => { setTxItemName(it.item_name); setTxUnit(it.unit ?? ''); setTxQty(String(it.quantity)); setItemSearch(it.item_name) }}
+                          className="w-full flex items-center justify-between text-xs px-2.5 py-1.5 rounded-lg border border-green-200 bg-white hover:bg-green-50 transition-colors text-left">
+                          <span className="font-medium text-gray-800">{it.item_name}</span>
+                          <span className="text-gray-500">{it.quantity} {it.unit ?? 'pcs'}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
               <ItemPicker />
 
               <div className="grid grid-cols-2 gap-3">
@@ -485,7 +571,13 @@ export default function PortalStockPage() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Department</label>
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Department</label>
+                    <button type="button" onClick={() => setAddDeptOpen(true)}
+                      className="inline-flex items-center gap-1 text-xs text-red-600 hover:text-red-700 font-medium px-2 py-0.5 rounded-md hover:bg-red-50 transition-colors">
+                      <Plus className="h-3 w-3" /> Add
+                    </button>
+                  </div>
                   {departments.length > 0 ? (
                     <select
                       value={txDepartment}
@@ -499,7 +591,7 @@ export default function PortalStockPage() {
                     <input
                       value={txDepartment}
                       onChange={e => setTxDepartment(e.target.value)}
-                      placeholder="Department name"
+                      placeholder="Department name (or click + Add)"
                       className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                     />
                   )}
@@ -507,13 +599,37 @@ export default function PortalStockPage() {
               </>)}
 
               <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Reference No.</label>
-                <input
-                  value={txRef}
-                  onChange={e => setTxRef(e.target.value)}
-                  placeholder="DR No., PO No., etc."
-                  className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-                />
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Reference No.</label>
+                  {availableDRs.length > 0 && (
+                    <div className="flex rounded-md overflow-hidden border border-gray-200 text-xs">
+                      <button type="button" onClick={() => setRefMode('dr')}
+                        className={cn('px-2 py-0.5 font-medium transition-colors', refMode === 'dr' ? 'bg-red-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50')}>
+                        DR
+                      </button>
+                      <button type="button" onClick={() => setRefMode('manual')}
+                        className={cn('px-2 py-0.5 font-medium transition-colors border-l border-gray-200', refMode === 'manual' ? 'bg-red-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50')}>
+                        Manual
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {refMode === 'dr' && availableDRs.length > 0 ? (
+                  <select value={txRef} onChange={e => setTxRef(e.target.value)}
+                    className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 bg-white">
+                    <option value="">— Select DR —</option>
+                    {availableDRs.map(dr => (
+                      <option key={dr.dr_number} value={dr.dr_number}>DR {dr.dr_number} ({dr.dr_date ? new Date(dr.dr_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' }) : ''})</option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    value={txRef}
+                    onChange={e => setTxRef(e.target.value)}
+                    placeholder="DR No., PO No., etc."
+                    className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  />
+                )}
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Notes</label>
@@ -542,6 +658,41 @@ export default function PortalStockPage() {
                 )}>
                 {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
                 {modal === 'receive' ? 'Receive' : modal === 'issue' ? 'Issue' : 'Adjust'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Department modal */}
+      {addDeptOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={e => { if (e.target === e.currentTarget) setAddDeptOpen(false) }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="flex items-center justify-between px-6 py-4 border-b">
+              <h3 className="font-bold text-gray-900">Add Department</h3>
+              <button onClick={() => setAddDeptOpen(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="px-6 py-4 space-y-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Department Name *</label>
+                <input
+                  value={newDeptName}
+                  onChange={e => setNewDeptName(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') addDepartment() }}
+                  placeholder="e.g. Operations, Engineering"
+                  className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                  autoFocus
+                />
+              </div>
+            </div>
+            <div className="px-6 pb-5 flex gap-3 justify-end border-t pt-3">
+              <button onClick={() => setAddDeptOpen(false)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
+              <button onClick={addDepartment} disabled={savingDept || !newDeptName.trim()}
+                className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-5 py-2 rounded-lg disabled:opacity-60">
+                {savingDept && <Loader2 className="h-4 w-4 animate-spin" />}
+                Add Department
               </button>
             </div>
           </div>

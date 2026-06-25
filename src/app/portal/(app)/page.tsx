@@ -10,7 +10,7 @@ import {
   TrendingUp, AlertTriangle, Send, CheckCircle, XCircle,
 } from 'lucide-react'
 import {
-  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
+  AreaChart, Area, BarChart, Bar, Cell,
   XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts'
 
@@ -239,7 +239,7 @@ export default function PortalDashboard() {
           )}
         </div>
 
-        {/* Quotation pie chart */}
+        {/* Quotation bar chart */}
         <div className="bg-white rounded-xl border border-gray-200 p-5">
           <div className="flex items-center justify-between mb-4">
             <div>
@@ -251,27 +251,16 @@ export default function PortalDashboard() {
           {quotePieData.length === 0 ? (
             <div className="flex items-center justify-center h-44 text-gray-300 text-sm">No quotations yet</div>
           ) : (
-            <>
-              <ResponsiveContainer width="100%" height={140}>
-                <PieChart>
-                  <Pie data={quotePieData} cx="50%" cy="50%" innerRadius={40} outerRadius={60} paddingAngle={3} dataKey="value">
-                    {quotePieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                  </Pie>
-                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="space-y-1.5 mt-2">
-                {quotePieData.map(d => (
-                  <div key={d.name} className="flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-1.5">
-                      <div className="h-2.5 w-2.5 rounded-full" style={{ background: d.color }} />
-                      <span className="text-gray-600">{d.name}</span>
-                    </div>
-                    <span className="font-semibold text-gray-800">{d.value}</span>
-                  </div>
-                ))}
-              </div>
-            </>
+            <ResponsiveContainer width="100%" height={160}>
+              <BarChart data={quotePieData} layout="vertical" margin={{ top: 0, right: 20, left: 0, bottom: 0 }}>
+                <XAxis type="number" tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: '#6b7280' }} axisLine={false} tickLine={false} width={60} />
+                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }} />
+                <Bar dataKey="value" radius={[0, 4, 4, 0]} maxBarSize={20}>
+                  {quotePieData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           )}
           <div className="mt-3 pt-3 border-t flex gap-4 text-xs">
             <div>

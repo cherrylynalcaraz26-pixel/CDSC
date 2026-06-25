@@ -119,16 +119,29 @@ export default function SalesOrdersPage() {
     setClients((cliData ?? []) as ClientOption[])
     if (sysData) setCompanyInfo(sysData as SystemSettings)
 
-    // Load delivery summary for all SOs that have an so_number
+    // Load delivery summary — query dr_logs (source of truth) + sales_deliveries
     const soNums = soList.map(s => s.so_number).filter(Boolean) as string[]
     if (soNums.length > 0) {
-      const { data: dvData } = await supabase.from('sales_deliveries').select('so_number,status').in('so_number', soNums)
+      const [{ data: drData }, { data: dvData }] = await Promise.all([
+        supabase.from('dr_logs').select('dr_number,po_number,status').in('po_number', soNums),
+        supabase.from('sales_deliveries').select('so_number,dr_number,status').in('so_number', soNums),
+      ])
       const map: Record<string, { total: number; pending: number; partial: number; delivered: number }> = {}
+      const seenDRs = new Set<string>()
+      for (const d of (drData ?? [])) {
+        if (!d.po_number) continue
+        if (!map[d.po_number]) map[d.po_number] = { total: 0, pending: 0, partial: 0, delivered: 0 }
+        map[d.po_number].total++
+        if (d.status === 'received' || d.status === 'delivered') map[d.po_number].delivered++
+        else if (d.status === 'partial') map[d.po_number].partial++
+        else map[d.po_number].pending++
+        if (d.dr_number) seenDRs.add(d.dr_number)
+      }
       for (const d of (dvData ?? [])) {
-        if (!d.so_number) continue
+        if (!d.so_number || (d.dr_number && seenDRs.has(d.dr_number))) continue
         if (!map[d.so_number]) map[d.so_number] = { total: 0, pending: 0, partial: 0, delivered: 0 }
         map[d.so_number].total++
-        if (d.status === 'delivered') map[d.so_number].delivered++
+        if (d.status === 'delivered' || d.status === 'received') map[d.so_number].delivered++
         else if (d.status === 'partial') map[d.so_number].partial++
         else map[d.so_number].pending++
       }
@@ -355,29 +368,43 @@ export default function SalesOrdersPage() {
   }
 
   async function openViewSO(so: SO) {
-    const [{ data: soItemsData }, { data: sdData }] = await Promise.all([
+    const [{ data: soItemsData }, { data: sdData }, { data: drLogData }] = await Promise.all([
       supabase.from('so_items').select('*').eq('so_id', so.id),
       so.so_number
         ? supabase.from('sales_deliveries').select('delivery_number,delivery_date,dr_number,status,client_name').eq('so_number', so.so_number).order('delivery_date', { ascending: false })
         : Promise.resolve({ data: [] }),
+      so.so_number
+        ? supabase.from('dr_logs').select('dr_number,dr_date,status,client_name').eq('po_number', so.so_number).order('dr_date', { ascending: false })
+        : Promise.resolve({ data: [] }),
     ])
     setViewSOItems((soItemsData ?? []) as SOItem[])
 
+    // Merge dr_logs + sales_deliveries (dr_logs is source of truth)
+    const seenDRs = new Set<string>()
+    const mergedDRs: { dr_number: string; dr_date: string; status: string; client_name: string | null; source: 'dr_logs' | 'sales_deliveries' }[] = []
+    for (const d of (drLogData ?? [])) {
+      if (d.dr_number) seenDRs.add(d.dr_number)
+      mergedDRs.push({ dr_number: d.dr_number, dr_date: d.dr_date, status: d.status, client_name: d.client_name, source: 'dr_logs' })
+    }
+    for (const d of (sdData ?? [])) {
+      if (d.dr_number && seenDRs.has(d.dr_number)) continue
+      mergedDRs.push({ dr_number: d.dr_number ?? d.delivery_number, dr_date: d.delivery_date, status: d.status, client_name: d.client_name, source: 'sales_deliveries' })
+    }
+
     const deliveryNums = (sdData ?? []).map((d: any) => d.delivery_number).filter(Boolean)
+    const drNums = mergedDRs.map(d => d.dr_number).filter(Boolean)
     let deliveries: typeof viewSODeliveries = []
-    if (deliveryNums.length > 0) {
-      const { data: sdItemsData } = await supabase.from('sales_delivery_items').select('*').in('delivery_number', deliveryNums)
-      deliveries = (sdData ?? []).map((d: any) => ({
-        dr_number: d.dr_number ?? d.delivery_number,
-        dr_date: d.delivery_date,
-        status: d.status,
-        client_name: d.client_name,
-        items: (sdItemsData ?? []).filter((i: any) => i.delivery_number === d.delivery_number).map((i: any) => ({
-          item_name: i.item_name,
-          unit: i.unit ?? '',
-          quantity: Number(i.quantity),
-        })),
-      }))
+    if (drNums.length > 0) {
+      const [{ data: sdItemsData }, { data: drItemsData }] = await Promise.all([
+        deliveryNums.length > 0 ? supabase.from('sales_delivery_items').select('*').in('delivery_number', deliveryNums) : Promise.resolve({ data: [] }),
+        supabase.from('dr_log_items').select('*').in('dr_number', drNums),
+      ])
+      deliveries = mergedDRs.map((d) => {
+        const items = d.source === 'dr_logs'
+          ? (drItemsData ?? []).filter((i: any) => i.dr_number === d.dr_number).map((i: any) => ({ item_name: i.item_name, unit: i.unit ?? '', quantity: Number(i.quantity) }))
+          : (sdItemsData ?? []).filter((i: any) => i.delivery_number === d.dr_number).map((i: any) => ({ item_name: i.item_name, unit: i.unit ?? '', quantity: Number(i.quantity) }))
+        return { dr_number: d.dr_number, dr_date: d.dr_date, status: d.status, client_name: d.client_name, items }
+      })
     }
     setViewSODeliveries(deliveries)
     setViewSO(so)

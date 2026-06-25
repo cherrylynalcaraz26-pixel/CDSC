@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { format } from 'date-fns'
 import Link from 'next/link'
-import { Plus, Loader2, FileText, ChevronDown, ChevronUp, Package } from 'lucide-react'
+import { Plus, Loader2, FileText, ChevronDown, ChevronUp, Package, Truck } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useSearchContext } from '@/context/search-context'
 
@@ -29,6 +29,13 @@ interface SalesOrder {
   so_items: SOItem[]
 }
 
+interface Delivery {
+  dr_number: string
+  dr_date: string | null
+  status: string
+  so_number: string | null
+}
+
 const STATUS: Record<string, { label: string; cls: string }> = {
   draft:      { label: 'Pending Review', cls: 'bg-yellow-100 text-yellow-700 border-yellow-200' },
   confirmed:  { label: 'Confirmed',      cls: 'bg-blue-100 text-blue-700 border-blue-200' },
@@ -51,6 +58,7 @@ const FILTERS = [
 export default function PortalRequests() {
   const supabase = createClient()
   const [orders, setOrders] = useState<SalesOrder[]>([])
+  const [deliveries, setDeliveries] = useState<Delivery[]>([])
   const [loading, setLoading] = useState(true)
   const { query: search } = useSearchContext()
   const [filter, setFilter] = useState('')
@@ -68,7 +76,15 @@ export default function PortalRequests() {
           .select('id, so_number, client_po_number, so_date, created_at, status, total_amount, remarks, so_items(id, item_name, quantity, unit, unit_price, total_amount)')
           .eq('client_name', clientRow.company_name)
           .order('created_at', { ascending: false })
-        setOrders((data ?? []) as unknown as SalesOrder[])
+        const soList = (data ?? []) as unknown as SalesOrder[]
+        setOrders(soList)
+        // Load deliveries for these SOs from dr_logs (source of truth)
+        const soNums = soList.map(o => o.so_number).filter(Boolean) as string[]
+        if (soNums.length > 0) {
+          const { data: drData } = await supabase
+            .from('dr_logs').select('dr_number,dr_date,status,po_number').in('po_number', soNums)
+          setDeliveries((drData ?? []).map((d: any) => ({ dr_number: d.dr_number, dr_date: d.dr_date, status: d.status, so_number: d.po_number })))
+        }
       }
       setLoading(false)
     }
@@ -152,6 +168,9 @@ export default function PortalRequests() {
             const date = o.so_date ?? o.created_at
             const isOpen = expanded.has(o.id)
             const hasItems = o.so_items?.length > 0
+            const orderDRs = deliveries.filter(d => d.so_number === o.so_number)
+            const deliveredCount = orderDRs.filter(d => d.status === 'received' || d.status === 'delivered').length
+            const pendingDRs = orderDRs.filter(d => d.status !== 'received' && d.status !== 'delivered')
 
             return (
               <div key={o.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -184,6 +203,12 @@ export default function PortalRequests() {
                             {o.so_items.length} item{o.so_items.length !== 1 ? 's' : ''}
                           </span>
                         )}
+                        {orderDRs.length > 0 && (
+                          <span className={cn('inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium border', pendingDRs.length > 0 ? 'bg-orange-50 text-orange-700 border-orange-200' : 'bg-green-50 text-green-700 border-green-200')}>
+                            <Truck className="h-3 w-3" />
+                            {deliveredCount}/{orderDRs.length} DR{orderDRs.length !== 1 ? 's' : ''} delivered
+                          </span>
+                        )}
                       </div>
                       {o.remarks && (
                         <p className="text-xs text-gray-500 mt-1.5 line-clamp-2">{o.remarks}</p>
@@ -202,6 +227,30 @@ export default function PortalRequests() {
                     )}
                   </div>
                 </div>
+
+                {/* Delivery status section */}
+                {isOpen && orderDRs.length > 0 && (
+                  <div className="border-t border-gray-100 bg-blue-50/40 px-5 py-3">
+                    <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                      <Truck className="h-3 w-3" /> Delivery Records
+                    </div>
+                    <div className="space-y-1.5">
+                      {orderDRs.map(dr => {
+                        const isDelivered = dr.status === 'received' || dr.status === 'delivered'
+                        const isPartial = dr.status === 'partial'
+                        return (
+                          <div key={dr.dr_number} className="flex items-center gap-3 text-xs">
+                            <span className="font-mono font-semibold text-red-600">{dr.dr_number}</span>
+                            <span className="text-gray-400">{dr.dr_date ? format(new Date(dr.dr_date), 'MMM d, yyyy') : '—'}</span>
+                            <span className={cn('px-2 py-0.5 rounded-full font-medium capitalize', isDelivered ? 'bg-green-100 text-green-700' : isPartial ? 'bg-yellow-100 text-yellow-700' : 'bg-orange-100 text-orange-700')}>
+                              {isDelivered ? 'Delivered' : isPartial ? 'Partial' : 'Pending'}
+                            </span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {/* Expandable items */}
                 {isOpen && hasItems && (

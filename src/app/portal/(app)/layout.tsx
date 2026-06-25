@@ -6,7 +6,7 @@ import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
-import { LayoutDashboard, FileText, Package, User, LogOut, Menu, X, Loader2, Boxes, ClipboardList, Search } from 'lucide-react'
+import { LayoutDashboard, FileText, Package, User, LogOut, Menu, X, Loader2, Boxes, ClipboardList, Search, Bell } from 'lucide-react'
 import { SearchProvider, useSearchContext } from '@/context/search-context'
 
 const NAV = [
@@ -28,6 +28,8 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
   const [userName, setUserName] = useState('')
   const [mobileOpen, setMobileOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [notifications, setNotifications] = useState<{ id: string; message: string; read: boolean; time: string }[]>([])
+  const [notifOpen, setNotifOpen] = useState(false)
 
   useEffect(() => {
     async function check() {
@@ -36,8 +38,29 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
       const { data: profile } = await supabase.from('profiles').select('full_name, role').eq('id', session.user.id).single()
       if (profile?.role !== 'client') { await supabase.auth.signOut(); router.replace('/login'); return }
       setUserName(profile?.full_name ?? session.user.email?.split('@')[0] ?? 'Client')
-      const { data: clientRow } = await supabase.from('clients').select('company_name').eq('auth_user_id', session.user.id).single()
+      const { data: clientRow } = await supabase.from('clients').select('id, company_name').eq('auth_user_id', session.user.id).single()
       setClientName(clientRow?.company_name ?? '')
+      if (clientRow) {
+        // Load unread notifications: recent delivered DRs and low stock
+        const companyName = (clientRow as any).company_name ?? ''
+        const cid = (clientRow as any).id
+        if (companyName) {
+          const { data: recentDRs } = await supabase.from('dr_logs').select('dr_number,dr_date,status')
+            .eq('client_name', companyName).in('status', ['received', 'partial'])
+            .order('dr_date', { ascending: false }).limit(5)
+          const { data: lowStock } = await supabase.from('client_inventory').select('item_name,quantity_on_hand,low_stock_threshold')
+            .eq('client_id', cid)
+          const notifs: typeof notifications = []
+          for (const dr of (recentDRs ?? [])) {
+            notifs.push({ id: `dr-${dr.dr_number}`, message: `Delivery DR ${dr.dr_number} has been ${dr.status === 'received' ? 'delivered' : 'partially delivered'}`, read: false, time: dr.dr_date ?? '' })
+          }
+          for (const s of (lowStock ?? [])) {
+            if (s.quantity_on_hand === 0) notifs.push({ id: `oos-${s.item_name}`, message: `${s.item_name} is out of stock`, read: false, time: '' })
+            else if (s.quantity_on_hand <= s.low_stock_threshold) notifs.push({ id: `low-${s.item_name}`, message: `${s.item_name} is low on stock (${s.quantity_on_hand} left)`, read: false, time: '' })
+          }
+          setNotifications(notifs)
+        }
+      }
       setLoading(false)
     }
     check()
@@ -105,8 +128,44 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          {/* Right: user info + sign out */}
+          {/* Right: notifications + user info + sign out */}
           <div className="ml-auto flex items-center gap-3">
+            {/* Notification bell */}
+            <div className="relative">
+              <button onClick={() => setNotifOpen(v => !v)}
+                className="relative p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors">
+                <Bell className="h-5 w-5" />
+                {notifications.filter(n => !n.read).length > 0 && (
+                  <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-600" />
+                )}
+              </button>
+              {notifOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)} />
+                  <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-200 z-50 max-h-96 overflow-y-auto">
+                  <div className="flex items-center justify-between px-4 py-3 border-b">
+                    <span className="text-sm font-semibold text-gray-900">Notifications</span>
+                    {notifications.some(n => !n.read) && (
+                      <button onClick={() => setNotifications(ns => ns.map(n => ({ ...n, read: true })))}
+                        className="text-xs text-red-600 hover:underline">Mark all read</button>
+                    )}
+                  </div>
+                  {notifications.length === 0 ? (
+                    <div className="px-4 py-6 text-center text-sm text-gray-400">No notifications</div>
+                  ) : (
+                    <div className="divide-y divide-gray-100">
+                      {notifications.map(n => (
+                        <div key={n.id} className={cn('px-4 py-3 text-xs', n.read ? 'text-gray-400' : 'text-gray-700 bg-blue-50/40')}>
+                          <div className="font-medium">{n.message}</div>
+                          {n.time && <div className="text-gray-400 mt-0.5">{new Date(n.time).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</div>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  </div>
+                </>
+              )}
+            </div>
             <div className="hidden sm:block text-right">
               <div className="text-xs font-semibold text-gray-900 leading-tight">{clientName || userName}</div>
               {clientName && <div className="text-[10px] text-gray-400 leading-tight">{userName}</div>}
