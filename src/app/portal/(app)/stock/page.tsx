@@ -1046,6 +1046,33 @@ export default function PortalStockPage() {
                 )}
               </div>
             </div>
+            {(() => {
+              const itemTxs = transactions.filter(t => t.item_name === issuedSlip.item_name).slice(0, 8)
+              if (!itemTxs.length) return null
+              return (
+                <div className="px-6 pb-4">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Transaction History</p>
+                  <div className="border border-gray-100 rounded-xl overflow-hidden">
+                    {itemTxs.map((t, idx) => (
+                      <div key={t.id} className={`flex items-center justify-between px-3 py-2 text-xs ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                        <div className="flex items-center gap-2">
+                          <span className={`px-1.5 py-0.5 rounded-full font-medium capitalize ${
+                            t.transaction_type === 'received' ? 'bg-green-100 text-green-700' :
+                            t.transaction_type === 'issued' ? 'bg-orange-100 text-orange-700' :
+                            'bg-blue-100 text-blue-700'
+                          }`}>{t.transaction_type}</span>
+                          {t.issued_to && <span className="text-gray-500 truncate max-w-[80px]">{t.issued_to}</span>}
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className="font-semibold text-gray-800">{t.quantity} {t.unit ?? 'pcs'}</span>
+                          <span className="text-gray-400 ml-2">{format(new Date(t.created_at), 'MMM d')}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )
+            })()}
             <div className="px-6 pb-5 flex gap-3 justify-end border-t pt-3">
               <button
                 onClick={() => {

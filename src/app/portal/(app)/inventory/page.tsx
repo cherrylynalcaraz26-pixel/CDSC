@@ -15,6 +15,7 @@ interface InventoryItem {
   category: string | null
   unit: string | null
   quantity_on_hand: number | null
+  low_stock_threshold: number | null
   unit_price: number | null
   selling_price: number | null
   description: string | null
@@ -51,14 +52,22 @@ export default function PortalInventoryPage() {
       if (session) {
         const { data: clientRow } = await supabase
           .from('clients').select('id, company_name').eq('auth_user_id', session.user.id).single()
-        if (clientRow) { setClientId(clientRow.id); setClientName(clientRow.company_name) }
+        if (clientRow) {
+          setClientId(clientRow.id); setClientName(clientRow.company_name)
+          const { data } = await supabase
+            .from('client_inventory')
+            .select('id, item_name, item_code, unit, quantity_on_hand, low_stock_threshold')
+            .eq('client_id', clientRow.id)
+            .order('item_name')
+          setItems((data ?? []).map((d: any) => ({
+            ...d,
+            category: null,
+            unit_price: null,
+            selling_price: null,
+            description: null,
+          })))
+        }
       }
-      const { data } = await supabase
-        .from('items')
-        .select('id, item_name, item_code, category, unit, quantity_on_hand, unit_price, selling_price, description')
-        .eq('status', 'active')
-        .order('item_name')
-      setItems(data ?? [])
       setLoading(false)
     }
     load()
@@ -162,8 +171,8 @@ export default function PortalInventoryPage() {
   return (
     <div className="space-y-6 pb-32">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Product Catalog</h1>
-        <p className="text-sm text-gray-500 mt-1">Browse available products and add them to your order.</p>
+        <h1 className="text-2xl font-bold text-gray-900">Browse Catalog</h1>
+        <p className="text-sm text-gray-500 mt-1">Your delivered items and on-hand inventory.</p>
       </div>
 
       {/* Stats row */}
@@ -176,10 +185,10 @@ export default function PortalInventoryPage() {
           </div>
         </div>
         <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 flex items-center gap-3">
-          <Tag className="h-5 w-5 text-indigo-500" />
+          <Tag className="h-5 w-5 text-orange-500" />
           <div>
-            <div className="text-xl font-bold text-gray-900">{loading ? '—' : categories.length - 1}</div>
-            <div className="text-xs text-gray-500">Categories</div>
+            <div className="text-xl font-bold text-gray-900">{loading ? '—' : items.filter(i => (i.quantity_on_hand ?? 0) <= (i.low_stock_threshold ?? 0) && (i.quantity_on_hand ?? 0) > 0).length}</div>
+            <div className="text-xs text-gray-500">Low Stock</div>
           </div>
         </div>
         <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 flex items-center gap-3">
@@ -311,16 +320,9 @@ export default function PortalInventoryPage() {
                   <p className="text-xs text-gray-500 line-clamp-2">{item.description}</p>
                 )}
 
-                <div className="flex items-center justify-between mt-auto pt-1">
-                  <div className="flex items-center gap-2">
-                    {item.category && (
-                      <span className="text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-full font-medium">{item.category}</span>
-                    )}
-                  </div>
-                  {price != null && (
-                    <span className="text-sm font-bold text-red-600">
-                      {fmt(price)}{item.unit ? `/${item.unit}` : ''}
-                    </span>
+                <div className="flex items-center gap-2 mt-auto pt-1">
+                  {item.low_stock_threshold != null && (item.quantity_on_hand ?? 0) <= item.low_stock_threshold && (item.quantity_on_hand ?? 0) > 0 && (
+                    <span className="text-xs bg-orange-50 text-orange-600 px-2 py-0.5 rounded-full font-medium">Low Stock</span>
                   )}
                 </div>
 
