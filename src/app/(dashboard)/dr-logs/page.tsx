@@ -300,6 +300,28 @@ export default function DRLogsPage() {
       )
     }
 
+    // Check warehouse stock availability and notify if lacking
+    if (clientName && (form.status === 'received' || form.status === 'partial')) {
+      const stockIssues: string[] = []
+      for (const it of validItems) {
+        const qty = Number(it.quantity) || 0
+        if (qty <= 0) continue
+        const { data: wsRow } = await supabase
+          .from('warehouse_stock')
+          .select('quantity')
+          .eq('item_name', it.item_name.trim())
+          .eq('client_name', clientName)
+          .maybeSingle()
+        const available = wsRow ? Number(wsRow.quantity) : 0
+        if (available < qty) {
+          stockIssues.push(`${it.item_name}: need ${qty} ${it.unit || ''}, available ${available}`)
+        }
+      }
+      if (stockIssues.length > 0) {
+        toast.warning(`⚠ Insufficient / unavailable stock:\n${stockIssues.join('\n')}`, { duration: 8000, description: 'DR was saved but warehouse stock may be insufficient.' })
+      }
+    }
+
     // Mirror to sales_deliveries when linked to an SO
     if (soNumber) {
       await supabase.from('sales_deliveries').delete().eq('dr_number', drNumber)
@@ -468,8 +490,8 @@ export default function DRLogsPage() {
           </SelectContent>
         </Select>
         <Select value={clientFilter || '_all'} onValueChange={(v: string | null) => setClientFilter(!v || v === '_all' ? '' : v)}>
-          <SelectTrigger className="w-48"><SelectValue placeholder="All Clients" /></SelectTrigger>
-          <SelectContent>
+          <SelectTrigger className="min-w-[220px]"><SelectValue placeholder="All Clients" /></SelectTrigger>
+          <SelectContent className="min-w-[300px]">
             <SelectItem value="_all">All Clients</SelectItem>
             {clients.map(c => <SelectItem key={c.id} value={c.company_name}>{c.company_name}</SelectItem>)}
           </SelectContent>
@@ -759,7 +781,7 @@ export default function DRLogsPage() {
                     <Label>Delivered To</Label>
                     <Select value={deliveredToId} onValueChange={handleClientChange}>
                       <SelectTrigger><SelectValue placeholder="Select client / delivered to" /></SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="min-w-[320px]">
                         <SelectItem value="">— None —</SelectItem>
                         {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
                       </SelectContent>

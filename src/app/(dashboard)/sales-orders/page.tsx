@@ -937,7 +937,7 @@ export default function SalesOrdersPage() {
               ) : displayedSOs.map(so => {
                 const sCfg = STATUS_CFG[so.status] ?? STATUS_CFG.draft
                 return (
-                  <TableRow key={so.id}>
+                  <TableRow key={so.id} className="cursor-pointer hover:bg-muted/50" onClick={() => openViewSO(so)}>
                     <TableCell className="font-mono text-xs font-semibold text-red-600">{so.so_number ?? '—'}</TableCell>
                     <TableCell className="text-sm whitespace-nowrap">
                       {(so.so_date ?? so.created_at) ? format(new Date(so.so_date ?? so.created_at), 'MMM d, yyyy') : '—'}
@@ -961,7 +961,7 @@ export default function SalesOrdersPage() {
                         )
                       })()}
                     </TableCell>
-                    <TableCell>
+                    <TableCell onClick={e => e.stopPropagation()}>
                       <DropdownMenu>
                         <DropdownMenuTrigger className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent">
                           <MoreHorizontal className="h-4 w-4" />

@@ -453,61 +453,49 @@ export default function ReceivingPage() {
           </Card>
         </TabsContent>
 
-        {/* ── Sales Deliveries ── */}
+        {/* ── Sales Deliveries (synced from DR Logs) ── */}
         <TabsContent value="sales" className="space-y-6 mt-4">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-lg font-semibold">Sales Deliveries</h3>
-              <p className="text-muted-foreground text-sm">Track outgoing deliveries to clients</p>
+              <p className="text-muted-foreground text-sm">Outgoing deliveries synced from DR Logs — record DRs linked to an SO Reference to appear here</p>
             </div>
-            <Button onClick={() => { resetSalesdForm(); setSalesdOpen(true) }} className="bg-red-600 hover:bg-red-700">
-              <Plus className="h-4 w-4 mr-2" />New Sales Delivery
+            <Button variant="outline" size="sm" onClick={loadSalesDeliveries}>
+              <Loader2 className={`h-3.5 w-3.5 mr-1.5 ${salesdLoading ? 'animate-spin' : 'hidden'}`} />Refresh
             </Button>
           </div>
 
           <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-base flex items-center gap-2"><ShoppingBag className="h-4 w-4" />Sales Delivery Records</CardTitle></CardHeader>
+            <CardHeader className="pb-3"><CardTitle className="text-base flex items-center gap-2"><ShoppingBag className="h-4 w-4" />DR Log → Sales Deliveries</CardTitle></CardHeader>
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Delivery #</TableHead>
-                    <TableHead>Quote Reference</TableHead>
+                    <TableHead>DR Number</TableHead>
+                    <TableHead>SO Reference</TableHead>
                     <TableHead>Client</TableHead>
                     <TableHead>Delivery Date</TableHead>
-                    <TableHead>Delivered By</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="w-10"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {salesdLoading ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
-                  ) : salesDeliveries.filter(d => filterQ(`${d.delivery_number} ${d.quote_number ?? ''} ${d.client_name ?? ''} ${d.status}`)).length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground">No sales deliveries yet. Click <strong>New Sales Delivery</strong> to get started.</TableCell></TableRow>
-                  ) : salesDeliveries.filter(d => filterQ(`${d.delivery_number} ${d.quote_number ?? ''} ${d.client_name ?? ''} ${d.status}`)).map(d => {
-                    const cfg = SALES_STATUS[d.status] ?? SALES_STATUS.pending
+                    <TableRow><TableCell colSpan={6} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
+                  ) : salesDeliveries.filter(d => filterQ(`${d.delivery_number} ${(d as any).dr_number ?? ''} ${(d as any).so_number ?? ''} ${d.client_name ?? ''} ${d.status}`)).length === 0 ? (
+                    <TableRow><TableCell colSpan={6} className="text-center py-10 text-muted-foreground text-sm">No sales deliveries yet. Create a DR Log with an SO Reference to populate this list.</TableCell></TableRow>
+                  ) : salesDeliveries.filter(d => filterQ(`${d.delivery_number} ${(d as any).dr_number ?? ''} ${(d as any).so_number ?? ''} ${d.client_name ?? ''} ${d.status}`)).map(d => {
+                    const sd = d as any
+                    const statusCls = sd.status === 'delivered' ? 'bg-green-100 text-green-700' : sd.status === 'partial' ? 'bg-yellow-100 text-yellow-700' : 'bg-orange-100 text-orange-700'
                     return (
                       <TableRow key={d.id}>
                         <TableCell className="font-mono text-xs font-semibold text-red-600">{d.delivery_number}</TableCell>
-                        <TableCell className="text-xs font-mono">{d.quote_number ?? '—'}</TableCell>
+                        <TableCell className="text-xs font-mono text-muted-foreground">{sd.dr_number ?? '—'}</TableCell>
+                        <TableCell className="text-xs font-mono text-blue-600">{sd.so_number ?? '—'}</TableCell>
                         <TableCell className="text-sm font-medium">{d.client_name ?? '—'}</TableCell>
                         <TableCell className="text-sm">{d.delivery_date}</TableCell>
-                        <TableCell className="text-sm">{d.delivered_by ?? '—'}</TableCell>
                         <TableCell>
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${cfg.cls}`}>{cfg.label}</span>
-                        </TableCell>
-                        <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-accent">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => toast.info(`Delivery: ${d.delivery_number}`)}>View Details</DropdownMenuItem>
-                              {d.status === 'pending' && <DropdownMenuItem onClick={async () => { await supabase.from('sales_deliveries').update({ status: 'in_transit' }).eq('id', d.id); loadSalesDeliveries() }}>Mark In Transit</DropdownMenuItem>}
-                              {d.status === 'in_transit' && <DropdownMenuItem onClick={async () => { await supabase.from('sales_deliveries').update({ status: 'delivered' }).eq('id', d.id); loadSalesDeliveries() }}>Mark Delivered</DropdownMenuItem>}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize ${statusCls}`}>{sd.status}</span>
                         </TableCell>
                       </TableRow>
                     )

@@ -106,6 +106,18 @@ export default function DashboardPage() {
   const [topClients, setTopClients] = useState<TopClient[]>([])
   const [clientLowStock, setClientLowStock] = useState<{ client_name: string; item_name: string; quantity_on_hand: number; low_stock_threshold: number; unit: string | null }[]>([])
   const [clientLowStockOpen, setClientLowStockOpen] = useState(true)
+  const [realtimeTick, setRealtimeTick] = useState(0)
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('dashboard-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dr_logs' }, () => setRealtimeTick(t => t + 1))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'sales_orders' }, () => setRealtimeTick(t => t + 1))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'purchase_orders' }, () => setRealtimeTick(t => t + 1))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'csi_records' }, () => setRealtimeTick(t => t + 1))
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [])
 
   useEffect(() => {
     async function load() {
@@ -272,7 +284,7 @@ export default function DashboardPage() {
       setLoading(false)
     }
     load()
-  }, [])
+  }, [realtimeTick])
 
   // Compute insights for Decision Maker
   const insights: Insight[] = !loading ? (() => {

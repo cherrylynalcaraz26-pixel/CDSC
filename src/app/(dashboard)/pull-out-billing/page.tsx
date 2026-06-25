@@ -236,6 +236,16 @@ export default function PullOutBillingPage() {
     init()
   }, [loadData])
 
+  useEffect(() => {
+    const channel = supabase
+      .channel('pullout-billing-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dr_logs' }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dr_log_items' }, () => loadData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'csi_records' }, () => loadData())
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [])
+
   async function handleRefresh() {
     setRefreshing(true)
     await loadData()
