@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import {
   Plus, MoreHorizontal, Eye, Printer, Trash2, CheckCircle2, XCircle,
   Loader2, X, FileText, Package, Search, Mail, ChevronDown, ChevronUp,
+  Globe, EyeOff,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
@@ -36,6 +37,7 @@ interface SO {
   id: string; so_number: string | null; so_date: string | null; created_at: string
   client_name: string | null; client_po_number: string | null
   status: SOStatus; total_amount: number; remarks: string | null
+  show_in_portal: boolean
 }
 
 interface SOLine { item_name: string; quantity: string; unit: string; unit_price: string; selling_price: string }
@@ -119,7 +121,7 @@ export default function SalesOrdersPage() {
   async function load() {
     setLoading(true)
     const [{ data: soData }, { data: itemData }, { data: cliData }, { data: sysData }] = await Promise.all([
-      supabase.from('sales_orders').select('id,so_number,so_date,created_at,client_name,client_po_number,status,total_amount,remarks').order('created_at', { ascending: false }),
+      supabase.from('sales_orders').select('id,so_number,so_date,created_at,client_name,client_po_number,status,total_amount,remarks,show_in_portal').order('created_at', { ascending: false }),
       supabase.from('items').select('item_code,item_name,unit_of_measure,cost,selling_price').eq('status', 'active').order('item_name'),
       supabase.from('clients').select('id,company_name,payment_terms').eq('status', 'active').order('company_name'),
       supabase.from('system_settings').select('company_name, address, phone, email, tin, logo_url').single(),
@@ -260,6 +262,13 @@ export default function SalesOrdersPage() {
         if (saved) { const { id: _id, so_number: _so, created_at: _ca, ...rest } = saved as any; await supabase.from('sales_orders').insert(rest); load() }
       }},
     })
+  }
+
+  async function togglePortalVisibility(so: SO) {
+    const next = !so.show_in_portal
+    const { error } = await supabase.from('sales_orders').update({ show_in_portal: next }).eq('id', so.id)
+    if (error) toast.error(error.message)
+    else { toast.success(next ? 'Visible in Client Portal' : 'Hidden from Client Portal'); load() }
   }
 
   function buildSOHtml(so: SO, soItems: SOItem[]): string {
@@ -1068,16 +1077,17 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
                 <TableHead className="text-right">Amount</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Delivery</TableHead>
+                <TableHead>Portal</TableHead>
                 <TableHead className="w-10" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-10">
+                <TableRow><TableCell colSpan={9} className="text-center py-10">
                   <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                 </TableCell></TableRow>
               ) : displayedSOs.length === 0 ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
+                <TableRow><TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
                   No sales orders match your search.
                 </TableCell></TableRow>
               ) : displayedSOs.map(so => {
@@ -1107,12 +1117,18 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
                         )
                       })()}
                     </TableCell>
+                    <TableCell>
+                      {so.show_in_portal
+                        ? <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700"><Globe className="h-3 w-3" />Visible</span>
+                        : <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-500"><EyeOff className="h-3 w-3" />Hidden</span>
+                      }
+                    </TableCell>
                     <TableCell onClick={e => e.stopPropagation()}>
                       <DropdownMenu>
                         <DropdownMenuTrigger className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent">
                           <MoreHorizontal className="h-4 w-4" />
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-52">
+                        <DropdownMenuContent align="end" className="w-56">
                           <DropdownMenuItem onClick={() => openViewSO(so)}>
                             <Eye className="mr-2 h-4 w-4" />View SO
                           </DropdownMenuItem>
@@ -1155,6 +1171,13 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
                               <XCircle className="mr-2 h-4 w-4" />Cancel
                             </DropdownMenuItem>
                           )}
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onClick={() => togglePortalVisibility(so)} className={so.show_in_portal ? 'text-orange-600' : 'text-green-600'}>
+                            {so.show_in_portal
+                              ? <><EyeOff className="mr-2 h-4 w-4" />Do not Show in Client Portal</>
+                              : <><Globe className="mr-2 h-4 w-4" />Show in Client Portal</>
+                            }
+                          </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem onClick={() => deleteSO(so.id)} className="text-destructive">
                             <Trash2 className="mr-2 h-4 w-4" />Delete

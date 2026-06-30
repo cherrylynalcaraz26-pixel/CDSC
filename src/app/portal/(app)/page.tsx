@@ -94,7 +94,7 @@ export default function PortalDashboard() {
       if (clientRow) {
         setClientName(clientRow.company_name)
         const [{ data: orderData }, { data: quoteData }, { data: stockData }] = await Promise.all([
-          supabase.from('sales_orders').select('id, so_number, client_po_number, so_date, created_at, status, total_amount').eq('client_name', clientRow.company_name).order('created_at', { ascending: false }),
+          supabase.from('sales_orders').select('id, so_number, client_po_number, so_date, created_at, status, total_amount').eq('client_name', clientRow.company_name).eq('show_in_portal', true).order('created_at', { ascending: false }),
           supabase.from('quotations').select('id, quote_number, quote_date, status, total_amount').eq('client_name', clientRow.company_name).neq('status', 'draft').order('created_at', { ascending: false }),
           supabase.from('client_inventory').select('id, item_name, quantity_on_hand, low_stock_threshold, unit').eq('client_id', clientRow.id).order('item_name'),
         ])
