@@ -123,12 +123,19 @@ export default function PortalStockPage() {
   async function fetchData(cid: string, cname?: string) {
     setLoading(true)
     const companyName = cname ?? clientName
-    const [{ data: stockData }, { data: txData }, { data: deptData }, { data: drData }, { data: drItemsData }] = await Promise.all([
+    // Fetch visible SO numbers for this client (only show_in_portal = true)
+    const { data: visibleSOData } = companyName
+      ? await supabase.from('sales_orders').select('so_number').eq('client_name', companyName).eq('show_in_portal', true)
+      : { data: [] as any[] }
+    const visibleSONumbers = (visibleSOData ?? []).map((s: any) => s.so_number).filter(Boolean) as string[]
+
+    const [{ data: stockData }, { data: txData }, { data: deptData }, { data: drData }] = await Promise.all([
       supabase.from('client_inventory').select('*').eq('client_id', cid).order('item_name'),
       supabase.from('client_inventory_transactions').select('*').eq('client_id', cid).order('created_at', { ascending: false }).limit(100),
       supabase.from('client_departments').select('name').eq('client_id', cid).order('name'),
-      companyName ? supabase.from('dr_logs').select('id,dr_number,dr_date,status,po_number').eq('supplier_name', companyName).in('status', ['received', 'partial']).order('dr_date', { ascending: false }).limit(50) : Promise.resolve({ data: [] }),
-      Promise.resolve({ data: [] as any[] }),
+      companyName && visibleSONumbers.length > 0
+        ? supabase.from('dr_logs').select('id,dr_number,dr_date,status,po_number').eq('supplier_name', companyName).in('status', ['received', 'partial']).in('po_number', visibleSONumbers).order('dr_date', { ascending: false }).limit(50)
+        : Promise.resolve({ data: [] as any[] }),
     ])
     setStock(stockData ?? [])
     setTransactions(txData ?? [])
@@ -139,6 +146,7 @@ export default function PortalStockPage() {
       const { data: drItemsFetch } = await supabase.from('dr_log_items').select('dr_number,item_name,unit,quantity').in('dr_number', drNums)
       drItemsFetched = drItemsFetch ?? []
     }
+
     const drs: DRRow[] = (drData ?? []).map((d: any) => ({
       id: d.id, dr_number: d.dr_number, dr_date: d.dr_date, status: d.status, po_number: d.po_number ?? null,
       items: drItemsFetched.filter((i: any) => i.dr_number === d.dr_number).map((i: any) => ({ item_name: i.item_name, unit: i.unit ?? null, quantity: Number(i.quantity) })),
