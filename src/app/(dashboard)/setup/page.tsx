@@ -1355,6 +1355,87 @@ function ItemListTab() {
   )
 }
 
+/* ─── Portal Settings ─────────────────────────────────── */
+function PortalTab() {
+  const supabase = createClient()
+  const [portalUrl, setPortalUrl] = useState('')
+  const [portalStatus, setPortalStatus] = useState('active')
+  const [saving, setSaving] = useState(false)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function load() {
+      const { data } = await supabase
+        .from('company_settings')
+        .select('portal_url, portal_status')
+        .limit(1)
+        .single()
+      if (data) {
+        setPortalUrl((data as any).portal_url ?? '')
+        setPortalStatus((data as any).portal_status ?? 'active')
+      }
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  async function save() {
+    setSaving(true)
+    const { error } = await supabase
+      .from('company_settings')
+      .update({ portal_url: portalUrl || null, portal_status: portalStatus } as any)
+      .not('id', 'is', null)
+    if (error) toast.error(error.message)
+    else toast.success('Portal settings saved')
+    setSaving(false)
+  }
+
+  if (loading) return <div className="py-8 text-center text-muted-foreground text-sm">Loading…</div>
+
+  return (
+    <div className="space-y-6 max-w-lg">
+      <div className="rounded-lg border bg-card p-5 space-y-4">
+        <h3 className="text-sm font-semibold">Client Portal Configuration</h3>
+        <div className="space-y-1.5">
+          <Label>Portal URL</Label>
+          <Input
+            placeholder="e.g. https://yoursite.com/portal"
+            value={portalUrl}
+            onChange={e => setPortalUrl(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">The URL where clients access the portal. Share this with your clients.</p>
+        </div>
+        <div className="space-y-1.5">
+          <Label>Portal Status</Label>
+          <Select value={portalStatus} onValueChange={v => setPortalStatus(v ?? 'active')}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="active">Active — clients can log in</SelectItem>
+              <SelectItem value="maintenance">Maintenance — temporarily offline</SelectItem>
+              <SelectItem value="disabled">Disabled — portal closed</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        {portalUrl && (
+          <div className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">
+            Current portal link:{' '}
+            <a href={portalUrl} target="_blank" rel="noopener noreferrer" className="text-red-600 hover:underline break-all">
+              {portalUrl}
+            </a>
+          </div>
+        )}
+      </div>
+      <div className="flex justify-end">
+        <Button onClick={save} disabled={saving} className="bg-red-600 hover:bg-red-700">
+          {saving ? 'Saving…' : 'Save Portal Settings'}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
 /* ─── Page ────────────────────────────────────────────── */
 const CONFIG_TABS = [
   { key: 'suppliers',  label: 'Suppliers' },
@@ -1364,6 +1445,7 @@ const CONFIG_TABS = [
   { key: 'uom',        label: 'Units of Measure' },
   { key: 'brands',     label: 'Brands' },
   { key: 'attributes', label: 'Attributes' },
+  { key: 'portal',     label: 'Portal Settings' },
 ]
 
 export default function SetupPage() {
@@ -1437,6 +1519,7 @@ export default function SetupPage() {
           {active === 'uom'        && <UOMTab />}
           {active === 'brands'     && <BrandsTab />}
           {active === 'attributes' && <AttributesTab />}
+          {active === 'portal'     && <PortalTab />}
         </div>
       </div>
     </div>

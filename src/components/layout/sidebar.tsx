@@ -199,12 +199,12 @@ function SidebarContent({
     <div className="flex flex-col h-full bg-[#111111]">
       <div className={cn('py-4 flex items-center gap-3 transition-all', collapsed ? 'px-3 justify-center' : 'px-4')}>
         {collapsed ? (
-          <button onClick={onToggleCollapse} title="Expand sidebar" className="relative h-8 w-8 shrink-0 rounded-md overflow-hidden">
+          <button onClick={onToggleCollapse} title="Expand sidebar" className="relative h-8 w-8 shrink-0 rounded-md overflow-hidden bg-white">
             <Image src={logoSrc} alt={displayName} fill className="object-cover" priority />
           </button>
         ) : (
           <>
-            <div className="relative h-8 w-8 shrink-0 rounded-md overflow-hidden">
+            <div className="relative h-8 w-8 shrink-0 rounded-md overflow-hidden bg-white">
               <Image src={logoSrc} alt={displayName} fill className="object-cover" priority />
             </div>
             <div className="min-w-0 flex-1">
@@ -271,6 +271,40 @@ export function Sidebar() {
     >
       <SidebarContent collapsed={collapsed} onToggleCollapse={toggle} />
     </aside>
+  )
+}
+
+const BOTTOM_NAV: NavItem[] = [
+  { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { label: 'CRM', href: '/crm', icon: TrendingUp },
+  { label: 'Warehouse', href: '/inventory', icon: Warehouse },
+  { label: 'Accounting', href: '/accounting', icon: Calculator },
+  { label: 'Setup', href: '/setup', icon: Wrench },
+]
+
+export function MobileBottomNav() {
+  const pathname = usePathname()
+  return (
+    <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-[#111111] border-t border-white/10 flex items-center justify-around h-16 px-2">
+      {BOTTOM_NAV.map(item => {
+        const active = item.href === '/dashboard'
+          ? pathname === item.href
+          : pathname.startsWith(item.href!)
+        return (
+          <Link
+            key={item.label}
+            href={item.href!}
+            className={cn(
+              'flex flex-col items-center gap-1 flex-1 py-2 rounded-lg transition-colors',
+              active ? 'text-red-400' : 'text-white/40 hover:text-white/70',
+            )}
+          >
+            <item.icon className="h-5 w-5" />
+            <span className="text-[10px] leading-tight">{item.label}</span>
+          </Link>
+        )
+      })}
+    </nav>
   )
 }
 

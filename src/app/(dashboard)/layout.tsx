@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Sidebar, MobileSidebar } from '@/components/layout/sidebar'
+import { Sidebar, MobileSidebar, MobileBottomNav } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { SearchProvider } from '@/context/search-context'
 import { CompanyProvider } from '@/context/company-context'
@@ -20,11 +20,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
           <Header onMenuClick={() => setMobileOpen(true)} />
-          <main className="flex-1 overflow-y-auto p-4 md:p-6">
+          <main className="flex-1 overflow-y-auto p-4 md:p-6 pb-20 lg:pb-6">
             {children}
           </main>
         </div>
       </div>
+        <MobileBottomNav />
     </SearchProvider></CompanyProvider>
   )
 }
