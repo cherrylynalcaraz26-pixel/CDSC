@@ -580,7 +580,7 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
       const fakeSO: SO = {
         id: '', so_number: soNumber || null, so_date: soDate, created_at: new Date().toISOString(),
         client_name: selectedClient?.company_name ?? null, client_po_number: clientPONumber || null,
-        status: 'draft', total_amount: subtotal, remarks: remarks || null,
+        status: 'draft', total_amount: subtotal, remarks: remarks || null, show_in_portal: false,
       }
       const fakeItems: SOItem[] = lines.filter(l => l.item_name).map((l, i) => ({
         id: String(i), item_name: l.item_name, quantity: parseFloat(l.quantity) || 1,
