@@ -91,6 +91,7 @@ export default function PortalRequests() {
           .from('sales_orders')
           .select('id, so_number, client_po_number, so_date, created_at, status, total_amount, remarks, so_items(id, item_name, quantity, unit, unit_price, selling_price, total_amount)')
           .eq('client_name', clientRow.company_name)
+          .eq('show_in_portal', true)
           .order('created_at', { ascending: false })
         const soList = (data ?? []) as unknown as SalesOrder[]
         setOrders(soList)
