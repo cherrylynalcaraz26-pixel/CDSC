@@ -97,11 +97,13 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
             <Menu className="h-5 w-5" />
           </button>
 
-          {/* Desktop sidebar toggle */}
-          <button className="hidden md:flex p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors shrink-0"
-            onClick={() => setSidebarOpen(v => !v)}>
-            <Menu className="h-5 w-5" />
-          </button>
+          {/* Desktop sidebar toggle — hidden when sidebar is open */}
+          {!sidebarOpen && (
+            <button className="hidden md:flex p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors shrink-0"
+              onClick={() => setSidebarOpen(v => !v)}>
+              <Menu className="h-5 w-5" />
+            </button>
+          )}
 
           {/* Logo — always visible, sidebar width on desktop */}
           <Link href="/portal" className="flex items-center gap-2.5 shrink-0 md:w-56">

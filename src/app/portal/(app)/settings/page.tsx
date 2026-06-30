@@ -3,9 +3,9 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
-import { Loader2, Save, Eye, EyeOff, User, Lock, Building2, Tag, Plus, Trash2 } from 'lucide-react'
+import { Loader2, Save, Eye, EyeOff, User, Lock, Building2, Tag, Plus, Trash2, FileCheck2, CheckCircle2, AlertCircle } from 'lucide-react'
 
-type Tab = 'account' | 'department' | 'password'
+type Tab = 'account' | 'bir' | 'department' | 'password'
 
 export default function PortalSettingsPage() {
   const supabase = createClient()
@@ -22,6 +22,9 @@ export default function PortalSettingsPage() {
   const [userId, setUserId] = useState('')
   const [clientId, setClientId] = useState('')
   const [tab, setTab] = useState<Tab>('account')
+  const [tin, setTin] = useState('')
+  const [vatType, setVatType] = useState('')
+  const [businessType, setBusinessType] = useState('')
 
   // Departments
   const [departments, setDepartments] = useState<{ id: string; name: string }[]>([])
@@ -36,8 +39,11 @@ export default function PortalSettingsPage() {
       setUserId(session.user.id)
       const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', session.user.id).single()
       setFullName(profile?.full_name ?? '')
-      const { data: clientRow } = await supabase.from('clients').select('id, company_name').eq('auth_user_id', session.user.id).single()
+      const { data: clientRow } = await supabase.from('clients').select('id, company_name, tin, vat_type, business_type').eq('auth_user_id', session.user.id).single()
       setCompanyName(clientRow?.company_name ?? '')
+      setTin((clientRow as any)?.tin ?? '')
+      setVatType((clientRow as any)?.vat_type ?? '')
+      setBusinessType((clientRow as any)?.business_type ?? '')
       if (clientRow?.id) {
         setClientId(clientRow.id)
         const { data: deptData } = await supabase.from('client_departments').select('id, name').eq('client_id', clientRow.id).order('name')
@@ -107,8 +113,11 @@ export default function PortalSettingsPage() {
 
   const initials = (companyName || fullName).split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'C'
 
+  const birReady = !!tin.trim()
+
   const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
     { key: 'account',    label: 'Account',         icon: <User className="h-4 w-4" /> },
+    { key: 'bir',        label: 'BIR Info',         icon: <FileCheck2 className="h-4 w-4" /> },
     { key: 'department', label: 'Department',       icon: <Tag className="h-4 w-4" /> },
     { key: 'password',   label: 'Change Password',  icon: <Lock className="h-4 w-4" /> },
   ]
@@ -196,6 +205,59 @@ export default function PortalSettingsPage() {
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             Save Profile
           </button>
+        </div>
+      )}
+
+      {/* BIR Info tab */}
+      {tab === 'bir' && (
+        <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <FileCheck2 className="h-4 w-4 text-gray-400" />
+              <span className="text-sm font-semibold text-gray-700">BIR Information</span>
+            </div>
+            {birReady ? (
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full bg-green-100 text-green-700 border border-green-200">
+                <CheckCircle2 className="h-3.5 w-3.5" /> BIR Ready
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full bg-amber-100 text-amber-700 border border-amber-200">
+                <AlertCircle className="h-3.5 w-3.5" /> Incomplete
+              </span>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-gray-700">TIN (Tax Identification Number)</label>
+            <input
+              value={tin}
+              disabled
+              placeholder="Not provided"
+              className="w-full h-10 px-3 rounded-lg border border-gray-200 text-sm bg-gray-50 text-gray-700 cursor-not-allowed"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-gray-700">VAT Registration</label>
+            <input
+              value={vatType === 'vat' ? 'VAT Registered' : vatType === 'vat_exempt' ? 'VAT Exempt' : vatType === 'non_vat' ? 'Non-VAT' : vatType || '—'}
+              disabled
+              className="w-full h-10 px-3 rounded-lg border border-gray-200 text-sm bg-gray-50 text-gray-700 cursor-not-allowed"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-gray-700">Business Type</label>
+            <input
+              value={businessType || '—'}
+              disabled
+              className="w-full h-10 px-3 rounded-lg border border-gray-200 text-sm bg-gray-50 text-gray-700 cursor-not-allowed"
+            />
+          </div>
+
+          <p className="text-xs text-gray-400">
+            BIR information is managed by CDSC. Contact us if any details need to be updated.
+          </p>
         </div>
       )}
 
