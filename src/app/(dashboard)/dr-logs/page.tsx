@@ -103,6 +103,7 @@ export default function DRLogsPage() {
   const [saving, setSaving] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<'by-dr' | 'all-items'>('by-dr')
+  const [itemFilter, setItemFilter] = useState('')
   const [drActiveTab, setDrActiveTab] = useState<'form' | 'preview'>('form')
   const [companyInfo, setCompanyInfo] = useState<{ company_name: string; address: string; phone: string; email: string; tin: string } | null>(null)
   const [itemSearches, setItemSearches] = useState<Record<number, string>>({})
@@ -268,7 +269,10 @@ export default function DRLogsPage() {
     const matchStatus = statusFilter === 'all' || l.status === statusFilter
     const matchClient = !clientFilter || (l.supplier_name ?? '') === clientFilter
     const matchDR = !drFilter || l.dr_number.toLowerCase().includes(drFilter.toLowerCase())
-    return matchSearch && matchStatus && matchClient && matchDR
+    const matchItem = !itemFilter || getItems(l.dr_number).some(it =>
+      it.item_name.toLowerCase().includes(itemFilter.toLowerCase())
+    )
+    return matchSearch && matchStatus && matchClient && matchDR && matchItem
   })
 
   function toggleExpand(id: string) {
@@ -564,6 +568,20 @@ export default function DRLogsPage() {
           </datalist>
           {drFilter && (
             <button onClick={() => setDrFilter('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+          <input
+            value={itemFilter}
+            onChange={e => setItemFilter(e.target.value)}
+            placeholder="Search line item…"
+            className="h-9 pl-8 pr-8 text-sm border rounded-md bg-background w-52 focus:outline-none focus:ring-2 focus:ring-red-500"
+          />
+          {itemFilter && (
+            <button onClick={() => setItemFilter('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
               <X className="h-3.5 w-3.5" />
             </button>
           )}

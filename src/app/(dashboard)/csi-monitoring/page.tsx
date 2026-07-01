@@ -76,6 +76,7 @@ export default function CSIMonitoringPage() {
   const [open, setOpen] = useState(false)
   const [editingSiNumber, setEditingSiNumber] = useState<string | null>(null)
   const [siFilter, setSiFilter] = useState('')
+  const [itemFilter, setItemFilter] = useState('')
   const [header, setHeader] = useState(emptyHeader())
   const [items, setItems] = useState<CSIItem[]>([emptyItem()])
   const [saving, setSaving] = useState(false)
@@ -242,7 +243,8 @@ export default function CSIMonitoringPage() {
       (r.dr_number ?? '').toLowerCase().includes(q)
     )
     const matchSI = !siFilter || r.si_number.toLowerCase().includes(siFilter.toLowerCase())
-    return matchSearch && matchSI
+    const matchItem = !itemFilter || r.item_name.toLowerCase().includes(itemFilter.toLowerCase())
+    return matchSearch && matchSI && matchItem
   })
 
   const totalAmount = filtered.reduce((s, r) => s + (Number(r.amount) || 0), 0)
@@ -643,6 +645,20 @@ export default function CSIMonitoringPage() {
           </datalist>
           {siFilter && (
             <button onClick={() => setSiFilter('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+              <X className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+          <input
+            value={itemFilter}
+            onChange={e => setItemFilter(e.target.value)}
+            placeholder="Search line item…"
+            className="h-9 pl-8 pr-8 text-sm border rounded-md bg-background w-52 focus:outline-none focus:ring-2 focus:ring-red-500"
+          />
+          {itemFilter && (
+            <button onClick={() => setItemFilter('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
               <X className="h-3.5 w-3.5" />
             </button>
           )}
