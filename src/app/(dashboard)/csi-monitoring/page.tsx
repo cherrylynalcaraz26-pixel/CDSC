@@ -651,113 +651,74 @@ export default function CSIMonitoringPage() {
         const maxSI = Math.max(...clientStats.map(c => c.siCount), 1)
         const maxItems = Math.max(...clientStats.map(c => c.lineItems), 1)
 
-        const BAR_H = 140
-        const BAR_W = Math.max(28, Math.min(56, Math.floor(520 / clientStats.length) - 12))
-        const GAP = Math.max(8, Math.min(16, Math.floor(80 / clientStats.length)))
-        const svgW = clientStats.length * (BAR_W + GAP)
-
         const PALETTE = ['#dc2626','#2563eb','#16a34a','#d97706','#7c3aed','#0891b2','#be185d','#65a30d']
+        const grandTotal = clientStats.reduce((s, c) => s + c.totalAmount, 0)
 
         return (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {/* SVG Column Chart — Total Amount */}
-            <Card className="lg:col-span-2">
-              <CardHeader className="pb-1 pt-4 px-5">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+            {/* Horizontal bar chart — Revenue */}
+            <Card className="lg:col-span-3">
+              <CardHeader className="pb-2 pt-4 px-5">
                 <CardTitle className="text-sm font-semibold">Revenue by Client</CardTitle>
                 <p className="text-xs text-muted-foreground">Total invoiced amount per client</p>
               </CardHeader>
-              <CardContent className="px-5 pb-5">
-                <div className="overflow-x-auto">
-                  <svg width={Math.max(svgW + 48, 300)} height={BAR_H + 56} className="block">
-                    {/* Y-axis gridlines */}
-                    {[0, 0.25, 0.5, 0.75, 1].map(t => (
-                      <g key={t}>
-                        <line x1={40} y1={BAR_H * (1 - t)} x2={svgW + 40} y2={BAR_H * (1 - t)}
-                          stroke="#e5e7eb" strokeWidth={1} strokeDasharray={t === 0 ? '0' : '4 3'} />
-                        <text x={36} y={BAR_H * (1 - t) + 4} textAnchor="end" fontSize={9} fill="#9ca3af">
-                          {t === 0 ? '₱0' : `₱${(maxAmount * t).toLocaleString('en-PH', { maximumFractionDigits: 0 })}`}
-                        </text>
-                      </g>
-                    ))}
-                    {/* Bars */}
-                    {clientStats.map((c, i) => {
-                      const barH = Math.max(4, (c.totalAmount / maxAmount) * BAR_H)
-                      const x = 40 + i * (BAR_W + GAP)
-                      const color = PALETTE[i % PALETTE.length]
-                      return (
-                        <g key={c.name}>
-                          <rect x={x} y={BAR_H - barH} width={BAR_W} height={barH} rx={4} fill={color} opacity={0.85} />
-                          <text x={x + BAR_W / 2} y={BAR_H - barH - 5} textAnchor="middle" fontSize={9} fontWeight="600" fill={color}>
-                            {formatPeso(c.totalAmount)}
-                          </text>
-                          <text x={x + BAR_W / 2} y={BAR_H + 14} textAnchor="middle" fontSize={9} fill="#6b7280"
-                            className="pointer-events-none">
-                            {c.name.length > 10 ? c.name.slice(0, 9) + '…' : c.name}
-                          </text>
-                        </g>
-                      )
-                    })}
-                  </svg>
-                </div>
+              <CardContent className="px-5 pb-5 space-y-3">
+                {clientStats.map((c, i) => {
+                  const color = PALETTE[i % PALETTE.length]
+                  const pct = (c.totalAmount / maxAmount) * 100
+                  return (
+                    <div key={c.name} className="space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ background: color }} />
+                          <span className="text-xs font-medium truncate" title={c.name}>{c.name}</span>
+                        </div>
+                        <span className="text-xs font-bold tabular-nums shrink-0" style={{ color }}>{formatPeso(c.totalAmount)}</span>
+                      </div>
+                      <div className="h-5 bg-muted rounded-md overflow-hidden">
+                        <div
+                          className="h-full rounded-md flex items-center justify-end pr-2 transition-all"
+                          style={{ width: `${Math.max(pct, 2)}%`, background: color, opacity: 0.85 }}
+                        >
+                          {pct > 15 && <span className="text-[10px] text-white font-semibold">{pct.toFixed(1)}%</span>}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
               </CardContent>
             </Card>
 
-            {/* Leaderboard card */}
-            <Card>
+            {/* Stats panel */}
+            <Card className="lg:col-span-2">
               <CardHeader className="pb-2 pt-4 px-5">
-                <CardTitle className="text-sm font-semibold">Client Summary</CardTitle>
-                <p className="text-xs text-muted-foreground">Ranked by total revenue</p>
+                <CardTitle className="text-sm font-semibold">Client Breakdown</CardTitle>
+                <p className="text-xs text-muted-foreground">SI invoices &amp; line items</p>
               </CardHeader>
-              <CardContent className="px-5 pb-4 space-y-3">
+              <CardContent className="px-5 pb-5 space-y-0 divide-y">
                 {clientStats.map((c, i) => {
                   const color = PALETTE[i % PALETTE.length]
+                  const share = grandTotal > 0 ? ((c.totalAmount / grandTotal) * 100).toFixed(1) : '0.0'
                   return (
-                    <div key={c.name} className="flex items-center gap-3">
-                      <div className="h-7 w-7 rounded-full flex items-center justify-center text-white text-[11px] font-bold shrink-0"
+                    <div key={c.name} className="py-3 flex items-center gap-3">
+                      <div className="h-8 w-8 rounded-lg flex items-center justify-center text-white text-xs font-bold shrink-0"
                         style={{ background: color }}>
                         {i + 1}
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="text-xs font-semibold truncate" title={c.name}>{c.name}</div>
-                        <div className="flex items-center gap-2 mt-0.5">
+                        <div className="flex items-center gap-3 mt-0.5">
                           <span className="text-[10px] text-muted-foreground">{c.siCount} SI</span>
-                          <span className="text-[10px] text-muted-foreground">·</span>
                           <span className="text-[10px] text-muted-foreground">{c.lineItems} items</span>
+                          <span className="text-[10px] font-semibold" style={{ color }}>{share}%</span>
                         </div>
-                        <div className="mt-1 h-1.5 rounded-full overflow-hidden bg-muted">
-                          <div className="h-full rounded-full" style={{ width: `${(c.totalAmount / maxAmount) * 100}%`, background: color }} />
-                        </div>
-                      </div>
-                      <div className="text-xs font-bold tabular-nums shrink-0" style={{ color }}>
-                        {formatPeso(c.totalAmount)}
                       </div>
                     </div>
                   )
                 })}
-
-                {/* Mini SI vs Items comparison */}
-                <div className="pt-2 border-t space-y-2">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">SI vs Line Items</p>
-                  {clientStats.map((c, i) => {
-                    const color = PALETTE[i % PALETTE.length]
-                    return (
-                      <div key={c.name} className="flex items-center gap-2 text-[10px]">
-                        <span className="w-16 truncate text-muted-foreground" title={c.name}>{c.name.length > 8 ? c.name.slice(0, 7) + '…' : c.name}</span>
-                        <div className="flex-1 flex items-center gap-1">
-                          <div className="h-2 rounded-sm" style={{ width: `${(c.siCount / maxSI) * 40}px`, background: color, opacity: 0.7, minWidth: 3 }} />
-                          <span className="text-muted-foreground">{c.siCount}</span>
-                        </div>
-                        <div className="flex-1 flex items-center gap-1">
-                          <div className="h-2 rounded-sm bg-gray-300" style={{ width: `${(c.lineItems / maxItems) * 40}px`, minWidth: 3 }} />
-                          <span className="text-muted-foreground">{c.lineItems}</span>
-                        </div>
-                      </div>
-                    )
-                  })}
-                  <div className="flex gap-4 pt-1">
-                    <div className="flex items-center gap-1.5"><div className="h-2 w-4 rounded-sm bg-red-500 opacity-70" /><span className="text-[10px] text-muted-foreground">SI Count</span></div>
-                    <div className="flex items-center gap-1.5"><div className="h-2 w-4 rounded-sm bg-gray-300" /><span className="text-[10px] text-muted-foreground">Line Items</span></div>
-                  </div>
+                <div className="pt-3 flex justify-between items-center">
+                  <span className="text-xs text-muted-foreground font-semibold">Grand Total</span>
+                  <span className="text-sm font-bold text-red-600">{formatPeso(grandTotal)}</span>
                 </div>
               </CardContent>
             </Card>
