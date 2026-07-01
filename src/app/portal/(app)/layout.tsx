@@ -180,12 +180,12 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
         <div className={cn('py-4 flex items-center gap-3 transition-all', collapsed ? 'px-3 justify-center' : 'px-4')}>
           {collapsed ? (
             <button onClick={toggleCollapsed} title="Expand sidebar"
-              className="relative h-8 w-8 shrink-0 rounded-md overflow-hidden bg-white">
+              className="relative h-8 w-8 shrink-0 rounded-md overflow-hidden">
               <Image src="/cdsc-logo.jpg" alt="CDSC Industrial Supply" fill className="object-cover" priority />
             </button>
           ) : (
             <>
-              <div className="relative h-8 w-8 shrink-0 rounded-md overflow-hidden bg-white">
+              <div className="relative h-8 w-8 shrink-0 rounded-md overflow-hidden">
                 <Image src="/cdsc-logo.jpg" alt="CDSC Industrial Supply" fill className="object-cover" priority />
               </div>
               <div className="min-w-0 flex-1">
@@ -225,7 +225,7 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
         mobileOpen ? 'translate-x-0' : '-translate-x-full'
       )}>
         <div className="py-4 px-4 flex items-center gap-3 border-b border-white/8">
-          <div className="relative h-8 w-8 shrink-0 rounded-md overflow-hidden bg-white">
+          <div className="relative h-8 w-8 shrink-0 rounded-md overflow-hidden">
             <Image src="/cdsc-logo.jpg" alt="CDSC Industrial Supply" fill className="object-cover" priority />
           </div>
           <div className="min-w-0 flex-1">
