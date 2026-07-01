@@ -1188,7 +1188,7 @@ export default function InventoryPage() {
             <span className="font-semibold text-sm text-gray-800">Inventory Report</span>
             <div className="w-px h-5 bg-gray-300 mx-1" />
             <label className="text-sm text-gray-500 shrink-0">Client:</label>
-            <Select value={reportClient} onValueChange={setReportClient}>
+            <Select value={reportClient} onValueChange={v => setReportClient(v ?? '')}>
               <SelectTrigger className="w-56 h-8 text-sm">
                 <SelectValue placeholder="Select client" />
               </SelectTrigger>
