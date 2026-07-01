@@ -12,7 +12,7 @@ import {
   FileBarChart, Settings, ChevronDown, ChevronRight, Building2,
   SlidersHorizontal, ArrowRightLeft, LogOut, X, Wrench,
   Receipt, PanelLeftClose, PanelLeftOpen, ClipboardList, BoxesIcon,
-  TrendingUp, MessageSquare,
+  TrendingUp, MessageSquare, Globe,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useCompany } from '@/context/company-context'
@@ -231,7 +231,20 @@ function SidebarContent({
         ))}
       </nav>
 
-      <div className={cn('p-3 border-t border-white/8', collapsed && 'flex flex-col items-center')}>
+      <div className={cn('p-3 border-t border-white/8 space-y-1', collapsed && 'flex flex-col items-center space-y-1')}>
+        <a
+          href="https://cdscindustrialsupply.netlify.app"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Visit Website"
+          className={cn(
+            'flex items-center gap-2.5 rounded-md text-[13px] font-medium text-white/40 hover:text-blue-400 hover:bg-white/10 transition-colors',
+            collapsed ? 'h-9 w-9 justify-center' : 'w-full px-3 py-2',
+          )}
+        >
+          <Globe className="h-[15px] w-[15px] shrink-0" />
+          {!collapsed && <span>Visit Website</span>}
+        </a>
         <button
           onClick={handleSignOut}
           title="Sign Out"

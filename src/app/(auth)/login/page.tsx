@@ -109,9 +109,20 @@ export default function LoginPage() {
           </form>
         </div>
 
-        <p className="text-center text-white/20 text-xs mt-6">
-          Authorized users only · © {new Date().getFullYear()} CDSC Industrial Supply
-        </p>
+        <div className="text-center mt-6 space-y-1.5">
+          <a
+            href="https://cdscindustrialsupply.netlify.app"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-xs text-white/30 hover:text-white/60 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            cdscindustrialsupply.netlify.app
+          </a>
+          <p className="text-white/20 text-xs">
+            Authorized users only · © {new Date().getFullYear()} CDSC Industrial Supply
+          </p>
+        </div>
       </div>
     </div>
   )
