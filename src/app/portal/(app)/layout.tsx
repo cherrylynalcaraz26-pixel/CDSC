@@ -201,16 +201,20 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
           {collapsed ? (
             <button onClick={toggleCollapsed} title="Expand sidebar"
               className="h-10 w-10 shrink-0 rounded-lg overflow-hidden bg-white flex items-center justify-center">
-              {clientLogoUrl
-                ? <img src={clientLogoUrl} alt={clientName} className="h-full w-full object-contain p-1" />
-                : <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="object-contain p-1" priority />}
+              <img
+                src={clientLogoUrl || '/cdsc-logo.jpg'}
+                alt={clientName || 'CDSC'}
+                className="h-full w-full object-contain p-1"
+              />
             </button>
           ) : (
             <>
               <div className="h-10 w-10 shrink-0 rounded-lg overflow-hidden bg-white flex items-center justify-center">
-                {clientLogoUrl
-                  ? <img src={clientLogoUrl} alt={clientName} className="h-full w-full object-contain p-1" />
-                  : <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="object-contain p-1" priority />}
+                <img
+                  src={clientLogoUrl || '/cdsc-logo.jpg'}
+                  alt={clientName || 'CDSC'}
+                  className="h-full w-full object-contain p-1"
+                />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="text-white font-semibold text-sm leading-tight truncate">{clientName || 'Client Portal'}</div>
@@ -250,9 +254,11 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
       )}>
         <div className="py-4 px-4 flex items-center gap-3 border-b border-white/8">
           <div className="h-10 w-10 shrink-0 rounded-lg overflow-hidden bg-white flex items-center justify-center">
-            {clientLogoUrl
-              ? <img src={clientLogoUrl} alt={clientName} className="h-full w-full object-contain p-1" />
-              : <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="object-contain p-1" priority />}
+            <img
+              src={clientLogoUrl || '/cdsc-logo.jpg'}
+              alt={clientName || 'CDSC'}
+              className="h-full w-full object-contain p-1"
+            />
           </div>
           <div className="min-w-0 flex-1">
             <div className="text-white font-semibold text-sm leading-tight truncate">{clientName || 'Client Portal'}</div>
@@ -300,10 +306,10 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
               </button>
               {collapsed && (
                 <div className="hidden lg:flex items-center gap-2">
-                  <div className="relative h-7 w-7 shrink-0 rounded-md overflow-hidden">
-                    <Image src="/cdsc-logo.jpg" alt="CDSC Industrial Supply" fill className="object-cover" priority />
+                  <div className="h-7 w-7 shrink-0 rounded-md overflow-hidden bg-white flex items-center justify-center">
+                    <img src={clientLogoUrl || '/cdsc-logo.jpg'} alt={clientName || 'CDSC'} className="h-full w-full object-contain p-0.5" />
                   </div>
-                  <span className="text-sm font-semibold leading-tight">CDSC Industrial Supply</span>
+                  <span className="text-sm font-semibold leading-tight">{clientName || 'Client Portal'}</span>
                 </div>
               )}
             </div>
