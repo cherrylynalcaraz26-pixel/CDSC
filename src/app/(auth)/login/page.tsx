@@ -51,92 +51,77 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex bg-gray-50">
-      {/* Left panel — branding */}
-      <div className="hidden lg:flex lg:w-1/2 flex-col items-center justify-center p-12 relative overflow-hidden" style={{ background: 'linear-gradient(145deg, #b91c1c 0%, #7f1d1d 60%, #450a0a 100%)' }}>
-        <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'repeating-linear-gradient(45deg,#fff 0,#fff 1px,transparent 1px,transparent 24px)' }} />
-        <div className="relative z-10 flex flex-col items-center text-center">
-          <div className="bg-white rounded-2xl shadow-2xl px-8 py-6 mb-8 w-72">
-            <div className="relative w-full h-28">
-              <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="object-contain" priority />
-            </div>
-          </div>
-          <h1 className="text-white font-bold text-3xl tracking-tight mb-2">CDSC Industrial Supply</h1>
-          <p className="text-red-200 text-base">Management System &amp; Client Portal</p>
-        </div>
-        <p className="absolute bottom-6 text-red-300/50 text-xs">
-          © {new Date().getFullYear()} CDSC Industrial Supply · Authorized users only
-        </p>
-      </div>
+    <div className="min-h-screen bg-[#0d0d0d] flex items-center justify-center p-4 relative overflow-hidden">
+      {/* Background glow */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(220,38,38,0.12)_0%,_transparent_60%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(220,38,38,0.06)_0%,_transparent_50%)]" />
 
-      {/* Right panel — form */}
-      <div className="flex-1 flex flex-col items-center justify-center p-6">
-        {/* Mobile logo */}
-        <div className="lg:hidden mb-8 flex flex-col items-center">
-          <div className="bg-white rounded-2xl shadow-md px-6 py-4 mb-4">
-            <div className="relative w-48 h-20">
-              <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="object-contain" priority />
-            </div>
+      <div className="relative w-full max-w-md">
+        {/* Brand */}
+        <div className="flex flex-col items-center mb-8">
+          <div className="relative h-16 w-16 mb-4">
+            <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="rounded-xl object-contain shadow-2xl" priority />
           </div>
-          <h1 className="text-gray-800 font-bold text-xl tracking-tight">CDSC Industrial Supply</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Management System &amp; Client Portal</p>
+          <h1 className="text-white font-bold text-xl tracking-tight">CDSC Industrial Supply</h1>
+          <p className="text-white/40 text-sm mt-0.5">Management System &amp; Client Portal</p>
         </div>
 
-        <div className="w-full max-w-sm">
-          <div className="mb-8">
-            <h2 className="text-gray-900 font-bold text-2xl">Welcome back</h2>
-            <p className="text-gray-500 text-sm mt-1">Sign in to your account to continue</p>
+        {/* Form card */}
+        <div className="bg-white/5 backdrop-blur border border-white/10 rounded-2xl p-8 shadow-2xl">
+          <div className="mb-6">
+            <h2 className="text-white font-semibold text-lg">Welcome back</h2>
+            <p className="text-white/40 text-sm mt-0.5">Sign in to your account to continue</p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-5">
+          <form onSubmit={handleLogin} className="space-y-4">
             <div className="space-y-1.5">
-              <Label className="text-gray-700 text-sm font-medium">Email address</Label>
+              <Label className="text-white/70 text-sm">Email address</Label>
               <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
                 <Input
                   type="email" placeholder="you@cdsc.com" value={email}
                   onChange={e => setEmail(e.target.value)} required autoComplete="email"
-                  className="pl-9 h-11 bg-white border-gray-200 text-gray-900 placeholder:text-gray-400 focus:border-red-500 focus:ring-red-500/20"
+                  className="pl-9 h-11 bg-white/8 border-white/15 text-white placeholder:text-white/25 focus:border-red-500"
                 />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-gray-700 text-sm font-medium">Password</Label>
+              <Label className="text-white/70 text-sm">Password</Label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/30" />
                 <Input
                   type={showPassword ? 'text' : 'password'} placeholder="••••••••" value={password}
                   onChange={e => setPassword(e.target.value)} required autoComplete="current-password"
-                  className="pl-9 pr-10 h-11 bg-white border-gray-200 text-gray-900 placeholder:text-gray-400 focus:border-red-500 focus:ring-red-500/20"
+                  className="pl-9 pr-10 h-11 bg-white/8 border-white/15 text-white placeholder:text-white/25 focus:border-red-500"
                 />
                 <button type="button" onClick={() => setShowPassword(s => !s)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60">
                   {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
             </div>
 
             <Button type="submit" disabled={loading}
-              className="w-full h-11 bg-red-600 hover:bg-red-700 text-white font-semibold shadow-sm">
+              className="w-full h-11 bg-red-600 hover:bg-red-700 text-white font-semibold mt-2 shadow-lg shadow-red-900/30">
               {loading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Signing in…</> : 'Sign In'}
             </Button>
           </form>
+        </div>
 
-          <div className="mt-8 space-y-1.5 text-center">
-            <a
-              href="https://cdscindustrialsupply.netlify.app"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-red-600 transition-colors"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-              cdscindustrialsupply.netlify.app
-            </a>
-            <p className="text-gray-300 text-xs">
-              Authorized users only · © {new Date().getFullYear()} CDSC Industrial Supply
-            </p>
-          </div>
+        <div className="text-center mt-6 space-y-1.5">
+          <a
+            href="https://cdscindustrialsupply.netlify.app"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-xs text-white/30 hover:text-white/60 transition-colors"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            cdscindustrialsupply.netlify.app
+          </a>
+          <p className="text-white/20 text-xs">
+            Authorized users only · © {new Date().getFullYear()} CDSC Industrial Supply
+          </p>
         </div>
       </div>
     </div>
