@@ -41,7 +41,7 @@ interface SO {
 }
 
 interface SOLine { item_name: string; quantity: string; unit: string; unit_price: string; selling_price: string }
-interface SOItem { id: string; item_name: string; quantity: number; unit: string | null; unit_price: number; selling_price: number | null; total_amount: number }
+interface SOItem { id: string; item_name: string; quantity: number; unit: string | null; unit_price: number; selling_price: number | null; total_amount: number; is_custom?: boolean }
 interface ItemOption { item_code: string; item_name: string; unit_of_measure: string; cost: number | null; selling_price: number | null }
 interface ClientOption { id: string; company_name: string; payment_terms?: string | null }
 interface SystemSettings { company_name: string; address: string; phone: string; email: string; tin: string; logo_url?: string }
@@ -280,7 +280,7 @@ export default function SalesOrdersPage() {
     const rows = soItems.map((it, i) => `
       <tr style="background:${i % 2 === 0 ? '#fff' : '#f9fafb'}">
         <td style="padding:4px 6px;color:#9ca3af;text-align:center">${i + 1}</td>
-        <td style="padding:4px 6px">${it.item_name ?? ''}</td>
+        <td style="padding:4px 6px">${it.item_name ?? ''}${it.is_custom ? ' <span style="display:inline-block;font-size:8px;font-weight:700;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:3px;padding:1px 4px;vertical-align:middle;line-height:1.4">CUSTOM</span>' : ''}</td>
         <td style="padding:4px 6px;text-align:center">${it.quantity}</td>
         <td style="padding:4px 6px;color:#6b7280;text-align:center">${it.unit ?? ''}</td>
         <td style="padding:4px 6px;text-align:right">${fmtN(it.selling_price ?? it.unit_price ?? 0)}</td>
