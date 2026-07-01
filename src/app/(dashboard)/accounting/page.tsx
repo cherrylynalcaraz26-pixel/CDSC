@@ -337,7 +337,7 @@ function CollectionsTab() {
               <Receipt className="h-4 w-4 text-red-600" />Collection Records
             </CardTitle>
             <div className="flex items-center gap-2">
-              <Select value={clientFilter} onValueChange={setClientFilter}>
+              <Select value={clientFilter} onValueChange={v => setClientFilter(v ?? '')}>
                 <SelectTrigger className="h-8 text-xs w-48">
                   <SelectValue placeholder="All Clients" />
                 </SelectTrigger>
