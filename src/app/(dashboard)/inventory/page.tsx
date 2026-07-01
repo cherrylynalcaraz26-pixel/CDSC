@@ -1084,7 +1084,7 @@ export default function InventoryPage() {
                   </style></head><body>
                     <div class="accent"></div>
                     <div class="letterhead">
-                      <div><div class="co-name">CDSC</div><div class="co-sub">Construction &amp; Development Supply Center</div></div>
+                      <div><img src="/cdsc-logo.jpg" style="height:50px;width:auto;display:block;margin-bottom:4px;" /><div style="font-size:11px;font-weight:600;color:#374151">CDSC Industrial Supply</div></div>
                       <div><div class="rpt-title">Inventory Report</div><div class="rpt-date">As of ${today}</div></div>
                     </div>
                     ${el.innerHTML}
@@ -1103,8 +1103,8 @@ export default function InventoryPage() {
               <div className="h-1 bg-red-600 rounded-full mb-6" />
               <div className="flex justify-between items-start mb-6 pb-5 border-b border-gray-200">
                 <div>
-                  <div className="text-2xl font-extrabold text-red-600 tracking-tight">CDSC</div>
-                  <div className="text-xs text-gray-400 mt-0.5">Construction &amp; Development Supply Center</div>
+                  <img src="/cdsc-logo.jpg" alt="CDSC" className="h-12 w-auto object-contain" />
+                  <div className="text-xs font-semibold text-gray-700 mt-1">CDSC Industrial Supply</div>
                 </div>
                 <div className="text-right">
                   <div className="text-base font-bold text-gray-800">Inventory Report</div>
@@ -1419,7 +1419,7 @@ export default function InventoryPage() {
                   </style></head><body>
                     <div class="accent"></div>
                     <div class="letterhead">
-                      <div><div class="co-name">CDSC</div><div class="co-sub">Construction &amp; Development Supply Center</div></div>
+                      <div><img src="/cdsc-logo.jpg" style="height:50px;width:auto;display:block;margin-bottom:4px;" /><div style="font-size:11px;font-weight:600;color:#374151">CDSC Industrial Supply</div></div>
                       <div><div class="rpt-title">Inventory Report</div><div class="rpt-date">As of ${today}</div></div>
                     </div>
                     ${el.innerHTML}
@@ -1439,8 +1439,8 @@ export default function InventoryPage() {
               <div className="h-1 bg-red-600 rounded-full mb-6" />
               <div className="flex justify-between items-start mb-6 pb-5 border-b border-gray-200">
                 <div>
-                  <div className="text-2xl font-extrabold text-red-600 tracking-tight">CDSC</div>
-                  <div className="text-xs text-gray-400 mt-0.5">Construction &amp; Development Supply Center</div>
+                  <img src="/cdsc-logo.jpg" alt="CDSC" className="h-12 w-auto object-contain" />
+                  <div className="text-xs font-semibold text-gray-700 mt-1">CDSC Industrial Supply</div>
                 </div>
                 <div className="text-right">
                   <div className="text-base font-bold text-gray-800">Inventory Report</div>
