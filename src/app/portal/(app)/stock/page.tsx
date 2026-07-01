@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Package, Loader2, Search, AlertTriangle, ArrowDownCircle, ArrowUpCircle,
   SlidersHorizontal, History, ChevronDown, ChevronUp, X, Check, Plus, Truck, CheckCircle2,
-  MoreHorizontal, Undo2, Printer
+  MoreHorizontal, Undo2, Printer, FileText,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
@@ -96,6 +96,9 @@ export default function PortalStockPage() {
   // Action dropdown per row
   const [openActionId, setOpenActionId] = useState<string | null>(null)
   const [actionDropdownPos, setActionDropdownPos] = useState<{ top: number; right: number } | null>(null)
+
+  // Report
+  const [reportOpen, setReportOpen] = useState(false)
 
   // Issue slip (shown after issue submit)
   const [issuedSlip, setIssuedSlip] = useState<{ item_name: string; unit: string | null; quantity: number; issued_to: string; department: string; notes: string; reference_no: string; date: string } | null>(null)
@@ -383,6 +386,17 @@ export default function PortalStockPage() {
         </div>
         <div className="flex gap-2 flex-wrap">
           <button
+            onClick={() => setReportOpen(v => !v)}
+            disabled={stock.length === 0}
+            className={cn(
+              'inline-flex items-center gap-1.5 text-sm font-semibold px-4 py-2 rounded-lg border transition-colors',
+              reportOpen
+                ? 'border-red-300 text-red-600 bg-red-50 hover:bg-red-100'
+                : 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
+            )}>
+            <FileText className="h-4 w-4" /> {reportOpen ? 'Close Report' : 'Generate Report'}
+          </button>
+          <button
             onClick={() => openModal('receive')}
             className="inline-flex items-center gap-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
             <ArrowDownCircle className="h-4 w-4" /> Receive Stock
@@ -434,8 +448,137 @@ export default function PortalStockPage() {
         </div>
       </div>
 
-      {/* Stock table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      {/* Inline Stock Report */}
+      {reportOpen && (() => {
+        const today = new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
+        const inStock = stock.filter(s => s.quantity_on_hand > s.low_stock_threshold)
+        const lowStock = stock.filter(s => s.quantity_on_hand > 0 && s.quantity_on_hand <= s.low_stock_threshold)
+        const outOfStock = stock.filter(s => s.quantity_on_hand === 0)
+        return (
+          <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+            {/* Toolbar */}
+            <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 border-b flex-wrap">
+              <FileText className="h-4 w-4 text-red-600 shrink-0" />
+              <span className="font-semibold text-sm text-gray-800 shrink-0">Stock Report</span>
+              <button
+                className="ml-auto inline-flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-4 py-1.5 rounded-lg transition-colors shrink-0"
+                onClick={() => {
+                  const el = document.getElementById('stock-report-print')
+                  if (!el) return
+                  const win = window.open('', '_blank', 'width=1000,height=800')
+                  if (!win) return
+                  win.document.write(`<!DOCTYPE html><html><head><title>Stock Report - ${clientName}</title><style>
+                    * { box-sizing: border-box; margin: 0; padding: 0; }
+                    body { font-family: Arial, sans-serif; background: #fff; color: #111; padding: 32px; }
+                    .accent { background: #dc2626; height: 5px; border-radius: 3px; margin-bottom: 20px; }
+                    .letterhead { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px solid #e5e7eb; }
+                    .co-name { font-size: 22px; font-weight: 800; color: #dc2626; }
+                    .co-sub { font-size: 10px; color: #9ca3af; margin-top: 2px; }
+                    table { width: 100%; border-collapse: collapse; font-size: 11px; }
+                    th { background: #1f2937; color: #fff; text-align: left; padding: 7px 10px; font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
+                    th.r { text-align: right; }
+                    td { padding: 6px 10px; border-bottom: 1px solid #f3f4f6; }
+                    td.r { text-align: right; }
+                    tr:nth-child(even) td { background: #f9fafb; }
+                    @media print { @page { margin: 12mm; size: A4 landscape; } }
+                  </style></head><body>
+                    <div class="accent"></div>
+                    <div class="letterhead">
+                      <div><div class="co-name">CDSC</div><div class="co-sub">Construction &amp; Development Supply Center</div></div>
+                      <div style="text-align:right"><div style="font-size:15px;font-weight:700">Stock Report</div><div style="font-size:10px;color:#9ca3af;margin-top:2px">As of ${today}</div></div>
+                    </div>
+                    <div style="margin-bottom:14px"><div style="font-size:9px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;font-weight:600;margin-bottom:2px">Client</div><div style="font-size:18px;font-weight:700">${clientName}</div></div>
+                    ${el.innerHTML}
+                  </body></html>`)
+                  win.document.close()
+                  win.focus()
+                  setTimeout(() => { win.print() }, 400)
+                }}
+              >
+                <Printer className="h-4 w-4" /> Print / Save PDF
+              </button>
+            </div>
+
+            {/* Report body */}
+            <div className="bg-white p-8" id="stock-report-print">
+              <div className="h-1 bg-red-600 rounded-full mb-6" />
+              <div className="flex justify-between items-start mb-6 pb-5 border-b border-gray-200">
+                <div>
+                  <div className="text-2xl font-extrabold text-red-600 tracking-tight">CDSC</div>
+                  <div className="text-xs text-gray-400 mt-0.5">Construction &amp; Development Supply Center</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-base font-bold text-gray-800">Stock Report</div>
+                  <div className="text-xs text-gray-400 mt-0.5">As of {today}</div>
+                </div>
+              </div>
+              <div className="mb-5">
+                <div className="text-[10px] text-gray-400 uppercase tracking-widest font-semibold mb-0.5">Client</div>
+                <div className="text-xl font-bold text-gray-900">{clientName}</div>
+              </div>
+              {/* Summary cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+                {[
+                  { label: 'Total Items',   value: stock.length,      cls: 'text-gray-800' },
+                  { label: 'In Stock',      value: inStock.length,    cls: 'text-green-700' },
+                  { label: 'Low Stock',     value: lowStock.length,   cls: 'text-amber-600' },
+                  { label: 'Out of Stock',  value: outOfStock.length, cls: 'text-red-600' },
+                ].map(c => (
+                  <div key={c.label} className="border border-gray-200 rounded-lg px-4 py-3 bg-gray-50">
+                    <div className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">{c.label}</div>
+                    <div className={`text-2xl font-bold mt-1 ${c.cls}`}>{c.value}</div>
+                  </div>
+                ))}
+              </div>
+              {/* Table */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs border-collapse min-w-[500px]">
+                  <thead>
+                    <tr className="bg-gray-800 text-white">
+                      <th className="px-3 py-2.5 text-left font-semibold text-[10px] uppercase tracking-wide w-8">#</th>
+                      <th className="px-3 py-2.5 text-left font-semibold text-[10px] uppercase tracking-wide">Item Description</th>
+                      <th className="px-3 py-2.5 text-left font-semibold text-[10px] uppercase tracking-wide w-20">Unit</th>
+                      <th className="px-3 py-2.5 text-right font-semibold text-[10px] uppercase tracking-wide w-24">On Hand</th>
+                      <th className="px-3 py-2.5 text-right font-semibold text-[10px] uppercase tracking-wide w-24">Low Stock At</th>
+                      <th className="px-3 py-2.5 text-center font-semibold text-[10px] uppercase tracking-wide w-24">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stock.map((s, i) => {
+                      const isOut = s.quantity_on_hand === 0
+                      const isLow = !isOut && s.quantity_on_hand <= s.low_stock_threshold
+                      return (
+                        <tr key={s.id} className={i % 2 === 1 ? 'bg-gray-50' : 'bg-white'}>
+                          <td className="px-3 py-2 text-gray-400 border-b border-gray-100">{i + 1}</td>
+                          <td className="px-3 py-2 font-medium text-gray-800 border-b border-gray-100">{s.item_name}</td>
+                          <td className="px-3 py-2 text-gray-500 border-b border-gray-100">{s.unit ?? 'pcs'}</td>
+                          <td className={`px-3 py-2 text-right font-bold border-b border-gray-100 ${isOut ? 'text-red-600' : isLow ? 'text-amber-600' : 'text-green-700'}`}>{s.quantity_on_hand}</td>
+                          <td className="px-3 py-2 text-right text-gray-500 border-b border-gray-100">{s.low_stock_threshold}</td>
+                          <td className="px-3 py-2 text-center border-b border-gray-100">
+                            <span className={cn(
+                              'text-[10px] px-2 py-0.5 rounded-full font-semibold',
+                              isOut ? 'bg-red-100 text-red-700' : isLow ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'
+                            )}>
+                              {isOut ? 'Out of Stock' : isLow ? 'Low Stock' : 'In Stock'}
+                            </span>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <div className="mt-8 pt-4 border-t border-gray-100 text-[10px] text-gray-400 flex justify-between flex-wrap gap-2">
+                <span>Stock levels reflect current on-hand quantities as of the report date.</span>
+                <span>Generated {today} · CDSC Inventory System</span>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* Stock table — hidden when report is open */}
+      {!reportOpen && <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-gray-50 border-b border-gray-200">
@@ -513,7 +656,7 @@ export default function PortalStockPage() {
             })}
           </tbody>
         </table>
-      </div>
+      </div>}
 
       {/* Action dropdown portal — rendered fixed so it escapes overflow:hidden containers */}
       {openActionId && actionDropdownPos && (() => {
@@ -546,8 +689,8 @@ export default function PortalStockPage() {
         )
       })()}
 
-      {/* Transaction History — inline, filterable by selected row */}
-      {transactions.length > 0 && (
+      {/* Transaction History — hidden when report is open */}
+      {!reportOpen && transactions.length > 0 && (
         <div id="tx-history-section" className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <button
             className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-gray-50 transition-colors"
