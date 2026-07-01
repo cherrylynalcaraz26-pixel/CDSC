@@ -88,7 +88,7 @@ function NavLink({
             title={item.label}
             className={cn(
               'w-full flex items-center justify-center h-9 rounded-md transition-colors',
-              childActive ? 'text-red-400' : 'text-white/40 hover:text-white/80 hover:bg-white/5',
+              childActive ? 'text-red-400' : 'text-white/40 hover:text-white/80 hover:bg-white',
             )}
           >
             <item.icon className="h-[16px] w-[16px] shrink-0" />
@@ -104,7 +104,7 @@ function NavLink({
                   onClick={onNavigate}
                   className={cn(
                     'flex items-center gap-2 px-3 py-1.5 text-[13px] transition-colors',
-                    cActive ? 'text-red-400 bg-red-600/10' : 'text-white/60 hover:text-white hover:bg-white/5',
+                    cActive ? 'text-red-400 bg-red-600/10' : 'text-white/60 hover:text-white hover:bg-white',
                   )}
                 >
                   <child.icon className="h-3.5 w-3.5 shrink-0" />
@@ -123,7 +123,7 @@ function NavLink({
           onClick={() => setOpen(o => !o)}
           className={cn(
             'w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] font-medium transition-colors',
-            childActive ? 'text-white' : 'text-white/50 hover:text-white/80 hover:bg-white/5',
+            childActive ? 'text-white' : 'text-white/50 hover:text-white/80 hover:bg-white',
           )}
         >
           <item.icon className="h-[15px] w-[15px] shrink-0" />
@@ -153,7 +153,7 @@ function NavLink({
           'flex items-center justify-center h-9 rounded-md transition-colors',
           active
             ? 'bg-red-600/20 text-red-400 border-l-2 border-red-500'
-            : 'text-white/40 hover:text-white/80 hover:bg-white/5',
+            : 'text-white/40 hover:text-white/80 hover:bg-white',
         )}
       >
         <item.icon className={cn('h-[16px] w-[16px] shrink-0', active ? 'text-red-400' : '')} />
@@ -169,7 +169,7 @@ function NavLink({
         'flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] font-medium transition-colors',
         active
           ? 'bg-red-600/20 text-red-400 border-l-2 border-red-500'
-          : 'text-white/50 hover:text-white/80 hover:bg-white/5',
+          : 'text-white/50 hover:text-white/80 hover:bg-white',
       )}
     >
       <item.icon className={cn('h-[15px] w-[15px] shrink-0', active ? 'text-red-400' : '')} />
@@ -200,12 +200,12 @@ function SidebarContent({
     <div className="flex flex-col h-full bg-[#111111]">
       <div className={cn('py-4 flex items-center gap-3 transition-all', collapsed ? 'px-3 justify-center' : 'px-4')}>
         {collapsed ? (
-          <button onClick={onToggleCollapse} title="Expand sidebar" className="relative h-10 w-10 shrink-0 rounded-lg overflow-hidden bg-white/5">
+          <button onClick={onToggleCollapse} title="Expand sidebar" className="relative h-10 w-10 shrink-0 rounded-lg overflow-hidden bg-white">
             <Image src={logoSrc} alt={displayName} fill className="object-contain p-1" priority />
           </button>
         ) : (
           <>
-            <div className="relative h-10 w-10 shrink-0 rounded-lg overflow-hidden bg-white/5">
+            <div className="relative h-10 w-10 shrink-0 rounded-lg overflow-hidden bg-white">
               <Image src={logoSrc} alt={displayName} fill className="object-contain p-1" priority />
             </div>
             <div className="min-w-0 flex-1">
@@ -236,7 +236,7 @@ function SidebarContent({
           onClick={handleSignOut}
           title="Sign Out"
           className={cn(
-            'flex items-center gap-2.5 rounded-md text-[13px] font-medium text-white/40 hover:text-red-400 hover:bg-white/5 transition-colors',
+            'flex items-center gap-2.5 rounded-md text-[13px] font-medium text-white/40 hover:text-red-400 hover:bg-white transition-colors',
             collapsed ? 'h-9 w-9 justify-center' : 'w-full px-3 py-2',
           )}
         >
