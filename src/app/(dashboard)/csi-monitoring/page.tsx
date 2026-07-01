@@ -18,13 +18,13 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Plus, X, Search, MoreHorizontal, Loader2, FileText, LayoutGrid, List, ChevronDown, ChevronRight, Package, Trash2, Printer } from 'lucide-react'
+import { Plus, X, Search, MoreHorizontal, Loader2, FileText, LayoutGrid, List, ChevronDown, ChevronRight, ChevronUp, Package, Trash2, Printer } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend, AreaChart, Area,
+  Cell, Legend, AreaChart, Area,
 } from 'recharts'
 
 interface ItemOption { item_name: string; unit_of_measure: string }
@@ -78,6 +78,8 @@ export default function CSIMonitoringPage() {
   const [soItemsMap, setSoItemsMap] = useState<Record<string, SOItemOption[]>>({})
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
+  const [collapsedCharts, setCollapsedCharts] = useState<Record<string, boolean>>({})
+  const toggleChart = (key: string) => setCollapsedCharts(p => ({ ...p, [key]: !p[key] }))
   const [editingSiNumber, setEditingSiNumber] = useState<string | null>(null)
   const [siFilter, setSiFilter] = useState('')
   const [itemFilter, setItemFilter] = useState('')
@@ -712,119 +714,94 @@ export default function CSIMonitoringPage() {
               ))}
             </div>
 
-            {/* Row 1: Bar chart + Pie chart */}
+            {/* Row 1: Revenue bar + Revenue Share stacked */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               {/* Revenue Bar Chart */}
               <Card className="lg:col-span-2">
-                <CardHeader className="pb-2 pt-5 px-6">
-                  <CardTitle className="text-sm font-semibold">Revenue by Client</CardTitle>
-                  <p className="text-xs text-muted-foreground">Total invoiced amount per client</p>
+                <CardHeader className="pb-2 pt-4 px-5 flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="text-sm font-semibold">Revenue by Client</CardTitle>
+                    <p className="text-xs text-muted-foreground">Total invoiced amount per client</p>
+                  </div>
+                  <button onClick={() => toggleChart('revenue-bar')} className="p-1 rounded hover:bg-muted transition-colors">
+                    {collapsedCharts['revenue-bar'] ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronUp className="h-4 w-4 text-muted-foreground" />}
+                  </button>
                 </CardHeader>
-                <CardContent className="px-2 pb-4">
-                  <ResponsiveContainer width="100%" height={220}>
-                    <BarChart data={clientStats} margin={{ top: 8, right: 16, left: 8, bottom: 40 }} barSize={32}>
-                      <defs>
-                        {clientStats.map((c, i) => (
-                          <linearGradient key={i} id={`bar-grad-${i}`} x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor={c.color} stopOpacity={1} />
-                            <stop offset="100%" stopColor={c.color} stopOpacity={0.6} />
-                          </linearGradient>
-                        ))}
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-                      <XAxis
-                        dataKey="shortName"
-                        tick={{ fontSize: 11, fill: '#6b7280' }}
-                        angle={-30}
-                        textAnchor="end"
-                        interval={0}
-                        height={50}
-                        axisLine={false}
-                        tickLine={false}
-                      />
-                      <YAxis
-                        tickFormatter={v => `₱${(v / 1000).toFixed(0)}k`}
-                        tick={{ fontSize: 10, fill: '#9ca3af' }}
-                        axisLine={false}
-                        tickLine={false}
-                        width={52}
-                      />
-                      <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f3f4f6' }} />
-                      <Bar dataKey="totalAmount" name="Revenue" radius={[6, 6, 0, 0]}>
-                        {clientStats.map((_, i) => (
-                          <Cell key={i} fill={`url(#bar-grad-${i})`} />
-                        ))}
-                      </Bar>
-                    </BarChart>
-                  </ResponsiveContainer>
-                </CardContent>
+                {!collapsedCharts['revenue-bar'] && (
+                  <CardContent className="px-2 pb-4">
+                    <ResponsiveContainer width="100%" height={220}>
+                      <BarChart data={clientStats} margin={{ top: 8, right: 16, left: 8, bottom: 40 }} barSize={32}>
+                        <defs>
+                          {clientStats.map((c, i) => (
+                            <linearGradient key={i} id={`bar-grad-${i}`} x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor={c.color} stopOpacity={1} />
+                              <stop offset="100%" stopColor={c.color} stopOpacity={0.6} />
+                            </linearGradient>
+                          ))}
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                        <XAxis dataKey="shortName" tick={{ fontSize: 11, fill: '#6b7280' }} angle={-30} textAnchor="end" interval={0} height={50} axisLine={false} tickLine={false} />
+                        <YAxis tickFormatter={v => `₱${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} width={52} />
+                        <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f3f4f6' }} />
+                        <Bar dataKey="totalAmount" name="Revenue" radius={[6, 6, 0, 0]}>
+                          {clientStats.map((_, i) => (
+                            <Cell key={i} fill={`url(#bar-grad-${i})`} />
+                          ))}
+                        </Bar>
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                )}
               </Card>
 
-              {/* Revenue Share – radial breakdown */}
+              {/* Revenue Share – stacked progress breakdown */}
               <Card className="flex flex-col">
-                <CardHeader className="pb-2 pt-5 px-6">
-                  <CardTitle className="text-sm font-semibold">Revenue Share</CardTitle>
-                  <p className="text-xs text-muted-foreground">% of total invoiced per client</p>
+                <CardHeader className="pb-2 pt-4 px-5 flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="text-sm font-semibold">Revenue Share</CardTitle>
+                    <p className="text-xs text-muted-foreground">% of total per client</p>
+                  </div>
+                  <button onClick={() => toggleChart('rev-share')} className="p-1 rounded hover:bg-muted transition-colors">
+                    {collapsedCharts['rev-share'] ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronUp className="h-4 w-4 text-muted-foreground" />}
+                  </button>
                 </CardHeader>
-                <CardContent className="px-5 pb-5 flex-1 flex flex-col justify-center gap-3">
-                  {/* Donut with center label */}
-                  <div className="relative mx-auto" style={{ width: 180, height: 180 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={clientStats.length ? clientStats : [{ shortName: 'No data', totalAmount: 1, color: '#e5e7eb' }]}
-                          cx="50%"
-                          cy="50%"
-                          innerRadius={58}
-                          outerRadius={82}
-                          paddingAngle={clientStats.length > 1 ? 3 : 0}
-                          startAngle={90}
-                          endAngle={-270}
-                          dataKey="totalAmount"
-                          strokeWidth={0}
-                        >
-                          {(clientStats.length ? clientStats : [{ color: '#e5e7eb' }]).map((c, i) => (
-                            <Cell key={i} fill={c.color} />
-                          ))}
-                        </Pie>
-                        <Tooltip
-                          formatter={(value, name) => [formatPeso(Number(value)), String(name)]}
-                          contentStyle={{ borderRadius: 12, border: '1px solid #e5e7eb', fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
-                        />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    {/* center label */}
-                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                      <span className="text-[10px] text-muted-foreground font-medium leading-tight">Total</span>
-                      <span className="text-sm font-bold leading-tight tabular-nums">{formatPeso(grandTotal)}</span>
-                      <span className="text-[10px] text-muted-foreground mt-0.5">{clientStats.length} client{clientStats.length !== 1 ? 's' : ''}</span>
+                {!collapsedCharts['rev-share'] && (
+                  <CardContent className="px-5 pb-5 flex-1 flex flex-col justify-center gap-4">
+                    {/* stacked single bar */}
+                    <div className="flex h-5 w-full rounded-full overflow-hidden gap-0.5">
+                      {clientStats.map((c, i) => {
+                        const pct = grandTotal > 0 ? (c.totalAmount / grandTotal) * 100 : 0
+                        return pct > 0 ? (
+                          <div key={i} style={{ width: `${pct}%`, background: c.color }} title={`${c.shortName}: ${pct.toFixed(1)}%`} className="transition-all duration-700" />
+                        ) : null
+                      })}
                     </div>
-                  </div>
-
-                  {/* per-client progress bars */}
-                  <div className="space-y-2">
-                    {clientStats.map((c, i) => {
-                      const pct = grandTotal > 0 ? (c.totalAmount / grandTotal) * 100 : 0
-                      return (
-                        <div key={i}>
-                          <div className="flex items-center justify-between mb-0.5">
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <span className="inline-block h-2 w-2 rounded-full shrink-0" style={{ background: c.color }} />
-                              <span className="text-xs text-foreground truncate max-w-[130px]" title={c.name}>{c.shortName}</span>
+                    {/* per-client rows */}
+                    <div className="space-y-3">
+                      {clientStats.map((c, i) => {
+                        const pct = grandTotal > 0 ? (c.totalAmount / grandTotal) * 100 : 0
+                        return (
+                          <div key={i}>
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="inline-block h-2.5 w-2.5 rounded-sm shrink-0" style={{ background: c.color }} />
+                                <span className="text-xs font-medium truncate max-w-[120px]" title={c.name}>{c.shortName}</span>
+                              </div>
+                              <div className="flex items-center gap-2 ml-2 shrink-0">
+                                <span className="text-[11px] text-muted-foreground tabular-nums">{formatPeso(c.totalAmount)}</span>
+                                <span className="text-xs font-bold tabular-nums" style={{ color: c.color }}>{pct.toFixed(1)}%</span>
+                              </div>
                             </div>
-                            <span className="text-xs font-semibold tabular-nums ml-2" style={{ color: c.color }}>{pct.toFixed(1)}%</span>
+                            <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                              <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, background: c.color }} />
+                            </div>
                           </div>
-                          <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
-                            <div
-                              className="h-full rounded-full transition-all duration-700"
-                              style={{ width: `${pct}%`, background: c.color }}
-                            />
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </CardContent>
+                        )
+                      })}
+                    </div>
+                    {clientStats.length === 0 && <p className="text-xs text-muted-foreground text-center py-4">No data</p>}
+                  </CardContent>
+                )}
               </Card>
             </div>
 
@@ -833,49 +810,63 @@ export default function CSIMonitoringPage() {
               {/* Monthly Revenue Trend */}
               {trendData.length > 1 && (
                 <Card>
-                  <CardHeader className="pb-2 pt-5 px-6">
-                    <CardTitle className="text-sm font-semibold">Monthly Revenue Trend</CardTitle>
-                    <p className="text-xs text-muted-foreground">Last 12 months</p>
+                  <CardHeader className="pb-2 pt-4 px-5 flex flex-row items-center justify-between">
+                    <div>
+                      <CardTitle className="text-sm font-semibold">Monthly Revenue Trend</CardTitle>
+                      <p className="text-xs text-muted-foreground">Last 12 months</p>
+                    </div>
+                    <button onClick={() => toggleChart('trend')} className="p-1 rounded hover:bg-muted transition-colors">
+                      {collapsedCharts['trend'] ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronUp className="h-4 w-4 text-muted-foreground" />}
+                    </button>
                   </CardHeader>
-                  <CardContent className="px-2 pb-4">
-                    <ResponsiveContainer width="100%" height={180}>
-                      <AreaChart data={trendData} margin={{ top: 8, right: 16, left: 8, bottom: 0 }}>
-                        <defs>
-                          <linearGradient id="area-grad" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#dc2626" stopOpacity={0.25} />
-                            <stop offset="100%" stopColor="#dc2626" stopOpacity={0} />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-                        <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
-                        <YAxis tickFormatter={v => `₱${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} width={52} />
-                        <Tooltip content={<CustomTooltip />} />
-                        <Area type="monotone" dataKey="amount" name="Revenue" stroke="#dc2626" strokeWidth={2} fill="url(#area-grad)" dot={{ fill: '#dc2626', r: 3 }} activeDot={{ r: 5 }} />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  </CardContent>
+                  {!collapsedCharts['trend'] && (
+                    <CardContent className="px-2 pb-4">
+                      <ResponsiveContainer width="100%" height={180}>
+                        <AreaChart data={trendData} margin={{ top: 8, right: 16, left: 8, bottom: 0 }}>
+                          <defs>
+                            <linearGradient id="area-grad" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="0%" stopColor="#dc2626" stopOpacity={0.25} />
+                              <stop offset="100%" stopColor="#dc2626" stopOpacity={0} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                          <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+                          <YAxis tickFormatter={v => `₱${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} width={52} />
+                          <Tooltip content={<CustomTooltip />} />
+                          <Area type="monotone" dataKey="amount" name="Revenue" stroke="#dc2626" strokeWidth={2} fill="url(#area-grad)" dot={{ fill: '#dc2626', r: 3 }} activeDot={{ r: 5 }} />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    </CardContent>
+                  )}
                 </Card>
               )}
 
               {/* SI Count vs Line Items grouped bar */}
               <Card>
-                <CardHeader className="pb-2 pt-5 px-6">
-                  <CardTitle className="text-sm font-semibold">SI Count vs Line Items</CardTitle>
-                  <p className="text-xs text-muted-foreground">Invoice activity per client</p>
+                <CardHeader className="pb-2 pt-4 px-5 flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle className="text-sm font-semibold">SI Count vs Line Items</CardTitle>
+                    <p className="text-xs text-muted-foreground">Invoice activity per client</p>
+                  </div>
+                  <button onClick={() => toggleChart('si-bar')} className="p-1 rounded hover:bg-muted transition-colors">
+                    {collapsedCharts['si-bar'] ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronUp className="h-4 w-4 text-muted-foreground" />}
+                  </button>
                 </CardHeader>
-                <CardContent className="px-2 pb-4">
-                  <ResponsiveContainer width="100%" height={180}>
-                    <BarChart data={clientStats} margin={{ top: 8, right: 16, left: 8, bottom: 40 }} barSize={14} barGap={3}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-                      <XAxis dataKey="shortName" tick={{ fontSize: 11, fill: '#6b7280' }} angle={-30} textAnchor="end" interval={0} height={50} axisLine={false} tickLine={false} />
-                      <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} width={28} />
-                      <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f3f4f6' }} />
-                      <Legend wrapperStyle={{ fontSize: 11, paddingTop: 4 }} iconType="circle" iconSize={8} />
-                      <Bar dataKey="siCount" name="SI Count" fill="#2563eb" radius={[4, 4, 0, 0]} />
-                      <Bar dataKey="lineItems" name="Line Items" fill="#dc2626" radius={[4, 4, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </CardContent>
+                {!collapsedCharts['si-bar'] && (
+                  <CardContent className="px-2 pb-4">
+                    <ResponsiveContainer width="100%" height={180}>
+                      <BarChart data={clientStats} margin={{ top: 8, right: 16, left: 8, bottom: 40 }} barSize={14} barGap={3}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                        <XAxis dataKey="shortName" tick={{ fontSize: 11, fill: '#6b7280' }} angle={-30} textAnchor="end" interval={0} height={50} axisLine={false} tickLine={false} />
+                        <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} width={28} />
+                        <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f3f4f6' }} />
+                        <Legend wrapperStyle={{ fontSize: 11, paddingTop: 4 }} iconType="circle" iconSize={8} />
+                        <Bar dataKey="siCount" name="SI Count" fill="#2563eb" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="lineItems" name="Line Items" fill="#dc2626" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                )}
               </Card>
             </div>
           </div>
