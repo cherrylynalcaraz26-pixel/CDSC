@@ -162,12 +162,16 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
   }
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-[#111111]">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="flex flex-col items-center gap-4">
-        <div className="relative h-16 w-16 rounded-xl overflow-hidden bg-white animate-pulse">
-          <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="object-cover" priority />
+        <div className="relative w-48 h-20">
+          <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="object-contain" priority />
         </div>
-        <p className="text-sm text-white/40">Loading portal…</p>
+        <div className="flex items-center gap-2 text-sm text-gray-400">
+          <div className="h-1.5 w-1.5 rounded-full bg-red-500 animate-bounce [animation-delay:0ms]" />
+          <div className="h-1.5 w-1.5 rounded-full bg-red-500 animate-bounce [animation-delay:150ms]" />
+          <div className="h-1.5 w-1.5 rounded-full bg-red-500 animate-bounce [animation-delay:300ms]" />
+        </div>
       </div>
     </div>
   )
