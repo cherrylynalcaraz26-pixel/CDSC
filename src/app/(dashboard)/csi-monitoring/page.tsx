@@ -78,8 +78,7 @@ export default function CSIMonitoringPage() {
   const [soItemsMap, setSoItemsMap] = useState<Record<string, SOItemOption[]>>({})
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
-  const [collapsedCharts, setCollapsedCharts] = useState<Record<string, boolean>>({})
-  const toggleChart = (key: string) => setCollapsedCharts(p => ({ ...p, [key]: !p[key] }))
+  const [chartsExpanded, setChartsExpanded] = useState(true)
   const [editingSiNumber, setEditingSiNumber] = useState<string | null>(null)
   const [siFilter, setSiFilter] = useState('')
   const [itemFilter, setItemFilter] = useState('')
@@ -714,21 +713,28 @@ export default function CSIMonitoringPage() {
               ))}
             </div>
 
+            {/* Charts group header */}
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-foreground">Analytics Charts</h3>
+              <button
+                onClick={() => setChartsExpanded(p => !p)}
+                className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground px-3 py-1.5 rounded-lg border hover:bg-muted transition-colors"
+              >
+                {chartsExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                {chartsExpanded ? 'Collapse' : 'Expand'} Charts
+              </button>
+            </div>
+
+            {chartsExpanded && <>
             {/* Row 1: Revenue bar + Revenue Share stacked */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               {/* Revenue Bar Chart */}
               <Card className="lg:col-span-2">
-                <CardHeader className="pb-2 pt-4 px-5 flex flex-row items-center justify-between">
-                  <div>
-                    <CardTitle className="text-sm font-semibold">Revenue by Client</CardTitle>
-                    <p className="text-xs text-muted-foreground">Total invoiced amount per client</p>
-                  </div>
-                  <button onClick={() => toggleChart('revenue-bar')} className="p-1 rounded hover:bg-muted transition-colors">
-                    {collapsedCharts['revenue-bar'] ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronUp className="h-4 w-4 text-muted-foreground" />}
-                  </button>
+                <CardHeader className="pb-2 pt-4 px-5">
+                  <CardTitle className="text-sm font-semibold">Revenue by Client</CardTitle>
+                  <p className="text-xs text-muted-foreground">Total invoiced amount per client</p>
                 </CardHeader>
-                {!collapsedCharts['revenue-bar'] && (
-                  <CardContent className="px-2 pb-4">
+                <CardContent className="px-2 pb-4">
                     <ResponsiveContainer width="100%" height={220}>
                       <BarChart data={clientStats} margin={{ top: 8, right: 16, left: 8, bottom: 40 }} barSize={32}>
                         <defs>
@@ -750,23 +756,16 @@ export default function CSIMonitoringPage() {
                         </Bar>
                       </BarChart>
                     </ResponsiveContainer>
-                  </CardContent>
-                )}
+                </CardContent>
               </Card>
 
               {/* Revenue Share – stacked progress breakdown */}
               <Card className="flex flex-col">
-                <CardHeader className="pb-2 pt-4 px-5 flex flex-row items-center justify-between">
-                  <div>
-                    <CardTitle className="text-sm font-semibold">Revenue Share</CardTitle>
-                    <p className="text-xs text-muted-foreground">% of total per client</p>
-                  </div>
-                  <button onClick={() => toggleChart('rev-share')} className="p-1 rounded hover:bg-muted transition-colors">
-                    {collapsedCharts['rev-share'] ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronUp className="h-4 w-4 text-muted-foreground" />}
-                  </button>
+                <CardHeader className="pb-2 pt-4 px-5">
+                  <CardTitle className="text-sm font-semibold">Revenue Share</CardTitle>
+                  <p className="text-xs text-muted-foreground">% of total per client</p>
                 </CardHeader>
-                {!collapsedCharts['rev-share'] && (
-                  <CardContent className="px-5 pb-5 flex-1 flex flex-col justify-center gap-4">
+                <CardContent className="px-5 pb-5 flex-1 flex flex-col justify-center gap-4">
                     {/* stacked single bar */}
                     <div className="flex h-5 w-full rounded-full overflow-hidden gap-0.5">
                       {clientStats.map((c, i) => {
@@ -800,8 +799,7 @@ export default function CSIMonitoringPage() {
                       })}
                     </div>
                     {clientStats.length === 0 && <p className="text-xs text-muted-foreground text-center py-4">No data</p>}
-                  </CardContent>
-                )}
+                </CardContent>
               </Card>
             </div>
 
@@ -810,65 +808,52 @@ export default function CSIMonitoringPage() {
               {/* Monthly Revenue Trend */}
               {trendData.length > 1 && (
                 <Card>
-                  <CardHeader className="pb-2 pt-4 px-5 flex flex-row items-center justify-between">
-                    <div>
-                      <CardTitle className="text-sm font-semibold">Monthly Revenue Trend</CardTitle>
-                      <p className="text-xs text-muted-foreground">Last 12 months</p>
-                    </div>
-                    <button onClick={() => toggleChart('trend')} className="p-1 rounded hover:bg-muted transition-colors">
-                      {collapsedCharts['trend'] ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronUp className="h-4 w-4 text-muted-foreground" />}
-                    </button>
+                  <CardHeader className="pb-2 pt-4 px-5">
+                    <CardTitle className="text-sm font-semibold">Monthly Revenue Trend</CardTitle>
+                    <p className="text-xs text-muted-foreground">Last 12 months</p>
                   </CardHeader>
-                  {!collapsedCharts['trend'] && (
-                    <CardContent className="px-2 pb-4">
-                      <ResponsiveContainer width="100%" height={180}>
-                        <AreaChart data={trendData} margin={{ top: 8, right: 16, left: 8, bottom: 0 }}>
-                          <defs>
-                            <linearGradient id="area-grad" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="0%" stopColor="#dc2626" stopOpacity={0.25} />
-                              <stop offset="100%" stopColor="#dc2626" stopOpacity={0} />
-                            </linearGradient>
-                          </defs>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-                          <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
-                          <YAxis tickFormatter={v => `₱${Number(v).toLocaleString('en-PH', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`} tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} width={52} />
-                          <Tooltip content={<CustomTooltip />} />
-                          <Area type="monotone" dataKey="amount" name="Revenue" stroke="#dc2626" strokeWidth={2} fill="url(#area-grad)" dot={{ fill: '#dc2626', r: 3 }} activeDot={{ r: 5 }} />
-                        </AreaChart>
-                      </ResponsiveContainer>
-                    </CardContent>
-                  )}
+                  <CardContent className="px-2 pb-4">
+                    <ResponsiveContainer width="100%" height={180}>
+                      <AreaChart data={trendData} margin={{ top: 8, right: 16, left: 8, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="area-grad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#dc2626" stopOpacity={0.25} />
+                            <stop offset="100%" stopColor="#dc2626" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                        <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+                        <YAxis tickFormatter={v => `₱${Number(v).toLocaleString('en-PH', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`} tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} width={52} />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Area type="monotone" dataKey="amount" name="Revenue" stroke="#dc2626" strokeWidth={2} fill="url(#area-grad)" dot={{ fill: '#dc2626', r: 3 }} activeDot={{ r: 5 }} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </CardContent>
                 </Card>
               )}
 
               {/* SI Count vs Line Items grouped bar */}
               <Card>
-                <CardHeader className="pb-2 pt-4 px-5 flex flex-row items-center justify-between">
-                  <div>
-                    <CardTitle className="text-sm font-semibold">SI Count vs Line Items</CardTitle>
-                    <p className="text-xs text-muted-foreground">Invoice activity per client</p>
-                  </div>
-                  <button onClick={() => toggleChart('si-bar')} className="p-1 rounded hover:bg-muted transition-colors">
-                    {collapsedCharts['si-bar'] ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronUp className="h-4 w-4 text-muted-foreground" />}
-                  </button>
+                <CardHeader className="pb-2 pt-4 px-5">
+                  <CardTitle className="text-sm font-semibold">SI Count vs Line Items</CardTitle>
+                  <p className="text-xs text-muted-foreground">Invoice activity per client</p>
                 </CardHeader>
-                {!collapsedCharts['si-bar'] && (
-                  <CardContent className="px-2 pb-4">
-                    <ResponsiveContainer width="100%" height={180}>
-                      <BarChart data={clientStats} margin={{ top: 8, right: 16, left: 8, bottom: 40 }} barSize={14} barGap={3}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
-                        <XAxis dataKey="shortName" tick={{ fontSize: 11, fill: '#6b7280' }} angle={-30} textAnchor="end" interval={0} height={50} axisLine={false} tickLine={false} />
-                        <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} width={28} />
-                        <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f3f4f6' }} />
-                        <Legend wrapperStyle={{ fontSize: 11, paddingTop: 4 }} iconType="circle" iconSize={8} />
-                        <Bar dataKey="siCount" name="SI Count" fill="#2563eb" radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="lineItems" name="Line Items" fill="#dc2626" radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </CardContent>
-                )}
+                <CardContent className="px-2 pb-4">
+                  <ResponsiveContainer width="100%" height={180}>
+                    <BarChart data={clientStats} margin={{ top: 8, right: 16, left: 8, bottom: 40 }} barSize={14} barGap={3}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                      <XAxis dataKey="shortName" tick={{ fontSize: 11, fill: '#6b7280' }} angle={-30} textAnchor="end" interval={0} height={50} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} width={28} />
+                      <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f3f4f6' }} />
+                      <Legend wrapperStyle={{ fontSize: 11, paddingTop: 4 }} iconType="circle" iconSize={8} />
+                      <Bar dataKey="siCount" name="SI Count" fill="#2563eb" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="lineItems" name="Line Items" fill="#dc2626" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
               </Card>
             </div>
+            </>}
           </div>
         )
       })()}
