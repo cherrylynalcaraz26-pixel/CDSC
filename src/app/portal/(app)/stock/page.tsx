@@ -52,6 +52,7 @@ export default function PortalStockPage() {
   const searchParams = useSearchParams()
   const [clientId, setClientId] = useState<string | null>(null)
   const [clientName, setClientName] = useState<string>('')
+  const [showCsiInPortal, setShowCsiInPortal] = useState(true)
   const [stock, setStock] = useState<StockRow[]>([])
   const [transactions, setTransactions] = useState<TxRow[]>([])
   const [departments, setDepartments] = useState<string[]>([])
@@ -111,11 +112,12 @@ export default function PortalStockPage() {
     async function init() {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) { router.push('/login'); return }
-      const { data: clientRow } = await supabase.from('clients').select('id, company_name').eq('auth_user_id', session.user.id).single()
+      const { data: clientRow } = await supabase.from('clients').select('id, company_name, show_csi_in_portal').eq('auth_user_id', session.user.id).single()
       if (!clientRow) { router.push('/login'); return }
       setClientId(clientRow.id)
       setClientName((clientRow as any).company_name ?? '')
-      await fetchData(clientRow.id, (clientRow as any).company_name ?? '')
+      setShowCsiInPortal((clientRow as any).show_csi_in_portal !== false)
+      await fetchData(clientRow.id, (clientRow as any).company_name ?? '', (clientRow as any).show_csi_in_portal !== false)
       const drParam = searchParams?.get('dr')
       if (drParam) {
         openModal('receive')
@@ -124,7 +126,7 @@ export default function PortalStockPage() {
     init()
   }, [])
 
-  async function fetchData(cid: string, cname?: string) {
+  async function fetchData(cid: string, cname?: string, csiVisible?: boolean) {
     setLoading(true)
     const companyName = cname ?? clientName
     // Fetch visible SO numbers for this client (only show_in_portal = true)
@@ -157,7 +159,8 @@ export default function PortalStockPage() {
     }))
     setAvailableDRs(drs)
 
-    if (companyName) {
+    const showCsi = csiVisible !== undefined ? csiVisible : showCsiInPortal
+    if (companyName && showCsi) {
       const { data: csiData } = await supabase
         .from('csi_records')
         .select('si_number,si_date,item_name,unit,quantity,unit_price,amount,dr_number')
@@ -165,6 +168,8 @@ export default function PortalStockPage() {
         .order('si_date', { ascending: false })
         .order('si_number')
       setCsiRecords(csiData ?? [])
+    } else {
+      setCsiRecords([])
     }
 
     setLoading(false)

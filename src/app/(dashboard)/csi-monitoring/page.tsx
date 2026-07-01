@@ -28,7 +28,7 @@ import {
 } from 'recharts'
 
 interface ItemOption { item_name: string; unit_of_measure: string }
-interface ClientOption { id: string; company_name: string }
+interface ClientOption { id: string; company_name: string; show_csi_in_portal: boolean }
 interface SOItemOption { item_name: string; unit: string; quantity: number }
 
 interface CSIRecord {
@@ -100,7 +100,7 @@ export default function CSIMonitoringPage() {
     setLoading(true)
     const [{ data: itemOptData }, { data: clientData }, { data: soData }, { data: drItemsData }] = await Promise.all([
       supabase.from('items').select('item_name, unit_of_measure').order('item_name'),
-      supabase.from('clients').select('id, company_name').eq('status', 'active').order('company_name'),
+      supabase.from('clients').select('id, company_name, show_csi_in_portal').eq('status', 'active').order('company_name'),
       supabase.from('sales_orders').select('id, so_number').not('so_number', 'is', null).order('created_at', { ascending: false }),
       supabase.from('dr_log_items').select('dr_number, item_name, dr_logs!inner(client_name)').order('item_name'),
     ])
@@ -146,6 +146,14 @@ export default function CSIMonitoringPage() {
   }
 
   useEffect(() => { load() }, [])
+
+  async function toggleCsiPortalVisibility(clientId: string, current: boolean) {
+    const next = !current
+    const { error } = await supabase.from('clients').update({ show_csi_in_portal: next }).eq('id', clientId)
+    if (error) { toast.error('Failed to update'); return }
+    setClientOptions(prev => prev.map(c => c.id === clientId ? { ...c, show_csi_in_portal: next } : c))
+    toast.success(next ? 'CSI visible in portal' : 'CSI hidden from portal')
+  }
 
   async function loadCompanyInfo() {
     const { data } = await supabase.from('system_settings').select('company_name, address, phone, email, tin').single()
@@ -902,11 +910,24 @@ export default function CSIMonitoringPage() {
             {clientOptions.map(c => <SelectItem key={c.id} value={c.company_name}>{c.company_name}</SelectItem>)}
           </SelectContent>
         </Select>
-        {clientFilter && (
-          <button onClick={() => setClientFilter('')} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground border rounded-md px-2 py-1">
-            <X className="h-3 w-3" /> Clear client
-          </button>
-        )}
+        {clientFilter && (() => {
+          const sel = clientOptions.find(c => c.company_name === clientFilter)
+          return sel ? (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => toggleCsiPortalVisibility(sel.id, sel.show_csi_in_portal)}
+                className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border font-medium transition-colors ${sel.show_csi_in_portal ? 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100' : 'bg-gray-50 border-gray-300 text-gray-500 hover:bg-gray-100'}`}
+                title="Toggle whether CSI Issued is visible in the client portal"
+              >
+                <span className={`inline-block h-2 w-2 rounded-full ${sel.show_csi_in_portal ? 'bg-emerald-500' : 'bg-gray-400'}`} />
+                Portal: CSI {sel.show_csi_in_portal ? 'Visible' : 'Hidden'}
+              </button>
+              <button onClick={() => setClientFilter('')} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground border rounded-md px-2 py-1">
+                <X className="h-3 w-3" /> Clear
+              </button>
+            </div>
+          ) : null
+        })()}
         <div className="flex border rounded-md overflow-hidden">
           <button
             onClick={() => setViewMode('by-si')}
