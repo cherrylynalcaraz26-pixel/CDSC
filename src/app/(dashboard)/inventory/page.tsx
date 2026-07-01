@@ -1181,16 +1181,15 @@ export default function InventoryPage() {
 
       {/* Inventory Report Dialog */}
       <Dialog open={reportOpen} onOpenChange={o => { if (!o) setReportOpen(false) }}>
-        <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] flex flex-col">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FileText className="h-4 w-4 text-red-600" /> Inventory Report
-            </DialogTitle>
-          </DialogHeader>
-          <div className="flex items-center gap-3 pb-2 border-b">
-            <label className="text-sm font-medium text-gray-700 shrink-0">Select Client:</label>
+        <DialogContent className="w-[95vw] max-w-5xl max-h-[92vh] flex flex-col p-0 gap-0 overflow-hidden">
+          {/* Toolbar */}
+          <div className="flex items-center gap-3 px-5 py-3 border-b bg-gray-50 shrink-0">
+            <FileText className="h-4 w-4 text-red-600 shrink-0" />
+            <span className="font-semibold text-sm text-gray-800">Inventory Report</span>
+            <div className="w-px h-5 bg-gray-300 mx-1" />
+            <label className="text-sm text-gray-500 shrink-0">Client:</label>
             <Select value={reportClient} onValueChange={setReportClient}>
-              <SelectTrigger className="w-64">
+              <SelectTrigger className="w-56 h-8 text-sm">
                 <SelectValue placeholder="Select client" />
               </SelectTrigger>
               <SelectContent>
@@ -1198,40 +1197,54 @@ export default function InventoryPage() {
               </SelectContent>
             </Select>
             <Button
-              variant="outline"
-              className="ml-auto gap-1.5"
+              className="ml-auto bg-red-600 hover:bg-red-700 text-white h-8 text-sm gap-1.5 shrink-0"
               onClick={() => {
                 const el = document.getElementById('inventory-report-print')
                 if (!el) return
-                const win = window.open('', '_blank', 'width=900,height=700')
+                const win = window.open('', '_blank', 'width=960,height=720')
                 if (!win) return
                 win.document.write(`<!DOCTYPE html><html><head><title>Inventory Report - ${reportClient}</title><style>
-                  body { font-family: Arial, sans-serif; margin: 24px; color: #111; }
-                  h1 { font-size: 20px; margin-bottom: 4px; }
-                  .sub { font-size: 12px; color: #666; margin-bottom: 16px; }
-                  table { width: 100%; border-collapse: collapse; font-size: 12px; }
-                  th { background: #f3f4f6; text-align: left; padding: 6px 10px; border: 1px solid #e5e7eb; font-weight: 600; }
-                  td { padding: 5px 10px; border: 1px solid #e5e7eb; }
+                  * { box-sizing: border-box; margin: 0; padding: 0; }
+                  body { font-family: Arial, sans-serif; background: #fff; color: #111; padding: 32px; }
+                  .header-bar { background: #dc2626; height: 6px; border-radius: 3px; margin-bottom: 20px; }
+                  .letterhead { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; padding-bottom: 16px; border-bottom: 1px solid #e5e7eb; }
+                  .company-name { font-size: 22px; font-weight: 800; color: #dc2626; letter-spacing: -0.5px; }
+                  .company-sub { font-size: 11px; color: #6b7280; margin-top: 2px; }
+                  .report-title { text-align: right; }
+                  .report-title h2 { font-size: 16px; font-weight: 700; color: #111; }
+                  .report-title p { font-size: 11px; color: #6b7280; margin-top: 2px; }
+                  .meta { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 20px; }
+                  .meta-card { border: 1px solid #e5e7eb; border-radius: 6px; padding: 10px 12px; }
+                  .meta-card .label { font-size: 10px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; }
+                  .meta-card .value { font-size: 18px; font-weight: 700; margin-top: 2px; }
+                  .green { color: #15803d; } .red { color: #dc2626; } .blue { color: #2563eb; } .gray { color: #6b7280; }
+                  table { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 4px; }
+                  th { background: #1f2937; color: #fff; text-align: left; padding: 7px 10px; font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
+                  th.r { text-align: right; }
+                  td { padding: 6px 10px; border-bottom: 1px solid #f3f4f6; }
+                  td.r { text-align: right; }
                   tr:nth-child(even) td { background: #f9fafb; }
-                  .text-right { text-align: right; }
-                  .green { color: #15803d; font-weight: 600; }
-                  .red { color: #dc2626; font-weight: 600; }
-                  .gray { color: #6b7280; }
-                  tfoot td { font-weight: 700; background: #f3f4f6; border-top: 2px solid #d1d5db; }
-                  @media print { @page { margin: 16mm; } }
+                  tfoot td { font-weight: 700; background: #f3f4f6; border-top: 2px solid #d1d5db; font-size: 11px; }
+                  .footer { margin-top: 24px; font-size: 10px; color: #9ca3af; border-top: 1px solid #f3f4f6; padding-top: 12px; }
+                  @media print { @page { margin: 14mm; size: A4 landscape; } body { padding: 0; } }
                 </style></head><body>${el.innerHTML}</body></html>`)
                 win.document.close()
                 win.focus()
-                setTimeout(() => { win.print() }, 300)
+                setTimeout(() => { win.print() }, 400)
               }}
             >
               <Printer className="h-4 w-4" /> Print / Save PDF
             </Button>
           </div>
-          <div className="overflow-y-auto flex-1 pt-2">
+
+          {/* Paper preview area */}
+          <div className="overflow-y-auto flex-1 bg-gray-200 p-6">
             {(() => {
               const reportRows = rows.filter(r => r.client === reportClient)
               const totalBalance = reportRows.reduce((s, r) => s + r.balance, 0)
+              const totalDr = reportRows.reduce((s, r) => s + r.dr_qty, 0)
+              const totalWs = reportRows.reduce((s, r) => s + r.ws_qty, 0)
+              const totalCsi = reportRows.reduce((s, r) => s + r.csi_qty, 0)
               const totalEstValue = reportRows.reduce((s, r) => {
                 const price = r.csi_details.length > 0
                   ? r.csi_details[r.csi_details.length - 1].unit_price
@@ -1240,25 +1253,58 @@ export default function InventoryPage() {
               }, 0)
               const today = new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
               return (
-                <div id="inventory-report-print">
-                  <h1 style={{ fontSize: '20px', marginBottom: '4px' }}>Inventory Report</h1>
-                  <div className="text-sm text-gray-500 mb-1">Client: <strong>{reportClient}</strong></div>
-                  <div className="text-xs text-gray-400 mb-4">As of {today} &mdash; CDSC Inventory System</div>
+                <div id="inventory-report-print" className="bg-white rounded-lg shadow-lg mx-auto max-w-[860px] p-10 min-h-[600px]">
+                  {/* Red accent bar */}
+                  <div className="h-1.5 bg-red-600 rounded-full mb-6" />
+
+                  {/* Letterhead */}
+                  <div className="flex justify-between items-start mb-6 pb-5 border-b border-gray-200">
+                    <div>
+                      <div className="text-2xl font-extrabold text-red-600 tracking-tight">CDSC</div>
+                      <div className="text-xs text-gray-400 mt-0.5">Construction & Development Supply Center</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-base font-bold text-gray-800">Inventory Report</div>
+                      <div className="text-xs text-gray-400 mt-0.5">As of {today}</div>
+                    </div>
+                  </div>
+
+                  {/* Client + summary cards */}
+                  <div className="mb-5">
+                    <div className="text-xs text-gray-400 uppercase tracking-wider font-semibold mb-0.5">Client</div>
+                    <div className="text-lg font-bold text-gray-900">{reportClient || '—'}</div>
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-3 mb-6">
+                    {[
+                      { label: 'DR Delivered', value: totalDr, cls: 'text-blue-700' },
+                      { label: 'WH Stock', value: totalWs, cls: 'text-green-700' },
+                      { label: 'CSI Issued', value: totalCsi, cls: 'text-orange-600' },
+                      { label: 'Net Balance', value: totalBalance, cls: totalBalance >= 0 ? 'text-green-700' : 'text-red-600' },
+                    ].map(c => (
+                      <div key={c.label} className="border border-gray-200 rounded-lg px-4 py-3 bg-gray-50">
+                        <div className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">{c.label}</div>
+                        <div className={`text-2xl font-bold mt-1 ${c.cls}`}>{c.value}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Table */}
                   {reportRows.length === 0 ? (
-                    <p className="text-sm text-muted-foreground italic py-6 text-center">No inventory data for this client.</p>
+                    <div className="text-center py-12 text-gray-400 italic text-sm">No inventory data for this client.</div>
                   ) : (
-                    <table className="w-full text-sm border-collapse">
+                    <table className="w-full text-xs border-collapse">
                       <thead>
-                        <tr className="bg-gray-100 text-left">
-                          <th className="px-3 py-2 border border-gray-200 text-xs font-semibold">#</th>
-                          <th className="px-3 py-2 border border-gray-200 text-xs font-semibold">Item Description</th>
-                          <th className="px-3 py-2 border border-gray-200 text-xs font-semibold">Unit</th>
-                          <th className="px-3 py-2 border border-gray-200 text-xs font-semibold text-right">DR Qty</th>
-                          <th className="px-3 py-2 border border-gray-200 text-xs font-semibold text-right">WH Stock</th>
-                          <th className="px-3 py-2 border border-gray-200 text-xs font-semibold text-right">CSI Issued</th>
-                          <th className="px-3 py-2 border border-gray-200 text-xs font-semibold text-right">Balance</th>
-                          <th className="px-3 py-2 border border-gray-200 text-xs font-semibold text-right">Est. Unit Price</th>
-                          <th className="px-3 py-2 border border-gray-200 text-xs font-semibold text-right">Est. Value</th>
+                        <tr className="bg-gray-800 text-white">
+                          <th className="px-3 py-2 text-left font-semibold text-[10px] uppercase tracking-wide w-8">#</th>
+                          <th className="px-3 py-2 text-left font-semibold text-[10px] uppercase tracking-wide">Item Description</th>
+                          <th className="px-3 py-2 text-left font-semibold text-[10px] uppercase tracking-wide w-16">Unit</th>
+                          <th className="px-3 py-2 text-right font-semibold text-[10px] uppercase tracking-wide w-16">DR Qty</th>
+                          <th className="px-3 py-2 text-right font-semibold text-[10px] uppercase tracking-wide w-16">WH Stock</th>
+                          <th className="px-3 py-2 text-right font-semibold text-[10px] uppercase tracking-wide w-16">CSI Issued</th>
+                          <th className="px-3 py-2 text-right font-semibold text-[10px] uppercase tracking-wide w-16">Balance</th>
+                          <th className="px-3 py-2 text-right font-semibold text-[10px] uppercase tracking-wide w-24">Est. Unit Price</th>
+                          <th className="px-3 py-2 text-right font-semibold text-[10px] uppercase tracking-wide w-24">Est. Value</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1268,39 +1314,43 @@ export default function InventoryPage() {
                             : r.dr_details.length > 0 ? r.dr_details[r.dr_details.length - 1].unit_price : null
                           const estValue = latestPrice != null ? r.balance * latestPrice : null
                           return (
-                            <tr key={r.item_name} className={i % 2 === 1 ? 'bg-gray-50' : ''}>
-                              <td className="px-3 py-2 border border-gray-200 text-xs text-gray-400">{i + 1}</td>
-                              <td className="px-3 py-2 border border-gray-200 text-xs font-medium">{r.item_name}</td>
-                              <td className="px-3 py-2 border border-gray-200 text-xs text-gray-500">{uomName(r.unit)}</td>
-                              <td className="px-3 py-2 border border-gray-200 text-xs text-right">{r.dr_qty}</td>
-                              <td className="px-3 py-2 border border-gray-200 text-xs text-right text-green-600">{r.ws_qty > 0 ? r.ws_qty : '—'}</td>
-                              <td className="px-3 py-2 border border-gray-200 text-xs text-right">{r.csi_qty}</td>
-                              <td className={`px-3 py-2 border border-gray-200 text-xs text-right font-semibold ${r.balance > 0 ? 'text-green-700' : r.balance < 0 ? 'text-red-600' : 'text-gray-500'}`}>{r.balance}</td>
-                              <td className="px-3 py-2 border border-gray-200 text-xs text-right text-blue-600">
-                                {latestPrice != null ? `₱${latestPrice.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}
+                            <tr key={r.item_name} className={i % 2 === 1 ? 'bg-gray-50' : 'bg-white'}>
+                              <td className="px-3 py-2 text-gray-400 border-b border-gray-100">{i + 1}</td>
+                              <td className="px-3 py-2 font-medium text-gray-800 border-b border-gray-100">{r.item_name}</td>
+                              <td className="px-3 py-2 text-gray-500 border-b border-gray-100">{uomName(r.unit)}</td>
+                              <td className="px-3 py-2 text-right text-gray-700 border-b border-gray-100">{r.dr_qty}</td>
+                              <td className="px-3 py-2 text-right border-b border-gray-100">
+                                {r.ws_qty > 0 ? <span className="text-green-600 font-medium">{r.ws_qty}</span> : <span className="text-gray-300">—</span>}
                               </td>
-                              <td className={`px-3 py-2 border border-gray-200 text-xs text-right font-semibold ${estValue != null && estValue < 0 ? 'text-red-600' : 'text-gray-800'}`}>
-                                {estValue != null ? `₱${estValue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}
+                              <td className="px-3 py-2 text-right text-gray-700 border-b border-gray-100">{r.csi_qty}</td>
+                              <td className={`px-3 py-2 text-right font-bold border-b border-gray-100 ${r.balance > 0 ? 'text-green-700' : r.balance < 0 ? 'text-red-600' : 'text-gray-400'}`}>{r.balance}</td>
+                              <td className="px-3 py-2 text-right text-blue-600 border-b border-gray-100">
+                                {latestPrice != null ? `₱${latestPrice.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : <span className="text-gray-300">—</span>}
+                              </td>
+                              <td className={`px-3 py-2 text-right font-semibold border-b border-gray-100 ${estValue != null && estValue < 0 ? 'text-red-600' : 'text-gray-800'}`}>
+                                {estValue != null ? `₱${estValue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : <span className="text-gray-300">—</span>}
                               </td>
                             </tr>
                           )
                         })}
                       </tbody>
                       <tfoot>
-                        <tr className="bg-gray-100 font-bold text-sm">
-                          <td colSpan={6} className="px-3 py-2 border border-gray-200 text-xs text-right text-gray-600">Total</td>
-                          <td className={`px-3 py-2 border border-gray-200 text-xs text-right font-bold ${totalBalance > 0 ? 'text-green-700' : totalBalance < 0 ? 'text-red-600' : 'text-gray-500'}`}>{totalBalance}</td>
-                          <td className="px-3 py-2 border border-gray-200 text-xs text-right text-gray-500">—</td>
-                          <td className="px-3 py-2 border border-gray-200 text-xs text-right font-bold text-gray-800">
+                        <tr className="bg-gray-100">
+                          <td colSpan={6} className="px-3 py-2.5 text-right text-xs font-bold text-gray-600 border-t-2 border-gray-300">TOTAL</td>
+                          <td className={`px-3 py-2.5 text-right text-sm font-bold border-t-2 border-gray-300 ${totalBalance > 0 ? 'text-green-700' : totalBalance < 0 ? 'text-red-600' : 'text-gray-500'}`}>{totalBalance}</td>
+                          <td className="px-3 py-2.5 text-right text-xs text-gray-400 border-t-2 border-gray-300">—</td>
+                          <td className="px-3 py-2.5 text-right text-sm font-bold text-gray-800 border-t-2 border-gray-300">
                             ₱{totalEstValue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                           </td>
                         </tr>
                       </tfoot>
                     </table>
                   )}
-                  <div className="mt-6 text-xs text-gray-400">
-                    <p>Note: Est. Unit Price is based on the latest CSI or DR unit price on record. Estimated values are for reference only.</p>
-                    <p className="mt-1">Generated by CDSC Inventory System &mdash; {today}</p>
+
+                  {/* Footer note */}
+                  <div className="mt-8 pt-4 border-t border-gray-100 text-[10px] text-gray-400 flex justify-between">
+                    <span>Est. Unit Price is based on the latest CSI or DR record. Values are for reference only.</span>
+                    <span>Generated {today} · CDSC Inventory System</span>
                   </div>
                 </div>
               )
