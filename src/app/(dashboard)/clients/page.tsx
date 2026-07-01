@@ -442,9 +442,12 @@ export default function ClientsPage() {
                         </span>
                       </button>
                       {c.portal_access && (
-                        <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-blue-100 text-blue-700 flex items-center gap-1 w-fit">
-                          <ShieldCheck className="h-3 w-3" /> Portal
-                        </span>
+                        <div>
+                          <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-blue-100 text-blue-700 flex items-center gap-1 w-fit">
+                            <ShieldCheck className="h-3 w-3" /> Portal
+                          </span>
+                          {c.email && <div className="text-[10px] text-blue-500 mt-0.5 pl-0.5 truncate max-w-[140px]">{c.email}</div>}
+                        </div>
                       )}
                       {unreadMsgByClient[c.id] && (
                         <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-700 flex items-center gap-1 w-fit">

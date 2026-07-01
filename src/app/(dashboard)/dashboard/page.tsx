@@ -431,19 +431,23 @@ export default function DashboardPage() {
       <Card>
         <CardHeader className="pb-0 pt-4 px-4">
           <button className="flex items-center justify-between w-full text-left" onClick={() => setSoPipelineOpen(o => !o)}>
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <FileText className="h-4 w-4 text-blue-600" />
-              Sales Order Pipeline — Next Actions
-            </CardTitle>
+            <div>
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <FileText className="h-4 w-4 text-blue-600" />
+                Sales Order Pipeline — Next Actions
+              </CardTitle>
+              <p className="text-[10px] text-muted-foreground mt-0.5">CSI is logged in Pull-Out &amp; Billing → Bill CSI</p>
+            </div>
             {soPipelineOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
           </button>
         </CardHeader>
         {soPipelineOpen && (
           <CardContent className="p-0 mt-3">
-            <div className="grid grid-cols-2 text-center text-[10px] font-semibold uppercase tracking-wider border-b border-t">
+            <div className="grid grid-cols-3 text-center text-[10px] font-semibold uppercase tracking-wider border-b border-t">
               {[
                 { label: 'SO Created', color: 'text-blue-600 bg-blue-50' },
                 { label: 'DR Logged',  color: 'text-orange-600 bg-orange-50' },
+                { label: 'CSI Billed', color: 'text-purple-600 bg-purple-50' },
               ].map(s => (
                 <div key={s.label} className={`py-2 ${s.color}`}>{s.label}</div>
               ))}
@@ -456,12 +460,14 @@ export default function DashboardPage() {
               <div className="divide-y">
                 {pipelineSOs.map(so => {
                   const hasDR = drLogSONumbers.has(so.so_number ?? '') || (!!so.client_po_number && drLogSONumbers.has(so.client_po_number))
+                  const hasCsi = csiRows.some(r => r.client === (so.client_name ?? '').trim())
                   const stages = [
-                    { done: true,  label: so.so_number ?? '—', sub: so.client_name ?? '' },
-                    { done: hasDR, label: hasDR ? 'Logged' : 'Pending' },
+                    { done: true,    label: so.so_number ?? '—', sub: so.client_name ?? '' },
+                    { done: hasDR,   label: hasDR ? 'Logged' : 'Pending' },
+                    { done: hasCsi,  label: hasCsi ? 'Billed' : 'Pending' },
                   ]
                   return (
-                    <div key={so.id} className="grid grid-cols-2 text-center text-xs cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => router.push('/sales-orders')}>
+                    <div key={so.id} className="grid grid-cols-3 text-center text-xs cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => router.push('/sales-orders')}>
                       {stages.map((s, i) => (
                         <div key={i} className={`py-2.5 px-1 border-r last:border-r-0 ${s.done ? '' : 'opacity-40'}`}>
                           <div className={`inline-flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold mx-auto mb-0.5 ${s.done ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
@@ -758,105 +764,6 @@ export default function DashboardPage() {
                     </td>
                   </tr>
                 ))}
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Collections + CSI tables */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Collections by Client */}
-        <Card>
-          <CardHeader className="pb-2 flex flex-row items-center justify-between">
-            <CardTitle className="text-sm font-medium">Collections by Client (OR Log)</CardTitle>
-            <span className="text-xs text-muted-foreground">Click row for details</span>
-          </CardHeader>
-          <CardContent className="p-0">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-red-600 text-white text-xs">
-                  <th className="px-3 py-2 text-left w-8">#</th>
-                  <th className="px-3 py-2 text-left">CLIENT</th>
-                  <th className="px-3 py-2 text-right">COLLECTED</th>
-                  <th className="px-3 py-2 text-right">EWT</th>
-                  <th className="px-3 py-2 text-right">ORs</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr><td colSpan={5} className="text-center py-6 text-muted-foreground text-xs">Loading…</td></tr>
-                ) : orRows.map((r, i) => (
-                  <tr key={r.client} className="border-b last:border-0 hover:bg-muted/30 cursor-pointer" onClick={() => setDetailModal({ type: 'or', client: r.client })}>
-                    <td className="px-3 py-2 text-xs text-muted-foreground">{i + 1}</td>
-                    <td className="px-3 py-2 text-xs text-blue-600 font-medium">{r.client}</td>
-                    <td className="px-3 py-2 text-xs text-right text-green-600 font-medium tabular-nums">
-                      ₱{r.collected.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="px-3 py-2 text-xs text-right text-orange-500 tabular-nums">
-                      ₱{r.ewt.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="px-3 py-2 text-xs text-right">{r.ors}</td>
-                  </tr>
-                ))}
-                {!loading && orRows.length > 0 && (
-                  <tr className="border-t bg-muted/20 font-semibold text-xs">
-                    <td colSpan={2} className="px-3 py-2 text-right">TOTAL</td>
-                    <td className="px-3 py-2 text-right text-green-600 tabular-nums">
-                      ₱{orRows.reduce((s, r) => s + r.collected, 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="px-3 py-2 text-right text-orange-500 tabular-nums">
-                      ₱{orRows.reduce((s, r) => s + r.ewt, 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="px-3 py-2 text-right">{orRows.reduce((s, r) => s + r.ors, 0)}</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </CardContent>
-        </Card>
-
-        {/* CSI Invoices by Client */}
-        <Card>
-          <CardHeader className="pb-2 flex flex-row items-center justify-between">
-            <CardTitle className="text-sm font-medium">CSI Invoices by Client</CardTitle>
-            <span className="text-xs text-muted-foreground">Click row for details</span>
-          </CardHeader>
-          <CardContent className="p-0">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-red-600 text-white text-xs">
-                  <th className="px-3 py-2 text-left w-8">#</th>
-                  <th className="px-3 py-2 text-left">CLIENT</th>
-                  <th className="px-3 py-2 text-right">BILLED</th>
-                  <th className="px-3 py-2 text-right">INVOICES</th>
-                  <th className="px-3 py-2 text-right">ITEMS</th>
-                </tr>
-              </thead>
-              <tbody>
-                {loading ? (
-                  <tr><td colSpan={5} className="text-center py-6 text-muted-foreground text-xs">Loading…</td></tr>
-                ) : csiRows.map((r, i) => (
-                  <tr key={r.client} className="border-b last:border-0 hover:bg-muted/30 cursor-pointer" onClick={() => setDetailModal({ type: 'csi', client: r.client })}>
-                    <td className="px-3 py-2 text-xs text-muted-foreground">{i + 1}</td>
-                    <td className="px-3 py-2 text-xs font-medium">{r.client}</td>
-                    <td className="px-3 py-2 text-xs text-right text-blue-600 font-medium tabular-nums">
-                      ₱{r.billed.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="px-3 py-2 text-xs text-right">{r.invoices}</td>
-                    <td className="px-3 py-2 text-xs text-right">{r.items}</td>
-                  </tr>
-                ))}
-                {!loading && csiRows.length > 0 && (
-                  <tr className="border-t bg-muted/20 font-semibold text-xs">
-                    <td colSpan={2} className="px-3 py-2 text-right">TOTAL</td>
-                    <td className="px-3 py-2 text-right text-blue-600 tabular-nums">
-                      ₱{csiRows.reduce((s, r) => s + r.billed, 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="px-3 py-2 text-right">{csiRows.reduce((s, r) => s + r.invoices, 0)}</td>
-                    <td className="px-3 py-2 text-right">{csiRows.reduce((s, r) => s + r.items, 0)}</td>
-                  </tr>
-                )}
               </tbody>
             </table>
           </CardContent>

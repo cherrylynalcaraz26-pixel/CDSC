@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -436,12 +437,17 @@ export default function PullOutBillingPage() {
   )
 
   return (
-    <div className="p-6">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Pull-Out &amp; Billing</h1>
-          <p className="text-sm text-gray-500">Stock on-hand, movement history and pull-out requests</p>
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <div className="h-9 w-9 rounded-lg bg-orange-600/10 flex items-center justify-center">
+            <RotateCcw className="h-5 w-5 text-orange-600" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-semibold leading-none">Pull-Out &amp; Billing</h1>
+            <p className="text-muted-foreground text-sm mt-0.5">Stock on-hand, movement history and pull-out requests</p>
+          </div>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" className="gap-1.5" onClick={handleRefresh} disabled={refreshing}>
@@ -459,25 +465,28 @@ export default function PullOutBillingPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-7 gap-3 mb-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
         {[
-          { label: 'Total Products',    value: rows.length,    color: '',               border: 'border-gray-800',   icon: <Package className="h-3.5 w-3.5 text-gray-500" /> },
-          { label: 'On-Hand SKUs',      value: onHandSkus,     color: 'text-amber-600', border: 'border-amber-500',  icon: <BarChart3 className="h-3.5 w-3.5 text-amber-500" /> },
-          { label: 'Negative SKUs',     value: negSkus,        color: 'text-red-600',   border: 'border-red-500',    icon: <TrendingUp className="h-3.5 w-3.5 text-red-500 rotate-180" /> },
-          { label: 'Est. On-Hand Value',value: peso(estValue), color: 'text-green-700', border: 'border-green-600',  icon: <TrendingUp className="h-3.5 w-3.5 text-green-600" /> },
-          { label: 'CSI Invoices',      value: counts.csi,     color: 'text-indigo-600',border: 'border-indigo-500', icon: <FileText className="h-3.5 w-3.5 text-indigo-500" /> },
-          { label: 'DR Logs',           value: counts.dr,      color: '',               border: 'border-gray-800',   icon: <Truck className="h-3.5 w-3.5 text-gray-500" /> },
-          { label: 'Pull-Out Reqs',     value: counts.pr,      color: '',               border: 'border-gray-800',   icon: <RotateCcw className="h-3.5 w-3.5 text-gray-500" /> },
+          { label: 'Total Products',    value: rows.length,    color: '',               icon: <Package className="h-3.5 w-3.5 text-gray-500" /> },
+          { label: 'On-Hand SKUs',      value: onHandSkus,     color: 'text-amber-600', icon: <BarChart3 className="h-3.5 w-3.5 text-amber-500" /> },
+          { label: 'Negative SKUs',     value: negSkus,        color: 'text-red-600',   icon: <TrendingUp className="h-3.5 w-3.5 text-red-500 rotate-180" /> },
+          { label: 'Est. Value',        value: peso(estValue), color: 'text-green-700', icon: <TrendingUp className="h-3.5 w-3.5 text-green-600" /> },
+          { label: 'CSI Invoices',      value: counts.csi,     color: 'text-indigo-600',icon: <FileText className="h-3.5 w-3.5 text-indigo-500" /> },
+          { label: 'DR Logs',           value: counts.dr,      color: '',               icon: <Truck className="h-3.5 w-3.5 text-gray-500" /> },
+          { label: 'Pull-Out Reqs',     value: counts.pr,      color: '',               icon: <RotateCcw className="h-3.5 w-3.5 text-gray-500" /> },
         ].map(k => (
-          <div key={k.label} className={`bg-white rounded-xl border-l-4 ${k.border} shadow-sm p-3`}>
-            <div className={`text-xl font-black ${k.color}`}>{k.value}</div>
-            <div className="flex items-center gap-1 text-xs text-gray-500 mt-0.5 leading-tight">{k.icon}{k.label}</div>
-          </div>
+          <Card key={k.label}>
+            <CardContent className="pt-4 pb-3">
+              <div className={`text-xl font-bold ${k.color}`}>{k.value}</div>
+              <div className="flex items-center gap-1 text-xs text-muted-foreground mt-0.5 leading-tight">{k.icon}{k.label}</div>
+            </CardContent>
+          </Card>
         ))}
       </div>
 
       {/* Filters + Tab Bar */}
-      <div className="bg-white rounded-xl border border-gray-200 p-4 mb-4 flex flex-wrap gap-3 items-end shadow-sm">
+      <Card>
+        <CardContent className="p-4 flex flex-wrap gap-3 items-end">
         {tab !== 'requests' && (
           <>
             <div>
@@ -517,15 +526,18 @@ export default function PullOutBillingPage() {
             </button>
           ))}
         </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* ── Stock Tab ─────────────────────────────────────────────────────────── */}
       {tab === 'stock' && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-          <div className="px-4 py-3 border-b border-gray-100 text-sm font-semibold text-gray-700 flex items-center gap-2">
-            <Package className="h-4 w-4 text-gray-500" />Stock On-Hand ({filteredRows.length} products)
-            <span className="text-xs font-normal text-gray-400 ml-1">Click a row to see DR &amp; CSI details</span>
-          </div>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Package className="h-4 w-4" />Stock On-Hand ({filteredRows.length} products)
+              <span className="text-xs font-normal text-muted-foreground ml-1">Click a row to see DR &amp; CSI details</span>
+            </CardTitle>
+          </CardHeader>
           <div className="overflow-x-auto">
             <table className="w-full text-sm border-collapse">
               <thead>
@@ -562,17 +574,17 @@ export default function PullOutBillingPage() {
               </tbody>
             </table>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* ── By Client Tab ─────────────────────────────────────────────────────── */}
       {tab === 'client' && (
         <div className="space-y-4">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-            <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-              <span className="font-semibold text-gray-700 text-sm flex items-center gap-2"><Package className="h-4 w-4 text-gray-500" />Stock by Client ({clientStock.length} clients)</span>
-              <span className="text-xs text-gray-400">Click a client to drill into their items</span>
-            </div>
+          <Card>
+            <CardHeader className="pb-2 flex flex-row items-center justify-between">
+              <CardTitle className="text-sm font-medium flex items-center gap-2"><Package className="h-4 w-4" />Stock by Client ({clientStock.length} clients)</CardTitle>
+              <span className="text-xs text-muted-foreground">Click a client to drill into their items</span>
+            </CardHeader>
             <div className="overflow-x-auto">
               <table className="w-full text-sm border-collapse">
                 <thead>
@@ -606,7 +618,7 @@ export default function PullOutBillingPage() {
                 </tbody>
               </table>
             </div>
-          </div>
+          </Card>
 
           {selectedClientStock && (() => {
             const clientRows = filteredRows.map(r => {
@@ -620,15 +632,15 @@ export default function PullOutBillingPage() {
               return { ...r, delivered: d, billed: b, pulledOut: p, onHand: d - b - p }
             }).filter(Boolean) as ProductRow[]
             return (
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-                <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-                  <span className="font-semibold text-gray-700 text-sm">{selectedClientStock} — Item Breakdown</span>
-                  <span className="text-xs text-gray-400">{clientRows.length} items</span>
-                </div>
+              <Card>
+                <CardHeader className="pb-2 flex flex-row items-center justify-between">
+                  <CardTitle className="text-sm font-medium">{selectedClientStock} — Item Breakdown</CardTitle>
+                  <span className="text-xs text-muted-foreground">{clientRows.length} items</span>
+                </CardHeader>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm border-collapse">
                     <thead>
-                      <tr className="bg-gray-800 text-white text-xs uppercase">
+                      <tr style={{ background: '#DC2626' }} className="text-white text-xs uppercase">
                         <th className="px-3 py-2.5 text-left">#</th>
                         <th className="px-3 py-2.5 text-left">Product</th>
                         <th className="px-3 py-2.5 text-left">Unit</th>
@@ -642,10 +654,10 @@ export default function PullOutBillingPage() {
                     </thead>
                     <tbody>
                       {clientRows.map((row, i) => (
-                        <tr key={row.product} className="border-b border-gray-100 hover:bg-gray-50">
-                          <td className="px-3 py-2 text-gray-400 text-xs">{i + 1}</td>
-                          <td className="px-3 py-2 font-medium text-gray-800">{row.product}</td>
-                          <td className="px-3 py-2 text-gray-500">{row.unit || '—'}</td>
+                        <tr key={row.product} className="border-b border-gray-100 hover:bg-muted/30">
+                          <td className="px-3 py-2 text-muted-foreground text-xs">{i + 1}</td>
+                          <td className="px-3 py-2 font-medium">{row.product}</td>
+                          <td className="px-3 py-2 text-muted-foreground">{row.unit || '—'}</td>
                           <td className="px-3 py-2 text-right text-blue-700 font-semibold">{fmtNum(row.delivered)}</td>
                           <td className="px-3 py-2 text-right text-purple-700 font-semibold">{fmtNum(row.billed)}</td>
                           <td className="px-3 py-2 text-right text-orange-600">{row.pulledOut > 0 ? fmtNum(row.pulledOut) : '—'}</td>
@@ -654,11 +666,11 @@ export default function PullOutBillingPage() {
                           <td className="px-3 py-2 text-right font-mono text-green-700">{peso(Math.max(0, row.onHand) * row.price)}</td>
                         </tr>
                       ))}
-                      {clientRows.length === 0 && <tr><td colSpan={9} className="px-3 py-6 text-center text-gray-400">No items for this client.</td></tr>}
+                      {clientRows.length === 0 && <tr><td colSpan={9} className="px-3 py-6 text-center text-muted-foreground">No items for this client.</td></tr>}
                     </tbody>
                   </table>
                 </div>
-              </div>
+              </Card>
             )
           })()}
         </div>
@@ -666,10 +678,12 @@ export default function PullOutBillingPage() {
 
       {/* ── Movements Tab ────────────────────────────────────────────────────── */}
       {tab === 'movements' && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-          <div className="px-4 py-3 border-b border-gray-100 font-semibold text-gray-700 text-sm flex items-center gap-2">
-            <TrendingUp className="h-4 w-4 text-gray-500" />Stock Movements ({movements.length})
-          </div>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" />Stock Movements ({movements.length})
+            </CardTitle>
+          </CardHeader>
           <div className="overflow-x-auto max-h-[60vh] overflow-y-auto">
             <table className="w-full text-sm border-collapse">
               <thead className="sticky top-0">
@@ -703,47 +717,52 @@ export default function PullOutBillingPage() {
                     <td className={`px-3 py-2 text-right font-semibold ${m.dir === 'IN' ? 'text-green-700' : 'text-red-700'}`}>{m.dir === 'IN' ? '+' : '-'}{fmtNum(m.qty)}</td>
                   </tr>
                 ))}
-                {movements.length === 0 && <tr><td colSpan={9} className="px-3 py-8 text-center text-gray-400">No movements found.</td></tr>}
+                {movements.length === 0 && <tr><td colSpan={9} className="px-3 py-8 text-center text-muted-foreground">No movements found.</td></tr>}
               </tbody>
             </table>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* ── Requests Tab ─────────────────────────────────────────────────────── */}
       {tab === 'requests' && (
         <div className="space-y-4">
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {([
               ['Total', pulloutRequests.length],
               ['Pending', pulloutRequests.filter(p => p.status === 'pending').length],
               ['Approved', pulloutRequests.filter(p => p.status === 'approved').length],
               ['Completed', pulloutRequests.filter(p => p.status === 'completed').length],
             ] as const).map(([label, value]) => (
-              <div key={label} className="bg-white rounded-2xl border border-gray-100 p-4 text-center shadow-sm">
-                <p className="text-3xl font-bold text-gray-900">{value}</p>
-                <p className="text-xs text-gray-500 mt-1">{label}</p>
-              </div>
+              <Card key={label}>
+                <CardContent className="pt-4 pb-3 text-center">
+                  <p className="text-2xl font-bold">{value}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
+                </CardContent>
+              </Card>
             ))}
           </div>
 
-          <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
-            <div className="p-4 border-b border-gray-100 flex gap-3">
-              <div className="relative flex-1 max-w-sm">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-                <input value={reqSearch} onChange={e => setReqSearch(e.target.value)}
-                  placeholder="Search by PR# or client…"
-                  className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500" />
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex gap-3">
+                <div className="relative flex-1 max-w-sm">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input value={reqSearch} onChange={e => setReqSearch(e.target.value)}
+                    placeholder="Search by PR# or client…"
+                    className="pl-9" />
+                </div>
+                <select value={reqStatusFilter} onChange={e => setReqStatusFilter(e.target.value)}
+                  className="px-3 py-2 text-sm border border-input rounded-md focus:outline-none focus:ring-2 focus:ring-ring bg-background">
+                  <option value="all">All Status</option>
+                  {Object.keys(STATUS_COLORS).map(s => <option key={s} value={s} className="capitalize">{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
+                </select>
               </div>
-              <select value={reqStatusFilter} onChange={e => setReqStatusFilter(e.target.value)}
-                className="px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-red-500">
-                <option value="all">All Status</option>
-                {Object.keys(STATUS_COLORS).map(s => <option key={s} value={s} className="capitalize">{s.charAt(0).toUpperCase() + s.slice(1)}</option>)}
-              </select>
-            </div>
+            </CardHeader>
+            <CardContent className="p-0">
             <table className="w-full text-sm">
               <thead>
-                <tr className="bg-gray-50 text-xs text-gray-500 uppercase border-b border-gray-100">
+                <tr className="bg-red-600 text-white text-xs">
                   <th className="px-5 py-3 text-left">PR #</th>
                   <th className="px-4 py-3 text-left">Client</th>
                   <th className="px-4 py-3 text-left">Date</th>
@@ -784,7 +803,8 @@ export default function PullOutBillingPage() {
                   ))}
               </tbody>
             </table>
-          </div>
+            </CardContent>
+          </Card>
         </div>
       )}
 
