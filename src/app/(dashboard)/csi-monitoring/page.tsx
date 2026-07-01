@@ -651,74 +651,114 @@ export default function CSIMonitoringPage() {
         const maxSI = Math.max(...clientStats.map(c => c.siCount), 1)
         const maxItems = Math.max(...clientStats.map(c => c.lineItems), 1)
 
+        const BAR_H = 140
+        const BAR_W = Math.max(28, Math.min(56, Math.floor(520 / clientStats.length) - 12))
+        const GAP = Math.max(8, Math.min(16, Math.floor(80 / clientStats.length)))
+        const svgW = clientStats.length * (BAR_W + GAP)
+
+        const PALETTE = ['#dc2626','#2563eb','#16a34a','#d97706','#7c3aed','#0891b2','#be185d','#65a30d']
+
         return (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Total Amount per Client */}
-            <Card>
-              <CardHeader className="pb-2 pt-4 px-4">
-                <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Total Amount by Client</CardTitle>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {/* SVG Column Chart — Total Amount */}
+            <Card className="lg:col-span-2">
+              <CardHeader className="pb-1 pt-4 px-5">
+                <CardTitle className="text-sm font-semibold">Revenue by Client</CardTitle>
+                <p className="text-xs text-muted-foreground">Total invoiced amount per client</p>
               </CardHeader>
-              <CardContent className="px-4 pb-4 space-y-2">
-                {clientStats.map(c => (
-                  <div key={c.name} className="space-y-1">
-                    <div className="flex justify-between text-xs">
-                      <span className="truncate max-w-[60%] font-medium" title={c.name}>{c.name}</span>
-                      <span className="text-muted-foreground tabular-nums">{formatPeso(c.totalAmount)}</span>
-                    </div>
-                    <div className="h-2 bg-muted rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-red-500 rounded-full transition-all"
-                        style={{ width: `${(c.totalAmount / maxAmount) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
+              <CardContent className="px-5 pb-5">
+                <div className="overflow-x-auto">
+                  <svg width={Math.max(svgW + 48, 300)} height={BAR_H + 56} className="block">
+                    {/* Y-axis gridlines */}
+                    {[0, 0.25, 0.5, 0.75, 1].map(t => (
+                      <g key={t}>
+                        <line x1={40} y1={BAR_H * (1 - t)} x2={svgW + 40} y2={BAR_H * (1 - t)}
+                          stroke="#e5e7eb" strokeWidth={1} strokeDasharray={t === 0 ? '0' : '4 3'} />
+                        <text x={36} y={BAR_H * (1 - t) + 4} textAnchor="end" fontSize={9} fill="#9ca3af">
+                          {t === 0 ? '₱0' : `₱${((maxAmount * t) / 1000).toFixed(0)}k`}
+                        </text>
+                      </g>
+                    ))}
+                    {/* Bars */}
+                    {clientStats.map((c, i) => {
+                      const barH = Math.max(4, (c.totalAmount / maxAmount) * BAR_H)
+                      const x = 40 + i * (BAR_W + GAP)
+                      const color = PALETTE[i % PALETTE.length]
+                      return (
+                        <g key={c.name}>
+                          <rect x={x} y={BAR_H - barH} width={BAR_W} height={barH} rx={4} fill={color} opacity={0.85} />
+                          <text x={x + BAR_W / 2} y={BAR_H - barH - 5} textAnchor="middle" fontSize={9} fontWeight="600" fill={color}>
+                            {c.totalAmount >= 1000 ? `₱${(c.totalAmount / 1000).toFixed(1)}k` : `₱${c.totalAmount}`}
+                          </text>
+                          <text x={x + BAR_W / 2} y={BAR_H + 14} textAnchor="middle" fontSize={9} fill="#6b7280"
+                            className="pointer-events-none">
+                            {c.name.length > 10 ? c.name.slice(0, 9) + '…' : c.name}
+                          </text>
+                        </g>
+                      )
+                    })}
+                  </svg>
+                </div>
               </CardContent>
             </Card>
 
-            {/* SI Count per Client */}
+            {/* Leaderboard card */}
             <Card>
-              <CardHeader className="pb-2 pt-4 px-4">
-                <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">SI Count by Client</CardTitle>
+              <CardHeader className="pb-2 pt-4 px-5">
+                <CardTitle className="text-sm font-semibold">Client Summary</CardTitle>
+                <p className="text-xs text-muted-foreground">Ranked by total revenue</p>
               </CardHeader>
-              <CardContent className="px-4 pb-4 space-y-2">
-                {clientStats.map(c => (
-                  <div key={c.name} className="space-y-1">
-                    <div className="flex justify-between text-xs">
-                      <span className="truncate max-w-[60%] font-medium" title={c.name}>{c.name}</span>
-                      <span className="text-muted-foreground tabular-nums">{c.siCount} SI</span>
+              <CardContent className="px-5 pb-4 space-y-3">
+                {clientStats.map((c, i) => {
+                  const color = PALETTE[i % PALETTE.length]
+                  return (
+                    <div key={c.name} className="flex items-center gap-3">
+                      <div className="h-7 w-7 rounded-full flex items-center justify-center text-white text-[11px] font-bold shrink-0"
+                        style={{ background: color }}>
+                        {i + 1}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-semibold truncate" title={c.name}>{c.name}</div>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-[10px] text-muted-foreground">{c.siCount} SI</span>
+                          <span className="text-[10px] text-muted-foreground">·</span>
+                          <span className="text-[10px] text-muted-foreground">{c.lineItems} items</span>
+                        </div>
+                        <div className="mt-1 h-1.5 rounded-full overflow-hidden bg-muted">
+                          <div className="h-full rounded-full" style={{ width: `${(c.totalAmount / maxAmount) * 100}%`, background: color }} />
+                        </div>
+                      </div>
+                      <div className="text-xs font-bold tabular-nums shrink-0" style={{ color }}>
+                        {c.totalAmount >= 1000 ? `₱${(c.totalAmount / 1000).toFixed(1)}k` : formatPeso(c.totalAmount)}
+                      </div>
                     </div>
-                    <div className="h-2 bg-muted rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-blue-500 rounded-full transition-all"
-                        style={{ width: `${(c.siCount / maxSI) * 100}%` }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
+                  )
+                })}
 
-            {/* Line Items per Client */}
-            <Card>
-              <CardHeader className="pb-2 pt-4 px-4">
-                <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Line Items by Client</CardTitle>
-              </CardHeader>
-              <CardContent className="px-4 pb-4 space-y-2">
-                {clientStats.map(c => (
-                  <div key={c.name} className="space-y-1">
-                    <div className="flex justify-between text-xs">
-                      <span className="truncate max-w-[60%] font-medium" title={c.name}>{c.name}</span>
-                      <span className="text-muted-foreground tabular-nums">{c.lineItems} items</span>
-                    </div>
-                    <div className="h-2 bg-muted rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-green-500 rounded-full transition-all"
-                        style={{ width: `${(c.lineItems / maxItems) * 100}%` }}
-                      />
-                    </div>
+                {/* Mini SI vs Items comparison */}
+                <div className="pt-2 border-t space-y-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">SI vs Line Items</p>
+                  {clientStats.map((c, i) => {
+                    const color = PALETTE[i % PALETTE.length]
+                    return (
+                      <div key={c.name} className="flex items-center gap-2 text-[10px]">
+                        <span className="w-16 truncate text-muted-foreground" title={c.name}>{c.name.length > 8 ? c.name.slice(0, 7) + '…' : c.name}</span>
+                        <div className="flex-1 flex items-center gap-1">
+                          <div className="h-2 rounded-sm" style={{ width: `${(c.siCount / maxSI) * 40}px`, background: color, opacity: 0.7, minWidth: 3 }} />
+                          <span className="text-muted-foreground">{c.siCount}</span>
+                        </div>
+                        <div className="flex-1 flex items-center gap-1">
+                          <div className="h-2 rounded-sm bg-gray-300" style={{ width: `${(c.lineItems / maxItems) * 40}px`, minWidth: 3 }} />
+                          <span className="text-muted-foreground">{c.lineItems}</span>
+                        </div>
+                      </div>
+                    )
+                  })}
+                  <div className="flex gap-4 pt-1">
+                    <div className="flex items-center gap-1.5"><div className="h-2 w-4 rounded-sm bg-red-500 opacity-70" /><span className="text-[10px] text-muted-foreground">SI Count</span></div>
+                    <div className="flex items-center gap-1.5"><div className="h-2 w-4 rounded-sm bg-gray-300" /><span className="text-[10px] text-muted-foreground">Line Items</span></div>
                   </div>
-                ))}
+                </div>
               </CardContent>
             </Card>
           </div>
