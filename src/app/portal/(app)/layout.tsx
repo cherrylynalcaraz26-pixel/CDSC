@@ -428,11 +428,11 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
               key={link.href}
               href={link.href}
               className={cn(
-                'flex-1 flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-colors',
+                'flex-1 flex flex-col items-center justify-center gap-1 py-3 text-[11px] font-medium transition-colors',
                 active ? 'text-red-400' : 'text-white/40 hover:text-white/70'
               )}
             >
-              <link.icon className={cn('h-[18px] w-[18px] shrink-0', active ? 'text-red-400' : '')} />
+              <link.icon className={cn('h-5 w-5 shrink-0', active ? 'text-red-400' : '')} />
               <span className="leading-tight truncate max-w-full px-1">{link.label}</span>
             </Link>
           )
