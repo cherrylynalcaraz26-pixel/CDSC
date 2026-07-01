@@ -200,16 +200,20 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
         <div className={cn('py-4 flex items-center gap-3 transition-all', collapsed ? 'px-3 justify-center' : 'px-4')}>
           {collapsed ? (
             <button onClick={toggleCollapsed} title="Expand sidebar"
-              className="relative h-8 w-8 shrink-0 rounded-md overflow-hidden">
-              <Image src="/cdsc-logo.jpg" alt="CDSC Industrial Supply" fill className="object-cover" priority />
+              className="h-10 w-10 shrink-0 rounded-lg overflow-hidden bg-white flex items-center justify-center">
+              {clientLogoUrl
+                ? <img src={clientLogoUrl} alt={clientName} className="h-full w-full object-contain p-1" />
+                : <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="object-contain p-1" priority />}
             </button>
           ) : (
             <>
-              <div className="relative h-8 w-8 shrink-0 rounded-md overflow-hidden">
-                <Image src="/cdsc-logo.jpg" alt="CDSC Industrial Supply" fill className="object-cover" priority />
+              <div className="h-10 w-10 shrink-0 rounded-lg overflow-hidden bg-white flex items-center justify-center">
+                {clientLogoUrl
+                  ? <img src={clientLogoUrl} alt={clientName} className="h-full w-full object-contain p-1" />
+                  : <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="object-contain p-1" priority />}
               </div>
               <div className="min-w-0 flex-1">
-                <div className="text-white font-semibold text-sm leading-tight truncate">CDSC Industrial Supply</div>
+                <div className="text-white font-semibold text-sm leading-tight truncate">{clientName || 'Client Portal'}</div>
                 <div className="text-white/35 text-[11px] leading-tight">Client Portal</div>
               </div>
               <button onClick={toggleCollapsed} title="Collapse sidebar"
@@ -245,11 +249,13 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
         mobileOpen ? 'translate-x-0' : '-translate-x-full'
       )}>
         <div className="py-4 px-4 flex items-center gap-3 border-b border-white/8">
-          <div className="relative h-8 w-8 shrink-0 rounded-md overflow-hidden">
-            <Image src="/cdsc-logo.jpg" alt="CDSC Industrial Supply" fill className="object-cover" priority />
+          <div className="h-10 w-10 shrink-0 rounded-lg overflow-hidden bg-white flex items-center justify-center">
+            {clientLogoUrl
+              ? <img src={clientLogoUrl} alt={clientName} className="h-full w-full object-contain p-1" />
+              : <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="object-contain p-1" priority />}
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-white font-semibold text-sm leading-tight truncate">CDSC Industrial Supply</div>
+            <div className="text-white font-semibold text-sm leading-tight truncate">{clientName || 'Client Portal'}</div>
             <div className="text-white/35 text-[11px] leading-tight">Client Portal</div>
           </div>
           <button onClick={() => setMobileOpen(false)} className="text-white/40 hover:text-white/80 transition-colors shrink-0">
@@ -362,17 +368,21 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
                 >
                   {userAvatarUrl
                     ? <img src={userAvatarUrl} alt={userName} className="h-full w-full object-cover" />
-                    : initials}
+                    : clientLogoUrl
+                      ? <img src={clientLogoUrl} alt={clientName} className="h-full w-full object-contain p-1 bg-white" />
+                      : initials}
                 </button>
 
                 {avatarOpen && (
                   <div className="absolute right-0 top-full mt-2 w-72 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden">
                     {/* User info */}
                     <div className="px-4 py-3 border-b flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-full overflow-hidden shrink-0 bg-red-600 flex items-center justify-center text-white text-sm font-bold">
+                      <div className="h-10 w-10 rounded-full overflow-hidden shrink-0 bg-white border border-gray-200 flex items-center justify-center text-red-600 text-sm font-bold">
                         {userAvatarUrl
                           ? <img src={userAvatarUrl} alt={userName} className="h-full w-full object-cover" />
-                          : initials}
+                          : clientLogoUrl
+                            ? <img src={clientLogoUrl} alt={clientName} className="h-full w-full object-contain p-1" />
+                            : <span className="bg-red-600 text-white h-full w-full flex items-center justify-center text-sm font-bold">{initials}</span>}
                       </div>
                       <div className="min-w-0">
                         <p className="text-sm font-bold text-gray-900 leading-tight truncate">{clientName || userName}</p>
