@@ -1097,7 +1097,7 @@ function BookkeepingTab() {
 
   // Date filter
   const currentYear = new Date().getFullYear()
-  const [filterYear, setFilterYear] = useState<string>(String(currentYear))
+  const [filterYear, setFilterYear] = useState<string>('all')
   const [filterQuarter, setFilterQuarter] = useState<string>('all')
   const [customFrom, setCustomFrom] = useState('')
   const [customTo, setCustomTo] = useState('')
