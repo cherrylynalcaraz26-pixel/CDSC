@@ -61,8 +61,8 @@ export default function LoginPage() {
       <div className="relative w-full max-w-md">
         {/* Brand */}
         <div className="flex flex-col items-center mb-8">
-          <div className="relative w-56 h-24 mb-3">
-            <Image src="/cdsc-logo.png" alt="CDSC" fill className="object-contain" priority />
+          <div className="relative w-56 h-24 mb-3 bg-white rounded-xl shadow-lg overflow-hidden px-4 py-2">
+            <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="object-contain" priority />
           </div>
           <h1 className="text-white font-bold text-xl tracking-tight">CDSC Industrial Supply</h1>
           <p className="text-white/50 text-sm mt-0.5">Management System &amp; Client Portal</p>
