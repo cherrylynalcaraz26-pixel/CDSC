@@ -367,30 +367,15 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
 
                 {avatarOpen && (
                   <div className="absolute right-0 top-full mt-2 w-72 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden">
-                    {/* Company info */}
-                    <div className="px-4 py-3 bg-gray-50 border-b flex items-center gap-3">
-                      <div className="h-10 w-10 rounded-lg overflow-hidden shrink-0 border bg-white">
-                        {clientLogoUrl
-                          ? <img src={clientLogoUrl} alt={clientName} className="h-full w-full object-cover" />
-                          : <div className="h-full w-full bg-red-600 flex items-center justify-center text-white text-sm font-bold">
-                              {initials}
-                            </div>}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-gray-900 leading-tight truncate">{clientName || 'My Company'}</p>
-                        <p className="text-xs text-gray-500 mt-0.5">Client Portal</p>
-                      </div>
-                    </div>
-
                     {/* User info */}
                     <div className="px-4 py-3 border-b flex items-center gap-3">
-                      <div className="h-8 w-8 rounded-full overflow-hidden shrink-0 bg-red-600 flex items-center justify-center text-white text-xs font-bold">
+                      <div className="h-10 w-10 rounded-full overflow-hidden shrink-0 bg-red-600 flex items-center justify-center text-white text-sm font-bold">
                         {userAvatarUrl
                           ? <img src={userAvatarUrl} alt={userName} className="h-full w-full object-cover" />
                           : initials}
                       </div>
                       <div className="min-w-0">
-                        <p className="text-sm font-medium text-gray-900 leading-tight">{userName}</p>
+                        <p className="text-sm font-bold text-gray-900 leading-tight truncate">{clientName || userName}</p>
                         <p className="text-xs text-gray-500 truncate">{userEmail}</p>
                       </div>
                     </div>
