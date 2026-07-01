@@ -165,6 +165,7 @@ export default function PortalStockPage() {
         .from('csi_records')
         .select('si_number,si_date,item_name,unit,quantity,unit_price,amount,dr_number')
         .eq('client_name', companyName)
+        .eq('show_in_portal', true)
         .order('si_date', { ascending: false })
         .order('si_number')
       setCsiRecords(csiData ?? [])

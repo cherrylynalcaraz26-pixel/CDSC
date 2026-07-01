@@ -44,6 +44,7 @@ interface CSIRecord {
   amount: number
   dr_number: string | null
   created_at: string
+  show_in_portal: boolean
 }
 
 interface CSIItem {
@@ -146,6 +147,14 @@ export default function CSIMonitoringPage() {
   }
 
   useEffect(() => { load() }, [])
+
+  async function toggleSIPortalVisibility(siNumber: string, current: boolean) {
+    const next = !current
+    const { error } = await supabase.from('csi_records').update({ show_in_portal: next }).eq('si_number', siNumber)
+    if (error) { toast.error('Failed to update'); return }
+    setRecords(prev => prev.map(r => r.si_number === siNumber ? { ...r, show_in_portal: next } : r))
+    toast.success(next ? `SI ${siNumber} visible in portal` : `SI ${siNumber} hidden from portal`)
+  }
 
   async function toggleCsiPortalVisibility(clientId: string, current: boolean) {
     const next = !current
@@ -268,7 +277,7 @@ export default function CSIMonitoringPage() {
   const totalAmount = filtered.reduce((s, r) => s + (Number(r.amount) || 0), 0)
   const uniqueSIs = new Set(filtered.map(r => r.si_number)).size
 
-  const siGroups: { si_number: string; date: string; client: string; po: string | null; dr: string | null; items: CSIRecord[]; total: number }[] = []
+  const siGroups: { si_number: string; date: string; client: string; po: string | null; dr: string | null; items: CSIRecord[]; total: number; show_in_portal: boolean }[] = []
   const siSeen = new Set<string>()
   for (const rec of filtered) {
     if (!siSeen.has(rec.si_number)) {
@@ -282,6 +291,7 @@ export default function CSIMonitoringPage() {
         dr: rec.dr_number,
         items: siItems,
         total: siItems.reduce((s, r) => s + (Number(r.amount) || 0), 0),
+        show_in_portal: rec.show_in_portal !== false,
       })
     }
   }
@@ -1033,6 +1043,7 @@ export default function CSIMonitoringPage() {
                     <TableHead className="w-28">DR Number</TableHead>
                     <TableHead className="text-right w-16">Items</TableHead>
                     <TableHead className="text-right w-32">Total Amount</TableHead>
+                    <TableHead className="w-24 text-center">Portal</TableHead>
                     <TableHead className="w-10" />
                   </TableRow>
                 </TableHeader>
@@ -1069,6 +1080,16 @@ export default function CSIMonitoringPage() {
                         <TableCell className="text-sm font-mono">{group.dr ?? '—'}</TableCell>
                         <TableCell className="text-right text-sm">{group.items.length}</TableCell>
                         <TableCell className="text-right text-sm font-medium">{formatPeso(group.total)}</TableCell>
+                        <TableCell className="text-center" onClick={e => e.stopPropagation()}>
+                          <button
+                            onClick={() => toggleSIPortalVisibility(group.si_number, group.show_in_portal)}
+                            className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full border transition-colors ${group.show_in_portal ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100' : 'bg-gray-100 border-gray-200 text-gray-400 hover:bg-gray-200'}`}
+                            title={group.show_in_portal ? 'Visible in portal — click to hide' : 'Hidden from portal — click to show'}
+                          >
+                            <span className={`h-1.5 w-1.5 rounded-full ${group.show_in_portal ? 'bg-emerald-500' : 'bg-gray-400'}`} />
+                            {group.show_in_portal ? 'Visible' : 'Hidden'}
+                          </button>
+                        </TableCell>
                         <TableCell onClick={e => e.stopPropagation()}>
                           <DropdownMenu>
                             <DropdownMenuTrigger className="h-8 w-8 flex items-center justify-center rounded hover:bg-accent">
