@@ -436,12 +436,12 @@ export default function CSIMonitoringPage() {
                     <Table>
                       <TableHeader>
                         <TableRow className="bg-muted/40">
+                          <TableHead className="min-w-[200px]">Item Description</TableHead>
                           <TableHead className="w-8"></TableHead>
-                          <TableHead>Item Description</TableHead>
-                          <TableHead className="w-16">Unit</TableHead>
+                          <TableHead className="w-20">Unit</TableHead>
                           <TableHead className="w-20">Qty</TableHead>
                           <TableHead className="w-28">Unit Price (₱)</TableHead>
-                          <TableHead className="w-24 text-right">Amount</TableHead>
+                          <TableHead className="w-28 text-right">Amount</TableHead>
                           <TableHead className="w-8"></TableHead>
                         </TableRow>
                       </TableHeader>
@@ -451,17 +451,11 @@ export default function CSIMonitoringPage() {
                           return (
                             <TableRow key={i}>
                               <TableCell className="py-1.5">
-                                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-blue-600"
-                                  title="View inventory" onClick={() => { setInventoryItem(item.item_name); setInventoryOpen(true) }}>
-                                  <Package className="h-3.5 w-3.5" />
-                                </Button>
-                              </TableCell>
-                              <TableCell className="py-1.5">
                                 <Select value={item.item_name} onValueChange={val => {
                                   const opt = itemOptions.find(o => o.item_name === (val ?? ''))
                                   setItems(prev => prev.map((it, idx) => idx === i ? { ...it, item_name: val ?? '', unit: opt?.unit_of_measure ?? it.unit } : it))
                                 }}>
-                                  <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select item…" /></SelectTrigger>
+                                  <SelectTrigger className="h-8 text-sm w-full"><SelectValue placeholder="Select item…" /></SelectTrigger>
                                   <SelectContent>
                                     {itemOptions.map(opt => (
                                       <SelectItem key={opt.item_name} value={opt.item_name}>
@@ -470,6 +464,12 @@ export default function CSIMonitoringPage() {
                                     ))}
                                   </SelectContent>
                                 </Select>
+                              </TableCell>
+                              <TableCell className="py-1.5">
+                                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-blue-600"
+                                  title="View inventory" onClick={() => { setInventoryItem(item.item_name); setInventoryOpen(true) }}>
+                                  <Package className="h-3.5 w-3.5" />
+                                </Button>
                               </TableCell>
                               <TableCell className="py-1.5">
                                 <div className="h-8 flex items-center px-2 text-sm bg-muted/30 rounded border text-muted-foreground">{item.unit || '—'}</div>
@@ -692,13 +692,13 @@ export default function CSIMonitoringPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-8" />
-                    <TableHead>Date</TableHead>
-                    <TableHead>SI Number</TableHead>
-                    <TableHead>SO Number</TableHead>
-                    <TableHead>Client</TableHead>
-                    <TableHead>DR Number</TableHead>
-                    <TableHead className="text-right">Items</TableHead>
-                    <TableHead className="text-right">Total Amount</TableHead>
+                    <TableHead className="w-28">Date</TableHead>
+                    <TableHead className="w-32">SI Number</TableHead>
+                    <TableHead className="w-32">SO Number</TableHead>
+                    <TableHead className="min-w-[160px]">Client</TableHead>
+                    <TableHead className="w-28">DR Number</TableHead>
+                    <TableHead className="text-right w-16">Items</TableHead>
+                    <TableHead className="text-right w-32">Total Amount</TableHead>
                     <TableHead className="w-10" />
                   </TableRow>
                 </TableHeader>
@@ -798,14 +798,14 @@ export default function CSIMonitoringPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>SI Number</TableHead>
-                    <TableHead>Client</TableHead>
+                    <TableHead className="w-28">Date</TableHead>
+                    <TableHead className="w-32">SI Number</TableHead>
+                    <TableHead className="min-w-[160px]">Client</TableHead>
                     <TableHead>Item/s</TableHead>
-                    <TableHead className="text-right">QTY</TableHead>
-                    <TableHead>Unit</TableHead>
-                    <TableHead className="text-right">Unit Price</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
+                    <TableHead className="text-right w-16">QTY</TableHead>
+                    <TableHead className="w-20">Unit</TableHead>
+                    <TableHead className="text-right w-32">Unit Price</TableHead>
+                    <TableHead className="text-right w-28">Amount</TableHead>
                     <TableHead className="w-10" />
                   </TableRow>
                 </TableHeader>
