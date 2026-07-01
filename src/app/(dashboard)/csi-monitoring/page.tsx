@@ -77,6 +77,7 @@ export default function CSIMonitoringPage() {
   const [editingSiNumber, setEditingSiNumber] = useState<string | null>(null)
   const [siFilter, setSiFilter] = useState('')
   const [itemFilter, setItemFilter] = useState('')
+  const [clientFilter, setClientFilter] = useState('')
   const [header, setHeader] = useState(emptyHeader())
   const [items, setItems] = useState<CSIItem[]>([emptyItem()])
   const [saving, setSaving] = useState(false)
@@ -247,7 +248,8 @@ export default function CSIMonitoringPage() {
     )
     const matchSI = !siFilter || r.si_number.toLowerCase().includes(siFilter.toLowerCase())
     const matchItem = !itemFilter || r.item_name.toLowerCase().includes(itemFilter.toLowerCase())
-    return matchSearch && matchSI && matchItem
+    const matchClient = !clientFilter || (r.client_name ?? '') === clientFilter
+    return matchSearch && matchSI && matchItem && matchClient
   })
 
   const totalAmount = filtered.reduce((s, r) => s + (Number(r.amount) || 0), 0)
@@ -631,6 +633,98 @@ export default function CSIMonitoringPage() {
       </div>
       )}
 
+      {!open && (() => {
+        const clientStats = clientOptions.map(c => {
+          const clientRecs = records.filter(r => r.client_name === c.company_name)
+          const siSet = new Set(clientRecs.map(r => r.si_number))
+          return {
+            name: c.company_name,
+            siCount: siSet.size,
+            lineItems: clientRecs.length,
+            totalAmount: clientRecs.reduce((s, r) => s + (Number(r.amount) || 0), 0),
+          }
+        }).filter(c => c.siCount > 0).sort((a, b) => b.totalAmount - a.totalAmount)
+
+        if (clientStats.length === 0) return null
+
+        const maxAmount = Math.max(...clientStats.map(c => c.totalAmount), 1)
+        const maxSI = Math.max(...clientStats.map(c => c.siCount), 1)
+        const maxItems = Math.max(...clientStats.map(c => c.lineItems), 1)
+
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Total Amount per Client */}
+            <Card>
+              <CardHeader className="pb-2 pt-4 px-4">
+                <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Total Amount by Client</CardTitle>
+              </CardHeader>
+              <CardContent className="px-4 pb-4 space-y-2">
+                {clientStats.map(c => (
+                  <div key={c.name} className="space-y-1">
+                    <div className="flex justify-between text-xs">
+                      <span className="truncate max-w-[60%] font-medium" title={c.name}>{c.name}</span>
+                      <span className="text-muted-foreground tabular-nums">{formatPeso(c.totalAmount)}</span>
+                    </div>
+                    <div className="h-2 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-red-500 rounded-full transition-all"
+                        style={{ width: `${(c.totalAmount / maxAmount) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            {/* SI Count per Client */}
+            <Card>
+              <CardHeader className="pb-2 pt-4 px-4">
+                <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">SI Count by Client</CardTitle>
+              </CardHeader>
+              <CardContent className="px-4 pb-4 space-y-2">
+                {clientStats.map(c => (
+                  <div key={c.name} className="space-y-1">
+                    <div className="flex justify-between text-xs">
+                      <span className="truncate max-w-[60%] font-medium" title={c.name}>{c.name}</span>
+                      <span className="text-muted-foreground tabular-nums">{c.siCount} SI</span>
+                    </div>
+                    <div className="h-2 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-blue-500 rounded-full transition-all"
+                        style={{ width: `${(c.siCount / maxSI) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+
+            {/* Line Items per Client */}
+            <Card>
+              <CardHeader className="pb-2 pt-4 px-4">
+                <CardTitle className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Line Items by Client</CardTitle>
+              </CardHeader>
+              <CardContent className="px-4 pb-4 space-y-2">
+                {clientStats.map(c => (
+                  <div key={c.name} className="space-y-1">
+                    <div className="flex justify-between text-xs">
+                      <span className="truncate max-w-[60%] font-medium" title={c.name}>{c.name}</span>
+                      <span className="text-muted-foreground tabular-nums">{c.lineItems} items</span>
+                    </div>
+                    <div className="h-2 bg-muted rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-green-500 rounded-full transition-all"
+                        style={{ width: `${(c.lineItems / maxItems) * 100}%` }}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          </div>
+        )
+      })()}
+
       {!open && <div className="flex flex-wrap gap-3 items-center">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
@@ -666,6 +760,20 @@ export default function CSIMonitoringPage() {
             </button>
           )}
         </div>
+        <Select value={clientFilter} onValueChange={v => setClientFilter(v === '__all__' ? '' : v)}>
+          <SelectTrigger className="h-9 w-48 text-sm">
+            <SelectValue placeholder="All Clients" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="__all__">All Clients</SelectItem>
+            {clientOptions.map(c => <SelectItem key={c.id} value={c.company_name}>{c.company_name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        {clientFilter && (
+          <button onClick={() => setClientFilter('')} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground border rounded-md px-2 py-1">
+            <X className="h-3 w-3" /> Clear client
+          </button>
+        )}
         <div className="flex border rounded-md overflow-hidden">
           <button
             onClick={() => setViewMode('by-si')}
