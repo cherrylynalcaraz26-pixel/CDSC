@@ -1,9 +1,12 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
-import { Loader2, Save, Eye, EyeOff, User, Lock, Building2, Tag, Plus, Trash2, FileCheck2, CheckCircle2, AlertCircle } from 'lucide-react'
+import {
+  Loader2, Save, Eye, EyeOff, User, Lock, Building2, Tag, Plus, Trash2,
+  FileCheck2, CheckCircle2, AlertCircle, Camera, ImagePlus, X,
+} from 'lucide-react'
 
 type Tab = 'account' | 'bir' | 'department' | 'password'
 
@@ -26,6 +29,14 @@ export default function PortalSettingsPage() {
   const [vatType, setVatType] = useState('')
   const [businessType, setBusinessType] = useState('')
 
+  // Avatar & logo
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
+  const [logoUrl, setLogoUrl] = useState<string | null>(null)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [uploadingLogo, setUploadingLogo] = useState(false)
+  const avatarInputRef = useRef<HTMLInputElement>(null)
+  const logoInputRef = useRef<HTMLInputElement>(null)
+
   // Departments
   const [departments, setDepartments] = useState<{ id: string; name: string }[]>([])
   const [newDept, setNewDept] = useState('')
@@ -37,13 +48,17 @@ export default function PortalSettingsPage() {
       if (!session) return
       setEmail(session.user.email ?? '')
       setUserId(session.user.id)
-      const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', session.user.id).single()
+      const { data: profile } = await supabase.from('profiles').select('full_name, avatar_url').eq('id', session.user.id).single()
       setFullName(profile?.full_name ?? '')
-      const { data: clientRow } = await supabase.from('clients').select('id, company_name, tin, vat_type, business_type').eq('auth_user_id', session.user.id).single()
+      setAvatarUrl((profile as any)?.avatar_url ?? null)
+      const { data: clientRow } = await supabase.from('clients')
+        .select('id, company_name, tin, vat_type, business_type, logo_url')
+        .eq('auth_user_id', session.user.id).single()
       setCompanyName(clientRow?.company_name ?? '')
       setTin((clientRow as any)?.tin ?? '')
       setVatType((clientRow as any)?.vat_type ?? '')
       setBusinessType((clientRow as any)?.business_type ?? '')
+      setLogoUrl((clientRow as any)?.logo_url ?? null)
       if (clientRow?.id) {
         setClientId(clientRow.id)
         const { data: deptData } = await supabase.from('client_departments').select('id, name').eq('client_id', clientRow.id).order('name')
@@ -61,6 +76,64 @@ export default function PortalSettingsPage() {
     if (error) toast.error(error.message)
     else toast.success('Profile updated successfully')
     setSaving(false)
+  }
+
+  async function uploadAvatar(file: File) {
+    if (!userId) return
+    setUploadingAvatar(true)
+    try {
+      const ext = file.name.split('.').pop()
+      const path = `portal-avatars/${userId}/avatar.${ext}`
+      const { error: upErr } = await supabase.storage.from('company-assets').upload(path, file, { upsert: true, contentType: file.type })
+      if (upErr) throw upErr
+      const { data: urlData } = supabase.storage.from('company-assets').getPublicUrl(path)
+      const url = `${urlData.publicUrl}?t=${Date.now()}`
+      const { error: dbErr } = await supabase.from('profiles').update({ avatar_url: urlData.publicUrl }).eq('id', userId)
+      if (dbErr) throw dbErr
+      setAvatarUrl(url)
+      toast.success('Avatar updated')
+    } catch (err: any) {
+      toast.error(err.message ?? 'Failed to upload avatar')
+    }
+    setUploadingAvatar(false)
+  }
+
+  async function removeAvatar() {
+    if (!userId) return
+    setUploadingAvatar(true)
+    await supabase.from('profiles').update({ avatar_url: null }).eq('id', userId)
+    setAvatarUrl(null)
+    toast.success('Avatar removed')
+    setUploadingAvatar(false)
+  }
+
+  async function uploadLogo(file: File) {
+    if (!clientId) return
+    setUploadingLogo(true)
+    try {
+      const ext = file.name.split('.').pop()
+      const path = `client-logos/${clientId}/logo.${ext}`
+      const { error: upErr } = await supabase.storage.from('company-assets').upload(path, file, { upsert: true, contentType: file.type })
+      if (upErr) throw upErr
+      const { data: urlData } = supabase.storage.from('company-assets').getPublicUrl(path)
+      const url = `${urlData.publicUrl}?t=${Date.now()}`
+      const { error: dbErr } = await supabase.from('clients').update({ logo_url: urlData.publicUrl }).eq('id', clientId)
+      if (dbErr) throw dbErr
+      setLogoUrl(url)
+      toast.success('Company logo updated')
+    } catch (err: any) {
+      toast.error(err.message ?? 'Failed to upload logo')
+    }
+    setUploadingLogo(false)
+  }
+
+  async function removeLogo() {
+    if (!clientId) return
+    setUploadingLogo(true)
+    await supabase.from('clients').update({ logo_url: null }).eq('id', clientId)
+    setLogoUrl(null)
+    toast.success('Logo removed')
+    setUploadingLogo(false)
   }
 
   async function changePassword() {
@@ -112,14 +185,13 @@ export default function PortalSettingsPage() {
   }
 
   const initials = (companyName || fullName).split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'C'
-
   const birReady = !!tin.trim()
 
   const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
-    { key: 'account',    label: 'Account',         icon: <User className="h-4 w-4" /> },
-    { key: 'bir',        label: 'BIR Info',         icon: <FileCheck2 className="h-4 w-4" /> },
-    { key: 'department', label: 'Department',       icon: <Tag className="h-4 w-4" /> },
-    { key: 'password',   label: 'Change Password',  icon: <Lock className="h-4 w-4" /> },
+    { key: 'account',    label: 'Account',        icon: <User className="h-4 w-4" /> },
+    { key: 'bir',        label: 'BIR Info',        icon: <FileCheck2 className="h-4 w-4" /> },
+    { key: 'department', label: 'Department',      icon: <Tag className="h-4 w-4" /> },
+    { key: 'password',   label: 'Change Password', icon: <Lock className="h-4 w-4" /> },
   ]
 
   return (
@@ -131,8 +203,41 @@ export default function PortalSettingsPage() {
 
       {/* Avatar + identity */}
       <div className="flex items-center gap-4">
-        <div className="h-14 w-14 rounded-full bg-red-600 text-white text-lg font-bold flex items-center justify-center shrink-0">
-          {initials}
+        {/* Avatar circle with upload overlay */}
+        <div className="relative shrink-0 group">
+          <div className="h-14 w-14 rounded-full overflow-hidden bg-red-600 flex items-center justify-center">
+            {avatarUrl ? (
+              <img src={avatarUrl} alt="Avatar" className="h-full w-full object-cover" />
+            ) : (
+              <span className="text-white text-lg font-bold">{initials}</span>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => avatarInputRef.current?.click()}
+            disabled={uploadingAvatar}
+            className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+          >
+            {uploadingAvatar
+              ? <Loader2 className="h-4 w-4 text-white animate-spin" />
+              : <Camera className="h-4 w-4 text-white" />}
+          </button>
+          <input
+            ref={avatarInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={e => { const f = e.target.files?.[0]; if (f) uploadAvatar(f); e.target.value = '' }}
+          />
+          {avatarUrl && (
+            <button
+              type="button"
+              onClick={removeAvatar}
+              className="absolute -top-1 -right-1 h-4 w-4 bg-gray-700 rounded-full flex items-center justify-center"
+            >
+              <X className="h-2.5 w-2.5 text-white" />
+            </button>
+          )}
         </div>
         <div>
           <div className="font-semibold text-gray-900">{fullName || '—'}</div>
@@ -152,9 +257,7 @@ export default function PortalSettingsPage() {
             key={t.key}
             onClick={() => setTab(t.key)}
             className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
-              tab === t.key
-                ? 'bg-white text-red-600 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
+              tab === t.key ? 'bg-white text-red-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'
             }`}
           >
             {t.icon}
@@ -165,46 +268,98 @@ export default function PortalSettingsPage() {
 
       {/* Account tab */}
       {tab === 'account' && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
-          <div className="flex items-center gap-2 mb-2">
-            <User className="h-4 w-4 text-gray-400" />
-            <span className="text-sm font-semibold text-gray-700">Profile Information</span>
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-gray-700">Full Name</label>
-            <input
-              value={fullName}
-              onChange={e => setFullName(e.target.value)}
-              placeholder="Your name"
-              className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-gray-700">Email Address</label>
-            <input
-              value={email}
-              disabled
-              className="w-full h-10 px-3 rounded-lg border border-gray-200 text-sm bg-gray-50 text-gray-400 cursor-not-allowed"
-            />
-            <p className="text-xs text-gray-400">Contact CDSC to change your email address.</p>
-          </div>
-          {companyName && (
+        <div className="space-y-4">
+          {/* Profile info */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+            <div className="flex items-center gap-2 mb-2">
+              <User className="h-4 w-4 text-gray-400" />
+              <span className="text-sm font-semibold text-gray-700">Profile Information</span>
+            </div>
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-gray-700">Company</label>
+              <label className="text-sm font-medium text-gray-700">Full Name</label>
               <input
-                value={companyName}
+                value={fullName}
+                onChange={e => setFullName(e.target.value)}
+                placeholder="Your name"
+                className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-gray-700">Email Address</label>
+              <input
+                value={email}
                 disabled
                 className="w-full h-10 px-3 rounded-lg border border-gray-200 text-sm bg-gray-50 text-gray-400 cursor-not-allowed"
               />
+              <p className="text-xs text-gray-400">Contact CDSC to change your email address.</p>
             </div>
-          )}
-          <button
-            onClick={saveProfile}
-            disabled={saving}
-            className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            Save Profile
-          </button>
+            {companyName && (
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-gray-700">Company</label>
+                <input
+                  value={companyName}
+                  disabled
+                  className="w-full h-10 px-3 rounded-lg border border-gray-200 text-sm bg-gray-50 text-gray-400 cursor-not-allowed"
+                />
+              </div>
+            )}
+            <button
+              onClick={saveProfile}
+              disabled={saving}
+              className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Save Profile
+            </button>
+          </div>
+
+          {/* Company logo */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+            <div className="flex items-center gap-2">
+              <Building2 className="h-4 w-4 text-gray-400" />
+              <span className="text-sm font-semibold text-gray-700">Company Logo</span>
+            </div>
+            <p className="text-xs text-gray-400">Upload your company logo. This may appear on documents and the portal.</p>
+
+            <div className="flex items-center gap-4">
+              {/* Logo preview */}
+              <div className="h-20 w-20 rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center overflow-hidden bg-gray-50 shrink-0">
+                {logoUrl ? (
+                  <img src={logoUrl} alt="Company logo" className="h-full w-full object-contain p-1" />
+                ) : (
+                  <Building2 className="h-8 w-8 text-gray-300" />
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => logoInputRef.current?.click()}
+                  disabled={uploadingLogo}
+                  className="inline-flex items-center gap-2 border border-gray-300 hover:bg-gray-50 disabled:opacity-60 text-gray-700 text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+                  {uploadingLogo ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
+                  {logoUrl ? 'Change Logo' : 'Upload Logo'}
+                </button>
+                {logoUrl && (
+                  <button
+                    type="button"
+                    onClick={removeLogo}
+                    disabled={uploadingLogo}
+                    className="flex items-center gap-1.5 text-xs text-red-500 hover:text-red-700 transition-colors">
+                    <X className="h-3 w-3" /> Remove logo
+                  </button>
+                )}
+                <p className="text-xs text-gray-400">PNG, JPG, SVG up to 2MB</p>
+              </div>
+            </div>
+
+            <input
+              ref={logoInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={e => { const f = e.target.files?.[0]; if (f) uploadLogo(f); e.target.value = '' }}
+            />
+          </div>
         </div>
       )}
 
@@ -275,9 +430,7 @@ export default function PortalSettingsPage() {
               {departments.map(d => (
                 <div key={d.id} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg border border-gray-100">
                   <span className="text-sm text-gray-800">{d.name}</span>
-                  <button
-                    onClick={() => deleteDepartment(d.id)}
-                    className="text-gray-300 hover:text-red-500 transition-colors">
+                  <button onClick={() => deleteDepartment(d.id)} className="text-gray-300 hover:text-red-500 transition-colors">
                     <Trash2 className="h-3.5 w-3.5" />
                   </button>
                 </div>

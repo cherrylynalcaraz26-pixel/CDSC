@@ -1,12 +1,12 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import {
   Plus, Loader2, MoreHorizontal, Building2, Phone, Mail,
   MapPin, User, Pencil, Trash2, Users, CheckCircle2, XCircle,
-  FileText, LayoutGrid, List, KeyRound, Copy, ShieldCheck, Eye, EyeOff, MessageSquare,
+  FileText, LayoutGrid, List, KeyRound, Copy, ShieldCheck, Eye, EyeOff, MessageSquare, Camera, X,
 } from 'lucide-react'
 import { useSearchContext } from '@/context/search-context'
 import { Button } from '@/components/ui/button'
@@ -68,6 +68,8 @@ interface Client {
   portal_access: boolean
   vat_type: string | null
   created_at: string
+  avatar_url: string | null
+  logo_url: string | null
 }
 
 type FormData = {
@@ -138,6 +140,12 @@ export default function ClientsPage() {
   const [inviting, setInviting] = useState(false)
   const [inviteResult, setInviteResult] = useState<{ email: string } | null>(null)
 
+  // Dialog avatar upload
+  const [dialogAvatarUrl, setDialogAvatarUrl] = useState<string | null>(null)
+  const [dialogAvatarFile, setDialogAvatarFile] = useState<File | null>(null)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const avatarInputRef = useRef<HTMLInputElement>(null)
+
   async function load() {
     setLoading(true)
     const [clientRes, msgRes] = await Promise.all([
@@ -163,11 +171,15 @@ export default function ClientsPage() {
   function openCreate() {
     setEditingId(null)
     setForm(blankForm())
+    setDialogAvatarUrl(null)
+    setDialogAvatarFile(null)
     setOpen(true)
   }
 
   function openEdit(c: Client) {
     setEditingId(c.id)
+    setDialogAvatarUrl(c.avatar_url ?? null)
+    setDialogAvatarFile(null)
     setForm({
       client_code: c.client_code ?? c.client_number ?? '',
       company_name: c.company_name,
@@ -196,6 +208,20 @@ export default function ClientsPage() {
     if (!form.company_name.trim()) { toast.error('Company name is required'); return }
     setSaving(true)
     try {
+      // Upload avatar if a new file was selected
+      let finalAvatarUrl = dialogAvatarUrl
+      if (dialogAvatarFile) {
+        setUploadingAvatar(true)
+        const targetId = editingId ?? `new-${Date.now()}`
+        const ext = dialogAvatarFile.name.split('.').pop()
+        const path = `client-avatars/${targetId}/avatar.${ext}`
+        const { error: upErr } = await supabase.storage.from('company-assets').upload(path, dialogAvatarFile, { upsert: true, contentType: dialogAvatarFile.type })
+        if (upErr) throw upErr
+        const { data: urlData } = supabase.storage.from('company-assets').getPublicUrl(path)
+        finalAvatarUrl = urlData.publicUrl
+        setUploadingAvatar(false)
+      }
+
       const payload = {
         client_code: form.client_code.trim() || null,
         company_name: form.company_name.trim(),
@@ -216,6 +242,7 @@ export default function ClientsPage() {
         notes: form.notes || null,
         status: form.status,
         vat_type: form.vat_type || 'vat',
+        avatar_url: finalAvatarUrl,
         updated_at: new Date().toISOString(),
       }
 
@@ -404,8 +431,10 @@ export default function ClientsPage() {
                 <TableRow key={c.id}>
                   <TableCell>
                     <div className="flex items-center gap-3">
-                      <div className={`h-8 w-8 rounded-full flex items-center justify-center text-white text-xs font-semibold shrink-0 ${avatarColor(c.id)}`}>
-                        {initials(c.company_name)}
+                      <div className={`h-8 w-8 rounded-full overflow-hidden flex items-center justify-center text-white text-xs font-semibold shrink-0 ${c.avatar_url ? '' : avatarColor(c.id)}`}>
+                        {c.avatar_url
+                          ? <img src={c.avatar_url} alt={c.company_name} className="h-full w-full object-cover" />
+                          : initials(c.company_name)}
                       </div>
                       <div>
                         <div className="font-medium text-sm leading-tight">{c.company_name}</div>
@@ -507,8 +536,10 @@ export default function ClientsPage() {
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between gap-2 mb-3">
                       <div className="flex items-center gap-3">
-                        <div className={`h-10 w-10 rounded-full flex items-center justify-center text-white text-sm font-semibold shrink-0 ${avatarColor(c.id)}`}>
-                          {initials(c.company_name)}
+                        <div className={`h-10 w-10 rounded-full overflow-hidden flex items-center justify-center text-white text-sm font-semibold shrink-0 ${c.avatar_url ? '' : avatarColor(c.id)}`}>
+                          {c.avatar_url
+                            ? <img src={c.avatar_url} alt={c.company_name} className="h-full w-full object-cover" />
+                            : initials(c.company_name)}
                         </div>
                         <div className="min-w-0">
                           <div className="font-semibold text-sm leading-tight truncate">{c.company_name}</div>
@@ -564,6 +595,58 @@ export default function ClientsPage() {
           </DialogHeader>
 
           <div className="space-y-5 py-2">
+            {/* Avatar upload */}
+            <div className="flex items-center gap-4">
+              <div className="relative group shrink-0">
+                <div className={`h-16 w-16 rounded-full overflow-hidden flex items-center justify-center text-white text-lg font-semibold ${dialogAvatarUrl ? '' : (editingId ? avatarColor(editingId) : 'bg-gray-400')}`}>
+                  {dialogAvatarUrl
+                    ? <img src={typeof dialogAvatarFile === 'object' && dialogAvatarFile ? URL.createObjectURL(dialogAvatarFile) : dialogAvatarUrl} alt="Avatar" className="h-full w-full object-cover" />
+                    : (form.company_name ? initials(form.company_name) : <User className="h-6 w-6" />)}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <Camera className="h-4 w-4 text-white" />
+                </button>
+                {dialogAvatarUrl && (
+                  <button
+                    type="button"
+                    onClick={() => { setDialogAvatarUrl(null); setDialogAvatarFile(null) }}
+                    className="absolute -top-1 -right-1 h-4 w-4 bg-gray-600 rounded-full flex items-center justify-center"
+                  >
+                    <X className="h-2.5 w-2.5 text-white" />
+                  </button>
+                )}
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground">Profile Picture</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Click the circle to upload. PNG, JPG up to 2MB.</p>
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  className="mt-1.5 text-xs text-blue-600 hover:underline"
+                >
+                  {dialogAvatarUrl ? 'Change photo' : 'Upload photo'}
+                </button>
+              </div>
+              <input
+                ref={avatarInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={e => {
+                  const f = e.target.files?.[0]
+                  if (f) {
+                    setDialogAvatarFile(f)
+                    setDialogAvatarUrl(URL.createObjectURL(f))
+                  }
+                  e.target.value = ''
+                }}
+              />
+            </div>
+
             {/* Company Info */}
             <div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Company Information</p>
