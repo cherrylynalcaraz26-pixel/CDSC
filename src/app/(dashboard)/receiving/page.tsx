@@ -146,8 +146,24 @@ export default function ReceivingPage() {
 
   async function loadSalesDeliveries() {
     setSalesdLoading(true)
-    const { data } = await supabase.from('sales_deliveries').select('*').order('created_at', { ascending: false })
-    setSalesDeliveries((data ?? []) as SalesDelivery[])
+    const { data } = await supabase
+      .from('dr_logs')
+      .select('id, dr_number, po_number, supplier_name, client_name, dr_date, status')
+      .order('dr_date', { ascending: false })
+    const mapped = (data ?? []).map((log: any) => ({
+      id: log.id,
+      delivery_number: log.dr_number,
+      dr_number: log.dr_number,
+      so_number: log.po_number,
+      quote_number: log.po_number,
+      client_name: log.client_name ?? log.supplier_name,
+      delivery_date: log.dr_date,
+      delivered_by: null,
+      status: log.status,
+      notes: null,
+      created_at: '',
+    }))
+    setSalesDeliveries(mapped as SalesDelivery[])
     setSalesdLoading(false)
   }
 
