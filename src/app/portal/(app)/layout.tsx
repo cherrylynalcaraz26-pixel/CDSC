@@ -109,8 +109,8 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
 
           {/* Logo — always visible, sidebar width on desktop */}
           <Link href="/portal" className="flex items-center gap-2.5 shrink-0 md:w-56">
-            <div className="relative h-8 w-8 shrink-0">
-              <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="rounded-md object-cover" />
+            <div className="relative h-8 w-8 shrink-0 rounded-md overflow-hidden bg-[#111111]">
+              <Image src="/cdsc-logo.jpg" alt="CDSC Industrial Supply" fill className="object-cover" />
             </div>
             <div className="hidden sm:block">
               <div className="text-sm font-bold text-gray-900 leading-tight">CDSC Industrial Supply</div>
@@ -232,7 +232,7 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
                   <div className="relative h-7 w-7 shrink-0 rounded-md overflow-hidden bg-white">
                     <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="object-cover" />
                   </div>
-                  <span className="font-bold text-sm text-white">CDSC Client Portal</span>
+                  <span className="font-bold text-sm text-white">CDSC Industrial Supply</span>
                 </div>
                 <button onClick={() => setMobileOpen(false)} className="p-1.5 rounded-lg text-white/40 hover:bg-white/5">
                   <X className="h-4 w-4" />
