@@ -51,19 +51,21 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0d0d0d] flex items-center justify-center p-4 relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 40%, #0f3460 100%)' }}>
       {/* Background glow */}
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(220,38,38,0.12)_0%,_transparent_60%)]" />
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(220,38,38,0.06)_0%,_transparent_50%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(234,88,12,0.18)_0%,_transparent_55%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_left,_rgba(220,38,38,0.12)_0%,_transparent_50%)]" />
+      {/* Subtle grid pattern */}
+      <div className="absolute inset-0 opacity-[0.04]" style={{ backgroundImage: 'repeating-linear-gradient(0deg,#fff 0,#fff 1px,transparent 1px,transparent 60px),repeating-linear-gradient(90deg,#fff 0,#fff 1px,transparent 1px,transparent 60px)' }} />
 
       <div className="relative w-full max-w-md">
         {/* Brand */}
         <div className="flex flex-col items-center mb-8">
-          <div className="relative h-16 w-16 mb-4">
-            <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="rounded-xl object-contain shadow-2xl" priority />
+          <div className="relative w-56 h-24 mb-3">
+            <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="object-contain" priority style={{ filter: 'brightness(1) saturate(1.1)' }} />
           </div>
           <h1 className="text-white font-bold text-xl tracking-tight">CDSC Industrial Supply</h1>
-          <p className="text-white/40 text-sm mt-0.5">Management System &amp; Client Portal</p>
+          <p className="text-white/50 text-sm mt-0.5">Management System &amp; Client Portal</p>
         </div>
 
         {/* Form card */}
