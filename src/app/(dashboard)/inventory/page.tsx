@@ -515,11 +515,14 @@ export default function InventoryPage() {
         <div className="flex gap-2 shrink-0">
           <Button
             variant="outline"
-            onClick={() => { setReportClient(clientFilter !== 'all' ? clientFilter : clients[0] ?? ''); setReportOpen(true) }}
+            onClick={() => {
+              if (!reportOpen) setReportClient(clientFilter !== 'all' ? clientFilter : clients[0] ?? '')
+              setReportOpen(v => !v)
+            }}
             disabled={rows.length === 0}
-            className="border-gray-300 text-gray-700 gap-1.5"
+            className={reportOpen ? 'border-red-300 text-red-600 bg-red-50 gap-1.5' : 'border-gray-300 text-gray-700 gap-1.5'}
           >
-            <FileText className="h-4 w-4" /> Generate Report
+            <FileText className="h-4 w-4" /> {reportOpen ? 'Close Report' : 'Generate Report'}
           </Button>
           <Button onClick={openAddDialog} className="bg-red-600 hover:bg-red-700 text-white">
             <Plus className="h-4 w-4 mr-1.5" /> Add Stock
@@ -1179,197 +1182,188 @@ export default function InventoryPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Inventory Report Dialog */}
-      <Dialog open={reportOpen} onOpenChange={o => { if (!o) setReportOpen(false) }}>
-        <DialogContent className="w-[98vw] max-w-[98vw] h-[95vh] flex flex-col p-0 gap-0 overflow-hidden">
-          {/* Toolbar */}
-          <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-gray-50 shrink-0 flex-wrap">
-            <FileText className="h-4 w-4 text-red-600 shrink-0" />
-            <span className="font-semibold text-sm text-gray-800 shrink-0">Inventory Report</span>
-            <div className="w-px h-4 bg-gray-300 mx-1 shrink-0" />
-            <label className="text-sm text-gray-500 shrink-0">Client:</label>
-            <Select value={reportClient} onValueChange={v => setReportClient(v ?? '')}>
-              <SelectTrigger className="w-64 h-8 text-sm">
-                <SelectValue placeholder="Select client" />
-              </SelectTrigger>
-              <SelectContent>
-                {clients.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Button
-              className="ml-auto bg-red-600 hover:bg-red-700 text-white h-8 text-sm gap-1.5 shrink-0"
-              onClick={() => {
-                const el = document.getElementById('inventory-report-print')
-                if (!el) return
-                const win = window.open('', '_blank', 'width=1100,height=800')
-                if (!win) return
-                win.document.write(`<!DOCTYPE html><html><head><title>Inventory Report - ${reportClient}</title><style>
-                  * { box-sizing: border-box; margin: 0; padding: 0; }
-                  body { font-family: Arial, sans-serif; background: #fff; color: #111; padding: 32px; }
-                  .accent { background: #dc2626; height: 5px; border-radius: 3px; margin-bottom: 20px; }
-                  .letterhead { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px solid #e5e7eb; }
-                  .co-name { font-size: 22px; font-weight: 800; color: #dc2626; }
-                  .co-sub { font-size: 10px; color: #9ca3af; margin-top: 2px; }
-                  .rpt-title { text-align: right; font-size: 15px; font-weight: 700; }
-                  .rpt-date { font-size: 10px; color: #9ca3af; margin-top: 2px; }
-                  .client-label { font-size: 9px; color: #9ca3af; text-transform: uppercase; letter-spacing: 1px; font-weight: 600; margin-bottom: 2px; }
-                  .client-name { font-size: 17px; font-weight: 700; margin-bottom: 14px; }
-                  .cards { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 18px; }
-                  .card { border: 1px solid #e5e7eb; border-radius: 6px; padding: 10px 14px; background: #f9fafb; }
-                  .card-label { font-size: 9px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
-                  .card-val { font-size: 20px; font-weight: 700; margin-top: 3px; }
-                  .blue { color: #1d4ed8; } .green { color: #15803d; } .orange { color: #c2410c; } .red { color: #dc2626; }
-                  table { width: 100%; border-collapse: collapse; font-size: 11px; }
-                  th { background: #1f2937; color: #fff; text-align: left; padding: 7px 10px; font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
-                  th.r { text-align: right; }
-                  td { padding: 6px 10px; border-bottom: 1px solid #f3f4f6; }
-                  td.r { text-align: right; }
-                  tr:nth-child(even) td { background: #f9fafb; }
-                  tfoot td { font-weight: 700; background: #f3f4f6; border-top: 2px solid #d1d5db; }
-                  .note { margin-top: 20px; padding-top: 10px; border-top: 1px solid #f3f4f6; font-size: 9px; color: #9ca3af; display: flex; justify-content: space-between; }
-                  @media print { @page { margin: 12mm; size: A4 landscape; } }
-                </style></head><body>
-                  <div class="accent"></div>
-                  <div class="letterhead">
-                    <div><div class="co-name">CDSC</div><div class="co-sub">Construction &amp; Development Supply Center</div></div>
-                    <div><div class="rpt-title">Inventory Report</div><div class="rpt-date">As of ${new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}</div></div>
+      {/* Inline Inventory Report */}
+      {reportOpen && (() => {
+        const reportRows = rows.filter(r => r.client === reportClient)
+        const totalBalance = reportRows.reduce((s, r) => s + r.balance, 0)
+        const totalDr = reportRows.reduce((s, r) => s + r.dr_qty, 0)
+        const totalWs = reportRows.reduce((s, r) => s + r.ws_qty, 0)
+        const totalCsi = reportRows.reduce((s, r) => s + r.csi_qty, 0)
+        const totalEstValue = reportRows.reduce((s, r) => {
+          const price = r.csi_details.length > 0
+            ? r.csi_details[r.csi_details.length - 1].unit_price
+            : r.dr_details.length > 0 ? r.dr_details[r.dr_details.length - 1].unit_price : null
+          return s + (price != null ? r.balance * price : 0)
+        }, 0)
+        const today = new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
+        return (
+          <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+            {/* Toolbar */}
+            <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 border-b flex-wrap">
+              <FileText className="h-4 w-4 text-red-600 shrink-0" />
+              <span className="font-semibold text-sm text-gray-800 shrink-0">Inventory Report</span>
+              <div className="w-px h-4 bg-gray-300 mx-1 shrink-0" />
+              <label className="text-sm text-gray-500 shrink-0">Client:</label>
+              <Select value={reportClient} onValueChange={v => setReportClient(v ?? '')}>
+                <SelectTrigger className="w-64 h-8 text-sm">
+                  <SelectValue placeholder="Select client" />
+                </SelectTrigger>
+                <SelectContent>
+                  {clients.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              <Button
+                className="ml-auto bg-red-600 hover:bg-red-700 text-white h-8 text-sm gap-1.5 shrink-0"
+                onClick={() => {
+                  const el = document.getElementById('inventory-report-print')
+                  if (!el) return
+                  const win = window.open('', '_blank', 'width=1100,height=800')
+                  if (!win) return
+                  win.document.write(`<!DOCTYPE html><html><head><title>Inventory Report - ${reportClient}</title><style>
+                    * { box-sizing: border-box; margin: 0; padding: 0; }
+                    body { font-family: Arial, sans-serif; background: #fff; color: #111; padding: 32px; }
+                    .accent { background: #dc2626; height: 5px; border-radius: 3px; margin-bottom: 20px; }
+                    .letterhead { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px solid #e5e7eb; }
+                    .co-name { font-size: 22px; font-weight: 800; color: #dc2626; }
+                    .co-sub { font-size: 10px; color: #9ca3af; margin-top: 2px; }
+                    .rpt-title { text-align: right; font-size: 15px; font-weight: 700; }
+                    .rpt-date { font-size: 10px; color: #9ca3af; margin-top: 2px; }
+                    .cards { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 18px; }
+                    .card { border: 1px solid #e5e7eb; border-radius: 6px; padding: 10px 14px; background: #f9fafb; }
+                    .card-label { font-size: 9px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+                    .card-val { font-size: 20px; font-weight: 700; margin-top: 3px; }
+                    .blue { color: #1d4ed8; } .green { color: #15803d; } .orange { color: #c2410c; } .red { color: #dc2626; }
+                    table { width: 100%; border-collapse: collapse; font-size: 11px; }
+                    th { background: #1f2937; color: #fff; text-align: left; padding: 7px 10px; font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
+                    th.r { text-align: right; }
+                    td { padding: 6px 10px; border-bottom: 1px solid #f3f4f6; }
+                    td.r { text-align: right; }
+                    tr:nth-child(even) td { background: #f9fafb; }
+                    tfoot td { font-weight: 700; background: #f3f4f6; border-top: 2px solid #d1d5db; }
+                    .note { margin-top: 20px; padding-top: 10px; border-top: 1px solid #f3f4f6; font-size: 9px; color: #9ca3af; display: flex; justify-content: space-between; }
+                    @media print { @page { margin: 12mm; size: A4 landscape; } }
+                  </style></head><body>
+                    <div class="accent"></div>
+                    <div class="letterhead">
+                      <div><div class="co-name">CDSC</div><div class="co-sub">Construction &amp; Development Supply Center</div></div>
+                      <div><div class="rpt-title">Inventory Report</div><div class="rpt-date">As of ${today}</div></div>
+                    </div>
+                    ${el.innerHTML}
+                  </body></html>`)
+                  win.document.close()
+                  win.focus()
+                  setTimeout(() => { win.print() }, 400)
+                }}
+              >
+                <Printer className="h-4 w-4" /> Print / Save PDF
+              </Button>
+            </div>
+
+            {/* Report body */}
+            <div className="bg-white p-8" id="inventory-report-print">
+              {/* Letterhead */}
+              <div className="h-1 bg-red-600 rounded-full mb-6" />
+              <div className="flex justify-between items-start mb-6 pb-5 border-b border-gray-200">
+                <div>
+                  <div className="text-2xl font-extrabold text-red-600 tracking-tight">CDSC</div>
+                  <div className="text-xs text-gray-400 mt-0.5">Construction &amp; Development Supply Center</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-base font-bold text-gray-800">Inventory Report</div>
+                  <div className="text-xs text-gray-400 mt-0.5">As of {today}</div>
+                </div>
+              </div>
+
+              {/* Client */}
+              <div className="mb-5">
+                <div className="text-[10px] text-gray-400 uppercase tracking-widest font-semibold mb-0.5">Client</div>
+                <div className="text-xl font-bold text-gray-900">{reportClient || '—'}</div>
+              </div>
+
+              {/* Summary cards */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+                {[
+                  { label: 'DR Delivered', value: totalDr,      cls: 'text-blue-700' },
+                  { label: 'WH Stock',     value: totalWs,      cls: 'text-green-700' },
+                  { label: 'CSI Issued',   value: totalCsi,     cls: 'text-orange-600' },
+                  { label: 'Net Balance',  value: totalBalance, cls: totalBalance >= 0 ? 'text-green-700' : 'text-red-600' },
+                ].map(c => (
+                  <div key={c.label} className="border border-gray-200 rounded-lg px-4 py-3 bg-gray-50">
+                    <div className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">{c.label}</div>
+                    <div className={`text-2xl font-bold mt-1 ${c.cls}`}>{c.value}</div>
                   </div>
-                  ${el.innerHTML}
-                </body></html>`)
-                win.document.close()
-                win.focus()
-                setTimeout(() => { win.print() }, 400)
-              }}
-            >
-              <Printer className="h-4 w-4" /> Print / Save PDF
-            </Button>
-          </div>
+                ))}
+              </div>
 
-          {/* Paper preview area — scrolls both axes */}
-          <div className="overflow-auto flex-1 bg-gray-300 p-6">
-            {(() => {
-              const reportRows = rows.filter(r => r.client === reportClient)
-              const totalBalance = reportRows.reduce((s, r) => s + r.balance, 0)
-              const totalDr = reportRows.reduce((s, r) => s + r.dr_qty, 0)
-              const totalWs = reportRows.reduce((s, r) => s + r.ws_qty, 0)
-              const totalCsi = reportRows.reduce((s, r) => s + r.csi_qty, 0)
-              const totalEstValue = reportRows.reduce((s, r) => {
-                const price = r.csi_details.length > 0
-                  ? r.csi_details[r.csi_details.length - 1].unit_price
-                  : r.dr_details.length > 0 ? r.dr_details[r.dr_details.length - 1].unit_price : null
-                return s + (price != null ? r.balance * price : 0)
-              }, 0)
-              const today = new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
-              return (
-                /* Paper — fixed width so it never squishes; dialog scrolls to show it */
-                <div className="bg-white rounded-lg shadow-xl mx-auto w-[900px] min-w-[900px] p-10">
-                  {/* Red accent bar */}
-                  <div className="h-1.5 bg-red-600 rounded-full mb-6" />
-
-                  {/* Letterhead */}
-                  <div className="flex justify-between items-start mb-6 pb-5 border-b border-gray-200">
-                    <div>
-                      <div className="text-2xl font-extrabold text-red-600 tracking-tight">CDSC</div>
-                      <div className="text-xs text-gray-400 mt-0.5">Construction &amp; Development Supply Center</div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-base font-bold text-gray-800">Inventory Report</div>
-                      <div className="text-xs text-gray-400 mt-0.5">As of {today}</div>
-                    </div>
-                  </div>
-
-                  {/* Client */}
-                  <div id="inventory-report-print">
-                    <div className="mb-5">
-                      <div className="text-[10px] text-gray-400 uppercase tracking-widest font-semibold mb-0.5">Client</div>
-                      <div className="text-xl font-bold text-gray-900">{reportClient || '—'}</div>
-                    </div>
-
-                    {/* Summary cards */}
-                    <div className="grid grid-cols-4 gap-3 mb-6">
-                      {[
-                        { label: 'DR Delivered', value: totalDr, cls: 'text-blue-700' },
-                        { label: 'WH Stock',     value: totalWs,  cls: 'text-green-700' },
-                        { label: 'CSI Issued',   value: totalCsi, cls: 'text-orange-600' },
-                        { label: 'Net Balance',  value: totalBalance, cls: totalBalance >= 0 ? 'text-green-700' : 'text-red-600' },
-                      ].map(c => (
-                        <div key={c.label} className="border border-gray-200 rounded-lg px-4 py-3 bg-gray-50">
-                          <div className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">{c.label}</div>
-                          <div className={`text-2xl font-bold mt-1 ${c.cls}`}>{c.value}</div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* Table */}
-                    {reportRows.length === 0 ? (
-                      <div className="text-center py-12 text-gray-400 italic text-sm">No inventory data for this client.</div>
-                    ) : (
-                      <table className="w-full text-xs border-collapse">
-                        <thead>
-                          <tr className="bg-gray-800 text-white">
-                            <th className="px-3 py-2.5 text-left font-semibold text-[10px] uppercase tracking-wide w-8">#</th>
-                            <th className="px-3 py-2.5 text-left font-semibold text-[10px] uppercase tracking-wide min-w-[220px]">Item Description</th>
-                            <th className="px-3 py-2.5 text-left font-semibold text-[10px] uppercase tracking-wide w-20">Unit</th>
-                            <th className="px-3 py-2.5 text-right font-semibold text-[10px] uppercase tracking-wide w-16">DR Qty</th>
-                            <th className="px-3 py-2.5 text-right font-semibold text-[10px] uppercase tracking-wide w-16">WH Stock</th>
-                            <th className="px-3 py-2.5 text-right font-semibold text-[10px] uppercase tracking-wide w-20">CSI Issued</th>
-                            <th className="px-3 py-2.5 text-right font-semibold text-[10px] uppercase tracking-wide w-16">Balance</th>
-                            <th className="px-3 py-2.5 text-right font-semibold text-[10px] uppercase tracking-wide w-28">Est. Unit Price</th>
-                            <th className="px-3 py-2.5 text-right font-semibold text-[10px] uppercase tracking-wide w-28">Est. Value</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {reportRows.map((r, i) => {
-                            const latestPrice = r.csi_details.length > 0
-                              ? r.csi_details[r.csi_details.length - 1].unit_price
-                              : r.dr_details.length > 0 ? r.dr_details[r.dr_details.length - 1].unit_price : null
-                            const estValue = latestPrice != null ? r.balance * latestPrice : null
-                            return (
-                              <tr key={r.item_name} className={i % 2 === 1 ? 'bg-gray-50' : 'bg-white'}>
-                                <td className="px-3 py-2 text-gray-400 border-b border-gray-100">{i + 1}</td>
-                                <td className="px-3 py-2 font-medium text-gray-800 border-b border-gray-100">{r.item_name}</td>
-                                <td className="px-3 py-2 text-gray-500 border-b border-gray-100">{uomName(r.unit)}</td>
-                                <td className="px-3 py-2 text-right text-gray-700 border-b border-gray-100">{r.dr_qty}</td>
-                                <td className="px-3 py-2 text-right border-b border-gray-100">
-                                  {r.ws_qty > 0 ? <span className="text-green-600 font-medium">{r.ws_qty}</span> : <span className="text-gray-300">—</span>}
-                                </td>
-                                <td className="px-3 py-2 text-right text-gray-700 border-b border-gray-100">{r.csi_qty}</td>
-                                <td className={`px-3 py-2 text-right font-bold border-b border-gray-100 ${r.balance > 0 ? 'text-green-700' : r.balance < 0 ? 'text-red-600' : 'text-gray-400'}`}>{r.balance}</td>
-                                <td className="px-3 py-2 text-right text-blue-600 border-b border-gray-100">
-                                  {latestPrice != null ? `₱${latestPrice.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : <span className="text-gray-300">—</span>}
-                                </td>
-                                <td className={`px-3 py-2 text-right font-semibold border-b border-gray-100 ${estValue != null && estValue < 0 ? 'text-red-600' : 'text-gray-800'}`}>
-                                  {estValue != null ? `₱${estValue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : <span className="text-gray-300">—</span>}
-                                </td>
-                              </tr>
-                            )
-                          })}
-                        </tbody>
-                        <tfoot>
-                          <tr className="bg-gray-100">
-                            <td colSpan={6} className="px-3 py-2.5 text-right text-xs font-bold text-gray-600 border-t-2 border-gray-300">TOTAL</td>
-                            <td className={`px-3 py-2.5 text-right text-sm font-bold border-t-2 border-gray-300 ${totalBalance > 0 ? 'text-green-700' : totalBalance < 0 ? 'text-red-600' : 'text-gray-500'}`}>{totalBalance}</td>
-                            <td className="px-3 py-2.5 text-right text-xs text-gray-400 border-t-2 border-gray-300">—</td>
-                            <td className="px-3 py-2.5 text-right text-sm font-bold text-gray-800 border-t-2 border-gray-300">
-                              ₱{totalEstValue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+              {/* Table */}
+              {reportRows.length === 0 ? (
+                <div className="text-center py-12 text-gray-400 italic text-sm">No inventory data for this client.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs border-collapse min-w-[700px]">
+                    <thead>
+                      <tr className="bg-gray-800 text-white">
+                        <th className="px-3 py-2.5 text-left font-semibold text-[10px] uppercase tracking-wide w-8">#</th>
+                        <th className="px-3 py-2.5 text-left font-semibold text-[10px] uppercase tracking-wide">Item Description</th>
+                        <th className="px-3 py-2.5 text-left font-semibold text-[10px] uppercase tracking-wide w-20">Unit</th>
+                        <th className="px-3 py-2.5 text-right font-semibold text-[10px] uppercase tracking-wide w-16">DR Qty</th>
+                        <th className="px-3 py-2.5 text-right font-semibold text-[10px] uppercase tracking-wide w-16">WH Stock</th>
+                        <th className="px-3 py-2.5 text-right font-semibold text-[10px] uppercase tracking-wide w-20">CSI Issued</th>
+                        <th className="px-3 py-2.5 text-right font-semibold text-[10px] uppercase tracking-wide w-16">Balance</th>
+                        <th className="px-3 py-2.5 text-right font-semibold text-[10px] uppercase tracking-wide w-28">Est. Unit Price</th>
+                        <th className="px-3 py-2.5 text-right font-semibold text-[10px] uppercase tracking-wide w-28">Est. Value</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reportRows.map((r, i) => {
+                        const latestPrice = r.csi_details.length > 0
+                          ? r.csi_details[r.csi_details.length - 1].unit_price
+                          : r.dr_details.length > 0 ? r.dr_details[r.dr_details.length - 1].unit_price : null
+                        const estValue = latestPrice != null ? r.balance * latestPrice : null
+                        return (
+                          <tr key={r.item_name} className={i % 2 === 1 ? 'bg-gray-50' : 'bg-white'}>
+                            <td className="px-3 py-2 text-gray-400 border-b border-gray-100">{i + 1}</td>
+                            <td className="px-3 py-2 font-medium text-gray-800 border-b border-gray-100">{r.item_name}</td>
+                            <td className="px-3 py-2 text-gray-500 border-b border-gray-100">{uomName(r.unit)}</td>
+                            <td className="px-3 py-2 text-right text-gray-700 border-b border-gray-100">{r.dr_qty}</td>
+                            <td className="px-3 py-2 text-right border-b border-gray-100">
+                              {r.ws_qty > 0 ? <span className="text-green-600 font-medium">{r.ws_qty}</span> : <span className="text-gray-300">—</span>}
+                            </td>
+                            <td className="px-3 py-2 text-right text-gray-700 border-b border-gray-100">{r.csi_qty}</td>
+                            <td className={`px-3 py-2 text-right font-bold border-b border-gray-100 ${r.balance > 0 ? 'text-green-700' : r.balance < 0 ? 'text-red-600' : 'text-gray-400'}`}>{r.balance}</td>
+                            <td className="px-3 py-2 text-right text-blue-600 border-b border-gray-100">
+                              {latestPrice != null ? `₱${latestPrice.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : <span className="text-gray-300">—</span>}
+                            </td>
+                            <td className={`px-3 py-2 text-right font-semibold border-b border-gray-100 ${estValue != null && estValue < 0 ? 'text-red-600' : 'text-gray-800'}`}>
+                              {estValue != null ? `₱${estValue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : <span className="text-gray-300">—</span>}
                             </td>
                           </tr>
-                        </tfoot>
-                      </table>
-                    )}
-
-                    {/* Footer note */}
-                    <div className="mt-8 pt-4 border-t border-gray-100 text-[10px] text-gray-400 flex justify-between">
-                      <span>Est. Unit Price is based on the latest CSI or DR record. Values are for reference only.</span>
-                      <span>Generated {today} · CDSC Inventory System</span>
-                    </div>
-                  </div>
+                        )
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-gray-100">
+                        <td colSpan={6} className="px-3 py-2.5 text-right text-xs font-bold text-gray-600 border-t-2 border-gray-300">TOTAL</td>
+                        <td className={`px-3 py-2.5 text-right text-sm font-bold border-t-2 border-gray-300 ${totalBalance > 0 ? 'text-green-700' : totalBalance < 0 ? 'text-red-600' : 'text-gray-500'}`}>{totalBalance}</td>
+                        <td className="px-3 py-2.5 text-right text-xs text-gray-400 border-t-2 border-gray-300">—</td>
+                        <td className="px-3 py-2.5 text-right text-sm font-bold text-gray-800 border-t-2 border-gray-300">
+                          ₱{totalEstValue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
                 </div>
-              )
-            })()}
+              )}
+
+              {/* Footer */}
+              <div className="mt-8 pt-4 border-t border-gray-100 text-[10px] text-gray-400 flex justify-between flex-wrap gap-2">
+                <span>Est. Unit Price is based on the latest CSI or DR record. Values are for reference only.</span>
+                <span>Generated {today} · CDSC Inventory System</span>
+              </div>
+            </div>
           </div>
-        </DialogContent>
-      </Dialog>
+        )
+      })()}
 
       {/* Confirm Dialog */}
       <Dialog open={confirmOpen} onOpenChange={o => { if (!o) setConfirmOpen(false) }}>
