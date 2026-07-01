@@ -405,7 +405,7 @@ export default function CSIMonitoringPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-[2fr_1fr] gap-4">
                     <div className="space-y-1.5">
                       <Label>SO Number</Label>
                       <Select value={header.po_number} onValueChange={v => setHeader(h => ({ ...h, po_number: v ?? '' }))}>
