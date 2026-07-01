@@ -43,6 +43,10 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
   const [msgText, setMsgText] = useState('')
   const [msgSending, setMsgSending] = useState(false)
   const [chatHistory, setChatHistory] = useState<{ id: string; message: string; sent_at: string; reply: string | null; replied_at: string | null }[]>([])
+  const [seenReplyIds, setSeenReplyIds] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set()
+    try { return new Set(JSON.parse(localStorage.getItem('portal-seen-replies') ?? '[]')) } catch { return new Set() }
+  })
 
   function toggleCollapsed() {
     setCollapsed(c => {
@@ -420,14 +424,34 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
             </div>
           </div>
         )}
-        <button
-          onClick={() => setMsgOpen(v => !v)}
-          className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-full shadow-lg transition-all hover:scale-105 active:scale-95"
-        >
-          <MessageSquare className="h-5 w-5" />
-          <span className="text-sm font-medium">Messages</span>
-          {chatHistory.some(m => m.reply) && <span className="h-2 w-2 rounded-full bg-white/80" />}
-        </button>
+        {(() => {
+          const unreadCount = chatHistory.filter(m => m.reply && !seenReplyIds.has(m.id)).length
+          return (
+            <button
+              onClick={() => {
+                setMsgOpen(v => {
+                  const opening = !v
+                  if (opening) {
+                    const allReplyIds = chatHistory.filter(m => m.reply).map(m => m.id)
+                    const updated = new Set([...seenReplyIds, ...allReplyIds])
+                    setSeenReplyIds(updated)
+                    localStorage.setItem('portal-seen-replies', JSON.stringify([...updated]))
+                  }
+                  return opening
+                })
+              }}
+              className="relative flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-full shadow-lg transition-all hover:scale-105 active:scale-95"
+            >
+              <MessageSquare className="h-5 w-5" />
+              <span className="text-sm font-medium">Messages</span>
+              {unreadCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 h-5 min-w-[20px] px-1 rounded-full bg-white text-red-600 text-[11px] font-bold flex items-center justify-center shadow">
+                  {unreadCount}
+                </span>
+              )}
+            </button>
+          )
+        })()}
       </div>
     </div>
   )
