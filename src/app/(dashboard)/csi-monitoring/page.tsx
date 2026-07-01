@@ -675,7 +675,7 @@ export default function CSIMonitoringPage() {
                         <line x1={40} y1={BAR_H * (1 - t)} x2={svgW + 40} y2={BAR_H * (1 - t)}
                           stroke="#e5e7eb" strokeWidth={1} strokeDasharray={t === 0 ? '0' : '4 3'} />
                         <text x={36} y={BAR_H * (1 - t) + 4} textAnchor="end" fontSize={9} fill="#9ca3af">
-                          {t === 0 ? '₱0' : `₱${((maxAmount * t) / 1000).toFixed(0)}k`}
+                          {t === 0 ? '₱0' : `₱${(maxAmount * t).toLocaleString('en-PH', { maximumFractionDigits: 0 })}`}
                         </text>
                       </g>
                     ))}
@@ -688,7 +688,7 @@ export default function CSIMonitoringPage() {
                         <g key={c.name}>
                           <rect x={x} y={BAR_H - barH} width={BAR_W} height={barH} rx={4} fill={color} opacity={0.85} />
                           <text x={x + BAR_W / 2} y={BAR_H - barH - 5} textAnchor="middle" fontSize={9} fontWeight="600" fill={color}>
-                            {c.totalAmount >= 1000 ? `₱${(c.totalAmount / 1000).toFixed(1)}k` : `₱${c.totalAmount}`}
+                            {formatPeso(c.totalAmount)}
                           </text>
                           <text x={x + BAR_W / 2} y={BAR_H + 14} textAnchor="middle" fontSize={9} fill="#6b7280"
                             className="pointer-events-none">
@@ -729,7 +729,7 @@ export default function CSIMonitoringPage() {
                         </div>
                       </div>
                       <div className="text-xs font-bold tabular-nums shrink-0" style={{ color }}>
-                        {c.totalAmount >= 1000 ? `₱${(c.totalAmount / 1000).toFixed(1)}k` : formatPeso(c.totalAmount)}
+                        {formatPeso(c.totalAmount)}
                       </div>
                     </div>
                   )
