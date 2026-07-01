@@ -760,7 +760,7 @@ export default function CSIMonitoringPage() {
             </button>
           )}
         </div>
-        <Select value={clientFilter} onValueChange={v => setClientFilter(v === '__all__' ? '' : v)}>
+        <Select value={clientFilter} onValueChange={v => setClientFilter(v === '__all__' ? '' : (v ?? ''))}>
           <SelectTrigger className="h-9 w-48 text-sm">
             <SelectValue placeholder="All Clients" />
           </SelectTrigger>
