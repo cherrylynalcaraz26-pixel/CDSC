@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 import {
   LayoutDashboard, FileText, Package, User, LogOut, Menu, X, Boxes,
-  ClipboardList, Search, Bell, PanelLeftClose, PanelLeftOpen, MessageSquare, Send,
+  ClipboardList, Search, Bell, PanelLeftClose, PanelLeftOpen, MessageSquare, Send, ChevronRight,
 } from 'lucide-react'
 import { SearchProvider, useSearchContext } from '@/context/search-context'
 
@@ -131,229 +131,221 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
 
   const initials = (clientName || userName).split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2) || 'C'
 
-  return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* Top header */}
-      <header className="sticky top-0 z-40 bg-white border-b border-gray-200 h-16 flex items-center">
-        <div className="w-full flex items-center h-16 px-4 gap-4">
-          {/* Mobile hamburger */}
-          <button className="md:hidden p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors shrink-0"
-            onClick={() => setMobileOpen(true)}>
-            <Menu className="h-5 w-5" />
-          </button>
-
-          {/* Logo area — full name when expanded, logo+name when collapsed */}
-          <Link href="/portal" className={cn('hidden md:flex items-center gap-2.5 shrink-0 transition-all duration-200', collapsed ? 'w-14 justify-center' : 'w-56')}>
-            <div className="relative h-8 w-8 shrink-0 rounded-md overflow-hidden bg-[#111111]">
-              <Image src="/cdsc-logo.jpg" alt="CDSC Industrial Supply" fill className="object-cover" />
-            </div>
-            {!collapsed && (
-              <div>
-                <div className="text-sm font-bold text-gray-900 leading-tight">CDSC Industrial Supply</div>
-                <div className="text-[10px] text-gray-400 leading-tight">Client Portal</div>
+  // Shared nav content for sidebar
+  function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
+    return (
+      <>
+        {NAV.map(link => {
+          const active = isActive(link.href, link.exact)
+          if (collapsed) {
+            return (
+              <div key={link.href} className="relative group">
+                <Link href={link.href} onClick={onNavigate} title={link.label}
+                  className={cn(
+                    'flex items-center justify-center h-9 rounded-md transition-colors',
+                    active ? 'bg-red-600/20 text-red-400' : 'text-white/40 hover:text-white/80 hover:bg-white/5'
+                  )}>
+                  <link.icon className="h-[16px] w-[16px] shrink-0" />
+                </Link>
+                <div className="absolute left-full top-0 ml-1 hidden group-hover:block z-50 min-w-[160px] bg-[#1a1a1a] border border-white/10 rounded-lg py-1 shadow-xl pointer-events-none">
+                  <span className={cn('block px-3 py-1.5 text-[13px]', active ? 'text-red-400' : 'text-white/70')}>{link.label}</span>
+                </div>
               </div>
-            )}
-          </Link>
+            )
+          }
+          return (
+            <Link key={link.href} href={link.href} onClick={onNavigate}
+              className={cn(
+                'flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] font-medium transition-colors',
+                active ? 'bg-red-600/20 text-red-400 border-l-2 border-red-500' : 'text-white/50 hover:text-white/80 hover:bg-white/5'
+              )}>
+              <link.icon className={cn('h-[15px] w-[15px] shrink-0', active ? 'text-red-400' : '')} />
+              {link.label}
+            </Link>
+          )
+        })}
+      </>
+    )
+  }
 
-          {/* Mobile logo */}
-          <Link href="/portal" className="md:hidden flex items-center gap-2">
-            <div className="relative h-8 w-8 shrink-0 rounded-md overflow-hidden bg-[#111111]">
-              <Image src="/cdsc-logo.jpg" alt="CDSC Industrial Supply" fill className="object-cover" />
-            </div>
-            <div>
-              <div className="text-sm font-bold text-gray-900 leading-tight">CDSC Industrial Supply</div>
-              <div className="text-[10px] text-gray-400 leading-tight">Client Portal</div>
-            </div>
-          </Link>
+  return (
+    <div className="min-h-screen bg-gray-50 flex">
 
-          {/* Search bar */}
-          <div className="flex flex-1 justify-center">
-            <div className="relative w-full max-w-sm">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-              <input
-                type="search"
-                value={query}
-                onChange={e => setQuery(e.target.value)}
-                placeholder="Search orders, items…"
-                className="w-full h-9 pl-9 pr-4 rounded-lg border border-gray-200 bg-gray-50 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-              />
-            </div>
-          </div>
-
-          {/* Right: notifications + user + sign out */}
-          <div className="ml-auto flex items-center gap-3">
-            <div className="relative">
-              <button onClick={() => setNotifOpen(v => !v)}
-                className="relative p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors">
-                <Bell className="h-5 w-5" />
-                {notifications.filter(n => !n.read).length > 0 && (
-                  <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-600" />
-                )}
+      {/* Desktop sidebar — full height, matches admin exactly */}
+      <aside className={cn(
+        'hidden lg:flex flex-col bg-[#111111] sticky top-0 h-screen shrink-0 transition-all duration-200',
+        collapsed ? 'w-14' : 'w-56'
+      )}>
+        {/* Logo + collapse toggle */}
+        <div className={cn('py-4 flex items-center gap-3 transition-all', collapsed ? 'px-3 justify-center' : 'px-4')}>
+          {collapsed ? (
+            <button onClick={toggleCollapsed} title="Expand sidebar"
+              className="relative h-8 w-8 shrink-0 rounded-md overflow-hidden bg-white">
+              <Image src="/cdsc-logo.jpg" alt="CDSC Industrial Supply" fill className="object-cover" priority />
+            </button>
+          ) : (
+            <>
+              <div className="relative h-8 w-8 shrink-0 rounded-md overflow-hidden bg-white">
+                <Image src="/cdsc-logo.jpg" alt="CDSC Industrial Supply" fill className="object-cover" priority />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-white font-semibold text-sm leading-tight truncate">CDSC Industrial Supply</div>
+                <div className="text-white/35 text-[11px] leading-tight">Client Portal</div>
+              </div>
+              <button onClick={toggleCollapsed} title="Collapse sidebar"
+                className="text-white/40 hover:text-white/80 transition-colors shrink-0">
+                <X className="h-4 w-4" />
               </button>
-              {notifOpen && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)} />
-                  <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-200 z-50 max-h-96 overflow-y-auto">
-                    <div className="flex items-center justify-between px-4 py-3 border-b">
-                      <span className="text-sm font-semibold text-gray-900">Notifications</span>
-                      {notifications.some(n => !n.read) && (
-                        <button onClick={() => setNotifications(ns => ns.map(n => ({ ...n, read: true })))}
-                          className="text-xs text-red-600 hover:underline">Mark all read</button>
-                      )}
-                    </div>
-                    {notifications.length === 0 ? (
-                      <div className="px-4 py-6 text-center text-sm text-gray-400">No notifications</div>
-                    ) : (
-                      <div className="divide-y divide-gray-100">
-                        {notifications.map(n => (
-                          <div key={n.id} className={cn('px-4 py-3 text-xs', n.read ? 'text-gray-400' : 'text-gray-700 bg-blue-50/40')}>
-                            <div className="font-medium">{n.message}</div>
-                            {n.time && <div className="text-gray-400 mt-0.5">{new Date(n.time).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</div>}
-                          </div>
-                        ))}
-                      </div>
-                    )}
+            </>
+          )}
+        </div>
+
+        <div className="h-px bg-white/8 mx-3 mb-2" />
+
+        <nav className={cn('flex-1 overflow-y-auto pb-2 space-y-0.5 scrollbar-thin', collapsed ? 'px-1.5' : 'px-2')}>
+          <SidebarNav />
+        </nav>
+
+        <div className={cn('p-3 border-t border-white/8', collapsed && 'flex flex-col items-center')}>
+          <button onClick={signOut} title="Sign Out"
+            className={cn(
+              'flex items-center gap-2.5 rounded-md text-[13px] font-medium text-white/40 hover:text-red-400 hover:bg-white/5 transition-colors',
+              collapsed ? 'h-9 w-9 justify-center' : 'w-full px-3 py-2'
+            )}>
+            <LogOut className="h-[15px] w-[15px] shrink-0" />
+            {!collapsed && <span>Sign Out</span>}
+          </button>
+        </div>
+      </aside>
+
+      {/* Mobile drawer */}
+      {mobileOpen && <div className="fixed inset-0 z-40 bg-black/60 lg:hidden" onClick={() => setMobileOpen(false)} />}
+      <aside className={cn(
+        'fixed inset-y-0 left-0 z-50 w-60 bg-[#111111] transition-transform duration-300 ease-in-out lg:hidden flex flex-col',
+        mobileOpen ? 'translate-x-0' : '-translate-x-full'
+      )}>
+        <div className="py-4 px-4 flex items-center gap-3 border-b border-white/8">
+          <div className="relative h-8 w-8 shrink-0 rounded-md overflow-hidden bg-white">
+            <Image src="/cdsc-logo.jpg" alt="CDSC Industrial Supply" fill className="object-cover" priority />
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-white font-semibold text-sm leading-tight truncate">CDSC Industrial Supply</div>
+            <div className="text-white/35 text-[11px] leading-tight">Client Portal</div>
+          </div>
+          <button onClick={() => setMobileOpen(false)} className="text-white/40 hover:text-white/80 transition-colors shrink-0">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <nav className="flex-1 overflow-y-auto p-2 space-y-0.5">
+          {NAV.map(link => {
+            const active = isActive(link.href, link.exact)
+            return (
+              <Link key={link.href} href={link.href} onClick={() => setMobileOpen(false)}
+                className={cn(
+                  'flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] font-medium transition-colors',
+                  active ? 'bg-red-600/20 text-red-400 border-l-2 border-red-500' : 'text-white/50 hover:text-white/80 hover:bg-white/5'
+                )}>
+                <link.icon className={cn('h-[15px] w-[15px] shrink-0', active ? 'text-red-400' : '')} />
+                {link.label}
+              </Link>
+            )
+          })}
+        </nav>
+
+        <div className="p-3 border-t border-white/8">
+          <button onClick={signOut}
+            className="flex items-center gap-2.5 w-full px-3 py-2 text-[13px] font-medium text-white/40 hover:text-red-400 hover:bg-white/5 rounded-md transition-colors">
+            <LogOut className="h-[15px] w-[15px] shrink-0" /> Sign Out
+          </button>
+        </div>
+      </aside>
+
+      {/* Main area: header + content */}
+      <div className="flex-1 min-w-0 flex flex-col">
+        {/* Top header */}
+        <header className="sticky top-0 z-30 bg-background/95 backdrop-blur border-b px-4 md:px-6 py-3">
+          <div className="flex items-center justify-between gap-3">
+            {/* Left: hamburger (mobile) + logo when sidebar collapsed (desktop) */}
+            <div className="flex items-center gap-3">
+              <button className="lg:hidden p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
+                onClick={() => setMobileOpen(true)}>
+                <Menu className="h-5 w-5" />
+              </button>
+              {collapsed && (
+                <div className="hidden lg:flex items-center gap-2">
+                  <div className="relative h-7 w-7 shrink-0 rounded-md overflow-hidden bg-[#111111]">
+                    <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="object-cover" priority />
                   </div>
-                </>
+                  <span className="text-sm font-semibold leading-tight">CDSC Industrial Supply</span>
+                </div>
               )}
             </div>
-            <div className="hidden sm:block text-right">
-              <div className="text-xs font-semibold text-gray-900 leading-tight">{clientName || userName}</div>
-              {clientName && <div className="text-[10px] text-gray-400 leading-tight">{userName}</div>}
+
+            {/* Center: search */}
+            <div className="flex-1 max-w-sm">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <input
+                  type="search"
+                  value={query}
+                  onChange={e => setQuery(e.target.value)}
+                  placeholder="Search orders, items…"
+                  className="w-full h-9 pl-9 pr-4 rounded-lg border border-input bg-background text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                />
+              </div>
             </div>
-            <div className="h-8 w-8 rounded-full bg-red-600 text-white text-xs font-bold flex items-center justify-center shrink-0">
-              {initials}
-            </div>
-            <button onClick={signOut}
-              className="hidden sm:flex items-center gap-1.5 text-sm text-gray-500 hover:text-red-600 px-3 py-2 rounded-lg hover:bg-red-50 transition-colors">
-              <LogOut className="h-4 w-4" />
-              <span className="hidden lg:inline">Sign Out</span>
-            </button>
-          </div>
-        </div>
-      </header>
 
-      <div className="flex flex-1">
-        {/* Desktop sidebar — collapsible like admin */}
-        <aside className={cn(
-          'hidden md:flex flex-col bg-[#111111] sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto shrink-0 transition-all duration-200',
-          collapsed ? 'w-14' : 'w-56'
-        )}>
-          {/* Sidebar header with toggle */}
-          <div className={cn('py-3 flex items-center transition-all', collapsed ? 'px-2 justify-center' : 'px-3 justify-end')}>
-            <button
-              onClick={toggleCollapsed}
-              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              className="text-white/40 hover:text-white/80 transition-colors p-1"
-            >
-              {collapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
-            </button>
-          </div>
-
-          <div className="h-px bg-white/8 mx-3 mb-2" />
-
-          <nav className={cn('flex-1 space-y-0.5', collapsed ? 'px-1.5' : 'px-2')}>
-            {NAV.map(link => {
-              const active = isActive(link.href, link.exact)
-              if (collapsed) {
-                return (
-                  <div key={link.href} className="relative group">
-                    <Link href={link.href}
-                      title={link.label}
-                      className={cn(
-                        'flex items-center justify-center h-9 rounded-md transition-colors',
-                        active
-                          ? 'bg-red-600/20 text-red-400'
-                          : 'text-white/40 hover:text-white/80 hover:bg-white/5'
-                      )}>
-                      <link.icon className="h-[16px] w-[16px] shrink-0" />
-                    </Link>
-                    {/* Flyout label */}
-                    <div className="absolute left-full top-0 ml-1 hidden group-hover:block z-50 min-w-[140px] bg-[#1a1a1a] border border-white/10 rounded-lg py-1 shadow-xl pointer-events-none">
-                      <span className={cn('block px-3 py-1.5 text-[13px]', active ? 'text-red-400' : 'text-white/70')}>{link.label}</span>
+            {/* Right: notifications + user */}
+            <div className="flex items-center gap-1.5">
+              <div className="relative">
+                <button onClick={() => setNotifOpen(v => !v)}
+                  className="relative h-9 w-9 flex items-center justify-center rounded-lg text-muted-foreground hover:bg-accent transition-colors">
+                  <Bell className="h-5 w-5" />
+                  {notifications.filter(n => !n.read).length > 0 && (
+                    <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-600" />
+                  )}
+                </button>
+                {notifOpen && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setNotifOpen(false)} />
+                    <div className="absolute right-0 top-full mt-2 w-80 bg-popover border rounded-xl shadow-lg z-50 max-h-96 overflow-y-auto">
+                      <div className="flex items-center justify-between px-4 py-3 border-b">
+                        <span className="text-sm font-semibold">Notifications</span>
+                        {notifications.some(n => !n.read) && (
+                          <button onClick={() => setNotifications(ns => ns.map(n => ({ ...n, read: true })))}
+                            className="text-xs text-red-600 hover:underline">Mark all read</button>
+                        )}
+                      </div>
+                      {notifications.length === 0 ? (
+                        <div className="px-4 py-6 text-center text-sm text-muted-foreground">No notifications</div>
+                      ) : (
+                        <div className="divide-y">
+                          {notifications.map(n => (
+                            <div key={n.id} className={cn('px-4 py-3 text-xs', n.read ? 'text-muted-foreground' : 'bg-blue-50/40 dark:bg-blue-950/20')}>
+                              <div className="font-medium">{n.message}</div>
+                              {n.time && <div className="text-muted-foreground mt-0.5">{new Date(n.time).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}</div>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                )
-              }
-              return (
-                <Link key={link.href} href={link.href}
-                  className={cn(
-                    'flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] font-medium transition-colors',
-                    active
-                      ? 'bg-red-600/20 text-red-400 border-l-2 border-red-500'
-                      : 'text-white/50 hover:text-white/80 hover:bg-white/5'
-                  )}>
-                  <link.icon className={cn('h-[15px] w-[15px] shrink-0', active ? 'text-red-400' : '')} />
-                  {link.label}
-                </Link>
-              )
-            })}
-          </nav>
-
-          <div className={cn('p-3 border-t border-white/8', collapsed && 'flex justify-center')}>
-            <button onClick={signOut}
-              title="Sign Out"
-              className={cn(
-                'flex items-center gap-2.5 text-[13px] font-medium text-white/40 hover:text-red-400 hover:bg-white/5 rounded-md transition-colors',
-                collapsed ? 'h-9 w-9 justify-center' : 'w-full px-3 py-2'
-              )}>
-              <LogOut className="h-[15px] w-[15px] shrink-0" />
-              {!collapsed && <span>Sign Out</span>}
-            </button>
-          </div>
-        </aside>
-
-        {/* Mobile drawer */}
-        {mobileOpen && (
-          <>
-            <div className="fixed inset-0 z-50 bg-black/40 md:hidden" onClick={() => setMobileOpen(false)} />
-            <div className="fixed inset-y-0 left-0 z-50 w-72 bg-[#111111] shadow-2xl md:hidden flex flex-col">
-              <div className="flex items-center justify-between p-4 border-b border-white/8">
-                <div className="flex items-center gap-2">
-                  <div className="relative h-7 w-7 shrink-0 rounded-md overflow-hidden bg-white">
-                    <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="object-cover" />
-                  </div>
-                  <span className="font-bold text-sm text-white">CDSC Industrial Supply</span>
-                </div>
-                <button onClick={() => setMobileOpen(false)} className="p-1.5 rounded-lg text-white/40 hover:bg-white/5">
-                  <X className="h-4 w-4" />
-                </button>
+                  </>
+                )}
               </div>
-              <div className="p-4 border-b border-white/8">
-                <div className="flex items-center gap-3">
-                  <div className="h-9 w-9 rounded-full bg-red-600 text-white text-sm font-bold flex items-center justify-center shrink-0">
-                    {initials}
-                  </div>
-                  <div>
-                    <div className="text-sm font-semibold text-white">{clientName || userName}</div>
-                    {clientName && <div className="text-xs text-white/40">{userName}</div>}
-                  </div>
-                </div>
-              </div>
-              <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
-                {NAV.map(link => {
-                  const active = isActive(link.href, link.exact)
-                  return (
-                    <Link key={link.href} href={link.href} onClick={() => setMobileOpen(false)}
-                      className={cn(
-                        'flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] font-medium transition-colors',
-                        active ? 'bg-red-600/20 text-red-400 border-l-2 border-red-500' : 'text-white/50 hover:text-white/80 hover:bg-white/5'
-                      )}>
-                      <link.icon className={cn('h-[15px] w-[15px]', active ? 'text-red-400' : '')} />
-                      {link.label}
-                    </Link>
-                  )
-                })}
-              </nav>
-              <div className="p-3 border-t border-white/8">
-                <button onClick={signOut}
-                  className="flex items-center gap-2.5 w-full px-3 py-2 text-[13px] font-medium text-white/40 hover:text-red-400 hover:bg-white/5 rounded-md transition-colors">
-                  <LogOut className="h-[15px] w-[15px]" /> Sign Out
-                </button>
+
+              <button onClick={signOut}
+                className="hidden sm:flex items-center gap-1.5 text-sm text-muted-foreground hover:text-destructive px-3 py-2 rounded-lg hover:bg-accent transition-colors">
+                <LogOut className="h-4 w-4" />
+                <span className="hidden md:inline">Sign Out</span>
+              </button>
+
+              <div className="h-9 w-9 rounded-full bg-red-600 text-white text-xs font-bold flex items-center justify-center shrink-0 cursor-default">
+                {initials}
               </div>
             </div>
-          </>
-        )}
+          </div>
+        </header>
 
         {/* Page content */}
         <main className="flex-1 min-w-0 px-4 sm:px-6 lg:px-8 py-8">
