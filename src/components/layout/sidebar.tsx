@@ -12,7 +12,7 @@ import {
   FileBarChart, Settings, ChevronDown, ChevronRight, Building2,
   SlidersHorizontal, ArrowRightLeft, LogOut, X, Wrench,
   Receipt, PanelLeftClose, PanelLeftOpen, ClipboardList, BoxesIcon,
-  TrendingUp,
+  TrendingUp, MessageSquare,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useCompany } from '@/context/company-context'
@@ -46,6 +46,7 @@ const navigation: NavItem[] = [
     ],
   },
   { label: 'Accounting', href: '/accounting', icon: Calculator },
+  { label: 'Messages', href: '/messages', icon: MessageSquare },
   {
     label: 'Setup', icon: Wrench,
     children: [

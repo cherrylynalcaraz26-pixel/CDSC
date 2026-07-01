@@ -43,7 +43,7 @@ const SEARCH_ITEMS = [
 const DATA_PAGES = [
   '/crm', '/purchase-orders', '/quotation', '/sales-orders',
   '/receiving', '/inventory', '/dr-logs', '/csi-monitoring',
-  '/pull-out-billing', '/users', '/clients', '/accounting', '/dashboard',
+  '/pull-out-billing', '/users', '/clients', '/accounting', '/dashboard', '/messages',
 ]
 
 export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
