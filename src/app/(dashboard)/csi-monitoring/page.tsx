@@ -760,47 +760,69 @@ export default function CSIMonitoringPage() {
                 </CardContent>
               </Card>
 
-              {/* Donut Pie Chart */}
-              <Card>
+              {/* Revenue Share – radial breakdown */}
+              <Card className="flex flex-col">
                 <CardHeader className="pb-2 pt-5 px-6">
                   <CardTitle className="text-sm font-semibold">Revenue Share</CardTitle>
                   <p className="text-xs text-muted-foreground">% of total invoiced per client</p>
                 </CardHeader>
-                <CardContent className="px-4 pb-4">
-                  <ResponsiveContainer width="100%" height={180}>
-                    <PieChart>
-                      <Pie
-                        data={clientStats}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={50}
-                        outerRadius={78}
-                        paddingAngle={3}
-                        dataKey="totalAmount"
-                        nameKey="shortName"
-                      >
-                        {clientStats.map((c, i) => (
-                          <Cell key={i} fill={c.color} stroke="transparent" />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        formatter={(value, name) => [formatPeso(Number(value)), String(name)]}
-                        contentStyle={{ borderRadius: 12, border: '1px solid #e5e7eb', fontSize: 12 }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="space-y-1.5 mt-1">
-                    {clientStats.map((c, i) => (
-                      <div key={i} className="flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-2">
-                          <div className="h-2 w-2 rounded-full shrink-0" style={{ background: c.color }} />
-                          <span className="text-muted-foreground truncate max-w-[120px]" title={c.name}>{c.shortName}</span>
+                <CardContent className="px-5 pb-5 flex-1 flex flex-col justify-center gap-3">
+                  {/* Donut with center label */}
+                  <div className="relative mx-auto" style={{ width: 180, height: 180 }}>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={clientStats.length ? clientStats : [{ shortName: 'No data', totalAmount: 1, color: '#e5e7eb' }]}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={58}
+                          outerRadius={82}
+                          paddingAngle={clientStats.length > 1 ? 3 : 0}
+                          startAngle={90}
+                          endAngle={-270}
+                          dataKey="totalAmount"
+                          strokeWidth={0}
+                        >
+                          {(clientStats.length ? clientStats : [{ color: '#e5e7eb' }]).map((c, i) => (
+                            <Cell key={i} fill={c.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip
+                          formatter={(value, name) => [formatPeso(Number(value)), String(name)]}
+                          contentStyle={{ borderRadius: 12, border: '1px solid #e5e7eb', fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    {/* center label */}
+                    <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                      <span className="text-[10px] text-muted-foreground font-medium leading-tight">Total</span>
+                      <span className="text-sm font-bold leading-tight tabular-nums">{formatPeso(grandTotal)}</span>
+                      <span className="text-[10px] text-muted-foreground mt-0.5">{clientStats.length} client{clientStats.length !== 1 ? 's' : ''}</span>
+                    </div>
+                  </div>
+
+                  {/* per-client progress bars */}
+                  <div className="space-y-2">
+                    {clientStats.map((c, i) => {
+                      const pct = grandTotal > 0 ? (c.totalAmount / grandTotal) * 100 : 0
+                      return (
+                        <div key={i}>
+                          <div className="flex items-center justify-between mb-0.5">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="inline-block h-2 w-2 rounded-full shrink-0" style={{ background: c.color }} />
+                              <span className="text-xs text-foreground truncate max-w-[130px]" title={c.name}>{c.shortName}</span>
+                            </div>
+                            <span className="text-xs font-semibold tabular-nums ml-2" style={{ color: c.color }}>{pct.toFixed(1)}%</span>
+                          </div>
+                          <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                            <div
+                              className="h-full rounded-full transition-all duration-700"
+                              style={{ width: `${pct}%`, background: c.color }}
+                            />
+                          </div>
                         </div>
-                        <span className="font-semibold tabular-nums" style={{ color: c.color }}>
-                          {grandTotal > 0 ? ((c.totalAmount / grandTotal) * 100).toFixed(1) : 0}%
-                        </span>
-                      </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </CardContent>
               </Card>
