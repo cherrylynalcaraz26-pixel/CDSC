@@ -458,8 +458,13 @@ export default function PortalStockPage() {
             ) : filtered.map(s => {
               const isLow = s.quantity_on_hand <= s.low_stock_threshold
               const isOut = s.quantity_on_hand === 0
+              const isSelected = historyItem?.id === s.id
               return (
-                <tr key={s.id} className="hover:bg-gray-50 transition-colors">
+                <tr
+                  key={s.id}
+                  onClick={() => { setHistoryItem(isSelected ? null : s); setHistoryOpen(true) }}
+                  className={cn('cursor-pointer transition-colors', isSelected ? 'bg-indigo-50 border-l-2 border-indigo-500' : 'hover:bg-gray-50')}
+                >
                   <td className="px-4 py-3">
                     <div className="font-medium text-gray-900 text-sm">{s.item_name}</div>
                     {s.item_code && <div className="text-xs text-gray-400">{s.item_code}</div>}
@@ -470,7 +475,7 @@ export default function PortalStockPage() {
                     </span>
                     <span className="text-xs text-gray-400 ml-1">{s.unit ?? 'pcs'}</span>
                   </td>
-                  <td className="px-4 py-3 text-center hidden sm:table-cell">
+                  <td className="px-4 py-3 text-center hidden sm:table-cell" onClick={e => e.stopPropagation()}>
                     <button
                       onClick={() => { setThresholdItem(s); setNewThreshold(String(s.low_stock_threshold)) }}
                       className="text-xs text-gray-500 hover:text-red-600 underline underline-offset-2">
@@ -485,7 +490,7 @@ export default function PortalStockPage() {
                       {isOut ? 'Out of Stock' : isLow ? 'Low Stock' : 'In Stock'}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
                     <div className="relative inline-block">
                       <button
                         onClick={e => {
@@ -520,7 +525,7 @@ export default function PortalStockPage() {
             <div
               className="fixed z-50 w-48 bg-white border border-gray-200 rounded-xl shadow-xl py-1 text-sm"
               style={{ top: actionDropdownPos.top, right: actionDropdownPos.right }}>
-              <button onClick={() => { setHistoryItem(s); setHistoryOpen(true); setOpenActionId(null); setActionDropdownPos(null) }}
+              <button onClick={() => { setHistoryItem(s); setHistoryOpen(true); setOpenActionId(null); setActionDropdownPos(null); setTimeout(() => document.getElementById('tx-history-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50) }}
                 className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-700 hover:bg-gray-50">
                 <History className="h-3.5 w-3.5 text-indigo-500" /> View History
               </button>
@@ -541,68 +546,95 @@ export default function PortalStockPage() {
         )
       })()}
 
-      {/* Recent transactions */}
+      {/* Transaction History — inline, filterable by selected row */}
       {transactions.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div id="tx-history-section" className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <button
             className="w-full flex items-center justify-between px-5 py-4 text-left hover:bg-gray-50 transition-colors"
-            onClick={() => setHistoryOpen(h => !h)}>
+            onClick={() => { setHistoryOpen(h => !h); if (historyOpen) setHistoryItem(null) }}>
             <div className="flex items-center gap-2">
               <History className="h-4 w-4 text-gray-500" />
-              <span className="text-sm font-semibold text-gray-700">Transaction History</span>
-              <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{transactions.length}</span>
+              {historyItem ? (
+                <>
+                  <span className="text-sm font-semibold text-indigo-700">{historyItem.item_name}</span>
+                  <span className="text-xs text-indigo-400">— history</span>
+                  <span className="text-xs bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-full">{itemHistory.length}</span>
+                </>
+              ) : (
+                <>
+                  <span className="text-sm font-semibold text-gray-700">Transaction History</span>
+                  <span className="text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{transactions.length}</span>
+                </>
+              )}
             </div>
-            {historyOpen ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
+            <div className="flex items-center gap-2">
+              {historyItem && (
+                <span
+                  role="button"
+                  onClick={e => { e.stopPropagation(); setHistoryItem(null) }}
+                  className="text-xs text-gray-400 hover:text-gray-600 flex items-center gap-0.5 px-1.5 py-0.5 rounded hover:bg-gray-100">
+                  <X className="h-3 w-3" /> Clear
+                </span>
+              )}
+              {historyOpen ? <ChevronUp className="h-4 w-4 text-gray-400" /> : <ChevronDown className="h-4 w-4 text-gray-400" />}
+            </div>
           </button>
-          {historyOpen && !historyItem && (
+          {historyOpen && (
             <div className="border-t">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-50 border-b">
-                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase">Date</th>
-                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase">Item</th>
-                    <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase">Type</th>
-                    <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase">Qty</th>
-                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase hidden sm:table-cell">Care of / Dept / Notes</th>
-                    <th className="px-4 py-2.5 w-16" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {transactions.slice(0, 30).map(t => (
-                    <tr key={t.id} className="hover:bg-gray-50">
-                      <td className="px-4 py-2.5 text-xs text-gray-500 whitespace-nowrap">
-                        {format(new Date(t.created_at), 'MMM d, yyyy')}
-                      </td>
-                      <td className="px-4 py-2.5 text-xs font-medium text-gray-900">{t.item_name}</td>
-                      <td className="px-4 py-2.5 text-center">
-                        <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium capitalize', txTypeStyle[t.transaction_type] ?? 'bg-gray-100 text-gray-600')}>
-                          {t.transaction_type}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5 text-center text-xs font-bold text-gray-800">
-                        {t.transaction_type === 'issued' ? '-' : '+'}{t.quantity} {t.unit ?? ''}
-                      </td>
-                      <td className="px-4 py-2.5 text-xs text-gray-500 hidden sm:table-cell">
-                        {t.issued_to && <span className="font-medium text-gray-700">{t.issued_to}</span>}
-                        {t.department && <span className="ml-1 text-gray-400">({t.department})</span>}
-                        {(t.issued_to || t.department) && t.notes && ' — '}
-                        {t.notes}
-                        {t.reference_no && <span className="ml-1 text-gray-400">({t.reference_no})</span>}
-                      </td>
-                      <td className="px-4 py-2.5 text-right">
-                        <button
-                          onClick={() => undoTransaction(t)}
-                          disabled={undoingId === t.id}
-                          title="Undo this transaction"
-                          className="inline-flex items-center gap-1 text-[10px] text-gray-400 hover:text-red-600 hover:bg-red-50 px-2 py-1 rounded-lg transition-colors disabled:opacity-40">
-                          {undoingId === t.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Undo2 className="h-3 w-3" />}
-                          Undo
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              {(() => {
+                const rows = historyItem ? itemHistory : transactions.slice(0, 30)
+                return (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-50 border-b">
+                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase">Date</th>
+                        {!historyItem && <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase">Item</th>}
+                        <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase">Type</th>
+                        <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-500 uppercase">Qty</th>
+                        <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase hidden sm:table-cell">Care of / Dept / Notes</th>
+                        <th className="px-4 py-2.5 w-16" />
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {rows.length === 0 ? (
+                        <tr><td colSpan={6} className="px-4 py-8 text-center text-xs text-gray-400">No transactions yet for this item.</td></tr>
+                      ) : rows.map(t => (
+                        <tr key={t.id} className="hover:bg-gray-50">
+                          <td className="px-4 py-2.5 text-xs text-gray-500 whitespace-nowrap">
+                            {format(new Date(t.created_at), 'MMM d, yyyy')}
+                          </td>
+                          {!historyItem && <td className="px-4 py-2.5 text-xs font-medium text-gray-900">{t.item_name}</td>}
+                          <td className="px-4 py-2.5 text-center">
+                            <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium capitalize', txTypeStyle[t.transaction_type] ?? 'bg-gray-100 text-gray-600')}>
+                              {t.transaction_type}
+                            </span>
+                          </td>
+                          <td className="px-4 py-2.5 text-center text-xs font-bold text-gray-800">
+                            {t.transaction_type === 'issued' ? '-' : '+'}{t.quantity} {t.unit ?? ''}
+                          </td>
+                          <td className="px-4 py-2.5 text-xs text-gray-500 hidden sm:table-cell">
+                            {t.issued_to && <span className="font-medium text-gray-700">{t.issued_to}</span>}
+                            {t.department && <span className="ml-1 text-gray-400">({t.department})</span>}
+                            {(t.issued_to || t.department) && t.notes && ' — '}
+                            {t.notes}
+                            {t.reference_no && <span className="ml-1 text-gray-400">({t.reference_no})</span>}
+                          </td>
+                          <td className="px-4 py-2.5 text-right">
+                            <button
+                              onClick={() => undoTransaction(t)}
+                              disabled={undoingId === t.id}
+                              title="Undo this transaction"
+                              className="inline-flex items-center gap-1 text-[10px] text-gray-400 hover:text-red-600 hover:bg-red-50 px-2 py-1 rounded-lg transition-colors disabled:opacity-40">
+                              {undoingId === t.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Undo2 className="h-3 w-3" />}
+                              Undo
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )
+              })()}
             </div>
           )}
         </div>
@@ -868,72 +900,6 @@ export default function PortalStockPage() {
                 {savingDept && <Loader2 className="h-4 w-4 animate-spin" />}
                 Add Department
               </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Item history modal */}
-      {historyItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col">
-            <div className="flex items-center justify-between px-6 py-4 border-b shrink-0">
-              <div>
-                <h3 className="font-bold text-gray-900">{historyItem.item_name}</h3>
-                <p className="text-xs text-gray-500">Transaction history</p>
-              </div>
-              <button onClick={() => setHistoryItem(null)} className="text-gray-400 hover:text-gray-600">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="overflow-y-auto flex-1">
-              {itemHistory.length === 0 ? (
-                <div className="py-12 text-center text-sm text-gray-400">No transactions yet for this item.</div>
-              ) : (
-                <table className="w-full text-sm">
-                  <thead className="sticky top-0 bg-gray-50 border-b">
-                    <tr>
-                      <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Date</th>
-                      <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-500">Type</th>
-                      <th className="px-4 py-2.5 text-center text-xs font-semibold text-gray-500">Qty</th>
-                      <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Details</th>
-                      <th className="px-4 py-2.5 w-14" />
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {itemHistory.map(t => (
-                      <tr key={t.id} className="hover:bg-gray-50">
-                        <td className="px-4 py-2.5 text-xs text-gray-500 whitespace-nowrap">
-                          {format(new Date(t.created_at), 'MMM d, yyyy')}
-                        </td>
-                        <td className="px-4 py-2.5 text-center">
-                          <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium capitalize', txTypeStyle[t.transaction_type] ?? 'bg-gray-100 text-gray-600')}>
-                            {t.transaction_type}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2.5 text-center text-xs font-bold">
-                          {t.transaction_type === 'issued' ? '-' : t.transaction_type === 'adjusted' ? '' : '+'}{t.quantity}
-                        </td>
-                        <td className="px-4 py-2.5 text-xs text-gray-600">
-                          {t.issued_to && <div className="font-medium">→ {t.issued_to}</div>}
-                          {t.department && <div className="text-gray-400">{t.department}</div>}
-                          {t.notes && <div className="text-gray-400">{t.notes}</div>}
-                          {t.reference_no && <div className="text-gray-400">{t.reference_no}</div>}
-                        </td>
-                        <td className="px-4 py-2.5 text-right">
-                          <button
-                            onClick={() => undoTransaction(t)}
-                            disabled={undoingId === t.id}
-                            title="Undo"
-                            className="inline-flex items-center gap-1 text-[10px] text-gray-400 hover:text-red-600 hover:bg-red-50 px-2 py-1 rounded-lg transition-colors disabled:opacity-40">
-                            {undoingId === t.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Undo2 className="h-3 w-3" />}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
             </div>
           </div>
         </div>
