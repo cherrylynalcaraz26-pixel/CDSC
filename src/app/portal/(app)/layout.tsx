@@ -77,9 +77,9 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
       setUserName(profile?.full_name ?? session.user.email?.split('@')[0] ?? 'Client')
       setUserEmail(session.user.email ?? '')
       setUserAvatarUrl((profile as any)?.avatar_url ?? null)
-      const { data: clientRow } = await supabase.from('clients').select('id, company_name, logo_url').eq('auth_user_id', session.user.id).single()
+      const { data: clientRow } = await supabase.from('clients').select('id, company_name, avatar_url').eq('auth_user_id', session.user.id).single()
       setClientName(clientRow?.company_name ?? '')
-      setClientLogoUrl((clientRow as any)?.logo_url ?? null)
+      setClientLogoUrl((clientRow as any)?.avatar_url ?? null)
       if (clientRow) {
         setClientId((clientRow as any).id)
         const companyName = (clientRow as any).company_name ?? ''
