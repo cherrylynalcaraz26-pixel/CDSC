@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import Image from 'next/image'
-import { Bell, Search, Menu, LogOut, Settings, Package, MessageSquare, ShoppingCart, MapPin, Phone, Mail, Globe } from 'lucide-react'
+import { Bell, Search, Menu, LogOut, Package, MessageSquare, ShoppingCart, MapPin, Phone, Mail, Globe } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -249,42 +249,24 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
               </Avatar>
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-72" align="end">
-              {/* Company info */}
-              <div className="px-3 py-3 flex items-center gap-3 border-b">
-                <div className="h-10 w-10 rounded-lg overflow-hidden shrink-0 border bg-white">
-                  <img src={logoSrc} alt={companyName} className="h-full w-full object-cover" />
+              {/* Company logo + name */}
+              <div className="px-4 py-4 flex flex-col items-center gap-3 border-b text-center">
+                <div className="h-14 w-14 rounded-xl overflow-hidden shrink-0 border bg-white flex items-center justify-center">
+                  <img src={logoSrc} alt={companyName} className="h-full w-full object-contain p-1" />
                 </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold leading-tight truncate">{companyName}</p>
-                  {company.address && <p className="text-xs text-muted-foreground truncate mt-0.5">{company.address}</p>}
-                  {company.phone && <p className="text-xs text-muted-foreground">{company.phone}</p>}
+                <div>
+                  <p className="text-sm font-bold leading-tight">{companyName}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{userEmail}</p>
                 </div>
               </div>
-
-              {/* User info */}
-              <DropdownMenuLabel className="font-normal py-2.5">
-                <div className="flex items-center gap-2.5">
-                  <Avatar className="h-7 w-7">
-                    {userAvatarUrl
-                      ? <AvatarImage src={userAvatarUrl} alt={userName} />
-                      : <AvatarImage src={logoSrc} alt={companyName} />
-                    }
-                    <AvatarFallback className="bg-red-600 text-white text-[10px] font-semibold">{initials}</AvatarFallback>
-                  </Avatar>
-                  <div>
-                    <p className="text-sm font-medium leading-none">{userName}</p>
-                    <p className="text-xs leading-none text-muted-foreground mt-1">{userEmail}</p>
-                  </div>
-                </div>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => router.push('/settings')}>
-                <Settings className="mr-2 h-4 w-4" /> Settings
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive">
-                <LogOut className="mr-2 h-4 w-4" /> Sign Out
-              </DropdownMenuItem>
+              <div className="p-2">
+                <button
+                  onClick={handleSignOut}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+                >
+                  <LogOut className="h-4 w-4" /> Sign Out
+                </button>
+              </div>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
