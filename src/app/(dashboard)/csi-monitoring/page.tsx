@@ -741,7 +741,7 @@ export default function CSIMonitoringPage() {
                         </defs>
                         <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
                         <XAxis dataKey="shortName" tick={{ fontSize: 11, fill: '#6b7280' }} angle={-30} textAnchor="end" interval={0} height={50} axisLine={false} tickLine={false} />
-                        <YAxis tickFormatter={v => `₱${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} width={52} />
+                        <YAxis tickFormatter={v => `₱${Number(v).toLocaleString('en-PH', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`} tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} width={52} />
                         <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f3f4f6' }} />
                         <Bar dataKey="totalAmount" name="Revenue" radius={[6, 6, 0, 0]}>
                           {clientStats.map((_, i) => (
@@ -831,7 +831,7 @@ export default function CSIMonitoringPage() {
                           </defs>
                           <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
                           <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
-                          <YAxis tickFormatter={v => `₱${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} width={52} />
+                          <YAxis tickFormatter={v => `₱${Number(v).toLocaleString('en-PH', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`} tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} width={52} />
                           <Tooltip content={<CustomTooltip />} />
                           <Area type="monotone" dataKey="amount" name="Revenue" stroke="#dc2626" strokeWidth={2} fill="url(#area-grad)" dot={{ fill: '#dc2626', r: 3 }} activeDot={{ r: 5 }} />
                         </AreaChart>
