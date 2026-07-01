@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import {
   Plus, Loader2, MoreHorizontal, Building2, Phone, Mail,
   MapPin, User, Pencil, Trash2, Users, CheckCircle2, XCircle,
-  FileText, LayoutGrid, List, KeyRound, Copy, ShieldCheck, Eye, EyeOff,
+  FileText, LayoutGrid, List, KeyRound, Copy, ShieldCheck, Eye, EyeOff, MessageSquare,
 } from 'lucide-react'
 import { useSearchContext } from '@/context/search-context'
 import { Button } from '@/components/ui/button'
@@ -121,6 +121,7 @@ export default function ClientsPage() {
   const supabase = createClient()
   const { query: search } = useSearchContext()
   const [clients, setClients] = useState<Client[]>([])
+  const [unreadMsgByClient, setUnreadMsgByClient] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<'table' | 'grid'>('table')
   const [filterStatus, setFilterStatus] = useState('')
@@ -139,12 +140,17 @@ export default function ClientsPage() {
 
   async function load() {
     setLoading(true)
-    const { data, error } = await supabase
-      .from('clients')
-      .select('*')
-      .order('created_at', { ascending: false })
-    if (error) toast.error(error.message)
-    else setClients(data ?? [])
+    const [clientRes, msgRes] = await Promise.all([
+      supabase.from('clients').select('*').order('created_at', { ascending: false }),
+      supabase.from('client_messages').select('client_id, status').eq('status', 'unread'),
+    ])
+    if (clientRes.error) toast.error(clientRes.error.message)
+    else setClients(clientRes.data ?? [])
+    const counts: Record<string, number> = {}
+    for (const m of (msgRes.data ?? [])) {
+      if (m.client_id) counts[m.client_id] = (counts[m.client_id] ?? 0) + 1
+    }
+    setUnreadMsgByClient(counts)
     setLoading(false)
   }
 
@@ -438,6 +444,11 @@ export default function ClientsPage() {
                       {c.portal_access && (
                         <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-blue-100 text-blue-700 flex items-center gap-1 w-fit">
                           <ShieldCheck className="h-3 w-3" /> Portal
+                        </span>
+                      )}
+                      {unreadMsgByClient[c.id] && (
+                        <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-700 flex items-center gap-1 w-fit">
+                          <MessageSquare className="h-3 w-3" /> {unreadMsgByClient[c.id]} msg
                         </span>
                       )}
                     </div>

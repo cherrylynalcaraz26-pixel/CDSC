@@ -38,11 +38,11 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
   const [notifications, setNotifications] = useState<{ id: string; message: string; read: boolean; time: string }[]>([])
   const [notifOpen, setNotifOpen] = useState(false)
 
-  // Leave us a Message
+  // Messages / Chat
   const [msgOpen, setMsgOpen] = useState(false)
   const [msgText, setMsgText] = useState('')
   const [msgSending, setMsgSending] = useState(false)
-  const [msgSent, setMsgSent] = useState(false)
+  const [chatHistory, setChatHistory] = useState<{ id: string; message: string; sent_at: string; reply: string | null; replied_at: string | null }[]>([])
 
   function toggleCollapsed() {
     setCollapsed(c => {
@@ -65,20 +65,28 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
         const companyName = (clientRow as any).company_name ?? ''
         const cid = (clientRow as any).id
         if (companyName) {
-          const { data: recentDRs } = await supabase.from('dr_logs').select('dr_number,dr_date,status')
-            .eq('client_name', companyName).in('status', ['received', 'partial'])
-            .order('dr_date', { ascending: false }).limit(5)
-          const { data: lowStock } = await supabase.from('client_inventory').select('item_name,quantity_on_hand,low_stock_threshold')
-            .eq('client_id', cid)
+          const [drRes, stockRes, msgRes] = await Promise.all([
+            supabase.from('dr_logs').select('dr_number,dr_date,status')
+              .eq('client_name', companyName).in('status', ['received', 'partial'])
+              .order('dr_date', { ascending: false }).limit(5),
+            supabase.from('client_inventory').select('item_name,quantity_on_hand,low_stock_threshold')
+              .eq('client_id', cid),
+            supabase.from('client_messages').select('id,message,sent_at,reply,replied_at')
+              .eq('client_id', cid).order('sent_at', { ascending: true }),
+          ])
           const notifs: typeof notifications = []
-          for (const dr of (recentDRs ?? [])) {
+          for (const dr of (drRes.data ?? [])) {
             notifs.push({ id: `dr-${dr.dr_number}`, message: `Delivery DR ${dr.dr_number} has been ${dr.status === 'received' ? 'delivered' : 'partially delivered'}`, read: false, time: dr.dr_date ?? '' })
           }
-          for (const s of (lowStock ?? [])) {
+          for (const s of (stockRes.data ?? [])) {
             if (s.quantity_on_hand === 0) notifs.push({ id: `oos-${s.item_name}`, message: `${s.item_name} is out of stock`, read: false, time: '' })
             else if (s.quantity_on_hand <= s.low_stock_threshold) notifs.push({ id: `low-${s.item_name}`, message: `${s.item_name} is low on stock (${s.quantity_on_hand} left)`, read: false, time: '' })
           }
+          for (const m of (msgRes.data ?? [])) {
+            if (m.reply) notifs.push({ id: `reply-${m.id}`, message: `CDSC replied: "${m.reply.slice(0, 60)}${m.reply.length > 60 ? '…' : ''}"`, read: false, time: m.replied_at ?? '' })
+          }
           setNotifications(notifs)
+          setChatHistory(msgRes.data ?? [])
         }
       }
       setLoading(false)
@@ -98,17 +106,16 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
   async function sendMessage() {
     if (!msgText.trim()) return
     setMsgSending(true)
-    await supabase.from('client_messages').insert({
+    const { data } = await supabase.from('client_messages').insert({
       client_id: clientId,
       client_name: clientName || userName,
       message: msgText.trim(),
       sent_at: new Date().toISOString(),
       status: 'unread',
-    })
+    }).select('id,message,sent_at,reply,replied_at').single()
+    if (data) setChatHistory(h => [...h, data])
     setMsgSending(false)
-    setMsgSent(true)
     setMsgText('')
-    setTimeout(() => { setMsgSent(false); setMsgOpen(false) }, 2000)
   }
 
   if (loading) return (
@@ -354,61 +361,80 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
         </main>
       </div>
 
-      {/* Floating Leave us a Message button */}
+      {/* Messages FAB + chat window */}
       <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-3">
-        {/* Message dialog */}
         {msgOpen && (
-          <div className="w-80 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
-            <div className="bg-[#111111] px-4 py-3 flex items-center justify-between">
+          <div className="w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col" style={{ maxHeight: '520px' }}>
+            <div className="bg-[#111111] px-4 py-3 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
                 <MessageSquare className="h-4 w-4 text-white/70" />
-                <span className="text-sm font-semibold text-white">Leave us a Message</span>
+                <span className="text-sm font-semibold text-white">Messages</span>
+                {chatHistory.length > 0 && (
+                  <span className="text-[10px] bg-white/10 text-white/60 px-1.5 py-0.5 rounded-full">{chatHistory.length}</span>
+                )}
               </div>
-              <button onClick={() => { setMsgOpen(false); setMsgText(''); setMsgSent(false) }}
-                className="text-white/40 hover:text-white transition-colors">
+              <button onClick={() => { setMsgOpen(false); setMsgText('') }} className="text-white/40 hover:text-white transition-colors">
                 <X className="h-4 w-4" />
               </button>
             </div>
-            <div className="p-4">
-              {msgSent ? (
-                <div className="text-center py-4">
-                  <div className="h-10 w-10 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-2">
-                    <Send className="h-5 w-5 text-green-600" />
-                  </div>
-                  <p className="text-sm font-medium text-gray-900">Message sent!</p>
-                  <p className="text-xs text-gray-400 mt-0.5">We'll get back to you soon.</p>
+            <div className="flex-1 overflow-y-auto p-3 space-y-3 bg-gray-50">
+              {chatHistory.length === 0 ? (
+                <div className="text-center py-8">
+                  <MessageSquare className="h-8 w-8 mx-auto mb-2 text-gray-300" />
+                  <p className="text-xs text-gray-400">No messages yet. Send your first message below.</p>
                 </div>
-              ) : (
-                <>
-                  <p className="text-xs text-gray-400 mb-3">Send a message to CDSC Industrial Supply. We'll respond within 1 business day.</p>
-                  <textarea
-                    rows={4}
-                    value={msgText}
-                    onChange={e => setMsgText(e.target.value)}
-                    placeholder="Type your message here…"
-                    className="w-full text-sm border border-gray-200 rounded-lg p-3 resize-none focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent text-gray-900 placeholder:text-gray-400"
-                  />
-                  <button
-                    onClick={sendMessage}
-                    disabled={!msgText.trim() || msgSending}
-                    className="mt-3 w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-200 disabled:text-gray-400 text-white text-sm font-medium py-2.5 rounded-lg transition-colors"
-                  >
-                    <Send className="h-4 w-4" />
-                    {msgSending ? 'Sending…' : 'Send Message'}
-                  </button>
-                </>
-              )}
+              ) : chatHistory.map(m => (
+                <div key={m.id} className="space-y-2">
+                  <div className="flex justify-end">
+                    <div className="max-w-[80%] bg-red-600 text-white rounded-2xl rounded-tr-sm px-3 py-2">
+                      <p className="text-xs whitespace-pre-wrap">{m.message}</p>
+                      <p className="text-[10px] text-red-200 mt-1 text-right">
+                        {m.sent_at ? new Date(m.sent_at).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''}
+                      </p>
+                    </div>
+                  </div>
+                  {m.reply && (
+                    <div className="flex justify-start">
+                      <div className="max-w-[80%] bg-white border border-gray-200 rounded-2xl rounded-tl-sm px-3 py-2 shadow-sm">
+                        <p className="text-[10px] font-semibold text-gray-400 mb-1">CDSC Industrial Supply</p>
+                        <p className="text-xs text-gray-800 whitespace-pre-wrap">{m.reply}</p>
+                        <p className="text-[10px] text-gray-400 mt-1">
+                          {m.replied_at ? new Date(m.replied_at).toLocaleString('en-PH', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : ''}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            <div className="p-3 border-t bg-white shrink-0">
+              <div className="flex gap-2 items-end">
+                <textarea
+                  rows={2}
+                  value={msgText}
+                  onChange={e => setMsgText(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
+                  placeholder="Type a message… (Enter to send)"
+                  className="flex-1 text-sm border border-gray-200 rounded-xl px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent text-gray-900 placeholder:text-gray-400"
+                />
+                <button
+                  onClick={sendMessage}
+                  disabled={!msgText.trim() || msgSending}
+                  className="h-9 w-9 flex items-center justify-center rounded-xl bg-red-600 hover:bg-red-700 disabled:bg-gray-200 text-white transition-colors shrink-0"
+                >
+                  <Send className="h-4 w-4" />
+                </button>
+              </div>
             </div>
           </div>
         )}
-
-        {/* FAB button */}
         <button
           onClick={() => setMsgOpen(v => !v)}
           className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-full shadow-lg transition-all hover:scale-105 active:scale-95"
         >
           <MessageSquare className="h-5 w-5" />
-          <span className="text-sm font-medium">Leave us a Message</span>
+          <span className="text-sm font-medium">Messages</span>
+          {chatHistory.some(m => m.reply) && <span className="h-2 w-2 rounded-full bg-white/80" />}
         </button>
       </div>
     </div>
