@@ -22,6 +22,10 @@ import { Plus, X, Search, MoreHorizontal, Loader2, FileText, LayoutGrid, List, C
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  PieChart, Pie, Cell, Legend, AreaChart, Area,
+} from 'recharts'
 
 interface ItemOption { item_name: string; unit_of_measure: string }
 interface ClientOption { id: string; company_name: string }
@@ -634,173 +638,225 @@ export default function CSIMonitoringPage() {
       )}
 
       {!open && (() => {
-        const clientStats = clientOptions.map(c => {
+        const PALETTE = ['#dc2626','#2563eb','#16a34a','#d97706','#7c3aed','#0891b2','#be185d','#65a30d']
+
+        const clientStats = clientOptions.map((c, i) => {
           const clientRecs = records.filter(r => r.client_name === c.company_name)
           const siSet = new Set(clientRecs.map(r => r.si_number))
           return {
             name: c.company_name,
+            shortName: c.company_name.split(' ').slice(0, 2).join(' '),
             siCount: siSet.size,
             lineItems: clientRecs.length,
             totalAmount: clientRecs.reduce((s, r) => s + (Number(r.amount) || 0), 0),
+            color: PALETTE[i % PALETTE.length],
           }
         }).filter(c => c.siCount > 0).sort((a, b) => b.totalAmount - a.totalAmount)
 
         if (clientStats.length === 0) return null
 
-        const maxAmount = Math.max(...clientStats.map(c => c.totalAmount), 1)
-        const maxSI = Math.max(...clientStats.map(c => c.siCount), 1)
-        const maxItems = Math.max(...clientStats.map(c => c.lineItems), 1)
-
-        const PALETTE = ['#dc2626','#2563eb','#16a34a','#d97706','#7c3aed','#0891b2','#be185d','#65a30d']
         const grandTotal = clientStats.reduce((s, c) => s + c.totalAmount, 0)
         const totalSIs = clientStats.reduce((s, c) => s + c.siCount, 0)
         const totalLineItems = clientStats.reduce((s, c) => s + c.lineItems, 0)
 
-        // Donut chart math
-        const CX = 80, CY = 80, R = 68, r = 42
-        const polarToXY = (angle: number, radius: number) => ({
-          x: CX + radius * Math.cos((angle - 90) * Math.PI / 180),
-          y: CY + radius * Math.sin((angle - 90) * Math.PI / 180),
-        })
-        let cursor = 0
-        const slices = clientStats.map((c, i) => {
-          const pct = grandTotal > 0 ? c.totalAmount / grandTotal : 0
-          const angle = pct * 360
-          const start = cursor
-          cursor += angle
-          return { ...c, color: PALETTE[i % PALETTE.length], startAngle: start, endAngle: cursor, pct }
-        })
+        // Monthly trend data
+        const monthMap: Record<string, number> = {}
+        for (const r of records) {
+          if (!r.si_date) continue
+          const key = r.si_date.slice(0, 7) // "YYYY-MM"
+          monthMap[key] = (monthMap[key] || 0) + (Number(r.amount) || 0)
+        }
+        const trendData = Object.entries(monthMap)
+          .sort(([a], [b]) => a.localeCompare(b))
+          .slice(-12)
+          .map(([month, amount]) => ({
+            month: format(parseISO(month + '-01'), 'MMM yy'),
+            amount,
+          }))
+
+        const CustomTooltip = ({ active, payload, label }: any) => {
+          if (!active || !payload?.length) return null
+          return (
+            <div className="bg-white border border-gray-200 rounded-xl shadow-xl px-4 py-3 text-sm">
+              <p className="font-semibold text-gray-800 mb-1">{label}</p>
+              {payload.map((p: any, i: number) => (
+                <div key={i} className="flex items-center gap-2">
+                  <div className="h-2 w-2 rounded-full" style={{ background: p.color || p.fill }} />
+                  <span className="text-gray-500 text-xs">{p.name}:</span>
+                  <span className="font-bold text-xs text-gray-900">
+                    {p.name === 'Revenue' || p.name === 'amount'
+                      ? formatPeso(p.value)
+                      : p.value}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )
+        }
 
         return (
-          <Card className="overflow-hidden">
-            {/* Dark header bar */}
-            <div className="bg-[#111111] px-6 py-4 flex flex-wrap items-center gap-6">
-              <div>
-                <div className="text-[10px] text-white/40 uppercase tracking-widest font-semibold">Total Revenue</div>
-                <div className="text-xl font-bold text-white mt-0.5">{formatPeso(grandTotal)}</div>
-              </div>
-              <div className="w-px h-8 bg-white/10 hidden sm:block" />
-              <div>
-                <div className="text-[10px] text-white/40 uppercase tracking-widest font-semibold">SI Count</div>
-                <div className="text-xl font-bold text-white mt-0.5">{totalSIs}</div>
-              </div>
-              <div className="w-px h-8 bg-white/10 hidden sm:block" />
-              <div>
-                <div className="text-[10px] text-white/40 uppercase tracking-widest font-semibold">Line Items</div>
-                <div className="text-xl font-bold text-white mt-0.5">{totalLineItems}</div>
-              </div>
-              <div className="w-px h-8 bg-white/10 hidden sm:block" />
-              <div>
-                <div className="text-[10px] text-white/40 uppercase tracking-widest font-semibold">Clients</div>
-                <div className="text-xl font-bold text-white mt-0.5">{clientStats.length}</div>
-              </div>
+          <div className="space-y-4">
+            {/* KPI strip */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              {[
+                { label: 'Total Revenue', value: formatPeso(grandTotal), sub: `across ${clientStats.length} clients`, color: 'from-red-500 to-rose-600' },
+                { label: 'SI Invoices', value: totalSIs, sub: 'charge sales invoices', color: 'from-blue-500 to-indigo-600' },
+                { label: 'Line Items', value: totalLineItems, sub: 'total invoice lines', color: 'from-emerald-500 to-teal-600' },
+                { label: 'Top Client', value: clientStats[0]?.shortName ?? '—', sub: formatPeso(clientStats[0]?.totalAmount ?? 0), color: 'from-violet-500 to-purple-600' },
+              ].map(k => (
+                <div key={k.label} className={`bg-gradient-to-br ${k.color} rounded-xl p-4 text-white`}>
+                  <div className="text-[10px] font-semibold uppercase tracking-widest text-white/60 mb-1">{k.label}</div>
+                  <div className="text-xl font-extrabold leading-tight truncate">{k.value}</div>
+                  <div className="text-[11px] text-white/60 mt-0.5 truncate">{k.sub}</div>
+                </div>
+              ))}
             </div>
 
-            <CardContent className="p-0">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+            {/* Row 1: Bar chart + Pie chart */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {/* Revenue Bar Chart */}
+              <Card className="lg:col-span-2">
+                <CardHeader className="pb-2 pt-5 px-6">
+                  <CardTitle className="text-sm font-semibold">Revenue by Client</CardTitle>
+                  <p className="text-xs text-muted-foreground">Total invoiced amount per client</p>
+                </CardHeader>
+                <CardContent className="px-2 pb-4">
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={clientStats} margin={{ top: 8, right: 16, left: 8, bottom: 40 }} barSize={32}>
+                      <defs>
+                        {clientStats.map((c, i) => (
+                          <linearGradient key={i} id={`bar-grad-${i}`} x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor={c.color} stopOpacity={1} />
+                            <stop offset="100%" stopColor={c.color} stopOpacity={0.6} />
+                          </linearGradient>
+                        ))}
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                      <XAxis
+                        dataKey="shortName"
+                        tick={{ fontSize: 11, fill: '#6b7280' }}
+                        angle={-30}
+                        textAnchor="end"
+                        interval={0}
+                        height={50}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <YAxis
+                        tickFormatter={v => `₱${(v / 1000).toFixed(0)}k`}
+                        tick={{ fontSize: 10, fill: '#9ca3af' }}
+                        axisLine={false}
+                        tickLine={false}
+                        width={52}
+                      />
+                      <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f3f4f6' }} />
+                      <Bar dataKey="totalAmount" name="Revenue" radius={[6, 6, 0, 0]}>
+                        {clientStats.map((_, i) => (
+                          <Cell key={i} fill={`url(#bar-grad-${i})`} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
 
-                {/* Donut chart */}
-                <div className="flex flex-col items-center justify-center p-6 border-b md:border-b-0 md:border-r">
-                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-4">Revenue Share</div>
-                  <svg width={160} height={160} viewBox="0 0 160 160">
-                    {slices.map((s, i) => {
-                      if (s.pct === 0) return null
-                      const gap = slices.length > 1 ? 2 : 0
-                      const startA = s.startAngle + gap / 2
-                      const endA = s.endAngle - gap / 2
-                      const p1 = polarToXY(startA, R)
-                      const p2 = polarToXY(endA, R)
-                      const p3 = polarToXY(endA, r)
-                      const p4 = polarToXY(startA, r)
-                      const large = endA - startA > 180 ? 1 : 0
-                      const d = `M ${p1.x.toFixed(2)} ${p1.y.toFixed(2)} A ${R} ${R} 0 ${large} 1 ${p2.x.toFixed(2)} ${p2.y.toFixed(2)} L ${p3.x.toFixed(2)} ${p3.y.toFixed(2)} A ${r} ${r} 0 ${large} 0 ${p4.x.toFixed(2)} ${p4.y.toFixed(2)} Z`
-                      return <path key={i} d={d} fill={s.color} />
-                    })}
-                    <text x={CX} y={CY - 6} textAnchor="middle" fontSize={10} fill="#6b7280" fontWeight="600">TOTAL</text>
-                    <text x={CX} y={CY + 10} textAnchor="middle" fontSize={12} fill="#111" fontWeight="800">{clientStats.length}</text>
-                    <text x={CX} y={CY + 24} textAnchor="middle" fontSize={9} fill="#9ca3af">clients</text>
-                  </svg>
-                  <div className="flex flex-wrap justify-center gap-x-4 gap-y-1.5 mt-3">
-                    {slices.map((s, i) => (
-                      <div key={i} className="flex items-center gap-1.5">
-                        <div className="h-2 w-2 rounded-full shrink-0" style={{ background: s.color }} />
-                        <span className="text-[10px] text-muted-foreground">{s.name.split(' ')[0]}</span>
-                        <span className="text-[10px] font-semibold" style={{ color: s.color }}>{(s.pct * 100).toFixed(1)}%</span>
+              {/* Donut Pie Chart */}
+              <Card>
+                <CardHeader className="pb-2 pt-5 px-6">
+                  <CardTitle className="text-sm font-semibold">Revenue Share</CardTitle>
+                  <p className="text-xs text-muted-foreground">% of total invoiced per client</p>
+                </CardHeader>
+                <CardContent className="px-4 pb-4">
+                  <ResponsiveContainer width="100%" height={180}>
+                    <PieChart>
+                      <Pie
+                        data={clientStats}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={50}
+                        outerRadius={78}
+                        paddingAngle={3}
+                        dataKey="totalAmount"
+                        nameKey="shortName"
+                      >
+                        {clientStats.map((c, i) => (
+                          <Cell key={i} fill={c.color} stroke="transparent" />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={(value: number, name: string) => [formatPeso(value), name]}
+                        contentStyle={{ borderRadius: 12, border: '1px solid #e5e7eb', fontSize: 12 }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="space-y-1.5 mt-1">
+                    {clientStats.map((c, i) => (
+                      <div key={i} className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2">
+                          <div className="h-2 w-2 rounded-full shrink-0" style={{ background: c.color }} />
+                          <span className="text-muted-foreground truncate max-w-[120px]" title={c.name}>{c.shortName}</span>
+                        </div>
+                        <span className="font-semibold tabular-nums" style={{ color: c.color }}>
+                          {grandTotal > 0 ? ((c.totalAmount / grandTotal) * 100).toFixed(1) : 0}%
+                        </span>
                       </div>
                     ))}
                   </div>
-                </div>
+                </CardContent>
+              </Card>
+            </div>
 
-                {/* SI Count bars */}
-                <div className="p-6 border-b md:border-b-0 lg:border-r">
-                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-4">SI Count</div>
-                  <div className="space-y-3">
-                    {clientStats.map((c, i) => {
-                      const color = PALETTE[i % PALETTE.length]
-                      const pct = (c.siCount / maxSI) * 100
-                      return (
-                        <div key={c.name}>
-                          <div className="flex justify-between items-center mb-1">
-                            <span className="text-xs text-muted-foreground truncate max-w-[70%]" title={c.name}>{c.name}</span>
-                            <span className="text-xs font-bold tabular-nums" style={{ color }}>{c.siCount}</span>
-                          </div>
-                          <div className="h-3 bg-muted rounded-full overflow-hidden">
-                            <div className="h-full rounded-full" style={{ width: `${Math.max(pct, 3)}%`, background: color }} />
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
+            {/* Row 2: Area trend + SI vs Items grouped bar */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {/* Monthly Revenue Trend */}
+              {trendData.length > 1 && (
+                <Card>
+                  <CardHeader className="pb-2 pt-5 px-6">
+                    <CardTitle className="text-sm font-semibold">Monthly Revenue Trend</CardTitle>
+                    <p className="text-xs text-muted-foreground">Last 12 months</p>
+                  </CardHeader>
+                  <CardContent className="px-2 pb-4">
+                    <ResponsiveContainer width="100%" height={180}>
+                      <AreaChart data={trendData} margin={{ top: 8, right: 16, left: 8, bottom: 0 }}>
+                        <defs>
+                          <linearGradient id="area-grad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor="#dc2626" stopOpacity={0.25} />
+                            <stop offset="100%" stopColor="#dc2626" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                        <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+                        <YAxis tickFormatter={v => `₱${(v / 1000).toFixed(0)}k`} tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} width={52} />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Area type="monotone" dataKey="amount" name="Revenue" stroke="#dc2626" strokeWidth={2} fill="url(#area-grad)" dot={{ fill: '#dc2626', r: 3 }} activeDot={{ r: 5 }} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </CardContent>
+                </Card>
+              )}
 
-                {/* Line Items bars */}
-                <div className="p-6">
-                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-4">Line Items</div>
-                  <div className="space-y-3">
-                    {clientStats.map((c, i) => {
-                      const color = PALETTE[i % PALETTE.length]
-                      const pct = (c.lineItems / maxItems) * 100
-                      return (
-                        <div key={c.name}>
-                          <div className="flex justify-between items-center mb-1">
-                            <span className="text-xs text-muted-foreground truncate max-w-[70%]" title={c.name}>{c.name}</span>
-                            <span className="text-xs font-bold tabular-nums" style={{ color }}>{c.lineItems}</span>
-                          </div>
-                          <div className="h-3 bg-muted rounded-full overflow-hidden">
-                            <div className="h-full rounded-full" style={{ width: `${Math.max(pct, 3)}%`, background: color }} />
-                          </div>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-
-              </div>
-
-              {/* Bottom revenue ranking strip */}
-              <div className="border-t px-6 py-4">
-                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Revenue Ranking</div>
-                <div className="flex flex-col gap-2">
-                  {clientStats.map((c, i) => {
-                    const color = PALETTE[i % PALETTE.length]
-                    const pct = grandTotal > 0 ? (c.totalAmount / grandTotal) * 100 : 0
-                    return (
-                      <div key={c.name} className="flex items-center gap-3">
-                        <span className="text-[10px] font-bold text-muted-foreground w-4 shrink-0">#{i + 1}</span>
-                        <span className="text-xs font-medium w-40 shrink-0 truncate" title={c.name}>{c.name}</span>
-                        <div className="flex-1 h-4 bg-muted rounded overflow-hidden">
-                          <div className="h-full rounded flex items-center pl-2" style={{ width: `${Math.max(pct, 1)}%`, background: color }}>
-                            {pct > 8 && <span className="text-[9px] text-white font-bold">{pct.toFixed(1)}%</span>}
-                          </div>
-                        </div>
-                        <span className="text-xs font-bold tabular-nums w-32 text-right shrink-0" style={{ color }}>{formatPeso(c.totalAmount)}</span>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              {/* SI Count vs Line Items grouped bar */}
+              <Card>
+                <CardHeader className="pb-2 pt-5 px-6">
+                  <CardTitle className="text-sm font-semibold">SI Count vs Line Items</CardTitle>
+                  <p className="text-xs text-muted-foreground">Invoice activity per client</p>
+                </CardHeader>
+                <CardContent className="px-2 pb-4">
+                  <ResponsiveContainer width="100%" height={180}>
+                    <BarChart data={clientStats} margin={{ top: 8, right: 16, left: 8, bottom: 40 }} barSize={14} barGap={3}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+                      <XAxis dataKey="shortName" tick={{ fontSize: 11, fill: '#6b7280' }} angle={-30} textAnchor="end" interval={0} height={50} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 10, fill: '#9ca3af' }} axisLine={false} tickLine={false} width={28} />
+                      <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f3f4f6' }} />
+                      <Legend wrapperStyle={{ fontSize: 11, paddingTop: 4 }} iconType="circle" iconSize={8} />
+                      <Bar dataKey="siCount" name="SI Count" fill="#2563eb" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="lineItems" name="Line Items" fill="#dc2626" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         )
       })()}
 
