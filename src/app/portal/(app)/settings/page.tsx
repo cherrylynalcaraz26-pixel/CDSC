@@ -28,6 +28,7 @@ export default function PortalSettingsPage() {
   const [tin, setTin] = useState('')
   const [vatType, setVatType] = useState('')
   const [businessType, setBusinessType] = useState('')
+  const [website, setWebsite] = useState('')
 
   // Avatar & logo
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
@@ -52,12 +53,13 @@ export default function PortalSettingsPage() {
       setFullName(profile?.full_name ?? '')
       setAvatarUrl((profile as any)?.avatar_url ?? null)
       const { data: clientRow } = await supabase.from('clients')
-        .select('id, company_name, tin, vat_type, business_type, logo_url')
+        .select('id, company_name, tin, vat_type, business_type, logo_url, website')
         .eq('auth_user_id', session.user.id).single()
       setCompanyName(clientRow?.company_name ?? '')
       setTin((clientRow as any)?.tin ?? '')
       setVatType((clientRow as any)?.vat_type ?? '')
       setBusinessType((clientRow as any)?.business_type ?? '')
+      setWebsite((clientRow as any)?.website ?? '')
       setLogoUrl((clientRow as any)?.logo_url ?? null)
       if (clientRow?.id) {
         setClientId(clientRow.id)
@@ -73,6 +75,9 @@ export default function PortalSettingsPage() {
     if (!fullName.trim()) { toast.error('Name is required'); return }
     setSaving(true)
     const { error } = await supabase.from('profiles').update({ full_name: fullName.trim() }).eq('id', userId)
+    if (!error && clientId) {
+      await supabase.from('clients').update({ website: website.trim() || null }).eq('id', clientId)
+    }
     if (error) toast.error(error.message)
     else toast.success('Profile updated successfully')
     setSaving(false)
@@ -303,6 +308,16 @@ export default function PortalSettingsPage() {
                 />
               </div>
             )}
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-gray-700">Website</label>
+              <input
+                value={website}
+                onChange={e => setWebsite(e.target.value)}
+                placeholder="https://yourwebsite.com"
+                type="url"
+                className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+              />
+            </div>
             <button
               onClick={saveProfile}
               disabled={saving}

@@ -19,7 +19,7 @@ import { Badge } from '@/components/ui/badge'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Search, Loader2, ChevronRight, ChevronDown, Pencil, AlertTriangle, Plus, X, MoreHorizontal, Trash2 } from 'lucide-react'
+import { Search, Loader2, ChevronRight, ChevronDown, Pencil, AlertTriangle, Plus, X, MoreHorizontal, Trash2, FileText, Printer } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSearchContext } from '@/context/search-context'
 
@@ -69,6 +69,8 @@ export default function InventoryPage() {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [confirmMsg, setConfirmMsg] = useState('')
   const [confirmAction, setConfirmAction] = useState<(() => void) | null>(null)
+  const [reportOpen, setReportOpen] = useState(false)
+  const [reportClient, setReportClient] = useState('')
 
   function askConfirm(msg: string, action: () => void) {
     setConfirmMsg(msg)
@@ -510,9 +512,19 @@ export default function InventoryPage() {
           <h1 className="text-2xl font-semibold">Inventory</h1>
           <p className="text-muted-foreground text-sm">Stock balance per client (DR delivered + WH Stock − CSI charged)</p>
         </div>
-        <Button onClick={openAddDialog} className="bg-red-600 hover:bg-red-700 text-white shrink-0">
-          <Plus className="h-4 w-4 mr-1.5" /> Add Stock
-        </Button>
+        <div className="flex gap-2 shrink-0">
+          <Button
+            variant="outline"
+            onClick={() => { setReportClient(clientFilter !== 'all' ? clientFilter : clients[0] ?? ''); setReportOpen(true) }}
+            disabled={rows.length === 0}
+            className="border-gray-300 text-gray-700 gap-1.5"
+          >
+            <FileText className="h-4 w-4" /> Generate Report
+          </Button>
+          <Button onClick={openAddDialog} className="bg-red-600 hover:bg-red-700 text-white">
+            <Plus className="h-4 w-4 mr-1.5" /> Add Stock
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -1164,6 +1176,136 @@ export default function InventoryPage() {
               {addSaving ? <><Loader2 className="h-4 w-4 animate-spin" />Saving…</> : <><Plus className="h-4 w-4" />Add Stock</>}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Inventory Report Dialog */}
+      <Dialog open={reportOpen} onOpenChange={o => { if (!o) setReportOpen(false) }}>
+        <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="h-4 w-4 text-red-600" /> Inventory Report
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex items-center gap-3 pb-2 border-b">
+            <label className="text-sm font-medium text-gray-700 shrink-0">Select Client:</label>
+            <Select value={reportClient} onValueChange={setReportClient}>
+              <SelectTrigger className="w-64">
+                <SelectValue placeholder="Select client" />
+              </SelectTrigger>
+              <SelectContent>
+                {clients.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Button
+              variant="outline"
+              className="ml-auto gap-1.5"
+              onClick={() => {
+                const el = document.getElementById('inventory-report-print')
+                if (!el) return
+                const win = window.open('', '_blank', 'width=900,height=700')
+                if (!win) return
+                win.document.write(`<!DOCTYPE html><html><head><title>Inventory Report - ${reportClient}</title><style>
+                  body { font-family: Arial, sans-serif; margin: 24px; color: #111; }
+                  h1 { font-size: 20px; margin-bottom: 4px; }
+                  .sub { font-size: 12px; color: #666; margin-bottom: 16px; }
+                  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+                  th { background: #f3f4f6; text-align: left; padding: 6px 10px; border: 1px solid #e5e7eb; font-weight: 600; }
+                  td { padding: 5px 10px; border: 1px solid #e5e7eb; }
+                  tr:nth-child(even) td { background: #f9fafb; }
+                  .text-right { text-align: right; }
+                  .green { color: #15803d; font-weight: 600; }
+                  .red { color: #dc2626; font-weight: 600; }
+                  .gray { color: #6b7280; }
+                  tfoot td { font-weight: 700; background: #f3f4f6; border-top: 2px solid #d1d5db; }
+                  @media print { @page { margin: 16mm; } }
+                </style></head><body>${el.innerHTML}</body></html>`)
+                win.document.close()
+                win.focus()
+                setTimeout(() => { win.print() }, 300)
+              }}
+            >
+              <Printer className="h-4 w-4" /> Print / Save PDF
+            </Button>
+          </div>
+          <div className="overflow-y-auto flex-1 pt-2">
+            {(() => {
+              const reportRows = rows.filter(r => r.client === reportClient)
+              const totalBalance = reportRows.reduce((s, r) => s + r.balance, 0)
+              const totalEstValue = reportRows.reduce((s, r) => {
+                const price = r.csi_details.length > 0
+                  ? r.csi_details[r.csi_details.length - 1].unit_price
+                  : r.dr_details.length > 0 ? r.dr_details[r.dr_details.length - 1].unit_price : null
+                return s + (price != null ? r.balance * price : 0)
+              }, 0)
+              const today = new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
+              return (
+                <div id="inventory-report-print">
+                  <h1 style={{ fontSize: '20px', marginBottom: '4px' }}>Inventory Report</h1>
+                  <div className="text-sm text-gray-500 mb-1">Client: <strong>{reportClient}</strong></div>
+                  <div className="text-xs text-gray-400 mb-4">As of {today} &mdash; CDSC Inventory System</div>
+                  {reportRows.length === 0 ? (
+                    <p className="text-sm text-muted-foreground italic py-6 text-center">No inventory data for this client.</p>
+                  ) : (
+                    <table className="w-full text-sm border-collapse">
+                      <thead>
+                        <tr className="bg-gray-100 text-left">
+                          <th className="px-3 py-2 border border-gray-200 text-xs font-semibold">#</th>
+                          <th className="px-3 py-2 border border-gray-200 text-xs font-semibold">Item Description</th>
+                          <th className="px-3 py-2 border border-gray-200 text-xs font-semibold">Unit</th>
+                          <th className="px-3 py-2 border border-gray-200 text-xs font-semibold text-right">DR Qty</th>
+                          <th className="px-3 py-2 border border-gray-200 text-xs font-semibold text-right">WH Stock</th>
+                          <th className="px-3 py-2 border border-gray-200 text-xs font-semibold text-right">CSI Issued</th>
+                          <th className="px-3 py-2 border border-gray-200 text-xs font-semibold text-right">Balance</th>
+                          <th className="px-3 py-2 border border-gray-200 text-xs font-semibold text-right">Est. Unit Price</th>
+                          <th className="px-3 py-2 border border-gray-200 text-xs font-semibold text-right">Est. Value</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reportRows.map((r, i) => {
+                          const latestPrice = r.csi_details.length > 0
+                            ? r.csi_details[r.csi_details.length - 1].unit_price
+                            : r.dr_details.length > 0 ? r.dr_details[r.dr_details.length - 1].unit_price : null
+                          const estValue = latestPrice != null ? r.balance * latestPrice : null
+                          return (
+                            <tr key={r.item_name} className={i % 2 === 1 ? 'bg-gray-50' : ''}>
+                              <td className="px-3 py-2 border border-gray-200 text-xs text-gray-400">{i + 1}</td>
+                              <td className="px-3 py-2 border border-gray-200 text-xs font-medium">{r.item_name}</td>
+                              <td className="px-3 py-2 border border-gray-200 text-xs text-gray-500">{uomName(r.unit)}</td>
+                              <td className="px-3 py-2 border border-gray-200 text-xs text-right">{r.dr_qty}</td>
+                              <td className="px-3 py-2 border border-gray-200 text-xs text-right text-green-600">{r.ws_qty > 0 ? r.ws_qty : '—'}</td>
+                              <td className="px-3 py-2 border border-gray-200 text-xs text-right">{r.csi_qty}</td>
+                              <td className={`px-3 py-2 border border-gray-200 text-xs text-right font-semibold ${r.balance > 0 ? 'text-green-700' : r.balance < 0 ? 'text-red-600' : 'text-gray-500'}`}>{r.balance}</td>
+                              <td className="px-3 py-2 border border-gray-200 text-xs text-right text-blue-600">
+                                {latestPrice != null ? `₱${latestPrice.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}
+                              </td>
+                              <td className={`px-3 py-2 border border-gray-200 text-xs text-right font-semibold ${estValue != null && estValue < 0 ? 'text-red-600' : 'text-gray-800'}`}>
+                                {estValue != null ? `₱${estValue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-gray-100 font-bold text-sm">
+                          <td colSpan={6} className="px-3 py-2 border border-gray-200 text-xs text-right text-gray-600">Total</td>
+                          <td className={`px-3 py-2 border border-gray-200 text-xs text-right font-bold ${totalBalance > 0 ? 'text-green-700' : totalBalance < 0 ? 'text-red-600' : 'text-gray-500'}`}>{totalBalance}</td>
+                          <td className="px-3 py-2 border border-gray-200 text-xs text-right text-gray-500">—</td>
+                          <td className="px-3 py-2 border border-gray-200 text-xs text-right font-bold text-gray-800">
+                            ₱{totalEstValue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  )}
+                  <div className="mt-6 text-xs text-gray-400">
+                    <p>Note: Est. Unit Price is based on the latest CSI or DR unit price on record. Estimated values are for reference only.</p>
+                    <p className="mt-1">Generated by CDSC Inventory System &mdash; {today}</p>
+                  </div>
+                </div>
+              )
+            })()}
+          </div>
         </DialogContent>
       </Dialog>
 

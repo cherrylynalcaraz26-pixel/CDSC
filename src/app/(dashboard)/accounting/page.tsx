@@ -242,6 +242,7 @@ function CollectionsTab() {
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [clientFilter, setClientFilter] = useState('')
   const [form, setForm] = useState({
     client_id: '', client_name: '', amount: '',
     payment_mode: 'Cash', reference_number: '', collection_date: '', remarks: '',
@@ -298,9 +299,12 @@ function CollectionsTab() {
     else { toast.success('Deleted'); load() }
   }
 
-  const totalPosted = records.filter(r => r.status === 'posted').reduce((s, r) => s + (r.amount ?? 0) - (r.form_2307 ?? 0), 0)
-  const countPosted = records.filter(r => r.status === 'posted').length
-  const countVoided = records.filter(r => r.status === 'voided').length
+  const filteredRecords = clientFilter
+    ? records.filter(r => (r.client_name ?? '').toLowerCase().includes(clientFilter.toLowerCase()))
+    : records
+  const totalPosted = filteredRecords.filter(r => r.status === 'posted').reduce((s, r) => s + (r.amount ?? 0) - (r.form_2307 ?? 0), 0)
+  const countPosted = filteredRecords.filter(r => r.status === 'posted').length
+  const countVoided = filteredRecords.filter(r => r.status === 'voided').length
 
   return (
     <div className="space-y-6">
@@ -328,9 +332,29 @@ function CollectionsTab() {
 
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Receipt className="h-4 w-4 text-red-600" />Collection Records
-          </CardTitle>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <CardTitle className="text-base flex items-center gap-2">
+              <Receipt className="h-4 w-4 text-red-600" />Collection Records
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <Select value={clientFilter} onValueChange={setClientFilter}>
+                <SelectTrigger className="h-8 text-xs w-48">
+                  <SelectValue placeholder="All Clients" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All Clients</SelectItem>
+                  {[...new Set(records.map(r => r.client_name).filter(Boolean))].sort().map(name => (
+                    <SelectItem key={name!} value={name!}>{name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {clientFilter && (
+                <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => setClientFilter('')}>
+                  Clear
+                </Button>
+              )}
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
@@ -352,11 +376,11 @@ function CollectionsTab() {
                 <TableRow><TableCell colSpan={9} className="text-center py-10">
                   <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                 </TableCell></TableRow>
-              ) : records.length === 0 ? (
+              ) : filteredRecords.length === 0 ? (
                 <TableRow><TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
-                  No collections yet. Click <strong>New Collection</strong> to record one.
+                  {clientFilter ? `No collections found for "${clientFilter}".` : 'No collections yet. Click New Collection to record one.'}
                 </TableCell></TableRow>
-              ) : records.map(r => (
+              ) : filteredRecords.map(r => (
                 <TableRow key={r.id}>
                   <TableCell className="font-mono text-xs font-semibold text-red-600">{r.or_number ?? '—'}</TableCell>
                   <TableCell className="text-sm whitespace-nowrap">
@@ -475,16 +499,21 @@ function CollectionsTab() {
 
 // ── Sales Journal (CRJ) sub-tab ───────────────────────────────────────────────
 
-function SalesJournalTab({ collections }: { collections: Collection[] }) {
-  const posted = collections.filter(c => c.status === 'posted')
-  const totalGross = posted.reduce((s, c) => s + c.amount, 0)
-  const totalWHT   = posted.reduce((s, c) => s + (c.form_2307 ?? 0), 0)
-  const totalNet   = totalGross - totalWHT
+function SalesJournalTab({ collections, csiRecords }: { collections: Collection[]; csiRecords: any[] }) {
+  // Group CSI records by SI number
+  const siMap: Record<string, { date: string; client: string; items: any[]; total: number }> = {}
+  csiRecords.forEach(r => {
+    if (!siMap[r.si_number]) siMap[r.si_number] = { date: r.si_date ?? '', client: r.client_name ?? '—', items: [], total: 0 }
+    siMap[r.si_number].items.push(r)
+    siMap[r.si_number].total += r.amount ?? 0
+  })
+  const siRows = Object.entries(siMap).sort((a, b) => (a[1].date > b[1].date ? 1 : -1))
+  const totalSales = siRows.reduce((s, [, v]) => s + v.total, 0)
 
-  function exportCRJ() {
-    exportCSV('CRJ_Collections.csv',
-      ['Date','OR Number','Client','Gross Amount','Form 2307 (WHT)','Net Total'],
-      posted.map(c => [c.collection_date ?? '', c.or_number ?? '', c.client_name ?? '', c.amount, c.form_2307 ?? 0, c.amount - (c.form_2307 ?? 0)])
+  function exportSJ() {
+    exportCSV('SalesJournal_CSI.csv',
+      ['Date', 'SI Number', 'Client', 'Item', 'Qty', 'Unit', 'Unit Price', 'Amount'],
+      csiRecords.map(r => [r.si_date ?? '', r.si_number ?? '', r.client_name ?? '', r.item_name ?? '', r.quantity ?? 0, r.unit ?? '', r.unit_price ?? 0, r.amount ?? 0])
     )
   }
 
@@ -492,44 +521,43 @@ function SalesJournalTab({ collections }: { collections: Collection[] }) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-semibold">Cash Receipts Journal (CRJ)</p>
-          <p className="text-xs text-muted-foreground">Auto-populated from posted Collections / Official Receipts</p>
+          <p className="text-sm font-semibold">Sales Journal — CSI</p>
+          <p className="text-xs text-muted-foreground">Charge Sales Invoices grouped by SI number (use date range filter above)</p>
         </div>
-        <Button variant="outline" size="sm" onClick={exportCRJ}><Download className="h-3.5 w-3.5 mr-1.5" />Export CSV (BIR)</Button>
+        <Button variant="outline" size="sm" onClick={exportSJ}><Download className="h-3.5 w-3.5 mr-1.5" />Export CSV</Button>
       </div>
-      <div className="grid grid-cols-3 gap-3">
-        <Card><CardContent className="pt-4 pb-3"><div className="text-xl font-bold">{fmt(totalGross)}</div><div className="text-xs text-muted-foreground">Total Gross Sales</div></CardContent></Card>
-        <Card><CardContent className="pt-4 pb-3"><div className="text-xl font-bold text-orange-600">{fmt(totalWHT)}</div><div className="text-xs text-muted-foreground">Total Form 2307 (WHT)</div></CardContent></Card>
-        <Card><CardContent className="pt-4 pb-3"><div className="text-xl font-bold text-green-600">{fmt(totalNet)}</div><div className="text-xs text-muted-foreground">Net Cash Received</div></CardContent></Card>
+      <div className="grid grid-cols-2 gap-3">
+        <Card><CardContent className="pt-4 pb-3"><div className="text-xl font-bold text-blue-600">{fmt(totalSales)}</div><div className="text-xs text-muted-foreground">Total Sales Billed</div></CardContent></Card>
+        <Card><CardContent className="pt-4 pb-3"><div className="text-xl font-bold">{siRows.length}</div><div className="text-xs text-muted-foreground">Sales Invoices</div></CardContent></Card>
       </div>
       <Card><CardContent className="p-0">
         <Table>
           <TableHeader><TableRow>
-            <TableHead>Date</TableHead><TableHead>OR Number</TableHead><TableHead>Client / Payor</TableHead>
-            <TableHead className="text-right">Gross Amount</TableHead><TableHead className="text-right">Form 2307</TableHead>
-            <TableHead className="text-right">Net Received</TableHead><TableHead>Account Credited</TableHead>
+            <TableHead>Date</TableHead>
+            <TableHead>SI Number</TableHead>
+            <TableHead>Client</TableHead>
+            <TableHead className="text-right">Items</TableHead>
+            <TableHead className="text-right">Total Amount</TableHead>
+            <TableHead>Account</TableHead>
           </TableRow></TableHeader>
           <TableBody>
-            {posted.length === 0 ? (
-              <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No collections posted yet.</TableCell></TableRow>
-            ) : posted.map(c => (
-              <TableRow key={c.id}>
-                <TableCell className="text-sm whitespace-nowrap">{c.collection_date ? format(new Date(c.collection_date), 'MMM d, yyyy') : '—'}</TableCell>
-                <TableCell className="font-mono text-xs font-semibold text-red-600">{c.or_number ?? '—'}</TableCell>
-                <TableCell className="text-sm">{c.client_name ?? '—'}</TableCell>
-                <TableCell className="text-right font-medium">{fmt(c.amount)}</TableCell>
-                <TableCell className="text-right text-orange-600">{c.form_2307 ? fmt(c.form_2307) : '—'}</TableCell>
-                <TableCell className="text-right font-semibold text-green-700">{fmt(c.amount - (c.form_2307 ?? 0))}</TableCell>
+            {siRows.length === 0 ? (
+              <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No CSI records in this date range.</TableCell></TableRow>
+            ) : siRows.map(([si, v]) => (
+              <TableRow key={si}>
+                <TableCell className="text-sm whitespace-nowrap">{v.date ? format(new Date(v.date), 'MMM d, yyyy') : '—'}</TableCell>
+                <TableCell className="font-mono text-xs font-semibold text-red-600">{si}</TableCell>
+                <TableCell className="text-sm">{v.client}</TableCell>
+                <TableCell className="text-right text-xs text-muted-foreground">{v.items.length}</TableCell>
+                <TableCell className="text-right font-semibold">{fmt(v.total)}</TableCell>
                 <TableCell className="text-xs text-muted-foreground">4100 – Sales Revenue</TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
-        {posted.length > 0 && (
+        {siRows.length > 0 && (
           <div className="flex justify-end gap-8 px-4 py-2 bg-muted/40 border-t text-sm font-semibold">
-            <span>Gross: {fmt(totalGross)}</span>
-            <span className="text-orange-600">WHT: {fmt(totalWHT)}</span>
-            <span className="text-green-700">Net: {fmt(totalNet)}</span>
+            <span>Total Sales: {fmt(totalSales)}</span>
           </div>
         )}
       </CardContent></Card>
@@ -1064,6 +1092,7 @@ function BookkeepingTab() {
   const [disbursements, setDisbursements] = useState<Disbursement[]>([])
   const [coa, setCoa] = useState<COA[]>([])
   const [jLines, setJLines] = useState<JournalLine[]>([])
+  const [csiRecords, setCsiRecords] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   // Date filter
@@ -1100,20 +1129,23 @@ function BookkeepingTab() {
 
   const filteredCollections = applyDateFilter(collections, c => (c as Collection).collection_date)
   const filteredDisbursements = applyDateFilter(disbursements, d => (d as Disbursement).disb_date)
+  const filteredCsi = applyDateFilter(csiRecords, r => r.si_date)
   const filteredJLines = applyDateFilter(jLines, l => (l as JournalLine).journal_entries?.entry_date)
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [{ data: colData }, { data: disbData }, { data: coaData }, { data: jlData }] = await Promise.all([
+    const [{ data: colData }, { data: disbData }, { data: coaData }, { data: jlData }, { data: csiData }] = await Promise.all([
       supabase.from('collections').select('id,or_number,collection_date,client_name,amount,form_2307,status').order('collection_date'),
       supabase.from('disbursements').select('*').order('disb_date', { ascending: false }),
       supabase.from('chart_of_accounts').select('account_code,account_name,account_type,normal_balance,is_header').eq('is_active', true).order('account_code'),
       supabase.from('journal_lines').select('*, journal_entries(entry_date,entry_number,memo,entry_type)').order('created_at'),
+      supabase.from('csi_records').select('id,si_number,si_date,client_name,item_name,unit,quantity,unit_price,amount').order('si_date'),
     ])
     setCollections((colData ?? []) as Collection[])
     setDisbursements((disbData ?? []) as Disbursement[])
     setCoa((coaData ?? []) as COA[])
     setJLines((jlData ?? []) as unknown as JournalLine[])
+    setCsiRecords(csiData ?? [])
     setLoading(false)
   }, [supabase])
 
@@ -1191,7 +1223,7 @@ function BookkeepingTab() {
           <TabsTrigger value="bir" className="flex items-center gap-1.5"><Download className="h-3.5 w-3.5" />BIR / CAS</TabsTrigger>
         </TabsList>
         <div className="mt-4">
-          <TabsContent value="crj"><SalesJournalTab collections={filteredCollections} /></TabsContent>
+          <TabsContent value="crj"><SalesJournalTab collections={filteredCollections} csiRecords={filteredCsi} /></TabsContent>
           <TabsContent value="cdj"><DisbursementsTab filterFrom={filterFrom} filterTo={filterTo} /></TabsContent>
           <TabsContent value="gl"><GeneralLedgerTab lines={filteredJLines} /></TabsContent>
           <TabsContent value="tb"><TrialBalanceTab lines={filteredJLines} coa={coa} /></TabsContent>

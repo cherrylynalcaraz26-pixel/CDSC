@@ -81,7 +81,8 @@ export default function CSIMonitoringPage() {
   const [items, setItems] = useState<CSIItem[]>([emptyItem()])
   const [saving, setSaving] = useState(false)
   const [deleteId, setDeleteId] = useState<number | null>(null)
-  const [viewMode, setViewMode] = useState<'by-si' | 'all-items'>('by-si')
+  const [viewMode, setViewMode] = useState<'by-si' | 'all-items' | 'cross-ref'>('by-si')
+  const [drItemsForCrossRef, setDrItemsForCrossRef] = useState<{ dr_number: string; item_name: string; client_name: string | null }[]>([])
   const [expandedSIs, setExpandedSIs] = useState<Set<string>>(new Set())
   const [inventoryItem, setInventoryItem] = useState<string>('')
   const [inventoryOpen, setInventoryOpen] = useState(false)
@@ -91,11 +92,13 @@ export default function CSIMonitoringPage() {
 
   async function load() {
     setLoading(true)
-    const [{ data: itemOptData }, { data: clientData }, { data: soData }] = await Promise.all([
+    const [{ data: itemOptData }, { data: clientData }, { data: soData }, { data: drItemsData }] = await Promise.all([
       supabase.from('items').select('item_name, unit_of_measure').order('item_name'),
       supabase.from('clients').select('id, company_name').eq('status', 'active').order('company_name'),
       supabase.from('sales_orders').select('id, so_number').not('so_number', 'is', null).order('created_at', { ascending: false }),
+      supabase.from('dr_log_items').select('dr_number, item_name, dr_logs!inner(client_name)').order('item_name'),
     ])
+    setDrItemsForCrossRef((drItemsData ?? []).map((d: any) => ({ dr_number: d.dr_number, item_name: d.item_name, client_name: d.dr_logs?.client_name ?? null })))
     setItemOptions((itemOptData ?? []) as ItemOption[])
     setClientOptions((clientData ?? []) as ClientOption[])
     const filteredSOs = (soData ?? []).filter((s: any) => s.so_number) as { id: string; so_number: string }[]
@@ -676,6 +679,12 @@ export default function CSIMonitoringPage() {
           >
             <List className="h-3.5 w-3.5" /> All Items
           </button>
+          <button
+            onClick={() => setViewMode('cross-ref')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm border-l ${viewMode === 'cross-ref' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
+          >
+            <Search className="h-3.5 w-3.5" /> CSI vs DR
+          </button>
         </div>
       </div>}
 
@@ -687,7 +696,70 @@ export default function CSIMonitoringPage() {
         </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            {viewMode === 'by-si' ? (
+            {viewMode === 'cross-ref' ? (() => {
+              const csiItems = new Set(records.map(r => r.item_name.trim().toLowerCase()))
+              const drItems = new Set(drItemsForCrossRef.map(d => d.item_name.trim().toLowerCase()))
+              const inCsiNotDr = [...new Set(records.map(r => r.item_name))].filter(n => !drItems.has(n.trim().toLowerCase()))
+              const inDrNotCsi = [...new Set(drItemsForCrossRef.map(d => d.item_name))].filter(n => !csiItems.has(n.trim().toLowerCase()))
+              return (
+                <div className="p-4 space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="text-sm font-semibold text-amber-700">In CSI — Not in DR Logs</span>
+                        <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">{inCsiNotDr.length}</span>
+                      </div>
+                      {inCsiNotDr.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">All CSI items are covered by DR logs.</p>
+                      ) : (
+                        <Table>
+                          <TableHeader><TableRow>
+                            <TableHead>Item Name</TableHead>
+                            <TableHead className="text-right">CSI Count</TableHead>
+                          </TableRow></TableHeader>
+                          <TableBody>
+                            {inCsiNotDr.map(name => (
+                              <TableRow key={name}>
+                                <TableCell className="text-sm">{name}</TableCell>
+                                <TableCell className="text-right text-xs text-muted-foreground">
+                                  {records.filter(r => r.item_name === name).length}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      )}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className="text-sm font-semibold text-blue-700">In DR Logs — Not in CSI</span>
+                        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{inDrNotCsi.length}</span>
+                      </div>
+                      {inDrNotCsi.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">All DR items are covered by CSI records.</p>
+                      ) : (
+                        <Table>
+                          <TableHeader><TableRow>
+                            <TableHead>Item Name</TableHead>
+                            <TableHead className="text-right">DR Count</TableHead>
+                          </TableRow></TableHeader>
+                          <TableBody>
+                            {inDrNotCsi.map(name => (
+                              <TableRow key={name}>
+                                <TableCell className="text-sm">{name}</TableCell>
+                                <TableCell className="text-right text-xs text-muted-foreground">
+                                  {drItemsForCrossRef.filter(d => d.item_name === name).length}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )
+            })() : viewMode === 'by-si' ? (
               <Table>
                 <TableHeader>
                   <TableRow>
