@@ -99,6 +99,7 @@ export default function PortalStockPage() {
 
   // Report
   const [reportOpen, setReportOpen] = useState(false)
+  const [csiRecords, setCsiRecords] = useState<{ si_number: string; si_date: string; item_name: string; unit: string | null; quantity: number; unit_price: number; amount: number; dr_number: string | null }[]>([])
 
   // Issue slip (shown after issue submit)
   const [issuedSlip, setIssuedSlip] = useState<{ item_name: string; unit: string | null; quantity: number; issued_to: string; department: string; notes: string; reference_no: string; date: string } | null>(null)
@@ -155,6 +156,17 @@ export default function PortalStockPage() {
       items: drItemsFetched.filter((i: any) => i.dr_number === d.dr_number).map((i: any) => ({ item_name: i.item_name, unit: i.unit ?? null, quantity: Number(i.quantity) })),
     }))
     setAvailableDRs(drs)
+
+    if (companyName) {
+      const { data: csiData } = await supabase
+        .from('csi_records')
+        .select('si_number,si_date,item_name,unit,quantity,unit_price,amount,dr_number')
+        .eq('client_name', companyName)
+        .order('si_date', { ascending: false })
+        .order('si_number')
+      setCsiRecords(csiData ?? [])
+    }
+
     setLoading(false)
   }
 
@@ -568,6 +580,72 @@ export default function PortalStockPage() {
                   </tbody>
                 </table>
               </div>
+              {/* CSI Issued section */}
+              {csiRecords.length > 0 && (() => {
+                const siGroups: { si_number: string; si_date: string; dr_number: string | null; items: typeof csiRecords; total: number }[] = []
+                const seen = new Set<string>()
+                for (const r of csiRecords) {
+                  if (!seen.has(r.si_number)) {
+                    seen.add(r.si_number)
+                    const grpItems = csiRecords.filter(x => x.si_number === r.si_number)
+                    siGroups.push({ si_number: r.si_number, si_date: r.si_date, dr_number: r.dr_number, items: grpItems, total: grpItems.reduce((s, x) => s + (Number(x.amount) || 0), 0) })
+                  }
+                }
+                const grandTotal = csiRecords.reduce((s, r) => s + (Number(r.amount) || 0), 0)
+                const fmtPeso = (v: number) => '₱' + v.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+                return (
+                  <div className="mt-8">
+                    <div className="flex items-center justify-between mb-3 pb-2 border-b border-gray-200">
+                      <div>
+                        <div className="text-sm font-bold text-gray-800">CSI Issued</div>
+                        <div className="text-[10px] text-gray-400 mt-0.5">Charge Sales Invoices issued to {clientName}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[10px] text-gray-400 uppercase tracking-wider">Total Invoiced</div>
+                        <div className="text-base font-bold text-red-600">{fmtPeso(grandTotal)}</div>
+                      </div>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs border-collapse min-w-[500px]">
+                        <thead>
+                          <tr className="bg-red-700 text-white">
+                            <th className="px-3 py-2 text-left font-semibold text-[10px] uppercase tracking-wide">Date</th>
+                            <th className="px-3 py-2 text-left font-semibold text-[10px] uppercase tracking-wide">SI Number</th>
+                            <th className="px-3 py-2 text-left font-semibold text-[10px] uppercase tracking-wide">Item Description</th>
+                            <th className="px-3 py-2 text-left font-semibold text-[10px] uppercase tracking-wide w-16">Unit</th>
+                            <th className="px-3 py-2 text-right font-semibold text-[10px] uppercase tracking-wide w-16">Qty</th>
+                            <th className="px-3 py-2 text-right font-semibold text-[10px] uppercase tracking-wide w-24">Unit Price</th>
+                            <th className="px-3 py-2 text-right font-semibold text-[10px] uppercase tracking-wide w-24">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {siGroups.map((g, gi) => (
+                            g.items.map((item, ii) => (
+                              <tr key={`${g.si_number}-${ii}`} className={gi % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                <td className="px-3 py-1.5 border-b border-gray-100 text-gray-500 whitespace-nowrap">{ii === 0 ? fmtDate(g.si_date) : ''}</td>
+                                <td className="px-3 py-1.5 border-b border-gray-100 font-mono font-semibold text-red-600">{ii === 0 ? g.si_number : ''}</td>
+                                <td className="px-3 py-1.5 border-b border-gray-100 text-gray-800">{item.item_name}</td>
+                                <td className="px-3 py-1.5 border-b border-gray-100 text-gray-500">{item.unit ?? '—'}</td>
+                                <td className="px-3 py-1.5 border-b border-gray-100 text-right font-medium">{Number(item.quantity)}</td>
+                                <td className="px-3 py-1.5 border-b border-gray-100 text-right">{item.unit_price ? fmtPeso(Number(item.unit_price)) : '—'}</td>
+                                <td className="px-3 py-1.5 border-b border-gray-100 text-right font-medium">{item.amount ? fmtPeso(Number(item.amount)) : '—'}</td>
+                              </tr>
+                            ))
+                          ))}
+                        </tbody>
+                        <tfoot>
+                          <tr className="border-t-2 border-gray-300 bg-gray-50">
+                            <td colSpan={6} className="px-3 py-2 text-right font-bold text-gray-700 text-xs">Grand Total</td>
+                            <td className="px-3 py-2 text-right font-bold text-red-600 text-xs">{fmtPeso(grandTotal)}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+                )
+              })()}
+
               <div className="mt-8 pt-4 border-t border-gray-100 text-[10px] text-gray-400 flex justify-between flex-wrap gap-2">
                 <span>Stock levels reflect current on-hand quantities as of the report date.</span>
                 <span>Generated {today} · CDSC Inventory System</span>
