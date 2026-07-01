@@ -895,7 +895,7 @@ export default function DRLogsPage() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-[2fr_1fr] gap-4">
                     <div className="space-y-1.5">
                       <Label>SO Reference</Label>
                       <Select value={form.po_number} onValueChange={v => setForm(f => ({ ...f, po_number: v ?? '' }))}>
@@ -945,10 +945,10 @@ export default function DRLogsPage() {
                 <div className="space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">Delivery Items</p>
                   <div className="border rounded-lg overflow-hidden">
-                    <Table>
+                    <Table className="table-fixed w-full">
                       <TableHeader>
                         <TableRow className="bg-muted/40">
-                          <TableHead className="min-w-[200px]">Item Description</TableHead>
+                          <TableHead>Item Description</TableHead>
                           <TableHead className="w-20">Qty</TableHead>
                           <TableHead className="w-24">Unit</TableHead>
                           <TableHead className="w-8"></TableHead>
