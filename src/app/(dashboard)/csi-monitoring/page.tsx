@@ -784,7 +784,7 @@ export default function CSIMonitoringPage() {
                         ))}
                       </Pie>
                       <Tooltip
-                        formatter={(value: number, name: string) => [formatPeso(value), name]}
+                        formatter={(value, name) => [formatPeso(Number(value)), String(name)]}
                         contentStyle={{ borderRadius: 12, border: '1px solid #e5e7eb', fontSize: 12 }}
                       />
                     </PieChart>
