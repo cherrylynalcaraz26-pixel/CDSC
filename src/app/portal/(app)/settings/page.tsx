@@ -60,7 +60,8 @@ export default function PortalSettingsPage() {
       setVatType((clientRow as any)?.vat_type ?? '')
       setBusinessType((clientRow as any)?.business_type ?? '')
       setWebsite((clientRow as any)?.website ?? '')
-      setLogoUrl((clientRow as any)?.logo_url ?? null)
+      const rawLogo = (clientRow as any)?.logo_url ?? null
+      setLogoUrl(rawLogo ? `${rawLogo}?t=${Date.now()}` : null)
       if (clientRow?.id) {
         setClientId(clientRow.id)
         const { data: deptData } = await supabase.from('client_departments').select('id, name').eq('client_id', clientRow.id).order('name')
@@ -125,6 +126,7 @@ export default function PortalSettingsPage() {
       const { error: dbErr } = await supabase.from('clients').update({ logo_url: urlData.publicUrl }).eq('id', clientId)
       if (dbErr) throw dbErr
       setLogoUrl(url)
+      window.dispatchEvent(new CustomEvent('portal-logo-updated', { detail: { url } }))
       toast.success('Company logo updated')
     } catch (err: any) {
       toast.error(err.message ?? 'Failed to upload logo')

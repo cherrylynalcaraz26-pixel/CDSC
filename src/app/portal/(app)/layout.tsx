@@ -61,6 +61,28 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  // Re-fetch logo when tab becomes visible (e.g. after uploading in settings)
+  useEffect(() => {
+    async function refreshLogo() {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+      const { data: clientRow } = await supabase.from('clients').select('logo_url, avatar_url').eq('auth_user_id', session.user.id).single()
+      const rawLogo = (clientRow as any)?.logo_url ?? (clientRow as any)?.avatar_url ?? null
+      setClientLogoUrl(rawLogo ? `${rawLogo}?t=${Date.now()}` : null)
+    }
+    function onVisible() { if (document.visibilityState === 'visible') refreshLogo() }
+    function onLogoUpdated(e: Event) {
+      const url = (e as CustomEvent).detail?.url
+      if (url) setClientLogoUrl(url)
+    }
+    document.addEventListener('visibilitychange', onVisible)
+    window.addEventListener('portal-logo-updated', onLogoUpdated)
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      window.removeEventListener('portal-logo-updated', onLogoUpdated)
+    }
+  }, [])
+
   function toggleCollapsed() {
     setCollapsed(c => {
       localStorage.setItem('portal-sidebar-collapsed', String(!c))
@@ -77,9 +99,10 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
       setUserName(profile?.full_name ?? session.user.email?.split('@')[0] ?? 'Client')
       setUserEmail(session.user.email ?? '')
       setUserAvatarUrl((profile as any)?.avatar_url ?? null)
-      const { data: clientRow } = await supabase.from('clients').select('id, company_name, avatar_url').eq('auth_user_id', session.user.id).single()
+      const { data: clientRow } = await supabase.from('clients').select('id, company_name, logo_url, avatar_url').eq('auth_user_id', session.user.id).single()
       setClientName(clientRow?.company_name ?? '')
-      setClientLogoUrl((clientRow as any)?.avatar_url ?? null)
+      const rawLogo = (clientRow as any)?.logo_url ?? (clientRow as any)?.avatar_url ?? null
+      setClientLogoUrl(rawLogo ? `${rawLogo}?t=${Date.now()}` : null)
       if (clientRow) {
         setClientId((clientRow as any).id)
         const companyName = (clientRow as any).company_name ?? ''
