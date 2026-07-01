@@ -29,7 +29,12 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [clientName, setClientName] = useState('')
   const [userName, setUserName] = useState('')
+  const [userEmail, setUserEmail] = useState('')
+  const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null)
+  const [clientLogoUrl, setClientLogoUrl] = useState<string | null>(null)
   const [clientId, setClientId] = useState<string | null>(null)
+  const [avatarOpen, setAvatarOpen] = useState(false)
+  const avatarRef = useRef<HTMLDivElement>(null)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false
@@ -48,6 +53,14 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
     try { return new Set(JSON.parse(localStorage.getItem('portal-seen-replies') ?? '[]')) } catch { return new Set() }
   })
 
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (avatarRef.current && !avatarRef.current.contains(e.target as Node)) setAvatarOpen(false)
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
   function toggleCollapsed() {
     setCollapsed(c => {
       localStorage.setItem('portal-sidebar-collapsed', String(!c))
@@ -59,11 +72,14 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
     async function check() {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) { router.replace('/login'); return }
-      const { data: profile } = await supabase.from('profiles').select('full_name, role').eq('id', session.user.id).single()
+      const { data: profile } = await supabase.from('profiles').select('full_name, role, avatar_url').eq('id', session.user.id).single()
       if (profile?.role !== 'client') { await supabase.auth.signOut(); router.replace('/login'); return }
       setUserName(profile?.full_name ?? session.user.email?.split('@')[0] ?? 'Client')
-      const { data: clientRow } = await supabase.from('clients').select('id, company_name').eq('auth_user_id', session.user.id).single()
+      setUserEmail(session.user.email ?? '')
+      setUserAvatarUrl((profile as any)?.avatar_url ?? null)
+      const { data: clientRow } = await supabase.from('clients').select('id, company_name, logo_url').eq('auth_user_id', session.user.id).single()
       setClientName(clientRow?.company_name ?? '')
+      setClientLogoUrl((clientRow as any)?.logo_url ?? null)
       if (clientRow) {
         setClientId((clientRow as any).id)
         const companyName = (clientRow as any).company_name ?? ''
@@ -278,8 +294,8 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
               </button>
               {collapsed && (
                 <div className="hidden lg:flex items-center gap-2">
-                  <div className="relative h-7 w-7 shrink-0 rounded-md overflow-hidden bg-[#111111]">
-                    <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="object-cover" priority />
+                  <div className="relative h-7 w-7 shrink-0 rounded-md overflow-hidden">
+                    <Image src="/cdsc-logo.jpg" alt="CDSC Industrial Supply" fill className="object-cover" priority />
                   </div>
                   <span className="text-sm font-semibold leading-tight">CDSC Industrial Supply</span>
                 </div>
@@ -338,14 +354,59 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
                 )}
               </div>
 
-              <button onClick={signOut}
-                className="hidden sm:flex items-center gap-1.5 text-sm text-muted-foreground hover:text-destructive px-3 py-2 rounded-lg hover:bg-accent transition-colors">
-                <LogOut className="h-4 w-4" />
-                <span className="hidden md:inline">Sign Out</span>
-              </button>
+              {/* Avatar dropdown */}
+              <div className="relative" ref={avatarRef}>
+                <button
+                  onClick={() => setAvatarOpen(v => !v)}
+                  className="h-9 w-9 rounded-full overflow-hidden flex items-center justify-center bg-red-600 text-white text-xs font-bold shrink-0 hover:ring-2 hover:ring-red-500/40 transition-all"
+                >
+                  {userAvatarUrl
+                    ? <img src={userAvatarUrl} alt={userName} className="h-full w-full object-cover" />
+                    : initials}
+                </button>
 
-              <div className="h-9 w-9 rounded-full bg-red-600 text-white text-xs font-bold flex items-center justify-center shrink-0 cursor-default">
-                {initials}
+                {avatarOpen && (
+                  <div className="absolute right-0 top-full mt-2 w-72 bg-white border border-gray-200 rounded-xl shadow-xl z-50 overflow-hidden">
+                    {/* Company info */}
+                    <div className="px-4 py-3 bg-gray-50 border-b flex items-center gap-3">
+                      <div className="h-10 w-10 rounded-lg overflow-hidden shrink-0 border bg-white">
+                        {clientLogoUrl
+                          ? <img src={clientLogoUrl} alt={clientName} className="h-full w-full object-cover" />
+                          : <div className="h-full w-full bg-red-600 flex items-center justify-center text-white text-sm font-bold">
+                              {initials}
+                            </div>}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-gray-900 leading-tight truncate">{clientName || 'My Company'}</p>
+                        <p className="text-xs text-gray-500 mt-0.5">Client Portal</p>
+                      </div>
+                    </div>
+
+                    {/* User info */}
+                    <div className="px-4 py-3 border-b flex items-center gap-3">
+                      <div className="h-8 w-8 rounded-full overflow-hidden shrink-0 bg-red-600 flex items-center justify-center text-white text-xs font-bold">
+                        {userAvatarUrl
+                          ? <img src={userAvatarUrl} alt={userName} className="h-full w-full object-cover" />
+                          : initials}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-gray-900 leading-tight">{userName}</p>
+                        <p className="text-xs text-gray-500 truncate">{userEmail}</p>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="p-1.5">
+                      <button
+                        onClick={() => { setAvatarOpen(false); signOut() }}
+                        className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors font-medium"
+                      >
+                        <LogOut className="h-4 w-4" />
+                        Sign Out
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
