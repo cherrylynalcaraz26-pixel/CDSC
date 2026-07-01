@@ -17,8 +17,9 @@ import { useCompany } from '@/context/company-context'
 import {
   Building2, Upload, RotateCcw, Save, Shield, Briefcase,
   FileText, Database, User, Globe, Phone, Mail, MapPin,
-  CheckCircle2, Eye, EyeOff, Loader2, Plus, Trash2, X,
+  CheckCircle2, Eye, EyeOff, Loader2, Plus, Trash2, X, Send,
 } from 'lucide-react'
+import { sendEmail } from '@/lib/send-email'
 
 const BUSINESS_TYPES = [
   'Sole Proprietorship', 'Partnership', 'Corporation', 'Trading Corporation',
@@ -920,6 +921,14 @@ function ProposalDatabaseTab() {
     status: 'draft' as Proposal['status'],
   })
 
+  // Email
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false)
+  const [emailProposal, setEmailProposal] = useState<Proposal | null>(null)
+  const [emailTo, setEmailTo] = useState('')
+  const [emailSubject, setEmailSubject] = useState('')
+  const [emailBody, setEmailBody] = useState('')
+  const [sendingEmail, setSendingEmail] = useState(false)
+
   async function loadProposals() {
     setLoading(true)
     const { data, error } = await supabase
@@ -974,6 +983,38 @@ function ProposalDatabaseTab() {
     }
   }
 
+  function openEmailDialog(p: Proposal) {
+    setEmailProposal(p)
+    setEmailTo('')
+    setEmailSubject(`Business Proposal – ${p.title} (${p.proposal_number})`)
+    setEmailBody(`Dear ${p.client},\n\nPlease find attached our business proposal for "${p.title}".\n\nProposal No.: ${p.proposal_number}\nDate: ${p.date ? new Date(p.date).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }) : ''}\n${p.amount ? `Amount: ₱${p.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : ''}\n\nWe look forward to your favorable response.\n\nBest regards,\nCDSC Industrial Supply`)
+    setEmailDialogOpen(true)
+  }
+
+  async function handleSendEmail() {
+    if (!emailTo.trim()) { toast.error('Recipient email is required'); return }
+    setSendingEmail(true)
+    try {
+      await sendEmail({
+        to: emailTo.trim(),
+        subject: emailSubject,
+        body: emailBody,
+        pdfFilename: `${emailProposal?.proposal_number ?? 'proposal'}.pdf`,
+      })
+      // Mark as sent if still draft
+      if (emailProposal && emailProposal.status === 'draft') {
+        await supabase.from('proposals').update({ status: 'sent' }).eq('id', emailProposal.id)
+        setProposals(ps => ps.map(p => p.id === emailProposal.id ? { ...p, status: 'sent' } : p))
+      }
+      toast.success('Proposal email sent successfully')
+      setEmailDialogOpen(false)
+    } catch (err: any) {
+      toast.error(err.message ?? 'Failed to send email')
+    } finally {
+      setSendingEmail(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between pb-4 border-b">
@@ -1009,7 +1050,7 @@ function ProposalDatabaseTab() {
                 <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Date</th>
                 <th className="text-right px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Amount</th>
                 <th className="text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Status</th>
-                <th className="px-4 py-3"></th>
+                <th className="px-4 py-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -1030,13 +1071,25 @@ function ProposalDatabaseTab() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <button
-                      type="button"
-                      onClick={() => deleteProposal(p.id)}
-                      className="text-muted-foreground hover:text-destructive transition-colors"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => openEmailDialog(p)}
+                        className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 transition-colors font-medium"
+                        title="Send proposal by email"
+                      >
+                        <Send className="h-3.5 w-3.5" />
+                        Send
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteProposal(p.id)}
+                        className="text-muted-foreground hover:text-destructive transition-colors"
+                        title="Delete proposal"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -1044,6 +1097,56 @@ function ProposalDatabaseTab() {
           </table>
         </div>
       )}
+
+      {/* Email Dialog */}
+      <Dialog open={emailDialogOpen} onOpenChange={setEmailDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="h-4 w-4 text-blue-600" />
+              Send Proposal by Email
+            </DialogTitle>
+          </DialogHeader>
+          {emailProposal && (
+            <div className="text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2 mb-1">
+              {emailProposal.proposal_number} — {emailProposal.title} — {emailProposal.client}
+            </div>
+          )}
+          <div className="space-y-3 py-1">
+            <div className="space-y-1.5">
+              <Label>To (recipient email) <span className="text-destructive">*</span></Label>
+              <Input
+                type="email"
+                placeholder="client@example.com"
+                value={emailTo}
+                onChange={e => setEmailTo(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Subject</Label>
+              <Input
+                value={emailSubject}
+                onChange={e => setEmailSubject(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Message</Label>
+              <Textarea
+                rows={8}
+                value={emailBody}
+                onChange={e => setEmailBody(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEmailDialogOpen(false)}>Cancel</Button>
+            <Button onClick={handleSendEmail} disabled={sendingEmail} className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5">
+              {sendingEmail ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              Send Email
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-md">
