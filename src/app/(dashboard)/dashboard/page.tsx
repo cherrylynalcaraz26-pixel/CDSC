@@ -36,7 +36,7 @@ interface RecentPO { id: string; po_number: string | null; created_at: string; s
 interface ORClientRow { client: string; collected: number; ewt: number; ors: number }
 interface CSIClientRow { client: string; billed: number; invoices: number; items: number }
 interface ReconRow { client: string; csi_billed: number; or_collected: number; diff: number; status: 'Balanced' | 'Outstanding' | 'Over-collected' }
-interface MonthlySOBar { month: string; revenue: number; orders: number }
+interface MonthlySOBar { month: string; revenue: number; orders: number; csiRevenue: number }
 interface TopClient { client: string; revenue: number; orders: number }
 
 interface Insight {
@@ -243,6 +243,7 @@ export default function DashboardPage() {
       // --- Decision Maker: monthly SO revenue + top clients ---
       const { data: soAll } = await supabase.from('sales_orders').select('so_date, created_at, client_name, total_amount, status').not('status', 'eq', 'cancelled')
       const soList = soAll ?? []
+      const allCSIDetail = csiDetailData.data ?? []
       const soBars: MonthlySOBar[] = Array.from({ length: 6 }, (_, i) => {
         const d = subMonths(now, 5 - i)
         const start = startOfMonth(d).toISOString().slice(0, 10)
@@ -251,10 +252,12 @@ export default function DashboardPage() {
           const dt = (s.so_date ?? s.created_at ?? '').slice(0, 10)
           return dt >= start && dt <= end
         })
+        const monthCSI = allCSIDetail.filter((r: any) => r.si_date && r.si_date >= start && r.si_date <= end)
         return {
           month: format(d, 'MMM'),
           revenue: monthSOs.reduce((sum: number, s: any) => sum + (Number(s.total_amount) || 0), 0),
           orders: monthSOs.length,
+          csiRevenue: monthCSI.reduce((sum: number, r: any) => sum + (Number(r.quantity) || 0) * (Number(r.unit_price) || 0), 0),
         }
       })
       setSoMonthlyBars(soBars)
@@ -559,17 +562,17 @@ export default function DashboardPage() {
             {/* Summary KPI tiles */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {(() => {
-                const currRev = soMonthlyBars[5]?.revenue ?? 0
-                const prevRev = soMonthlyBars[4]?.revenue ?? 0
-                const pct = prevRev > 0 ? ((currRev - prevRev) / prevRev * 100) : null
+                const currCSIRev = soMonthlyBars[5]?.csiRevenue ?? 0
+                const prevCSIRev = soMonthlyBars[4]?.csiRevenue ?? 0
+                const pct = prevCSIRev > 0 ? ((currCSIRev - prevCSIRev) / prevCSIRev * 100) : null
                 const outstandingBal = reconRows.filter(r => r.status === 'Outstanding').reduce((s, r) => s + r.diff, 0)
                 const totalBilled = csiRows.reduce((s, r) => s + r.billed, 0)
                 const totalCollected = orRows.reduce((s, r) => s + r.collected, 0)
                 return (
                   <>
                     <div className="rounded-lg border p-3 space-y-0.5">
-                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">This Month Revenue</div>
-                      <div className="text-xl font-bold tabular-nums">₱{currRev.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</div>
+                      <div className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">CSI Revenue This Month</div>
+                      <div className="text-xl font-bold tabular-nums">₱{currCSIRev.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</div>
                       {pct !== null ? (
                         <div className={`flex items-center gap-1 text-xs font-medium ${pct >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                           {pct >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
@@ -606,19 +609,19 @@ export default function DashboardPage() {
               {/* Revenue chart */}
               <div className="lg:col-span-3 space-y-2">
                 <div>
-                  <p className="text-xs font-semibold text-muted-foreground">Monthly Sales Revenue — Last 6 Months</p>
-                  <p className="text-[10px] text-muted-foreground">Based on confirmed sales orders</p>
+                  <p className="text-xs font-semibold text-muted-foreground">Monthly CSI Revenue — Last 6 Months</p>
+                  <p className="text-[10px] text-muted-foreground">Based on CSI records (quantity × unit price)</p>
                 </div>
-                {loading || soMonthlyBars.every(m => m.revenue === 0) ? (
-                  <div className="h-44 flex items-center justify-center text-muted-foreground text-xs border rounded-lg">{loading ? 'Loading…' : 'No revenue data yet'}</div>
+                {loading || soMonthlyBars.every(m => m.csiRevenue === 0) ? (
+                  <div className="h-44 flex items-center justify-center text-muted-foreground text-xs border rounded-lg">{loading ? 'Loading…' : 'No CSI revenue data yet'}</div>
                 ) : (
                   <ResponsiveContainer width="100%" height={180}>
                     <BarChart data={soMonthlyBars} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} />
                       <XAxis dataKey="month" tick={{ fontSize: 11 }} />
                       <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `₱${(v / 1000).toFixed(0)}k`} />
-                      <Tooltip formatter={(v: any) => [`₱${(v ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, 'Revenue']} />
-                      <Bar dataKey="revenue" name="Revenue" fill="#4f46e5" radius={[3, 3, 0, 0]} />
+                      <Tooltip formatter={(v: any) => [`₱${(v ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`]} />
+                      <Bar dataKey="csiRevenue" name="CSI Revenue" fill="#dc2626" radius={[3, 3, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
                 )}
