@@ -61,7 +61,7 @@ export default function LoginPage() {
       <div className="relative w-full max-w-md">
         {/* Brand */}
         <div className="flex flex-col items-center mb-8">
-          <div className="relative w-56 h-24 mb-3">
+          <div className="relative w-56 h-24 mb-3 bg-white rounded-2xl shadow-lg overflow-hidden p-3">
             <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="object-contain" priority style={{ filter: 'brightness(1) saturate(1.1)' }} />
           </div>
           <h1 className="text-white font-bold text-xl tracking-tight">CDSC Industrial Supply</h1>
