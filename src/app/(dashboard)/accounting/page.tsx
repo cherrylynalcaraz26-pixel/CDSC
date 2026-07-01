@@ -1457,6 +1457,151 @@ function BIRComplianceTab() {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
+// ── CSI Revenue Tab ───────────────────────────────────────────────────────────
+
+function CSITab() {
+  const supabase = createClient()
+  const [records, setRecords] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function load() {
+      const { data } = await supabase
+        .from('csi_records')
+        .select('id, si_number, si_date, client_name, item_name, unit, quantity, unit_price, amount, collection_status')
+        .order('si_date', { ascending: false })
+      setRecords(data ?? [])
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  const totalBilled = records.reduce((s, r) => s + (r.amount ?? 0), 0)
+  const totalCollected = records.filter(r => r.collection_status === 'collected').reduce((s, r) => s + (r.amount ?? 0), 0)
+  const pending = totalBilled - totalCollected
+
+  const byClient: Record<string, { billed: number; collected: number; count: number }> = {}
+  records.forEach(r => {
+    const key = r.client_name ?? '—'
+    if (!byClient[key]) byClient[key] = { billed: 0, collected: 0, count: 0 }
+    byClient[key].billed += r.amount ?? 0
+    byClient[key].count += 1
+    if (r.collection_status === 'collected') byClient[key].collected += r.amount ?? 0
+  })
+
+  const statusCls: Record<string, string> = {
+    collected:  'bg-green-100 text-green-700',
+    pending:    'bg-yellow-100 text-yellow-700',
+    partial:    'bg-blue-100 text-blue-700',
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+        <Card>
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <CardTitle className="text-xs font-medium text-muted-foreground">Total CSI Billed</CardTitle>
+            <Receipt className="h-4 w-4 text-blue-600" />
+          </CardHeader>
+          <CardContent><div className="text-xl font-bold">{loading ? '—' : fmt(totalBilled)}</div></CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <CardTitle className="text-xs font-medium text-muted-foreground">Total Collected</CardTitle>
+            <CheckCircle2 className="h-4 w-4 text-green-600" />
+          </CardHeader>
+          <CardContent><div className="text-xl font-bold text-green-600">{loading ? '—' : fmt(totalCollected)}</div></CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2 flex flex-row items-center justify-between">
+            <CardTitle className="text-xs font-medium text-muted-foreground">Pending Collection</CardTitle>
+            <AlertTriangle className="h-4 w-4 text-yellow-600" />
+          </CardHeader>
+          <CardContent><div className="text-xl font-bold text-yellow-600">{loading ? '—' : fmt(pending)}</div></CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">By Client Summary</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Client</TableHead>
+                <TableHead className="text-right">Invoices</TableHead>
+                <TableHead className="text-right">Billed</TableHead>
+                <TableHead className="text-right">Collected</TableHead>
+                <TableHead className="text-right">Outstanding</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Loading…</TableCell></TableRow>
+              ) : Object.entries(byClient).length === 0 ? (
+                <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No CSI records found</TableCell></TableRow>
+              ) : Object.entries(byClient).sort((a, b) => b[1].billed - a[1].billed).map(([client, data]) => (
+                <TableRow key={client}>
+                  <TableCell className="font-medium">{client}</TableCell>
+                  <TableCell className="text-right">{data.count}</TableCell>
+                  <TableCell className="text-right">{fmt(data.billed)}</TableCell>
+                  <TableCell className="text-right text-green-600">{fmt(data.collected)}</TableCell>
+                  <TableCell className="text-right text-yellow-600">{fmt(data.billed - data.collected)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">All CSI Records</CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>SI Number</TableHead>
+                <TableHead>Date</TableHead>
+                <TableHead>Client</TableHead>
+                <TableHead>Item</TableHead>
+                <TableHead className="text-right">Qty</TableHead>
+                <TableHead className="text-right">Unit Price</TableHead>
+                <TableHead className="text-right">Amount</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Loading…</TableCell></TableRow>
+              ) : records.length === 0 ? (
+                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No CSI records found</TableCell></TableRow>
+              ) : records.map((r: any) => (
+                <TableRow key={r.id}>
+                  <TableCell className="font-mono text-sm">{r.si_number ?? '—'}</TableCell>
+                  <TableCell>{r.si_date ? format(new Date(r.si_date), 'MMM dd, yyyy') : '—'}</TableCell>
+                  <TableCell>{r.client_name ?? '—'}</TableCell>
+                  <TableCell>{r.item_name ?? '—'}</TableCell>
+                  <TableCell className="text-right">{r.quantity ?? 0} {r.unit ?? ''}</TableCell>
+                  <TableCell className="text-right">{fmt(r.unit_price ?? 0)}</TableCell>
+                  <TableCell className="text-right font-medium">{fmt(r.amount ?? 0)}</TableCell>
+                  <TableCell>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusCls[r.collection_status ?? 'pending'] ?? 'bg-gray-100 text-gray-700'}`}>
+                      {r.collection_status ?? 'pending'}
+                    </span>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
 export default function AccountingPage() {
   return (
     <div className="space-y-6">
@@ -1476,6 +1621,9 @@ export default function AccountingPage() {
           <TabsTrigger value="bookkeeping" className="flex items-center gap-1.5">
             <FileBarChart className="h-3.5 w-3.5" />Bookkeeping
           </TabsTrigger>
+          <TabsTrigger value="csi" className="flex items-center gap-1.5">
+            <Receipt className="h-3.5 w-3.5" />CSI Revenue
+          </TabsTrigger>
           <TabsTrigger value="bir" className="flex items-center gap-1.5">
             <FileText className="h-3.5 w-3.5" />BIR Compliance
           </TabsTrigger>
@@ -1484,6 +1632,7 @@ export default function AccountingPage() {
         <div className="mt-6">
           <TabsContent value="overview"><OverviewTab /></TabsContent>
           <TabsContent value="collections"><CollectionsTab /></TabsContent>
+          <TabsContent value="csi"><CSITab /></TabsContent>
           <TabsContent value="bookkeeping"><BookkeepingTab /></TabsContent>
           <TabsContent value="bir"><BIRComplianceTab /></TabsContent>
         </div>

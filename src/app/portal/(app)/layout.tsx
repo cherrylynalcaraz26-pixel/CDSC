@@ -6,7 +6,7 @@ import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
-import { LayoutDashboard, FileText, Package, User, LogOut, Menu, X, Loader2, Boxes, ClipboardList, Search, Bell } from 'lucide-react'
+import { LayoutDashboard, FileText, Package, User, LogOut, Menu, X, Boxes, ClipboardList, Search, Bell } from 'lucide-react'
 import { SearchProvider, useSearchContext } from '@/context/search-context'
 
 const NAV = [
@@ -76,10 +76,12 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
   }
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="flex flex-col items-center gap-3">
-        <Loader2 className="h-7 w-7 text-red-600 animate-spin" />
-        <p className="text-sm text-gray-400">Loading portal…</p>
+    <div className="min-h-screen flex items-center justify-center bg-[#111111]">
+      <div className="flex flex-col items-center gap-4">
+        <div className="relative h-16 w-16 rounded-xl overflow-hidden bg-white animate-pulse">
+          <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="object-cover" priority />
+        </div>
+        <p className="text-sm text-white/40">Loading portal…</p>
       </div>
     </div>
   )
@@ -187,34 +189,34 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
       <div className="flex flex-1">
         {/* Desktop sidebar */}
         {sidebarOpen && (
-        <aside className="hidden md:flex flex-col w-56 shrink-0 bg-white border-r border-gray-200 sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto">
+        <aside className="hidden md:flex flex-col w-56 shrink-0 bg-[#111111] sticky top-16 h-[calc(100vh-4rem)] overflow-y-auto">
           <div className="flex items-center justify-between px-3 pt-3 pb-1">
-            <span className="text-xs font-semibold text-gray-400 uppercase tracking-wider px-1">Menu</span>
-            <button onClick={() => setSidebarOpen(false)} className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100 transition-colors">
+            <span className="text-xs font-semibold text-white/30 uppercase tracking-wider px-1">Menu</span>
+            <button onClick={() => setSidebarOpen(false)} className="p-1.5 rounded-lg text-white/40 hover:bg-white/5 transition-colors">
               <X className="h-4 w-4" />
             </button>
           </div>
-          <nav className="flex-1 p-3 space-y-0.5">
+          <nav className="flex-1 p-2 space-y-0.5">
             {NAV.map(link => {
               const active = isActive(link.href, link.exact)
               return (
                 <Link key={link.href} href={link.href}
                   className={cn(
-                    'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
+                    'flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] font-medium transition-colors',
                     active
-                      ? 'bg-red-50 text-red-600'
-                      : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+                      ? 'bg-red-600/20 text-red-400 border-l-2 border-red-500'
+                      : 'text-white/50 hover:text-white/80 hover:bg-white/5'
                   )}>
-                  <link.icon className="h-4 w-4 shrink-0" />
+                  <link.icon className={cn('h-[15px] w-[15px] shrink-0', active ? 'text-red-400' : '')} />
                   {link.label}
                 </Link>
               )
             })}
           </nav>
-          <div className="p-3 border-t">
+          <div className="p-3 border-t border-white/8">
             <button onClick={signOut}
-              className="flex items-center gap-2 w-full px-3 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-              <LogOut className="h-4 w-4" /> Sign Out
+              className="flex items-center gap-2.5 w-full px-3 py-2 text-[13px] font-medium text-white/40 hover:text-red-400 hover:bg-white/5 rounded-md transition-colors">
+              <LogOut className="h-[15px] w-[15px]" /> Sign Out
             </button>
           </div>
         </aside>
@@ -224,48 +226,48 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
         {mobileOpen && (
           <>
             <div className="fixed inset-0 z-50 bg-black/40 md:hidden" onClick={() => setMobileOpen(false)} />
-            <div className="fixed inset-y-0 left-0 z-50 w-72 bg-white shadow-2xl md:hidden flex flex-col">
-              <div className="flex items-center justify-between p-4 border-b">
+            <div className="fixed inset-y-0 left-0 z-50 w-72 bg-[#111111] shadow-2xl md:hidden flex flex-col">
+              <div className="flex items-center justify-between p-4 border-b border-white/8">
                 <div className="flex items-center gap-2">
-                  <div className="relative h-7 w-7 shrink-0">
-                    <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="rounded object-cover" />
+                  <div className="relative h-7 w-7 shrink-0 rounded-md overflow-hidden bg-white">
+                    <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="object-cover" />
                   </div>
-                  <span className="font-bold text-sm text-gray-900">CDSC Client Portal</span>
+                  <span className="font-bold text-sm text-white">CDSC Client Portal</span>
                 </div>
-                <button onClick={() => setMobileOpen(false)} className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100">
+                <button onClick={() => setMobileOpen(false)} className="p-1.5 rounded-lg text-white/40 hover:bg-white/5">
                   <X className="h-4 w-4" />
                 </button>
               </div>
-              <div className="p-4 border-b bg-gray-50">
+              <div className="p-4 border-b border-white/8">
                 <div className="flex items-center gap-3">
                   <div className="h-9 w-9 rounded-full bg-red-600 text-white text-sm font-bold flex items-center justify-center shrink-0">
                     {initials}
                   </div>
                   <div>
-                    <div className="text-sm font-semibold text-gray-900">{clientName || userName}</div>
-                    {clientName && <div className="text-xs text-gray-400">{userName}</div>}
+                    <div className="text-sm font-semibold text-white">{clientName || userName}</div>
+                    {clientName && <div className="text-xs text-white/40">{userName}</div>}
                   </div>
                 </div>
               </div>
-              <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
+              <nav className="flex-1 p-2 space-y-0.5 overflow-y-auto">
                 {NAV.map(link => {
                   const active = isActive(link.href, link.exact)
                   return (
                     <Link key={link.href} href={link.href} onClick={() => setMobileOpen(false)}
                       className={cn(
-                        'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
-                        active ? 'bg-red-50 text-red-600' : 'text-gray-700 hover:bg-gray-100'
+                        'flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] font-medium transition-colors',
+                        active ? 'bg-red-600/20 text-red-400 border-l-2 border-red-500' : 'text-white/50 hover:text-white/80 hover:bg-white/5'
                       )}>
-                      <link.icon className="h-4 w-4" />
+                      <link.icon className={cn('h-[15px] w-[15px]', active ? 'text-red-400' : '')} />
                       {link.label}
                     </Link>
                   )
                 })}
               </nav>
-              <div className="p-3 border-t">
+              <div className="p-3 border-t border-white/8">
                 <button onClick={signOut}
-                  className="flex items-center gap-2 w-full px-3 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                  <LogOut className="h-4 w-4" /> Sign Out
+                  className="flex items-center gap-2.5 w-full px-3 py-2 text-[13px] font-medium text-white/40 hover:text-red-400 hover:bg-white/5 rounded-md transition-colors">
+                  <LogOut className="h-[15px] w-[15px]" /> Sign Out
                 </button>
               </div>
             </div>
