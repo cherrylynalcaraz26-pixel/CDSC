@@ -199,17 +199,17 @@ function SidebarContent({
     <div className="flex flex-col h-full bg-[#111111]">
       <div className={cn('py-4 flex items-center gap-3 transition-all', collapsed ? 'px-3 justify-center' : 'px-4')}>
         {collapsed ? (
-          <button onClick={onToggleCollapse} title="Expand sidebar" className="relative h-8 w-8 shrink-0 rounded-md overflow-hidden">
+          <button onClick={onToggleCollapse} title="Expand sidebar" className="relative h-8 w-8 shrink-0 rounded-md overflow-hidden bg-white">
             <Image src={logoSrc} alt={displayName} fill className="object-cover" priority />
           </button>
         ) : (
           <>
-            <div className="relative h-8 w-8 shrink-0 rounded-md overflow-hidden">
+            <div className="relative h-8 w-8 shrink-0 rounded-md overflow-hidden bg-white">
               <Image src={logoSrc} alt={displayName} fill className="object-cover" priority />
             </div>
             <div className="min-w-0 flex-1">
               <div className="text-white font-semibold text-sm leading-tight truncate">{displayName}</div>
-              <div className="text-white/35 text-[11px] leading-tight">ERP System</div>
+              <div className="text-white/35 text-[11px] leading-tight">Industrial Supply</div>
             </div>
             <button
               onClick={onToggleCollapse}
@@ -247,19 +247,29 @@ function SidebarContent({
   )
 }
 
-export function Sidebar() {
-  
-
-    const [collapsed, setCollapsed] = useState(() => {
+export function Sidebar({
+  collapsed: externalCollapsed,
+  onToggleCollapse: externalToggle,
+}: {
+  collapsed?: boolean
+  onToggleCollapse?: () => void
+} = {}) {
+  const [localCollapsed, setLocalCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false
     return localStorage.getItem('sidebar-collapsed') === 'true'
   })
 
+  const collapsed = externalCollapsed !== undefined ? externalCollapsed : localCollapsed
+
   function toggle() {
-    setCollapsed(c => {
-      localStorage.setItem('sidebar-collapsed', String(!c))
-      return !c
-    })
+    if (externalToggle) {
+      externalToggle()
+    } else {
+      setLocalCollapsed(c => {
+        localStorage.setItem('sidebar-collapsed', String(!c))
+        return !c
+      })
+    }
   }
 
   return (

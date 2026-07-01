@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import Image from 'next/image'
 import { Bell, Search, Menu, LogOut, Settings } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -12,9 +13,11 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, usePathname } from 'next/navigation'
 import { useSearchContext } from '@/context/search-context'
+import { useCompany } from '@/context/company-context'
 
 interface HeaderProps {
   onMenuClick?: () => void
+  sidebarCollapsed?: boolean
 }
 
 const SEARCH_ITEMS = [
@@ -40,14 +43,15 @@ const SEARCH_ITEMS = [
 const DATA_PAGES = [
   '/crm', '/purchase-orders', '/quotation', '/sales-orders',
   '/receiving', '/inventory', '/dr-logs', '/csi-monitoring',
-  '/pull-out-billing', '/users', '/clients',
+  '/pull-out-billing', '/users', '/clients', '/accounting', '/dashboard',
 ]
 
-export function Header({ onMenuClick }: HeaderProps) {
+export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
   const router = useRouter()
   const pathname = usePathname()
   const supabase = createClient()
   const { query, setQuery } = useSearchContext()
+  const { company } = useCompany()
   const [userName, setUserName] = useState('User')
   const [userEmail, setUserEmail] = useState('')
   const [initials, setInitials] = useState('U')
@@ -105,7 +109,7 @@ export function Header({ onMenuClick }: HeaderProps) {
   return (
     <header className="sticky top-0 z-30 bg-background/95 backdrop-blur border-b px-4 md:px-6 py-3">
       <div className="flex items-center justify-between gap-3">
-        {/* Left: hamburger */}
+        {/* Left: hamburger (mobile) + logo when sidebar collapsed (desktop) */}
         <div className="flex items-center gap-3">
           <Button
             variant="ghost"
@@ -115,6 +119,22 @@ export function Header({ onMenuClick }: HeaderProps) {
           >
             <Menu className="h-5 w-5" />
           </Button>
+          {sidebarCollapsed && (
+            <div className="hidden lg:flex items-center gap-2">
+              <div className="relative h-7 w-7 shrink-0 rounded-md overflow-hidden bg-white border">
+                <Image
+                  src={company.logo_url || '/cdsc-logo.jpg'}
+                  alt={company.company_short_name || company.company_name || 'CDSC'}
+                  fill
+                  className="object-cover"
+                  priority
+                />
+              </div>
+              <span className="text-sm font-semibold leading-tight">
+                {company.company_short_name || company.company_name || 'CDSC'}
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Center: search */}
