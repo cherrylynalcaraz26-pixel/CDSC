@@ -56,16 +56,10 @@ export default function PortalInventoryPage() {
           setClientId(clientRow.id); setClientName(clientRow.company_name)
           const { data } = await supabase
             .from('client_inventory')
-            .select('id, item_name, item_code, unit, quantity_on_hand, low_stock_threshold')
+            .select('id, item_name, item_code, category, unit, quantity_on_hand, low_stock_threshold, unit_price, selling_price, description')
             .eq('client_id', clientRow.id)
             .order('item_name')
-          setItems((data ?? []).map((d: any) => ({
-            ...d,
-            category: null,
-            unit_price: null,
-            selling_price: null,
-            description: null,
-          })))
+          setItems(data ?? [])
         }
       }
       setLoading(false)
@@ -320,9 +314,14 @@ export default function PortalInventoryPage() {
                   <p className="text-xs text-gray-500 line-clamp-2">{item.description}</p>
                 )}
 
-                <div className="flex items-center gap-2 mt-auto pt-1">
-                  {item.low_stock_threshold != null && (item.quantity_on_hand ?? 0) <= item.low_stock_threshold && (item.quantity_on_hand ?? 0) > 0 && (
-                    <span className="text-xs bg-orange-50 text-orange-600 px-2 py-0.5 rounded-full font-medium">Low Stock</span>
+                <div className="flex items-center justify-between gap-2 mt-auto pt-1">
+                  <div>
+                    {item.low_stock_threshold != null && (item.quantity_on_hand ?? 0) <= item.low_stock_threshold && (item.quantity_on_hand ?? 0) > 0 && (
+                      <span className="text-xs bg-orange-50 text-orange-600 px-2 py-0.5 rounded-full font-medium">Low Stock</span>
+                    )}
+                  </div>
+                  {price != null && (
+                    <span className="font-bold text-red-600 text-sm">{fmt(price)}</span>
                   )}
                 </div>
 
