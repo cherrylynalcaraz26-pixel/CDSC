@@ -104,6 +104,8 @@ export default function PortalStockPage() {
 
   // Issue slip (shown after issue submit)
   const [issuedSlip, setIssuedSlip] = useState<{ item_name: string; unit: string | null; quantity: number; issued_to: string; department: string; notes: string; reference_no: string; date: string } | null>(null)
+  // Receive slip (shown after receive submit)
+  const [receivedSlip, setReceivedSlip] = useState<{ items: { item_name: string; unit: string | null; quantity: number }[]; reference_no: string; notes: string; date: string; new_totals: Record<string, number> } | null>(null)
 
   // Undo transaction
   const [undoingId, setUndoingId] = useState<string | null>(null)
@@ -249,8 +251,20 @@ export default function PortalStockPage() {
           date: new Date().toISOString(),
         })
         setModal(null)
+      } else if (modal === 'receive') {
+        await fetchData(clientId)
+        const updatedItem = stock.find(s => s.item_name === txItemName.trim())
+        setReceivedSlip({
+          items: [{ item_name: txItemName.trim(), unit: txUnit.trim() || null, quantity: qty }],
+          reference_no: txRef.trim(),
+          notes: txNotes.trim(),
+          date: new Date().toISOString(),
+          new_totals: { [txItemName.trim()]: (updatedItem?.quantity_on_hand ?? 0) },
+        })
+        setModal(null)
+        return
       } else {
-        toast.success(modal === 'receive' ? 'Stock received!' : 'Stock adjusted!')
+        toast.success('Stock adjusted!')
         setModal(null)
       }
       await fetchData(clientId)
@@ -275,11 +289,22 @@ export default function PortalStockPage() {
       }))
       const { error } = await supabase.from('client_inventory_transactions').insert(rows)
       if (error) throw error
-      toast.success(`${rows.length} item${rows.length > 1 ? 's' : ''} received into stock`)
+      await fetchData(clientId)
+      const newTotals: Record<string, number> = {}
+      for (const it of bulkSelectedItems) {
+        const found = stock.find(s => s.item_name === it.item_name)
+        newTotals[it.item_name] = found?.quantity_on_hand ?? 0
+      }
+      setReceivedSlip({
+        items: bulkSelectedItems.map(it => ({ item_name: it.item_name, unit: it.unit, quantity: it.quantity })),
+        reference_no: `PO ${selectedPO}`,
+        notes: '',
+        date: new Date().toISOString(),
+        new_totals: newTotals,
+      })
       setModal(null)
       setSelectedPO('')
       setBulkSelectedItems([])
-      await fetchData(clientId)
     } catch (err: any) {
       toast.error(err.message ?? 'Failed to save transactions')
     }
@@ -1156,6 +1181,66 @@ export default function PortalStockPage() {
             <div className="px-6 pb-5 flex gap-3 justify-end">
               <button onClick={() => setThresholdItem(null)} className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50">Cancel</button>
               <button onClick={saveThreshold} className="bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-5 py-2 rounded-lg">Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Receive Slip modal */}
+      {receivedSlip && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="flex items-center justify-between px-6 py-4 border-b">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                <CheckCircle2 className="h-4 w-4 text-green-600" /> Stock Received
+              </h3>
+              <button onClick={() => setReceivedSlip(null)} className="text-gray-400 hover:text-gray-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="px-6 py-4 space-y-3">
+              <div className="bg-green-50 border border-green-100 rounded-xl p-4 space-y-3">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Date</span>
+                  <span className="font-medium text-gray-800">{format(new Date(receivedSlip.date), 'MMM d, yyyy — h:mm a')}</span>
+                </div>
+                {receivedSlip.reference_no && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Reference</span>
+                    <span className="font-medium text-gray-800">{receivedSlip.reference_no}</span>
+                  </div>
+                )}
+                <div className="border-t border-green-200 pt-3 space-y-2">
+                  <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+                    {receivedSlip.items.length} Item{receivedSlip.items.length !== 1 ? 's' : ''} Received
+                  </div>
+                  {receivedSlip.items.map((it, i) => (
+                    <div key={i} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-green-200">
+                      <div>
+                        <div className="text-sm font-semibold text-gray-900">{it.item_name}</div>
+                        <div className="text-xs text-gray-400">New total: {receivedSlip.new_totals[it.item_name] ?? '—'} {it.unit ?? 'pcs'}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-base font-bold text-green-700">+{it.quantity}</div>
+                        <div className="text-xs text-gray-400">{it.unit ?? 'pcs'}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {receivedSlip.notes && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500">Notes</span>
+                    <span className="font-medium text-gray-800 text-right max-w-[60%]">{receivedSlip.notes}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="px-6 pb-5">
+              <button
+                onClick={() => setReceivedSlip(null)}
+                className="w-full py-2.5 bg-green-600 hover:bg-green-700 text-white text-sm font-semibold rounded-xl transition-colors">
+                Done
+              </button>
             </div>
           </div>
         </div>
