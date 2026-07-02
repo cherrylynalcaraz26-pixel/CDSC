@@ -334,7 +334,7 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
               {collapsed && (
                 <div className="hidden lg:flex items-center gap-2">
                   <div className="h-7 w-7 shrink-0 rounded-md overflow-hidden bg-white flex items-center justify-center">
-                    <img src="/cdsc-logo.jpg" alt="CDSC Industrial Supply" className="h-full w-full object-contain p-0.5" />
+                    <img src="/cdsc-logo.jpg" alt="CDSC Industrial Supply" className="max-h-full max-w-full object-contain p-0.5" />
                   </div>
                   <span className="text-sm font-semibold leading-tight">CDSC Industrial Supply</span>
                 </div>
@@ -454,6 +454,7 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
             <Link
               key={link.href}
               href={link.href}
+              replace
               className={cn(
                 'flex-1 flex flex-col items-center justify-center gap-1 py-3 text-[11px] font-medium transition-colors',
                 active ? 'text-red-400' : 'text-white/40 hover:text-white/70'

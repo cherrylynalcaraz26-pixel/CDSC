@@ -63,6 +63,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <Link
               key={link.href}
               href={link.href}
+              replace
               className={cn(
                 'flex-1 flex flex-col items-center justify-center gap-1 py-3 text-[11px] font-medium transition-colors',
                 active ? 'text-red-400' : 'text-white/40 hover:text-white/70'
