@@ -169,7 +169,7 @@ export default function PortalInventoryPage() {
   }
 
   return (
-    <div className="space-y-6 pb-32">
+    <div className="space-y-6 pb-48 lg:pb-32">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Browse Catalog</h1>
         <p className="text-sm text-gray-500 mt-1">Your delivered items and on-hand inventory.</p>
@@ -358,8 +358,8 @@ export default function PortalInventoryPage() {
         </div>
       ) : (
         /* List view */
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <table className="w-full text-sm">
+        <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
+          <table className="w-full text-sm min-w-[500px]">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Product</th>
@@ -425,7 +425,7 @@ export default function PortalInventoryPage() {
 
       {/* Floating cart bar */}
       {cartCount > 0 && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 p-4 md:px-8">
+        <div className="fixed bottom-16 lg:bottom-0 left-0 right-0 z-40 p-4 md:px-8">
           <div className="max-w-3xl mx-auto">
             {/* Expanded cart panel */}
             {cartOpen && (
