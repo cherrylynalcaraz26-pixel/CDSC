@@ -243,6 +243,7 @@ export default function ClientsPage() {
         status: form.status,
         vat_type: form.vat_type || 'vat',
         avatar_url: finalAvatarUrl,
+        logo_url: finalAvatarUrl,
         updated_at: new Date().toISOString(),
       }
 

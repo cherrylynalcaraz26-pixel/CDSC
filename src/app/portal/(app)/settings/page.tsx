@@ -53,14 +53,14 @@ export default function PortalSettingsPage() {
       setFullName(profile?.full_name ?? '')
       setAvatarUrl((profile as any)?.avatar_url ?? null)
       const { data: clientRow } = await supabase.from('clients')
-        .select('id, company_name, tin, vat_type, business_type, logo_url, website')
+        .select('id, company_name, tin, vat_type, business_type, logo_url, avatar_url, website')
         .eq('auth_user_id', session.user.id).single()
       setCompanyName(clientRow?.company_name ?? '')
       setTin((clientRow as any)?.tin ?? '')
       setVatType((clientRow as any)?.vat_type ?? '')
       setBusinessType((clientRow as any)?.business_type ?? '')
       setWebsite((clientRow as any)?.website ?? '')
-      const rawLogo = (clientRow as any)?.logo_url ?? null
+      const rawLogo = (clientRow as any)?.logo_url ?? (clientRow as any)?.avatar_url ?? null
       setLogoUrl(rawLogo ? `${rawLogo}?t=${Date.now()}` : null)
       if (clientRow?.id) {
         setClientId(clientRow.id)
