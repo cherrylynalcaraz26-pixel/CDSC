@@ -19,14 +19,74 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
-import { Plus, Search, MoreHorizontal, Loader2, Truck, Trash2, ChevronDown, ChevronRight, LayoutGrid, List, X, Printer } from 'lucide-react'
+import { Plus, Search, MoreHorizontal, Loader2, Truck, Trash2, ChevronDown, ChevronRight, LayoutGrid, List, X, Printer, SlidersHorizontal, FileOutput } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
 
 interface Supplier { id: string; company_name: string }
-interface Client { id: string; company_name: string }
+interface Client {
+  id: string
+  company_name: string
+  address: string | null
+  city: string | null
+  province: string | null
+  tin: string | null
+  payment_terms: string | null
+  business_type: string | null
+}
 interface ItemOption { item_code: string; item_name: string; unit_of_measure: string }
+
+interface BlankFormCalib {
+  pageWidthMm: number
+  pageHeightMm: number
+  fontSizePt: number
+  drNumberTop: number; drNumberLeft: number
+  dateTop: number; dateLeft: number
+  deliveredToTop: number; deliveredToLeft: number
+  addressTop: number; addressLeft: number
+  tinTop: number; tinLeft: number
+  termsTop: number; termsLeft: number
+  businessStyleTop: number; businessStyleLeft: number
+  tableTop: number
+  rowHeight: number
+  colQtyLeft: number
+  colUnitLeft: number
+  colDescLeft: number
+  maxRows: number
+}
+
+const DEFAULT_BLANK_CALIB: BlankFormCalib = {
+  pageWidthMm: 215.9,
+  pageHeightMm: 279.4,
+  fontSizePt: 10,
+  drNumberTop: 14, drNumberLeft: 150,
+  dateTop: 20, dateLeft: 150,
+  deliveredToTop: 40, deliveredToLeft: 45,
+  addressTop: 47, addressLeft: 45,
+  tinTop: 54, tinLeft: 45,
+  termsTop: 54, termsLeft: 130,
+  businessStyleTop: 61, businessStyleLeft: 45,
+  tableTop: 78,
+  rowHeight: 5.5,
+  colQtyLeft: 25,
+  colUnitLeft: 45,
+  colDescLeft: 70,
+  maxRows: 23,
+}
+
+const BLANK_CALIB_KEY = 'cdsc_dr_blank_form_calib'
+
+function loadBlankCalib(): BlankFormCalib {
+  if (typeof window === 'undefined') return DEFAULT_BLANK_CALIB
+  try {
+    const raw = window.localStorage.getItem(BLANK_CALIB_KEY)
+    if (!raw) return DEFAULT_BLANK_CALIB
+    return { ...DEFAULT_BLANK_CALIB, ...JSON.parse(raw) }
+  } catch {
+    return DEFAULT_BLANK_CALIB
+  }
+}
 
 interface DRLog {
   id: string
@@ -108,7 +168,20 @@ export default function DRLogsPage() {
   const [companyInfo, setCompanyInfo] = useState<{ company_name: string; address: string; phone: string; email: string; tin: string } | null>(null)
   const [itemSearches, setItemSearches] = useState<Record<number, string>>({})
   const [itemDropdowns, setItemDropdowns] = useState<Record<number, boolean>>({})
+  const [blankCalib, setBlankCalib] = useState<BlankFormCalib>(() => loadBlankCalib())
+  const [calibOpen, setCalibOpen] = useState(false)
+  const [calibDraft, setCalibDraft] = useState<BlankFormCalib>(DEFAULT_BLANK_CALIB)
   const printRef = useRef<HTMLDivElement>(null)
+
+  function saveCalib(next: BlankFormCalib) {
+    setBlankCalib(next)
+    window.localStorage.setItem(BLANK_CALIB_KEY, JSON.stringify(next))
+  }
+
+  function openCalib() {
+    setCalibDraft(blankCalib)
+    setCalibOpen(true)
+  }
 
   function handlePrint() {
     const el = printRef.current
@@ -191,12 +264,81 @@ export default function DRLogsPage() {
     setTimeout(() => { win.focus(); win.print(); win.close() }, 800)
   }
 
+  // Prints only the field values, absolutely positioned to line up with a pre-printed
+  // blank DR form — no borders, logo, labels or backgrounds are rendered.
+  async function printDRBlank(log: DRLog) {
+    const { data: drItems } = await supabase.from('dr_log_items').select('item_name,unit,quantity').eq('dr_number', log.dr_number).order('id')
+    const items = (drItems ?? []).slice(0, blankCalib.maxRows)
+    const client = clients.find(c => c.company_name === log.supplier_name)
+    const c = blankCalib
+    const dateStr = log.dr_date ? new Date(log.dr_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : ''
+    const addressLine = [client?.address, client?.city, client?.province].filter(Boolean).join(', ')
+    const field = (top: number, left: number, value: string) =>
+      value ? `<div style="position:absolute;top:${top}mm;left:${left}mm;">${value}</div>` : ''
+    const rows = items.map((it, i) => {
+      const top = c.tableTop + i * c.rowHeight
+      return field(top, c.colQtyLeft, String(Number(it.quantity))) +
+        field(top, c.colUnitLeft, it.unit ?? '') +
+        field(top, c.colDescLeft, it.item_name)
+    }).join('')
+    const html = `<!DOCTYPE html><html><head><title>DR ${log.dr_number} (Blank Form)</title>
+    <style>
+      @page { size: ${c.pageWidthMm}mm ${c.pageHeightMm}mm; margin: 0; }
+      html, body { margin: 0; padding: 0; }
+      body { position: relative; width: ${c.pageWidthMm}mm; height: ${c.pageHeightMm}mm; font-family: Arial, sans-serif; font-size: ${c.fontSizePt}pt; color: #000; }
+      div { white-space: nowrap; }
+    </style>
+    </head><body>
+    ${field(c.drNumberTop, c.drNumberLeft, log.dr_number)}
+    ${field(c.dateTop, c.dateLeft, dateStr)}
+    ${field(c.deliveredToTop, c.deliveredToLeft, log.supplier_name ?? '')}
+    ${field(c.addressTop, c.addressLeft, addressLine)}
+    ${field(c.tinTop, c.tinLeft, client?.tin ?? '')}
+    ${field(c.termsTop, c.termsLeft, client?.payment_terms ?? '')}
+    ${field(c.businessStyleTop, c.businessStyleLeft, client?.business_type ?? '')}
+    ${rows}
+    </body></html>`
+    const win = window.open('', '_blank', 'width=900,height=700')
+    if (!win) return
+    win.document.write(html)
+    win.document.close()
+    setTimeout(() => { win.focus(); win.print(); win.close() }, 500)
+  }
+
+  // Prints a 5mm-spaced ruler grid on the current calibration's page size, so you can
+  // hold it up against the physical form and read off Top/Left offsets to enter below.
+  function printCalibGrid() {
+    const c = blankCalib
+    const vLines: string[] = []
+    for (let x = 0; x <= c.pageWidthMm; x += 5) {
+      vLines.push(`<div style="position:absolute;top:0;left:${x}mm;width:0;border-left:${x % 20 === 0 ? '0.5pt solid #000' : '0.25pt solid #999'};height:${c.pageHeightMm}mm;"></div>`)
+      if (x % 20 === 0) vLines.push(`<div style="position:absolute;top:0;left:${x + 0.5}mm;font-size:6pt;">${x}</div>`)
+    }
+    const hLines: string[] = []
+    for (let y = 0; y <= c.pageHeightMm; y += 5) {
+      hLines.push(`<div style="position:absolute;top:${y}mm;left:0;height:0;border-top:${y % 20 === 0 ? '0.5pt solid #000' : '0.25pt solid #999'};width:${c.pageWidthMm}mm;"></div>`)
+      if (y % 20 === 0) hLines.push(`<div style="position:absolute;top:${y}mm;left:0;font-size:6pt;">${y}</div>`)
+    }
+    const html = `<!DOCTYPE html><html><head><title>Calibration Grid</title>
+    <style>
+      @page { size: ${c.pageWidthMm}mm ${c.pageHeightMm}mm; margin: 0; }
+      html, body { margin: 0; padding: 0; }
+      body { position: relative; width: ${c.pageWidthMm}mm; height: ${c.pageHeightMm}mm; font-family: Arial, sans-serif; color: #000; }
+    </style>
+    </head><body>${vLines.join('')}${hLines.join('')}</body></html>`
+    const win = window.open('', '_blank', 'width=900,height=700')
+    if (!win) return
+    win.document.write(html)
+    win.document.close()
+    setTimeout(() => { win.focus(); win.print(); win.close() }, 500)
+  }
+
   async function load() {
     setLoading(true)
     const [{ data: drData }, { data: supData }, { data: clientData }, { data: itemData }, { data: soData }] = await Promise.all([
       supabase.from('dr_logs').select('*').order('dr_date', { ascending: false }),
       supabase.from('suppliers').select('id, company_name').order('company_name'),
-      supabase.from('clients').select('id, company_name').order('company_name'),
+      supabase.from('clients').select('id, company_name, address, city, province, tin, payment_terms, business_type').order('company_name'),
       supabase.from('items').select('item_code, item_name, unit_of_measure').eq('status', 'active').order('item_name'),
       supabase.from('sales_orders').select('id, so_number').not('so_number', 'is', null).order('created_at', { ascending: false }),
     ])
@@ -687,6 +829,7 @@ export default function DRLogsPage() {
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
                                 <DropdownMenuItem onClick={() => printDR(log)}><Printer className="h-3.5 w-3.5 mr-1.5" />Print DR</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => printDRBlank(log)}><FileOutput className="h-3.5 w-3.5 mr-1.5" />Print (Blank Form)</DropdownMenuItem>
                                 <DropdownMenuItem onClick={() => openEdit(log)}>Edit</DropdownMenuItem>
                                 <DropdownMenuItem className="text-destructive" onClick={() => setDeleteId(log.id)}>Delete</DropdownMenuItem>
                               </DropdownMenuContent>
@@ -1038,9 +1181,19 @@ export default function DRLogsPage() {
                 <div className="sticky top-0">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Live Preview</p>
-                    <Button type="button" variant="outline" size="sm" onClick={handlePrint} className="h-7 px-2 text-xs gap-1">
-                      <Printer className="h-3.5 w-3.5" /> Print
-                    </Button>
+                    <div className="flex gap-1.5">
+                      <Button type="button" variant="outline" size="sm" onClick={openCalib} className="h-7 px-2 text-xs gap-1">
+                        <SlidersHorizontal className="h-3.5 w-3.5" /> Calibrate
+                      </Button>
+                      {editing && (
+                        <Button type="button" variant="outline" size="sm" onClick={() => printDRBlank(editing)} className="h-7 px-2 text-xs gap-1">
+                          <FileOutput className="h-3.5 w-3.5" /> Blank Form
+                        </Button>
+                      )}
+                      <Button type="button" variant="outline" size="sm" onClick={handlePrint} className="h-7 px-2 text-xs gap-1">
+                        <Printer className="h-3.5 w-3.5" /> Print
+                      </Button>
+                    </div>
                   </div>
                   <div ref={printRef} className="border rounded-lg bg-white text-[11px] p-4 shadow-sm space-y-3 font-sans">
                     {/* Header: logo LEFT | company name + address RIGHT */}
@@ -1143,6 +1296,88 @@ export default function DRLogsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={calibOpen} onOpenChange={setCalibOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Calibrate Blank Form Print</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground -mt-2">
+            All values are in millimeters, measured from the top-left corner of the page. Load your blank DR form
+            into the printer, click <strong>Print Test Grid</strong>, hold it up to the form to read off where each
+            field's blank line falls, then enter those numbers below. Make sure your print dialog uses 100% scale
+            with no margins.
+          </p>
+          <Button type="button" variant="outline" size="sm" onClick={printCalibGrid} className="w-fit gap-1.5">
+            <Printer className="h-3.5 w-3.5" /> Print Test Grid
+          </Button>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+            <div className="col-span-2 grid grid-cols-3 gap-3">
+              <CalibField label="Page Width" value={calibDraft.pageWidthMm} onChange={v => setCalibDraft(d => ({ ...d, pageWidthMm: v }))} />
+              <CalibField label="Page Height" value={calibDraft.pageHeightMm} onChange={v => setCalibDraft(d => ({ ...d, pageHeightMm: v }))} />
+              <CalibField label="Font Size (pt)" value={calibDraft.fontSizePt} onChange={v => setCalibDraft(d => ({ ...d, fontSizePt: v }))} />
+            </div>
+            <CalibPair label="DR Number" top={calibDraft.drNumberTop} left={calibDraft.drNumberLeft}
+              onChange={(top, left) => setCalibDraft(d => ({ ...d, drNumberTop: top, drNumberLeft: left }))} />
+            <CalibPair label="Date" top={calibDraft.dateTop} left={calibDraft.dateLeft}
+              onChange={(top, left) => setCalibDraft(d => ({ ...d, dateTop: top, dateLeft: left }))} />
+            <CalibPair label="Delivered To" top={calibDraft.deliveredToTop} left={calibDraft.deliveredToLeft}
+              onChange={(top, left) => setCalibDraft(d => ({ ...d, deliveredToTop: top, deliveredToLeft: left }))} />
+            <CalibPair label="Address" top={calibDraft.addressTop} left={calibDraft.addressLeft}
+              onChange={(top, left) => setCalibDraft(d => ({ ...d, addressTop: top, addressLeft: left }))} />
+            <CalibPair label="TIN" top={calibDraft.tinTop} left={calibDraft.tinLeft}
+              onChange={(top, left) => setCalibDraft(d => ({ ...d, tinTop: top, tinLeft: left }))} />
+            <CalibPair label="Terms" top={calibDraft.termsTop} left={calibDraft.termsLeft}
+              onChange={(top, left) => setCalibDraft(d => ({ ...d, termsTop: top, termsLeft: left }))} />
+            <CalibPair label="Business Style" top={calibDraft.businessStyleTop} left={calibDraft.businessStyleLeft}
+              onChange={(top, left) => setCalibDraft(d => ({ ...d, businessStyleTop: top, businessStyleLeft: left }))} />
+            <div className="col-span-2 border-t pt-3 grid grid-cols-3 gap-3">
+              <CalibField label="Table Top" value={calibDraft.tableTop} onChange={v => setCalibDraft(d => ({ ...d, tableTop: v }))} />
+              <CalibField label="Row Height" value={calibDraft.rowHeight} onChange={v => setCalibDraft(d => ({ ...d, rowHeight: v }))} />
+              <CalibField label="Max Rows" value={calibDraft.maxRows} onChange={v => setCalibDraft(d => ({ ...d, maxRows: v }))} />
+            </div>
+            <div className="col-span-2 grid grid-cols-3 gap-3">
+              <CalibField label="Qty Column Left" value={calibDraft.colQtyLeft} onChange={v => setCalibDraft(d => ({ ...d, colQtyLeft: v }))} />
+              <CalibField label="Unit Column Left" value={calibDraft.colUnitLeft} onChange={v => setCalibDraft(d => ({ ...d, colUnitLeft: v }))} />
+              <CalibField label="Description Column Left" value={calibDraft.colDescLeft} onChange={v => setCalibDraft(d => ({ ...d, colDescLeft: v }))} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setCalibDraft(DEFAULT_BLANK_CALIB)}>Reset to Defaults</Button>
+            <Button type="button" variant="outline" onClick={() => setCalibOpen(false)}>Cancel</Button>
+            <Button type="button" onClick={() => { saveCalib(calibDraft); setCalibOpen(false); toast.success('Calibration saved') }} className="bg-red-600 hover:bg-red-700">
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
+function CalibField({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+  return (
+    <div className="space-y-1">
+      <Label className="text-xs">{label}</Label>
+      <Input
+        type="number" step="0.5" value={value}
+        onChange={e => onChange(Number(e.target.value) || 0)}
+        className="h-8 text-sm"
+      />
+    </div>
+  )
+}
+
+function CalibPair({ label, top, left, onChange }: { label: string; top: number; left: number; onChange: (top: number, left: number) => void }) {
+  return (
+    <div className="space-y-1">
+      <Label className="text-xs">{label}</Label>
+      <div className="grid grid-cols-2 gap-2">
+        <Input type="number" step="0.5" value={top} placeholder="Top"
+          onChange={e => onChange(Number(e.target.value) || 0, left)} className="h-8 text-sm" />
+        <Input type="number" step="0.5" value={left} placeholder="Left"
+          onChange={e => onChange(top, Number(e.target.value) || 0)} className="h-8 text-sm" />
+      </div>
     </div>
   )
 }
