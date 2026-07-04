@@ -32,8 +32,7 @@ interface Client {
   city: string | null
   province: string | null
   tin: string | null
-  payment_terms: string | null
-  business_type: string | null
+  industry: string | null
 }
 interface ItemOption { item_code: string; item_name: string; unit_of_measure: string }
 
@@ -41,12 +40,10 @@ interface BlankFormCalib {
   pageWidthMm: number
   pageHeightMm: number
   fontSizePt: number
-  drNumberTop: number; drNumberLeft: number
   dateTop: number; dateLeft: number
   deliveredToTop: number; deliveredToLeft: number
   addressTop: number; addressLeft: number
   tinTop: number; tinLeft: number
-  termsTop: number; termsLeft: number
   businessStyleTop: number; businessStyleLeft: number
   tableTop: number
   rowHeight: number
@@ -60,12 +57,10 @@ const DEFAULT_BLANK_CALIB: BlankFormCalib = {
   pageWidthMm: 215.9,
   pageHeightMm: 279.4,
   fontSizePt: 10,
-  drNumberTop: 14, drNumberLeft: 150,
   dateTop: 20, dateLeft: 150,
   deliveredToTop: 40, deliveredToLeft: 45,
   addressTop: 47, addressLeft: 45,
   tinTop: 54, tinLeft: 45,
-  termsTop: 54, termsLeft: 130,
   businessStyleTop: 61, businessStyleLeft: 45,
   tableTop: 78,
   rowHeight: 5.5,
@@ -289,13 +284,11 @@ export default function DRLogsPage() {
       div { white-space: nowrap; }
     </style>
     </head><body>
-    ${field(c.drNumberTop, c.drNumberLeft, log.dr_number)}
     ${field(c.dateTop, c.dateLeft, dateStr)}
     ${field(c.deliveredToTop, c.deliveredToLeft, log.supplier_name ?? '')}
     ${field(c.addressTop, c.addressLeft, addressLine)}
     ${field(c.tinTop, c.tinLeft, client?.tin ?? '')}
-    ${field(c.termsTop, c.termsLeft, client?.payment_terms ?? '')}
-    ${field(c.businessStyleTop, c.businessStyleLeft, client?.business_type ?? '')}
+    ${field(c.businessStyleTop, c.businessStyleLeft, client?.industry ?? '')}
     ${rows}
     </body></html>`
     const win = window.open('', '_blank', 'width=900,height=700')
@@ -338,7 +331,7 @@ export default function DRLogsPage() {
     const [{ data: drData }, { data: supData }, { data: clientData }, { data: itemData }, { data: soData }] = await Promise.all([
       supabase.from('dr_logs').select('*').order('dr_date', { ascending: false }),
       supabase.from('suppliers').select('id, company_name').order('company_name'),
-      supabase.from('clients').select('id, company_name, address, city, province, tin, payment_terms, business_type').order('company_name'),
+      supabase.from('clients').select('id, company_name, address, city, province, tin, industry').order('company_name'),
       supabase.from('items').select('item_code, item_name, unit_of_measure').eq('status', 'active').order('item_name'),
       supabase.from('sales_orders').select('id, so_number').not('so_number', 'is', null).order('created_at', { ascending: false }),
     ])
@@ -1317,8 +1310,6 @@ export default function DRLogsPage() {
               <CalibField label="Page Height" value={calibDraft.pageHeightMm} onChange={v => setCalibDraft(d => ({ ...d, pageHeightMm: v }))} />
               <CalibField label="Font Size (pt)" value={calibDraft.fontSizePt} onChange={v => setCalibDraft(d => ({ ...d, fontSizePt: v }))} />
             </div>
-            <CalibPair label="DR Number" top={calibDraft.drNumberTop} left={calibDraft.drNumberLeft}
-              onChange={(top, left) => setCalibDraft(d => ({ ...d, drNumberTop: top, drNumberLeft: left }))} />
             <CalibPair label="Date" top={calibDraft.dateTop} left={calibDraft.dateLeft}
               onChange={(top, left) => setCalibDraft(d => ({ ...d, dateTop: top, dateLeft: left }))} />
             <CalibPair label="Delivered To" top={calibDraft.deliveredToTop} left={calibDraft.deliveredToLeft}
@@ -1327,8 +1318,6 @@ export default function DRLogsPage() {
               onChange={(top, left) => setCalibDraft(d => ({ ...d, addressTop: top, addressLeft: left }))} />
             <CalibPair label="TIN" top={calibDraft.tinTop} left={calibDraft.tinLeft}
               onChange={(top, left) => setCalibDraft(d => ({ ...d, tinTop: top, tinLeft: left }))} />
-            <CalibPair label="Terms" top={calibDraft.termsTop} left={calibDraft.termsLeft}
-              onChange={(top, left) => setCalibDraft(d => ({ ...d, termsTop: top, termsLeft: left }))} />
             <CalibPair label="Business Style" top={calibDraft.businessStyleTop} left={calibDraft.businessStyleLeft}
               onChange={(top, left) => setCalibDraft(d => ({ ...d, businessStyleTop: top, businessStyleLeft: left }))} />
             <div className="col-span-2 border-t pt-3 grid grid-cols-3 gap-3">
