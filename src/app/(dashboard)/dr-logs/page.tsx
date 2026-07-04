@@ -54,11 +54,11 @@ interface BlankFormCalib {
 }
 
 const DEFAULT_BLANK_CALIB: BlankFormCalib = {
-  pageWidthMm: 215.9,
-  pageHeightMm: 279.4,
-  fontSizePt: 10,
-  dateTop: 15, dateLeft: 160,
-  deliveredToTop: 34, deliveredToLeft: 38,
+  pageWidthMm: 210,
+  pageHeightMm: 297,
+  fontSizePt: 8,
+  dateTop: 12, dateLeft: 140,
+  deliveredToTop: 15, deliveredToLeft: 60,
   addressTop: 47, addressLeft: 45,
   tinTop: 54, tinLeft: 45,
   businessStyleTop: 61, businessStyleLeft: 45,
