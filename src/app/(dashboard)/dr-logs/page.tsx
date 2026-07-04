@@ -62,7 +62,7 @@ const DEFAULT_BLANK_CALIB: BlankFormCalib = {
   addressTop: 40, addressLeft: 60,
   tinTop: 45, tinLeft: 55,
   businessStyleTop: 50, businessStyleLeft: 65,
-  tableTop: 50,
+  tableTop: 70,
   rowHeight: 6,
   colQtyLeft: 50,
   colUnitLeft: 62,
