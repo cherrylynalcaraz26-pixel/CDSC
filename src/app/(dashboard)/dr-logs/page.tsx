@@ -590,6 +590,82 @@ export default function DRLogsPage() {
       }
     }
 
+    // Auto-sync into the client's own portal stock ledger (client_inventory) so My Stock in
+    // the client portal reflects deliveries automatically — no manual "Receive Stock" click
+    // needed. Writes a client_inventory_transactions row with reference_no = dr_number using
+    // the same convention the manual Receive Stock flow uses, so that flow's "already
+    // received" DR exclusion logic naturally prevents the same delivery being double-counted
+    // if a client still receives it manually.
+    if (clientName) {
+      const { data: clientRow } = await supabase.from('clients').select('id').eq('company_name', clientName).maybeSingle()
+      const clientRowId = clientRow?.id ?? null
+      if (clientRowId) {
+        const autoNote = (drNum: string) => `Auto-received from DR ${drNum}`
+
+        if (editing && (editing.status === 'received' || editing.status === 'partial')) {
+          const prevItems = getItems(editing.dr_number)
+          for (const it of prevItems) {
+            const qty = Number(it.quantity) || 0
+            if (qty <= 0) continue
+            const { data: ciRow } = await supabase
+              .from('client_inventory')
+              .select('id, quantity_on_hand')
+              .eq('client_id', clientRowId)
+              .eq('item_name', it.item_name.trim())
+              .maybeSingle()
+            if (ciRow) {
+              await supabase.from('client_inventory').update({
+                quantity_on_hand: Math.max(0, Number(ciRow.quantity_on_hand) - qty),
+                updated_at: new Date().toISOString(),
+              }).eq('id', ciRow.id)
+            }
+          }
+          await supabase.from('client_inventory_transactions')
+            .delete()
+            .eq('client_id', clientRowId)
+            .eq('reference_no', editing.dr_number)
+            .eq('notes', autoNote(editing.dr_number))
+        }
+
+        if (form.status === 'received' || form.status === 'partial') {
+          for (const it of validItems) {
+            const qty = Number(it.quantity) || 0
+            if (qty <= 0) continue
+            const itemName = it.item_name.trim()
+            const { data: ciRow } = await supabase
+              .from('client_inventory')
+              .select('id, quantity_on_hand')
+              .eq('client_id', clientRowId)
+              .eq('item_name', itemName)
+              .maybeSingle()
+            if (ciRow) {
+              await supabase.from('client_inventory').update({
+                quantity_on_hand: Number(ciRow.quantity_on_hand) + qty,
+                updated_at: new Date().toISOString(),
+              }).eq('id', ciRow.id)
+            } else {
+              await supabase.from('client_inventory').insert({
+                client_id: clientRowId,
+                item_name: itemName,
+                unit: it.unit || null,
+                quantity_on_hand: qty,
+                low_stock_threshold: 0,
+              })
+            }
+            await supabase.from('client_inventory_transactions').insert({
+              client_id: clientRowId,
+              item_name: itemName,
+              unit: it.unit || null,
+              transaction_type: 'received',
+              quantity: qty,
+              reference_no: drNumber,
+              notes: autoNote(drNumber),
+            })
+          }
+        }
+      }
+    }
+
     // Mirror to sales_deliveries when linked to an SO
     if (soNumber) {
       await supabase.from('sales_deliveries').delete().eq('dr_number', drNumber)

@@ -1079,8 +1079,8 @@ export default function InventoryPage() {
               <div className="w-px h-4 bg-gray-300 mx-1 shrink-0" />
               <label className="text-sm text-gray-500 shrink-0">Client:</label>
               <Select value={reportClient} onValueChange={v => setReportClient(v ?? '')}>
-                <SelectTrigger className="w-64 h-8 text-sm">
-                  <SelectValue placeholder="Select client" />
+                <SelectTrigger className="w-80 h-8 text-sm">
+                  <SelectValue placeholder="Select client" className="truncate" />
                 </SelectTrigger>
                 <SelectContent>
                   {clients.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}

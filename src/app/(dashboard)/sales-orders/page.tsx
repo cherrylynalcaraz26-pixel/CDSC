@@ -248,8 +248,10 @@ export default function SalesOrdersPage() {
 
   async function updateStatus(id: string, status: SOStatus) {
     const { error } = await supabase.from('sales_orders').update({ status }).eq('id', id)
-    if (error) toast.error(error.message)
-    else { toast.success(`Status → ${STATUS_CFG[status].label}`); load() }
+    if (error) { toast.error(error.message); return }
+    if (status === 'cancelled') toast.warning('Sales Order cancelled')
+    else toast.success(`Status → ${STATUS_CFG[status].label}`)
+    load()
   }
 
   async function deleteSO(id: string) {
