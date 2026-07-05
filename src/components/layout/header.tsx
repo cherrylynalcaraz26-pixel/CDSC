@@ -58,6 +58,7 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
   const [userEmail, setUserEmail] = useState('')
   const [initials, setInitials] = useState('U')
   const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null)
+  const [profileLoaded, setProfileLoaded] = useState(false)
   const [showResults, setShowResults] = useState(false)
   const searchRef = useRef<HTMLDivElement>(null)
 
@@ -89,6 +90,7 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
       setUserName(name)
       setInitials(name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2))
       setUserAvatarUrl((profile as any)?.avatar_url ?? null)
+      setProfileLoaded(true)
 
       const built: Notif[] = []
       for (const m of (msgs ?? [])) {
@@ -240,8 +242,8 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
             <DropdownMenuTrigger className="h-9 w-9 rounded-full flex items-center justify-center hover:ring-2 hover:ring-red-500/30 outline-none transition-all">
               <Avatar className="h-8 w-8">
                 {userAvatarUrl && <AvatarImage src={userAvatarUrl} alt={userName} />}
-                <AvatarFallback className="bg-red-600 text-white text-xs font-semibold">
-                  {initials}
+                <AvatarFallback className={cn('text-xs font-semibold', profileLoaded ? 'bg-red-600 text-white' : 'bg-muted animate-pulse')}>
+                  {profileLoaded ? initials : ''}
                 </AvatarFallback>
               </Avatar>
             </DropdownMenuTrigger>

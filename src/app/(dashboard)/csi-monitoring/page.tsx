@@ -149,6 +149,7 @@ export default function CSIMonitoringPage() {
   const [siFilter, setSiFilter] = useState('')
   const [itemFilter, setItemFilter] = useState('')
   const [clientFilter, setClientFilter] = useState('')
+  const [yearFilter, setYearFilter] = useState('all')
   const [header, setHeader] = useState(emptyHeader())
   const [items, setItems] = useState<CSIItem[]>([emptyItem()])
   const [saving, setSaving] = useState(false)
@@ -417,6 +418,8 @@ export default function CSIMonitoringPage() {
     setTimeout(() => { win.focus(); win.print(); win.close() }, 800)
   }
 
+  const availableYears = Array.from(new Set(records.map(r => r.si_date?.slice(0, 4)).filter(Boolean))).sort((a, b) => b.localeCompare(a))
+
   const filtered = records.filter(r => {
     const q = search.toLowerCase()
     const matchSearch = !q || (
@@ -428,7 +431,8 @@ export default function CSIMonitoringPage() {
     const matchSI = !siFilter || r.si_number.toLowerCase().includes(siFilter.toLowerCase())
     const matchItem = !itemFilter || r.item_name.toLowerCase().includes(itemFilter.toLowerCase())
     const matchClient = !clientFilter || (r.client_name ?? '') === clientFilter
-    return matchSearch && matchSI && matchItem && matchClient
+    const matchYear = yearFilter === 'all' || r.si_date?.slice(0, 4) === yearFilter
+    return matchSearch && matchSI && matchItem && matchClient && matchYear
   })
 
   const totalAmount = filtered.reduce((s, r) => s + (Number(r.amount) || 0), 0)
@@ -1128,6 +1132,13 @@ export default function CSIMonitoringPage() {
           <SelectContent>
             <SelectItem value="__all__">All Clients</SelectItem>
             {clientOptions.map(c => <SelectItem key={c.id} value={c.company_name}>{c.company_name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={yearFilter} onValueChange={v => setYearFilter(v ?? 'all')}>
+          <SelectTrigger className="h-9 w-32 text-sm"><SelectValue placeholder="All Years" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Years</SelectItem>
+            {availableYears.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
           </SelectContent>
         </Select>
         {clientFilter && (() => {

@@ -148,6 +148,7 @@ export default function DRLogsPage() {
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState('all')
   const [clientFilter, setClientFilter] = useState('')
+  const [yearFilter, setYearFilter] = useState('all')
   const [drFilter, setDrFilter] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
@@ -403,6 +404,8 @@ export default function DRLogsPage() {
   )
   const availableSoNumbers = soNumbers.filter(s => !usedSoNumbers.has(s.so_number) || s.so_number === form.po_number)
 
+  const availableYears = Array.from(new Set(logs.map(l => l.dr_date?.slice(0, 4)).filter(Boolean))).sort((a, b) => b.localeCompare(a))
+
   const filtered = logs.filter(l => {
     const matchSearch =
       l.dr_number.toLowerCase().includes(search.toLowerCase()) ||
@@ -410,11 +413,12 @@ export default function DRLogsPage() {
       (l.po_number ?? '').toLowerCase().includes(search.toLowerCase())
     const matchStatus = statusFilter === 'all' || l.status === statusFilter
     const matchClient = !clientFilter || (l.supplier_name ?? '') === clientFilter
+    const matchYear = yearFilter === 'all' || l.dr_date?.slice(0, 4) === yearFilter
     const matchDR = !drFilter || l.dr_number.toLowerCase().includes(drFilter.toLowerCase())
     const matchItem = !itemFilter || getItems(l.dr_number).some(it =>
       it.item_name.toLowerCase().includes(itemFilter.toLowerCase())
     )
-    return matchSearch && matchStatus && matchClient && matchDR && matchItem
+    return matchSearch && matchStatus && matchClient && matchYear && matchDR && matchItem
   })
 
   function toggleExpand(id: string) {
@@ -769,6 +773,13 @@ export default function DRLogsPage() {
           <SelectContent className="min-w-[300px]">
             <SelectItem value="_all">All Clients</SelectItem>
             {clients.map(c => <SelectItem key={c.id} value={c.company_name}>{c.company_name}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={yearFilter} onValueChange={v => setYearFilter(v ?? 'all')}>
+          <SelectTrigger className="w-32"><SelectValue placeholder="All Years" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Years</SelectItem>
+            {availableYears.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
           </SelectContent>
         </Select>
         <div className="flex rounded-md border overflow-hidden">
