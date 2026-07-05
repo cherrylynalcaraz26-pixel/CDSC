@@ -59,6 +59,7 @@ export default function ReceivingPage() {
   const [rrs, setRRs] = useState<RR[]>([])
   const [loading, setLoading] = useState(true)
   const [drNumber, setDrNumber] = useState('')
+  const [rrSupplier, setRrSupplier] = useState<string | null>(null)
   const [deliveryDate, setDeliveryDate] = useState(new Date().toISOString().split('T')[0])
   const [receivedBy, setReceivedBy] = useState('')
   const [rrSaving, setRrSaving] = useState(false)
@@ -107,6 +108,8 @@ export default function ReceivingPage() {
   const [salesdSaving, setSalesdSaving] = useState(false)
   const [salesDeliveries, setSalesDeliveries] = useState<SalesDelivery[]>([])
   const [salesdLoading, setSalesdLoading] = useState(true)
+  const [salesdDateFrom, setSalesdDateFrom] = useState('')
+  const [salesdDateTo, setSalesdDateTo] = useState('')
 
   const selectedPOData = pos.find(p => p.po_number === selectedPO)
   const selectedSupplier = suppliers.find(s => s.id === returnSupplierId)
@@ -217,6 +220,7 @@ export default function ReceivingPage() {
     setDrNumber('')
     setDeliveryDate(new Date().toISOString().split('T')[0])
     setReceivedBy('')
+    setRrSupplier(null)
   }
 
   function openEditRR(rr: RR) {
@@ -226,6 +230,10 @@ export default function ReceivingPage() {
     setDeliveryDate(rr.delivery_date)
     setDrNumber(rr.dr_number ?? '')
     setReceivedBy(rr.received_by ?? '')
+    // The RR's PO may no longer be in `pos` (it's excluded once completed and received),
+    // so read the supplier straight off the RR itself rather than re-deriving it from the
+    // PO dropdown — otherwise it'd silently blank out while editing an already-received RR.
+    setRrSupplier(rr.supplier ?? null)
     setRrOpen(true)
   }
 
@@ -244,7 +252,7 @@ export default function ReceivingPage() {
     const payload = {
       rr_number: rrNumber.trim(),
       po_number: selectedPO,
-      supplier: (selectedPOData?.supplier as any)?.company_name ?? null,
+      supplier: rrSupplier ?? (selectedPOData?.supplier as any)?.company_name ?? null,
       delivery_date: deliveryDate,
       received_by: receivedBy || null,
       dr_number: drNumber || null,
@@ -491,6 +499,11 @@ export default function ReceivingPage() {
   }
 
   const filterQ = (str: string) => !query.trim() || str.toLowerCase().includes(query.toLowerCase())
+  const matchSalesdDate = (d: SalesDelivery) =>
+    (!salesdDateFrom || d.delivery_date >= salesdDateFrom) && (!salesdDateTo || d.delivery_date <= salesdDateTo)
+  const filteredSalesDeliveries = salesDeliveries.filter(d =>
+    filterQ(`${d.delivery_number} ${(d as any).dr_number ?? ''} ${(d as any).so_number ?? ''} ${d.client_name ?? ''} ${d.status}`) && matchSalesdDate(d)
+  )
 
   return (
     <div className="space-y-6">
@@ -719,14 +732,29 @@ export default function ReceivingPage() {
 
         {/* ── Sales Deliveries (synced from DR Logs) ── */}
         <TabsContent value="sales" className="space-y-6 mt-4">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between flex-wrap gap-3">
             <div>
               <h3 className="text-lg font-semibold">Sales Deliveries</h3>
               <p className="text-muted-foreground text-sm">Outgoing deliveries synced from DR Logs</p>
             </div>
-            <Button variant="outline" size="sm" onClick={loadSalesDeliveries}>
-              <Loader2 className={`h-3.5 w-3.5 mr-1.5 ${salesdLoading ? 'animate-spin' : 'hidden'}`} />Refresh
-            </Button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-1.5">
+                <Label className="text-xs text-muted-foreground">From</Label>
+                <Input type="date" className="h-8 w-36 text-xs" value={salesdDateFrom} onChange={e => setSalesdDateFrom(e.target.value)} />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Label className="text-xs text-muted-foreground">To</Label>
+                <Input type="date" className="h-8 w-36 text-xs" value={salesdDateTo} onChange={e => setSalesdDateTo(e.target.value)} />
+              </div>
+              {(salesdDateFrom || salesdDateTo) && (
+                <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => { setSalesdDateFrom(''); setSalesdDateTo('') }}>
+                  Clear
+                </Button>
+              )}
+              <Button variant="outline" size="sm" onClick={loadSalesDeliveries}>
+                <Loader2 className={`h-3.5 w-3.5 mr-1.5 ${salesdLoading ? 'animate-spin' : 'hidden'}`} />Refresh
+              </Button>
+            </div>
           </div>
 
           <Card>
@@ -747,9 +775,11 @@ export default function ReceivingPage() {
                 <TableBody>
                   {salesdLoading ? (
                     <TableRow><TableCell colSpan={7} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
-                  ) : salesDeliveries.filter(d => filterQ(`${d.delivery_number} ${(d as any).dr_number ?? ''} ${(d as any).so_number ?? ''} ${d.client_name ?? ''} ${d.status}`)).length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground text-sm">No sales deliveries yet. Create a DR Log to populate this list.</TableCell></TableRow>
-                  ) : salesDeliveries.filter(d => filterQ(`${d.delivery_number} ${(d as any).dr_number ?? ''} ${(d as any).so_number ?? ''} ${d.client_name ?? ''} ${d.status}`)).map(d => {
+                  ) : filteredSalesDeliveries.length === 0 ? (
+                    <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground text-sm">
+                      {salesdDateFrom || salesdDateTo ? 'No sales deliveries in this date range.' : 'No sales deliveries yet. Create a DR Log to populate this list.'}
+                    </TableCell></TableRow>
+                  ) : filteredSalesDeliveries.map(d => {
                     const sd = d as any
                     const statusCls = sd.status === 'delivered' ? 'bg-green-100 text-green-700' : sd.status === 'partial' ? 'bg-yellow-100 text-yellow-700' : 'bg-orange-100 text-orange-700'
                     return (
@@ -935,7 +965,11 @@ export default function ReceivingPage() {
             </div>
             <div className="space-y-1.5">
               <Label>PO Reference <span className="text-destructive">*</span></Label>
-              <Select value={selectedPO} onValueChange={v => setSelectedPO(v ?? '')}>
+              <Select value={selectedPO} onValueChange={v => {
+                setSelectedPO(v ?? '')
+                const po = pos.find(p => p.po_number === v)
+                if (po) setRrSupplier((po.supplier as any)?.company_name ?? null)
+              }}>
                 <SelectTrigger>
                   {selectedPO ? <span className="text-sm truncate">{selectedPO}</span> : <span className="text-muted-foreground text-sm">Select PO</span>}
                 </SelectTrigger>
@@ -951,13 +985,13 @@ export default function ReceivingPage() {
               <Label>DR / SI Number</Label>
               <Input placeholder="Delivery Receipt or SI number" value={drNumber} onChange={e => setDrNumber(e.target.value)} />
             </div>
-            {selectedPOData && (
+            {selectedPO && (
               <div className="rounded-lg border bg-muted/30 p-4 text-sm">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">PO Details</p>
                 <div className="grid grid-cols-3 gap-4">
-                  <div><span className="text-xs text-muted-foreground block">PO Number</span><span className="font-mono font-semibold text-red-600">{selectedPOData.po_number}</span></div>
-                  <div><span className="text-xs text-muted-foreground block">Supplier</span><span className="font-medium">{(selectedPOData.supplier as any)?.company_name ?? '—'}</span></div>
-                  <div><span className="text-xs text-muted-foreground block">Expected</span><span>{selectedPOData.delivery_date ?? '—'}</span></div>
+                  <div><span className="text-xs text-muted-foreground block">PO Number</span><span className="font-mono font-semibold text-red-600">{selectedPO}</span></div>
+                  <div><span className="text-xs text-muted-foreground block">Supplier</span><span className="font-medium">{rrSupplier ?? '—'}</span></div>
+                  <div><span className="text-xs text-muted-foreground block">Expected</span><span>{selectedPOData?.delivery_date ?? '—'}</span></div>
                 </div>
               </div>
             )}
