@@ -280,7 +280,11 @@ export default function InventoryPage() {
     result.sort((a, b) => a.client.localeCompare(b.client) || a.item_name.localeCompare(b.item_name))
     setRows(result)
 
-    // Build warehouse view rows — all warehouse_stock entries
+    // Build warehouse view rows — By Warehouse is CDSC's own unassigned stock only
+    // (client_name IS NULL, the general pool Receiving always adds into). Once an
+    // item has been fully delivered out of that pool its quantity is decremented
+    // to 0 by DR Logs — at that point it's no longer sitting in the warehouse, so
+    // drop it from this view instead of showing an empty/zero row.
     const allItemsWithClientRecord = new Set(result.map(r => r.item_name))
     const whRows: typeof warehouseRows = []
     from = 0
@@ -288,17 +292,20 @@ export default function InventoryPage() {
       const { data } = await supabase
         .from('warehouse_stock')
         .select('id, client_name, item_name, unit, quantity, notes, created_at')
+        .is('client_name', null)
         .order('created_at', { ascending: false })
         .order('id')
         .range(from, from + PAGE - 1)
       if (!data || data.length === 0) break
       for (const rec of data) {
+        const qty = Number(rec.quantity) || 0
+        if (qty <= 0) continue
         whRows.push({
           id: rec.id,
           client_name: rec.client_name ?? null,
           item_name: rec.item_name,
           unit: rec.unit ?? '',
-          quantity: Number(rec.quantity) || 0,
+          quantity: qty,
           notes: rec.notes ?? null,
           created_at: rec.created_at,
           hasClientRecord: allItemsWithClientRecord.has(rec.item_name),
@@ -695,7 +702,7 @@ export default function InventoryPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-44">Client</TableHead>
+                    <TableHead className="w-44">Owner</TableHead>
                     <TableHead className="min-w-[280px]">Item Name</TableHead>
                     <TableHead>Unit</TableHead>
                     <TableHead className="text-right">Qty</TableHead>
@@ -720,7 +727,7 @@ export default function InventoryPage() {
                           {r.client_name ? (
                             <span>{r.client_name}</span>
                           ) : (
-                            <span className="text-muted-foreground italic text-xs">No Client</span>
+                            <span className="inline-flex items-center rounded-full bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5 text-xs font-medium">CDSC Stock</span>
                           )}
                         </TableCell>
                         <TableCell className="text-sm font-medium">
