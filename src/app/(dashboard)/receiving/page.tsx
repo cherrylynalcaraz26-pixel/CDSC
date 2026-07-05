@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -14,13 +14,14 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import {
   Plus, MoreHorizontal, CheckCircle2, Package, Loader2, Trash2, X,
-  Truck, ShoppingBag, ArrowLeftRight,
+  Truck, ShoppingBag, ArrowLeftRight, ChevronDown, ChevronRight, Pencil, Printer,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSearchContext } from '@/context/search-context'
 
 interface PO { id: string; po_number: string; status: string; supplier?: { company_name: string } | null; delivery_date: string | null }
-interface RR { id: string; rr_number: string; po_number: string; supplier: string; delivery_date: string; received_by: string; status: string }
+interface RR { id: string; rr_number: string; po_number: string; supplier: string; delivery_date: string; received_by: string; status: string; dr_number?: string | null }
+interface POItemLine { item_name: string; quantity: number; unit_of_measure: string }
 interface Supplier { id: string; company_name: string }
 interface Client { id: string; company_name: string }
 interface ItemOption { item_name: string; unit_of_measure: string }
@@ -51,6 +52,8 @@ export default function ReceivingPage() {
 
   // Receiving Reports
   const [rrOpen, setRrOpen] = useState(false)
+  const [editingRRId, setEditingRRId] = useState<string | null>(null)
+  const [rrNumber, setRrNumber] = useState('')
   const [selectedPO, setSelectedPO] = useState('')
   const [pos, setPOs] = useState<PO[]>([])
   const [rrs, setRRs] = useState<RR[]>([])
@@ -59,6 +62,9 @@ export default function ReceivingPage() {
   const [deliveryDate, setDeliveryDate] = useState(new Date().toISOString().split('T')[0])
   const [receivedBy, setReceivedBy] = useState('')
   const [rrSaving, setRrSaving] = useState(false)
+  const [expandedRRId, setExpandedRRId] = useState<string | null>(null)
+  const [deleteRRId, setDeleteRRId] = useState<string | null>(null)
+  const [poItemsByNumber, setPoItemsByNumber] = useState<Record<string, POItemLine[]>>({})
 
   // Returns
   const [returnFormOpen, setReturnFormOpen] = useState(false)
@@ -124,6 +130,29 @@ export default function ReceivingPage() {
     setLoading(false)
   }
 
+  // Maps every PO's line items by po_number (not just the currently-pending ones) so
+  // Receiving Report row details/print can show what was on the referenced PO regardless
+  // of that PO's current status.
+  async function loadPoItemsMap() {
+    const { data: allPOs } = await supabase.from('purchase_orders').select('id, po_number')
+    const poIdToNumber: Record<string, string> = {}
+    for (const po of allPOs ?? []) poIdToNumber[po.id] = po.po_number
+    const poIds = Object.keys(poIdToNumber)
+    if (poIds.length === 0) { setPoItemsByNumber({}); return }
+    const { data: itemsData } = await supabase
+      .from('po_items')
+      .select('po_id, item_name, quantity, unit_of_measure')
+      .in('po_id', poIds)
+    const map: Record<string, POItemLine[]> = {}
+    for (const it of itemsData ?? []) {
+      const poNum = poIdToNumber[it.po_id]
+      if (!poNum) continue
+      if (!map[poNum]) map[poNum] = []
+      map[poNum].push({ item_name: it.item_name, quantity: Number(it.quantity), unit_of_measure: it.unit_of_measure })
+    }
+    setPoItemsByNumber(map)
+  }
+
   async function loadReturns() {
     setReturnsLoading(true)
     const { data } = await supabase.from('item_returns').select('*').order('created_at', { ascending: false })
@@ -173,25 +202,62 @@ export default function ReceivingPage() {
   }
 
   useEffect(() => {
-    loadRR(); loadReturns(); loadShared(); loadStockDeliveries(); loadSalesDeliveries()
+    loadRR(); loadPoItemsMap(); loadReturns(); loadShared(); loadStockDeliveries(); loadSalesDeliveries()
   }, [])
 
-  function resetRRForm() { setSelectedPO(''); setDrNumber(''); setDeliveryDate(new Date().toISOString().split('T')[0]); setReceivedBy('') }
+  function resetRRForm() {
+    setEditingRRId(null)
+    setRrNumber('')
+    setSelectedPO('')
+    setDrNumber('')
+    setDeliveryDate(new Date().toISOString().split('T')[0])
+    setReceivedBy('')
+  }
+
+  function openEditRR(rr: RR) {
+    setEditingRRId(rr.id)
+    setRrNumber(rr.rr_number)
+    setSelectedPO(rr.po_number)
+    setDeliveryDate(rr.delivery_date)
+    setDrNumber(rr.dr_number ?? '')
+    setReceivedBy(rr.received_by ?? '')
+    setRrOpen(true)
+  }
+
+  function toggleExpandRR(id: string) {
+    setExpandedRRId(prev => prev === id ? null : id)
+  }
   function resetReturnForm() { setReturnType('warehouse'); setReturnDate(new Date().toISOString().split('T')[0]); setReturnSupplierId(''); setReturnItems([emptyReturnItem()]); setReturnNotes('') }
   function resetSdForm() { setSdPO(''); setSdSupplierId(''); setSdDate(new Date().toISOString().split('T')[0]); setSdDR(''); setSdReceivedBy(''); setSdNotes(''); setSdItems([emptyStockItem()]) }
   function resetSalesdForm() { setSalesdClientId(''); setSalesdQuote(''); setSalesdDate(new Date().toISOString().split('T')[0]); setSalesdBy(''); setSalesdNotes(''); setSalesdStatus('pending'); setSalesdItems([emptySalesItem()]) }
 
   async function handleSaveRR() {
+    if (!rrNumber.trim()) { toast.error('RR Number is required'); return }
     if (!selectedPO) { toast.error('Select a PO reference'); return }
     setRrSaving(true)
-    const { error } = await supabase.from('receiving_reports').insert({
+
+    const payload = {
+      rr_number: rrNumber.trim(),
       po_number: selectedPO,
       supplier: (selectedPOData?.supplier as any)?.company_name ?? null,
       delivery_date: deliveryDate,
       received_by: receivedBy || null,
       dr_number: drNumber || null,
       status: 'completed',
-    })
+    }
+
+    if (editingRRId) {
+      // Editing only updates the record's own fields — it does not re-run the inventory
+      // adjustment below, since that already happened once when the RR was first saved.
+      const { error } = await supabase.from('receiving_reports').update(payload).eq('id', editingRRId)
+      if (error) { toast.error(error.message); setRrSaving(false); return }
+      toast.success('Receiving report updated.')
+      setRrOpen(false); resetRRForm(); loadRR()
+      setRrSaving(false)
+      return
+    }
+
+    const { error } = await supabase.from('receiving_reports').insert(payload)
     if (error) { toast.error(error.message); setRrSaving(false); return }
 
     // Update inventory: add the PO's line-item quantities into warehouse_stock (unassigned
@@ -229,6 +295,83 @@ export default function ReceivingPage() {
     toast.success('Receiving report saved — inventory updated.')
     setRrOpen(false); resetRRForm(); loadRR()
     setRrSaving(false)
+  }
+
+  async function confirmDeleteRR() {
+    if (!deleteRRId) return
+    const { error } = await supabase.from('receiving_reports').delete().eq('id', deleteRRId)
+    if (error) { toast.error(error.message); setDeleteRRId(null); return }
+    setDeleteRRId(null)
+    toast.success('Receiving report deleted.')
+    loadRR()
+  }
+
+  function printRR(rr: RR) {
+    const items = poItemsByNumber[rr.po_number] ?? []
+    const html = `<!DOCTYPE html><html><head><title>RR ${rr.rr_number}</title>
+    <script src="https://cdn.tailwindcss.com"><\/script>
+    <style>body{font-family:Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact;}</style>
+    </head><body class="p-6 text-[11px]">
+    <div class="border rounded-lg bg-white p-4 space-y-3 font-sans text-[11px]">
+      <div class="flex justify-between items-start border-b pb-3">
+        <div class="text-[16px] font-extrabold text-red-700 uppercase tracking-widest">Receiving Report</div>
+        <div class="text-right">
+          <div class="text-[9px] font-semibold uppercase text-gray-400">RR Number</div>
+          <div class="font-mono font-bold text-gray-800">${rr.rr_number}</div>
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-3">
+        <div>
+          <div class="text-[9px] font-semibold uppercase text-gray-400 mb-0.5">PO Reference</div>
+          <div class="font-mono text-gray-800">${rr.po_number}</div>
+        </div>
+        <div>
+          <div class="text-[9px] font-semibold uppercase text-gray-400 mb-0.5">Supplier</div>
+          <div class="font-semibold text-gray-800">${rr.supplier ?? '—'}</div>
+        </div>
+        <div>
+          <div class="text-[9px] font-semibold uppercase text-gray-400 mb-0.5">Delivery Date</div>
+          <div class="text-gray-800">${rr.delivery_date}</div>
+        </div>
+        <div>
+          <div class="text-[9px] font-semibold uppercase text-gray-400 mb-0.5">DR / SI Number</div>
+          <div class="font-mono text-gray-800">${rr.dr_number ?? '—'}</div>
+        </div>
+        <div>
+          <div class="text-[9px] font-semibold uppercase text-gray-400 mb-0.5">Received By</div>
+          <div class="text-gray-800">${rr.received_by ?? '—'}</div>
+        </div>
+        <div>
+          <div class="text-[9px] font-semibold uppercase text-gray-400 mb-0.5">Status</div>
+          <div class="text-gray-800 capitalize">${rr.status}</div>
+        </div>
+      </div>
+      <table class="w-full border-collapse">
+        <thead>
+          <tr class="bg-red-700 text-white">
+            <th class="text-left px-1.5 py-1">#</th>
+            <th class="text-left px-1.5 py-1">Item Description</th>
+            <th class="text-left px-1.5 py-1">Unit</th>
+            <th class="text-right px-1.5 py-1">Qty</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${items.length === 0 ? '<tr><td colspan="4" class="px-1.5 py-3 text-center text-gray-400 italic">No PO items found</td></tr>' :
+            items.map((it, i) => `<tr class="${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}">
+              <td class="px-1.5 py-1 text-gray-400">${i + 1}</td>
+              <td class="px-1.5 py-1">${it.item_name}</td>
+              <td class="px-1.5 py-1 text-gray-500">${it.unit_of_measure ?? '—'}</td>
+              <td class="px-1.5 py-1 text-right font-medium">${it.quantity}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    </body></html>`
+    const win = window.open('', '_blank', 'width=900,height=700')
+    if (!win) return
+    win.document.write(html)
+    win.document.close()
+    setTimeout(() => { win.focus(); win.print(); win.close() }, 800)
   }
 
   async function handleSaveReturn() {
@@ -399,7 +542,7 @@ export default function ReceivingPage() {
                           <div className="text-sm">{(po.supplier as any)?.company_name ?? '—'}</div>
                           <div className="text-xs text-muted-foreground">Expected: {po.delivery_date ?? 'TBD'}</div>
                         </div>
-                        <Button size="sm" variant="outline" onClick={() => { setSelectedPO(po.po_number); setRrOpen(true) }}>Receive</Button>
+                        <Button size="sm" variant="outline" onClick={() => { resetRRForm(); setSelectedPO(po.po_number); setRrOpen(true) }}>Receive</Button>
                       </div>
                     )
                   })}
@@ -414,6 +557,7 @@ export default function ReceivingPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-8" />
                     <TableHead>RR Number</TableHead>
                     <TableHead>PO Reference</TableHead>
                     <TableHead>Supplier</TableHead>
@@ -425,31 +569,81 @@ export default function ReceivingPage() {
                 </TableHeader>
                 <TableBody>
                   {loading ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
+                    <TableRow><TableCell colSpan={8} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
                   ) : rrs.filter(rr => filterQ(`${rr.rr_number} ${rr.po_number} ${rr.supplier} ${rr.status}`)).length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground">No receiving reports found.</TableCell></TableRow>
-                  ) : rrs.filter(rr => filterQ(`${rr.rr_number} ${rr.po_number} ${rr.supplier} ${rr.status}`)).map(rr => (
-                    <TableRow key={rr.id}>
-                      <TableCell className="font-mono text-xs font-semibold text-red-600">{rr.rr_number ?? '—'}</TableCell>
-                      <TableCell className="text-xs font-mono">{rr.po_number}</TableCell>
-                      <TableCell className="text-sm font-medium">{rr.supplier ?? '—'}</TableCell>
-                      <TableCell className="text-sm">{rr.delivery_date}</TableCell>
-                      <TableCell className="text-sm">{rr.received_by ?? '—'}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-xs text-green-700 border-green-300">✓ {rr.status}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-accent">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => toast.info(`RR: ${rr.rr_number}`)}>View Details</DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                    <TableRow><TableCell colSpan={8} className="text-center py-10 text-muted-foreground">No receiving reports found.</TableCell></TableRow>
+                  ) : rrs.filter(rr => filterQ(`${rr.rr_number} ${rr.po_number} ${rr.supplier} ${rr.status}`)).map(rr => {
+                    const isExpanded = expandedRRId === rr.id
+                    const rrItems = poItemsByNumber[rr.po_number] ?? []
+                    return (
+                      <Fragment key={rr.id}>
+                        <TableRow className="cursor-pointer hover:bg-muted/50" onClick={() => toggleExpandRR(rr.id)}>
+                          <TableCell className="pr-0 text-muted-foreground">
+                            {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                          </TableCell>
+                          <TableCell className="font-mono text-xs font-semibold text-red-600">{rr.rr_number ?? '—'}</TableCell>
+                          <TableCell className="text-xs font-mono">{rr.po_number}</TableCell>
+                          <TableCell className="text-sm font-medium">{rr.supplier ?? '—'}</TableCell>
+                          <TableCell className="text-sm">{rr.delivery_date}</TableCell>
+                          <TableCell className="text-sm">{rr.received_by ?? '—'}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className="text-xs text-green-700 border-green-300">✓ {rr.status}</Badge>
+                          </TableCell>
+                          <TableCell onClick={e => e.stopPropagation()}>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-accent">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => toggleExpandRR(rr.id)}>View Details</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => openEditRR(rr)}><Pencil className="h-3.5 w-3.5 mr-1.5" />Edit</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => printRR(rr)}><Printer className="h-3.5 w-3.5 mr-1.5" />Print</DropdownMenuItem>
+                                <DropdownMenuItem className="text-destructive" onClick={() => setDeleteRRId(rr.id)}><Trash2 className="h-3.5 w-3.5 mr-1.5" />Delete</DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                        {isExpanded && (
+                          <TableRow className="bg-muted/20 hover:bg-muted/20">
+                            <TableCell colSpan={8} className="py-3 px-6">
+                              <div className="space-y-3">
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                                  <div><span className="text-muted-foreground block">DR / SI Number</span><span className="font-mono">{rr.dr_number ?? '—'}</span></div>
+                                  <div><span className="text-muted-foreground block">PO Reference</span><span className="font-mono">{rr.po_number}</span></div>
+                                  <div><span className="text-muted-foreground block">Supplier</span>{rr.supplier ?? '—'}</div>
+                                  <div><span className="text-muted-foreground block">Received By</span>{rr.received_by ?? '—'}</div>
+                                </div>
+                                {rrItems.length === 0 ? (
+                                  <p className="text-xs text-muted-foreground italic">No line items found for this PO reference.</p>
+                                ) : (
+                                  <div className="border rounded-md overflow-hidden text-xs bg-background">
+                                    <table className="w-full">
+                                      <thead className="bg-muted/60">
+                                        <tr>
+                                          <th className="text-left px-3 py-1.5 font-medium">Item</th>
+                                          <th className="text-right px-3 py-1.5 font-medium w-20">Qty</th>
+                                          <th className="text-left px-3 py-1.5 font-medium w-24">Unit</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {rrItems.map((it, i) => (
+                                          <tr key={i} className="border-t">
+                                            <td className="px-3 py-1">{it.item_name}</td>
+                                            <td className="px-3 py-1 text-right font-medium">{it.quantity}</td>
+                                            <td className="px-3 py-1 text-muted-foreground">{it.unit_of_measure}</td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                )}
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        )}
+                      </Fragment>
+                    )
+                  })}
                 </TableBody>
               </Table>
             </CardContent>
@@ -711,25 +905,34 @@ export default function ReceivingPage() {
         </TabsContent>
       </Tabs>
 
-      {/* Create RR Dialog */}
+      {/* Create/Edit RR Dialog */}
       <Dialog open={rrOpen} onOpenChange={v => { setRrOpen(v); if (!v) resetRRForm() }}>
         <DialogContent className="w-[95vw] max-w-2xl sm:max-w-2xl">
-          <DialogHeader><DialogTitle>New Receiving Report</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editingRRId ? 'Edit Receiving Report' : 'New Receiving Report'}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <Label>PO Reference <span className="text-destructive">*</span></Label>
-                <Select value={selectedPO} onValueChange={v => setSelectedPO(v ?? '')}>
-                  <SelectTrigger>
-                    {selectedPO ? <span className="text-sm truncate">{selectedPO}</span> : <span className="text-muted-foreground text-sm">Select PO</span>}
-                  </SelectTrigger>
-                  <SelectContent>{pos.map(po => <SelectItem key={po.id} value={po.po_number}>{po.po_number} — {(po.supplier as any)?.company_name ?? ''}</SelectItem>)}</SelectContent>
-                </Select>
+                <Label>RR Number <span className="text-destructive">*</span></Label>
+                <Input placeholder="e.g. RR-2026-00001" value={rrNumber} onChange={e => setRrNumber(e.target.value)} />
               </div>
               <div className="space-y-1.5">
                 <Label>Delivery Date</Label>
                 <Input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} />
               </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>PO Reference <span className="text-destructive">*</span></Label>
+              <Select value={selectedPO} onValueChange={v => setSelectedPO(v ?? '')}>
+                <SelectTrigger>
+                  {selectedPO ? <span className="text-sm truncate">{selectedPO}</span> : <span className="text-muted-foreground text-sm">Select PO</span>}
+                </SelectTrigger>
+                <SelectContent>
+                  {pos.map(po => <SelectItem key={po.id} value={po.po_number}>{po.po_number} — {(po.supplier as any)?.company_name ?? ''}</SelectItem>)}
+                  {selectedPO && !pos.some(po => po.po_number === selectedPO) && (
+                    <SelectItem value={selectedPO}>{selectedPO}</SelectItem>
+                  )}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1.5">
               <Label>DR / SI Number</Label>
@@ -753,8 +956,25 @@ export default function ReceivingPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => { setRrOpen(false); resetRRForm() }}>Cancel</Button>
             <Button onClick={handleSaveRR} disabled={rrSaving} className="bg-red-600 hover:bg-red-700">
-              {rrSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : <><CheckCircle2 className="h-4 w-4 mr-2" />Save & Update Inventory</>}
+              {rrSaving
+                ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</>
+                : editingRRId ? <><CheckCircle2 className="h-4 w-4 mr-2" />Update</> : <><CheckCircle2 className="h-4 w-4 mr-2" />Save & Update Inventory</>}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete RR Confirmation */}
+      <Dialog open={!!deleteRRId} onOpenChange={() => setDeleteRRId(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Delete Receiving Report?</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            This will permanently delete this receiving report. It will not reverse the inventory quantities that
+            were added to warehouse stock when it was saved — adjust those separately if needed.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteRRId(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={confirmDeleteRR}>Delete</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
