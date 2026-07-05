@@ -212,7 +212,9 @@ export default function PurchaseOrdersPage() {
   const discountAmount = subtotal * (discountRate / 100)
   const netSubtotal = subtotal - discountAmount
   const vatAmount = vatInclusive ? netSubtotal * (0.12 / 1.12) : netSubtotal * 0.12
-  const taxAmount = (netSubtotal / 1.12) * taxRate
+  // EWT is withheld on the VAT-exclusive amount. netSubtotal is already VAT-exclusive
+  // unless vatInclusive is on, in which case the 12% baked into it must be stripped first.
+  const taxAmount = (vatInclusive ? netSubtotal / 1.12 : netSubtotal) * taxRate
   const totalAmount = vatInclusive ? netSubtotal : netSubtotal + vatAmount
   const netPayable = totalAmount - taxAmount
 
