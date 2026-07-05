@@ -18,7 +18,7 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Plus, X, Search, MoreHorizontal, Loader2, FileText, LayoutGrid, List, ChevronDown, ChevronRight, ChevronUp, Package, Trash2, Printer } from 'lucide-react'
+import { Plus, X, Search, MoreHorizontal, Loader2, FileText, LayoutGrid, List, ChevronDown, ChevronRight, ChevronUp, Package, Trash2, Printer, SlidersHorizontal, FileOutput } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
@@ -28,8 +28,72 @@ import {
 } from 'recharts'
 
 interface ItemOption { item_name: string; unit_of_measure: string }
-interface ClientOption { id: string; company_name: string; show_csi_in_portal: boolean }
+interface ClientOption {
+  id: string
+  company_name: string
+  show_csi_in_portal: boolean
+  address: string | null
+  city: string | null
+  province: string | null
+  tin: string | null
+  industry: string | null
+}
 interface SOItemOption { item_name: string; unit: string; quantity: number }
+
+interface BlankFormCalib {
+  pageWidthMm: number
+  pageHeightMm: number
+  fontSizePt: number
+  dateTop: number; dateLeft: number
+  clientTop: number; clientLeft: number
+  addressTop: number; addressLeft: number
+  tinTop: number; tinLeft: number
+  businessStyleTop: number; businessStyleLeft: number
+  tableTop: number
+  rowHeight: number
+  colQtyLeft: number
+  colUnitLeft: number
+  colDescLeft: number
+  colUnitPriceLeft: number
+  colAmountLeft: number
+  totalDueTop: number
+  totalDueLeft: number
+  maxRows: number
+}
+
+const DEFAULT_BLANK_CALIB: BlankFormCalib = {
+  pageWidthMm: 210,
+  pageHeightMm: 297,
+  fontSizePt: 10,
+  dateTop: 29, dateLeft: 135,
+  clientTop: 35, clientLeft: 70,
+  addressTop: 40, addressLeft: 60,
+  tinTop: 47, tinLeft: 55,
+  businessStyleTop: 52, businessStyleLeft: 75,
+  tableTop: 60,
+  rowHeight: 6,
+  colQtyLeft: 45,
+  colUnitLeft: 60,
+  colDescLeft: 85,
+  colUnitPriceLeft: 140,
+  colAmountLeft: 170,
+  totalDueTop: 200,
+  totalDueLeft: 170,
+  maxRows: 23,
+}
+
+const BLANK_CALIB_KEY = 'cdsc_csi_blank_form_calib'
+
+function loadBlankCalib(): BlankFormCalib {
+  if (typeof window === 'undefined') return DEFAULT_BLANK_CALIB
+  try {
+    const raw = window.localStorage.getItem(BLANK_CALIB_KEY)
+    if (!raw) return DEFAULT_BLANK_CALIB
+    return { ...DEFAULT_BLANK_CALIB, ...JSON.parse(raw) }
+  } catch {
+    return DEFAULT_BLANK_CALIB
+  }
+}
 
 interface CSIRecord {
   id: number
@@ -79,7 +143,7 @@ export default function CSIMonitoringPage() {
   const [soItemsMap, setSoItemsMap] = useState<Record<string, SOItemOption[]>>({})
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
-  const [chartsExpanded, setChartsExpanded] = useState(true)
+  const [chartsExpanded, setChartsExpanded] = useState(false)
   const [editingSiNumber, setEditingSiNumber] = useState<string | null>(null)
   const [siFilter, setSiFilter] = useState('')
   const [itemFilter, setItemFilter] = useState('')
@@ -94,14 +158,28 @@ export default function CSIMonitoringPage() {
   const [inventoryItem, setInventoryItem] = useState<string>('')
   const [inventoryOpen, setInventoryOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'form' | 'preview'>('form')
+  const [siNumberOptions, setSiNumberOptions] = useState<string[]>([])
   const [companyInfo, setCompanyInfo] = useState<{ company_name: string; address: string; phone: string; email: string; tin: string } | null>(null)
+  const [blankCalib, setBlankCalib] = useState<BlankFormCalib>(() => loadBlankCalib())
+  const [calibOpen, setCalibOpen] = useState(false)
+  const [calibDraft, setCalibDraft] = useState<BlankFormCalib>(DEFAULT_BLANK_CALIB)
   const printRef = useRef<HTMLDivElement>(null)
+
+  function saveCalib(next: BlankFormCalib) {
+    setBlankCalib(next)
+    window.localStorage.setItem(BLANK_CALIB_KEY, JSON.stringify(next))
+  }
+
+  function openCalib() {
+    setCalibDraft(blankCalib)
+    setCalibOpen(true)
+  }
 
   async function load() {
     setLoading(true)
     const [{ data: itemOptData }, { data: clientData }, { data: soData }, { data: drItemsData }] = await Promise.all([
       supabase.from('items').select('item_name, unit_of_measure').order('item_name'),
-      supabase.from('clients').select('id, company_name, show_csi_in_portal').eq('status', 'active').order('company_name'),
+      supabase.from('clients').select('id, company_name, show_csi_in_portal, address, city, province, tin, industry').eq('status', 'active').order('company_name'),
       supabase.from('sales_orders').select('id, so_number').not('so_number', 'is', null).order('created_at', { ascending: false }),
       supabase.from('dr_log_items').select('dr_number, item_name, dr_logs!inner(client_name)').order('item_name'),
     ])
@@ -247,6 +325,82 @@ export default function CSIMonitoringPage() {
     setTimeout(() => { win.focus(); win.print(); win.close() }, 800)
   }
 
+  // Prints only the field values, absolutely positioned to line up with a pre-printed
+  // blank Sales Invoice form — no borders, logo, labels or backgrounds are rendered.
+  async function printCSIBlank(group: typeof siGroups[0]) {
+    const { data: allItems } = await supabase
+      .from('csi_records')
+      .select('item_name,unit,quantity,unit_price,amount')
+      .eq('si_number', group.si_number)
+      .order('id')
+    type BlankItem = { item_name: string; unit: string | null; quantity: number; unit_price: number; amount: number }
+    const items: BlankItem[] = ((allItems ?? group.items) as BlankItem[]).slice(0, blankCalib.maxRows)
+    const client = clientOptions.find(c => c.company_name === group.client)
+    const c = blankCalib
+    const dateStr = group.date ? format(parseISO(group.date), 'MM/dd/yyyy') : ''
+    const addressLine = [client?.address, client?.city, client?.province].filter(Boolean).join(', ')
+    const totalDue = items.reduce((s, it) => s + (Number(it.amount) || 0), 0)
+    const field = (top: number, left: number, value: string) =>
+      value ? `<div style="position:absolute;top:${top}mm;left:${left}mm;">${value}</div>` : ''
+    const rows = items.map((it, i) => {
+      const top = c.tableTop + i * c.rowHeight
+      return field(top, c.colQtyLeft, String(Number(it.quantity))) +
+        field(top, c.colUnitLeft, it.unit ?? '') +
+        field(top, c.colDescLeft, it.item_name) +
+        field(top, c.colUnitPriceLeft, Number(it.unit_price).toLocaleString('en-PH', { minimumFractionDigits: 2 })) +
+        field(top, c.colAmountLeft, Number(it.amount).toLocaleString('en-PH', { minimumFractionDigits: 2 }))
+    }).join('')
+    const html = `<!DOCTYPE html><html><head><title>SI ${group.si_number} (Blank Form)</title>
+    <style>
+      @page { size: ${c.pageWidthMm}mm ${c.pageHeightMm}mm; margin: 0; }
+      html, body { margin: 0; padding: 0; }
+      body { position: relative; width: ${c.pageWidthMm}mm; height: ${c.pageHeightMm}mm; font-family: Arial, sans-serif; font-size: ${c.fontSizePt}pt; color: #000; }
+      div { white-space: nowrap; }
+    </style>
+    </head><body>
+    ${field(c.dateTop, c.dateLeft, dateStr)}
+    ${field(c.clientTop, c.clientLeft, group.client === '—' ? '' : group.client)}
+    ${field(c.addressTop, c.addressLeft, addressLine)}
+    ${field(c.tinTop, c.tinLeft, client?.tin ?? '')}
+    ${field(c.businessStyleTop, c.businessStyleLeft, client?.industry ?? '')}
+    ${rows}
+    ${field(c.totalDueTop, c.totalDueLeft, totalDue.toLocaleString('en-PH', { minimumFractionDigits: 2 }))}
+    </body></html>`
+    const win = window.open('', '_blank', 'width=900,height=700')
+    if (!win) return
+    win.document.write(html)
+    win.document.close()
+    setTimeout(() => { win.focus(); win.print(); win.close() }, 500)
+  }
+
+  // Prints a 5mm-spaced ruler grid on the current calibration's page size, so you can
+  // hold it up against the physical form and read off Top/Left offsets to enter below.
+  function printCalibGrid() {
+    const c = blankCalib
+    const vLines: string[] = []
+    for (let x = 0; x <= c.pageWidthMm; x += 5) {
+      vLines.push(`<div style="position:absolute;top:0;left:${x}mm;width:0;border-left:${x % 20 === 0 ? '0.5pt solid #000' : '0.25pt solid #999'};height:${c.pageHeightMm}mm;"></div>`)
+      if (x % 20 === 0) vLines.push(`<div style="position:absolute;top:0;left:${x + 0.5}mm;font-size:6pt;">${x}</div>`)
+    }
+    const hLines: string[] = []
+    for (let y = 0; y <= c.pageHeightMm; y += 5) {
+      hLines.push(`<div style="position:absolute;top:${y}mm;left:0;height:0;border-top:${y % 20 === 0 ? '0.5pt solid #000' : '0.25pt solid #999'};width:${c.pageWidthMm}mm;"></div>`)
+      if (y % 20 === 0) hLines.push(`<div style="position:absolute;top:${y}mm;left:0;font-size:6pt;">${y}</div>`)
+    }
+    const html = `<!DOCTYPE html><html><head><title>Calibration Grid</title>
+    <style>
+      @page { size: ${c.pageWidthMm}mm ${c.pageHeightMm}mm; margin: 0; }
+      html, body { margin: 0; padding: 0; }
+      body { position: relative; width: ${c.pageWidthMm}mm; height: ${c.pageHeightMm}mm; font-family: Arial, sans-serif; color: #000; }
+    </style>
+    </head><body>${vLines.join('')}${hLines.join('')}</body></html>`
+    const win = window.open('', '_blank', 'width=900,height=700')
+    if (!win) return
+    win.document.write(html)
+    win.document.close()
+    setTimeout(() => { win.focus(); win.print(); win.close() }, 500)
+  }
+
   function handlePrint() {
     const el = printRef.current
     if (!el) return
@@ -305,9 +459,33 @@ export default function CSIMonitoringPage() {
     })
   }
 
+  // Suggests the next sequential SI number after the highest one used so far, plus any
+  // gaps (skipped/missing numbers) in the existing sequence — so a skipped number can
+  // still be picked instead of always jumping straight to the newest one.
+  function getSiNumberSuggestions(): { next: string; missing: string[] } {
+    const nums: number[] = []
+    let width = 5
+    for (const r of records) {
+      if (/^\d+$/.test(r.si_number)) {
+        nums.push(parseInt(r.si_number, 10))
+        width = Math.max(width, r.si_number.length)
+      }
+    }
+    if (nums.length === 0) return { next: '1'.padStart(width, '0'), missing: [] }
+    const max = Math.max(...nums)
+    const existing = new Set(nums)
+    const missing: string[] = []
+    for (let n = 1; n < max; n++) {
+      if (!existing.has(n)) missing.push(String(n).padStart(width, '0'))
+    }
+    return { next: String(max + 1).padStart(width, '0'), missing }
+  }
+
   function openAdd() {
     setEditingSiNumber(null)
-    setHeader(emptyHeader())
+    const { next, missing } = getSiNumberSuggestions()
+    setSiNumberOptions([...missing, next])
+    setHeader({ ...emptyHeader(), si_number: next })
     setItems([emptyItem()])
     setOpen(true)
   }
@@ -420,7 +598,25 @@ export default function CSIMonitoringPage() {
                     </div>
                     <div className="space-y-1.5">
                       <Label>SI Number <span className="text-destructive">*</span></Label>
-                      <Input placeholder="e.g. 00001" value={header.si_number} onChange={e => setHeader(h => ({ ...h, si_number: e.target.value }))} />
+                      {editingSiNumber ? (
+                        <Input placeholder="e.g. 00001" value={header.si_number} onChange={e => setHeader(h => ({ ...h, si_number: e.target.value }))} />
+                      ) : (
+                        <Select value={header.si_number} onValueChange={v => setHeader(h => ({ ...h, si_number: v ?? '' }))}>
+                          <SelectTrigger><SelectValue placeholder="Select SI number…" /></SelectTrigger>
+                          <SelectContent>
+                            {siNumberOptions.map((n, i) => (
+                              <SelectItem key={n} value={n}>
+                                {n}
+                                {i === siNumberOptions.length - 1 ? (
+                                  <span className="text-xs text-muted-foreground ml-1.5">(Next)</span>
+                                ) : (
+                                  <span className="text-xs text-amber-600 ml-1.5">(Missing)</span>
+                                )}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
                     </div>
                   </div>
                   <div className="space-y-1.5">
@@ -539,9 +735,25 @@ export default function CSIMonitoringPage() {
                 <div className="sticky top-0">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Live Preview</p>
-                    <Button type="button" variant="outline" size="sm" onClick={handlePrint} className="h-7 px-2 text-xs gap-1">
-                      <Printer className="h-3.5 w-3.5" /> Print
-                    </Button>
+                    <div className="flex gap-1.5">
+                      <Button type="button" variant="outline" size="sm" onClick={openCalib} className="h-7 px-2 text-xs gap-1">
+                        <SlidersHorizontal className="h-3.5 w-3.5" /> Calibrate
+                      </Button>
+                      {editingSiNumber && (
+                        <Button
+                          type="button" variant="outline" size="sm" className="h-7 px-2 text-xs gap-1"
+                          onClick={() => {
+                            const grp = siGroups.find(g => g.si_number === editingSiNumber)
+                            if (grp) printCSIBlank(grp)
+                          }}
+                        >
+                          <FileOutput className="h-3.5 w-3.5" /> Blank Form
+                        </Button>
+                      )}
+                      <Button type="button" variant="outline" size="sm" onClick={handlePrint} className="h-7 px-2 text-xs gap-1">
+                        <Printer className="h-3.5 w-3.5" /> Print
+                      </Button>
+                    </div>
                   </div>
                   <div ref={printRef} className="border rounded-lg bg-white text-[11px] p-4 shadow-sm space-y-3 font-sans">
                     {/* Header */}
@@ -1097,6 +1309,7 @@ export default function CSIMonitoringPage() {
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem onClick={() => printCSI(group)}><Printer className="h-3.5 w-3.5 mr-1.5" />Print CSI</DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => printCSIBlank(group)}><FileOutput className="h-3.5 w-3.5 mr-1.5" />Print (Blank Form)</DropdownMenuItem>
                               <DropdownMenuItem onClick={() => openEdit(group.si_number)}>Edit</DropdownMenuItem>
                               <DropdownMenuItem className="text-destructive" onClick={() => setDeleteId(group.items[0].id)}>Delete</DropdownMenuItem>
                             </DropdownMenuContent>
@@ -1271,6 +1484,90 @@ export default function CSIMonitoringPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={calibOpen} onOpenChange={setCalibOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Calibrate Blank Form Print</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground -mt-2">
+            All values are in millimeters, measured from the top-left corner of the page. Load your blank Sales
+            Invoice form into the printer, click <strong>Print Test Grid</strong>, hold it up to the form to read
+            off where the blank line for each field falls, then enter those numbers below. Make sure your print
+            dialog uses 100% scale with no margins.
+          </p>
+          <Button type="button" variant="outline" size="sm" onClick={printCalibGrid} className="w-fit gap-1.5">
+            <Printer className="h-3.5 w-3.5" /> Print Test Grid
+          </Button>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+            <div className="col-span-2 grid grid-cols-3 gap-3">
+              <CalibField label="Page Width" value={calibDraft.pageWidthMm} onChange={v => setCalibDraft(d => ({ ...d, pageWidthMm: v }))} />
+              <CalibField label="Page Height" value={calibDraft.pageHeightMm} onChange={v => setCalibDraft(d => ({ ...d, pageHeightMm: v }))} />
+              <CalibField label="Font Size (pt)" value={calibDraft.fontSizePt} onChange={v => setCalibDraft(d => ({ ...d, fontSizePt: v }))} />
+            </div>
+            <CalibPair label="Date" top={calibDraft.dateTop} left={calibDraft.dateLeft}
+              onChange={(top, left) => setCalibDraft(d => ({ ...d, dateTop: top, dateLeft: left }))} />
+            <CalibPair label="Client" top={calibDraft.clientTop} left={calibDraft.clientLeft}
+              onChange={(top, left) => setCalibDraft(d => ({ ...d, clientTop: top, clientLeft: left }))} />
+            <CalibPair label="Address" top={calibDraft.addressTop} left={calibDraft.addressLeft}
+              onChange={(top, left) => setCalibDraft(d => ({ ...d, addressTop: top, addressLeft: left }))} />
+            <CalibPair label="TIN" top={calibDraft.tinTop} left={calibDraft.tinLeft}
+              onChange={(top, left) => setCalibDraft(d => ({ ...d, tinTop: top, tinLeft: left }))} />
+            <CalibPair label="Business Style" top={calibDraft.businessStyleTop} left={calibDraft.businessStyleLeft}
+              onChange={(top, left) => setCalibDraft(d => ({ ...d, businessStyleTop: top, businessStyleLeft: left }))} />
+            <CalibPair label="Total Amount Due" top={calibDraft.totalDueTop} left={calibDraft.totalDueLeft}
+              onChange={(top, left) => setCalibDraft(d => ({ ...d, totalDueTop: top, totalDueLeft: left }))} />
+            <div className="col-span-2 border-t pt-3 grid grid-cols-3 gap-3">
+              <CalibField label="Table Top" value={calibDraft.tableTop} onChange={v => setCalibDraft(d => ({ ...d, tableTop: v }))} />
+              <CalibField label="Row Height" value={calibDraft.rowHeight} onChange={v => setCalibDraft(d => ({ ...d, rowHeight: v }))} />
+              <CalibField label="Max Rows" value={calibDraft.maxRows} onChange={v => setCalibDraft(d => ({ ...d, maxRows: v }))} />
+            </div>
+            <div className="col-span-2 grid grid-cols-3 gap-3">
+              <CalibField label="Qty Column Left" value={calibDraft.colQtyLeft} onChange={v => setCalibDraft(d => ({ ...d, colQtyLeft: v }))} />
+              <CalibField label="Unit Column Left" value={calibDraft.colUnitLeft} onChange={v => setCalibDraft(d => ({ ...d, colUnitLeft: v }))} />
+              <CalibField label="Description Column Left" value={calibDraft.colDescLeft} onChange={v => setCalibDraft(d => ({ ...d, colDescLeft: v }))} />
+            </div>
+            <div className="col-span-2 grid grid-cols-2 gap-3">
+              <CalibField label="Unit Price Column Left" value={calibDraft.colUnitPriceLeft} onChange={v => setCalibDraft(d => ({ ...d, colUnitPriceLeft: v }))} />
+              <CalibField label="Amount Column Left" value={calibDraft.colAmountLeft} onChange={v => setCalibDraft(d => ({ ...d, colAmountLeft: v }))} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setCalibDraft(DEFAULT_BLANK_CALIB)}>Reset to Defaults</Button>
+            <Button type="button" variant="outline" onClick={() => setCalibOpen(false)}>Cancel</Button>
+            <Button type="button" onClick={() => { saveCalib(calibDraft); setCalibOpen(false); toast.success('Calibration saved') }} className="bg-red-600 hover:bg-red-700">
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
+function CalibField({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+  return (
+    <div className="space-y-1">
+      <Label className="text-xs">{label}</Label>
+      <Input
+        type="number" step="0.5" value={value}
+        onChange={e => onChange(Number(e.target.value) || 0)}
+        className="h-8 text-sm"
+      />
+    </div>
+  )
+}
+
+function CalibPair({ label, top, left, onChange }: { label: string; top: number; left: number; onChange: (top: number, left: number) => void }) {
+  return (
+    <div className="space-y-1">
+      <Label className="text-xs">{label}</Label>
+      <div className="grid grid-cols-2 gap-2">
+        <Input type="number" step="0.5" value={top} placeholder="Top"
+          onChange={e => onChange(Number(e.target.value) || 0, left)} className="h-8 text-sm" />
+        <Input type="number" step="0.5" value={left} placeholder="Left"
+          onChange={e => onChange(top, Number(e.target.value) || 0)} className="h-8 text-sm" />
+      </div>
     </div>
   )
 }

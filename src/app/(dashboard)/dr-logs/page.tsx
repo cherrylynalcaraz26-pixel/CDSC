@@ -61,10 +61,10 @@ const DEFAULT_BLANK_CALIB: BlankFormCalib = {
   deliveredToTop: 35, deliveredToLeft: 70,
   addressTop: 40, addressLeft: 60,
   tinTop: 47, tinLeft: 55,
-  businessStyleTop: 52, businessStyleLeft: 75,
-  tableTop: 60,
+  businessStyleTop: 50, businessStyleLeft: 75,
+  tableTop: 70,
   rowHeight: 6,
-  colQtyLeft: 45,
+  colQtyLeft: 55,
   colUnitLeft: 60,
   colDescLeft: 85,
   maxRows: 23,
@@ -395,6 +395,13 @@ export default function DRLogsPage() {
   function getTotalQty(drNumber: string) {
     return getItems(drNumber).reduce((sum, i) => sum + (Number(i.quantity) || 0), 0)
   }
+
+  // An SO that already has a DR log recorded against it shouldn't be offered again in the
+  // SO Reference dropdown — keep the currently-edited DR's own SO reference selectable though.
+  const usedSoNumbers = new Set(
+    logs.filter(l => l.po_number && l.id !== editing?.id).map(l => l.po_number as string)
+  )
+  const availableSoNumbers = soNumbers.filter(s => !usedSoNumbers.has(s.so_number) || s.so_number === form.po_number)
 
   const filtered = logs.filter(l => {
     const matchSearch =
@@ -1038,7 +1045,7 @@ export default function DRLogsPage() {
                         <SelectTrigger><SelectValue placeholder="Select SO…" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="">— None —</SelectItem>
-                          {soNumbers.map(s => <SelectItem key={s.id} value={s.so_number}>{s.so_number}</SelectItem>)}
+                          {availableSoNumbers.map(s => <SelectItem key={s.id} value={s.so_number}>{s.so_number}</SelectItem>)}
                         </SelectContent>
                       </Select>
                       {form.po_number && soItemsMap[form.po_number]?.length > 0 && (
@@ -1297,9 +1304,9 @@ export default function DRLogsPage() {
           </DialogHeader>
           <p className="text-xs text-muted-foreground -mt-2">
             All values are in millimeters, measured from the top-left corner of the page. Load your blank DR form
-            into the printer, click <strong>Print Test Grid</strong>, hold it up to the form to read off where each
-            field's blank line falls, then enter those numbers below. Make sure your print dialog uses 100% scale
-            with no margins.
+            into the printer, click <strong>Print Test Grid</strong>, hold it up to the form to read off where the
+            blank line for each field falls, then enter those numbers below. Make sure your print dialog uses 100%
+            scale with no margins.
           </p>
           <Button type="button" variant="outline" size="sm" onClick={printCalibGrid} className="w-fit gap-1.5">
             <Printer className="h-3.5 w-3.5" /> Print Test Grid
