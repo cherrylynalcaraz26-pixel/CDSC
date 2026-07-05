@@ -539,6 +539,30 @@ export default function DRLogsPage() {
       }
     }
 
+    // Editing a DR that had already decremented warehouse_stock would otherwise decrement it
+    // again on every save. Reverse the previous decrement (using the pre-edit persisted items,
+    // client, SO, and status) before the block below applies the new one — so only the net
+    // change between the old and new item quantities ever hits the stock.
+    if (editing && editing.po_number && (editing.status === 'received' || editing.status === 'partial')) {
+      const prevItems = getItems(editing.dr_number)
+      for (const it of prevItems) {
+        const qty = Number(it.quantity) || 0
+        if (qty <= 0) continue
+        const { data: wsRow } = await supabase
+          .from('warehouse_stock')
+          .select('id, quantity')
+          .eq('item_name', it.item_name.trim())
+          .eq('client_name', editing.supplier_name ?? '')
+          .maybeSingle()
+        if (wsRow) {
+          await supabase.from('warehouse_stock').update({
+            quantity: Number(wsRow.quantity) + qty,
+            updated_at: new Date().toISOString(),
+          }).eq('id', wsRow.id)
+        }
+      }
+    }
+
     // Mirror to sales_deliveries when linked to an SO
     if (soNumber) {
       await supabase.from('sales_deliveries').delete().eq('dr_number', drNumber)
