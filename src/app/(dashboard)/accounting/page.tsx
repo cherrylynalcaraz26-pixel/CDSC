@@ -22,7 +22,7 @@ import {
   FileBarChart, Zap, MoreHorizontal, Printer, Eye, CheckCircle2, XCircle, AlertTriangle,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { format, startOfMonth } from 'date-fns'
+import { format } from 'date-fns'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -123,21 +123,127 @@ const vatSummary = [
 
 const readinessScore = Math.round((readinessChecks.filter(c => c.status === 'pass').length / readinessChecks.length) * 100)
 
+// ── Date range filter (Preset year/quarter or Custom from/to) ─────────────────
+// Shared across Overview, Collections, and Bookkeeping so each tab can filter
+// its data by the same Preset/Custom date range control.
+
+function useDateRangeFilter() {
+  const currentYear = new Date().getFullYear()
+  const [filterYear, setFilterYear] = useState<string>('all')
+  const [filterQuarter, setFilterQuarter] = useState<string>('all')
+  const [customFrom, setCustomFrom] = useState('')
+  const [customTo, setCustomTo] = useState('')
+  const [useCustom, setUseCustom] = useState(false)
+
+  const { filterFrom, filterTo } = (() => {
+    if (useCustom) return { filterFrom: customFrom || undefined, filterTo: customTo || undefined }
+    if (filterYear === 'all') return { filterFrom: undefined, filterTo: undefined }
+    const y = parseInt(filterYear)
+    const qMap: Record<string, [string, string]> = {
+      Q1: [`${y}-01-01`, `${y}-03-31`],
+      Q2: [`${y}-04-01`, `${y}-06-30`],
+      Q3: [`${y}-07-01`, `${y}-09-30`],
+      Q4: [`${y}-10-01`, `${y}-12-31`],
+    }
+    if (filterQuarter !== 'all' && qMap[filterQuarter]) return { filterFrom: qMap[filterQuarter][0], filterTo: qMap[filterQuarter][1] }
+    return { filterFrom: `${y}-01-01`, filterTo: `${y}-12-31` }
+  })()
+
+  return {
+    currentYear, filterYear, setFilterYear, filterQuarter, setFilterQuarter,
+    customFrom, setCustomFrom, customTo, setCustomTo, useCustom, setUseCustom,
+    filterFrom, filterTo,
+  }
+}
+
+type DateRangeFilter = ReturnType<typeof useDateRangeFilter>
+
+function applyDateFilter<T>(df: DateRangeFilter, arr: T[], getDate: (item: T) => string | null | undefined) {
+  return arr.filter(item => {
+    const d = getDate(item)
+    if (!d) return true
+    if (df.filterFrom && d < df.filterFrom) return false
+    if (df.filterTo && d > df.filterTo) return false
+    return true
+  })
+}
+
+function DateFilterBar({ df }: { df: DateRangeFilter }) {
+  const yearOptions = Array.from({ length: 5 }, (_, i) => String(df.currentYear - i))
+  return (
+    <div className="flex flex-wrap items-end gap-3 p-3 rounded-lg bg-muted/30 border">
+      <div className="flex items-center gap-2">
+        <Label className="text-xs whitespace-nowrap">Filter by</Label>
+        <Select value={df.useCustom ? 'custom' : 'preset'} onValueChange={v => df.setUseCustom(v === 'custom')}>
+          <SelectTrigger className="h-8 text-xs w-24"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="preset">Preset</SelectItem>
+            <SelectItem value="custom">Custom</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      {!df.useCustom ? (
+        <>
+          <div className="flex items-center gap-2">
+            <Label className="text-xs">Year</Label>
+            <Select value={df.filterYear} onValueChange={v => { df.setFilterYear(v ?? 'all'); df.setFilterQuarter('all') }}>
+              <SelectTrigger className="h-8 text-xs w-24"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Years</SelectItem>
+                {yearOptions.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center gap-2">
+            <Label className="text-xs">Quarter</Label>
+            <Select value={df.filterQuarter} onValueChange={v => df.setFilterQuarter(v ?? 'all')} disabled={df.filterYear === 'all'}>
+              <SelectTrigger className="h-8 text-xs w-24"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Quarters</SelectItem>
+                <SelectItem value="Q1">Q1 (Jan–Mar)</SelectItem>
+                <SelectItem value="Q2">Q2 (Apr–Jun)</SelectItem>
+                <SelectItem value="Q3">Q3 (Jul–Sep)</SelectItem>
+                <SelectItem value="Q4">Q4 (Oct–Dec)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="flex items-center gap-2">
+            <Label className="text-xs">From</Label>
+            <Input type="date" className="h-8 text-xs w-36" value={df.customFrom} onChange={e => df.setCustomFrom(e.target.value)} />
+          </div>
+          <div className="flex items-center gap-2">
+            <Label className="text-xs">To</Label>
+            <Input type="date" className="h-8 text-xs w-36" value={df.customTo} onChange={e => df.setCustomTo(e.target.value)} />
+          </div>
+        </>
+      )}
+      {(df.filterFrom || df.filterTo) && (
+        <span className="text-xs text-muted-foreground">{df.filterFrom ?? '—'} → {df.filterTo ?? '—'}</span>
+      )}
+    </div>
+  )
+}
+
 // ── Overview Tab ──────────────────────────────────────────────────────────────
 
 function OverviewTab() {
   const supabase = createClient()
+  const df = useDateRangeFilter()
   const [summary, setSummary] = useState({ totalPO: 0, totalReceived: 0, totalEWT: 0, totalVAT: 0, pendingPayables: 0 })
   const [recentPOs, setRecentPOs] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function load() {
-      const now = new Date()
-      const [pos, rrs] = await Promise.all([
-        supabase.from('purchase_orders').select('total_amount, ewt_amount, vat_amount, status').gte('created_at', startOfMonth(now).toISOString()),
-        supabase.from('receiving_reports').select('total_amount').gte('created_at', startOfMonth(now).toISOString()),
-      ])
+      setLoading(true)
+      let poQuery = supabase.from('purchase_orders').select('total_amount, ewt_amount, vat_amount, status')
+      let rrQuery = supabase.from('receiving_reports').select('total_amount')
+      if (df.filterFrom) { poQuery = poQuery.gte('created_at', df.filterFrom); rrQuery = rrQuery.gte('created_at', df.filterFrom) }
+      if (df.filterTo) { poQuery = poQuery.lte('created_at', df.filterTo); rrQuery = rrQuery.lte('created_at', df.filterTo) }
+      const [pos, rrs] = await Promise.all([poQuery, rrQuery])
       const poData = pos.data ?? []
       const rrData = rrs.data ?? []
       setSummary({
@@ -156,11 +262,13 @@ function OverviewTab() {
       setLoading(false)
     }
     load()
-  }, [])
+  }, [df.filterFrom, df.filterTo])
+
+  const periodLabel = df.filterFrom || df.filterTo ? `${df.filterFrom ?? '—'} → ${df.filterTo ?? '—'}` : 'All Time'
 
   const cards = [
-    { title: 'PO Amount (This Month)', value: fmt(summary.totalPO), icon: FileText, color: 'text-blue-600' },
-    { title: 'Total Received (This Month)', value: fmt(summary.totalReceived), icon: TrendingUp, color: 'text-green-600' },
+    { title: 'PO Amount', value: fmt(summary.totalPO), icon: FileText, color: 'text-blue-600' },
+    { title: 'Total Received', value: fmt(summary.totalReceived), icon: TrendingUp, color: 'text-green-600' },
     { title: 'Pending Payables', value: fmt(summary.pendingPayables), icon: DollarSign, color: 'text-red-700' },
     { title: 'EWT Withheld', value: fmt(summary.totalEWT), icon: Receipt, color: 'text-purple-600' },
     { title: 'Input VAT', value: fmt(summary.totalVAT), icon: Calculator, color: 'text-red-600' },
@@ -168,7 +276,8 @@ function OverviewTab() {
 
   return (
     <div className="space-y-6">
-      <p className="text-sm text-muted-foreground">Current month — {format(new Date(), 'MMMM yyyy')}</p>
+      <DateFilterBar df={df} />
+      <p className="text-sm text-muted-foreground">Showing: {periodLabel}</p>
 
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         {cards.map(card => (
@@ -243,6 +352,7 @@ function CollectionsTab() {
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [clientFilter, setClientFilter] = useState('')
+  const df = useDateRangeFilter()
   const [form, setForm] = useState({
     client_id: '', client_name: '', amount: '',
     payment_mode: 'Cash', reference_number: '', collection_date: '', remarks: '',
@@ -299,9 +409,11 @@ function CollectionsTab() {
     else { toast.success('Deleted'); load() }
   }
 
-  const filteredRecords = clientFilter
-    ? records.filter(r => (r.client_name ?? '').toLowerCase().includes(clientFilter.toLowerCase()))
-    : records
+  const filteredRecords = applyDateFilter(
+    df,
+    clientFilter ? records.filter(r => (r.client_name ?? '').toLowerCase().includes(clientFilter.toLowerCase())) : records,
+    r => r.collection_date
+  )
   const totalPosted = filteredRecords.filter(r => r.status === 'posted').reduce((s, r) => s + (r.amount ?? 0) - (r.form_2307 ?? 0), 0)
   const countPosted = filteredRecords.filter(r => r.status === 'posted').length
   const countVoided = filteredRecords.filter(r => r.status === 'voided').length
@@ -314,6 +426,8 @@ function CollectionsTab() {
           <Plus className="h-4 w-4 mr-2" />New Collection
         </Button>
       </div>
+
+      <DateFilterBar df={df} />
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         <Card><CardContent className="pt-5 pb-4">
@@ -1094,43 +1208,13 @@ function BookkeepingTab() {
   const [jLines, setJLines] = useState<JournalLine[]>([])
   const [csiRecords, setCsiRecords] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const df = useDateRangeFilter()
+  const { filterFrom, filterTo } = df
 
-  // Date filter
-  const currentYear = new Date().getFullYear()
-  const [filterYear, setFilterYear] = useState<string>('all')
-  const [filterQuarter, setFilterQuarter] = useState<string>('all')
-  const [customFrom, setCustomFrom] = useState('')
-  const [customTo, setCustomTo] = useState('')
-  const [useCustom, setUseCustom] = useState(false)
-
-  const { filterFrom, filterTo } = (() => {
-    if (useCustom) return { filterFrom: customFrom || undefined, filterTo: customTo || undefined }
-    if (filterYear === 'all') return { filterFrom: undefined, filterTo: undefined }
-    const y = parseInt(filterYear)
-    const qMap: Record<string, [string, string]> = {
-      Q1: [`${y}-01-01`, `${y}-03-31`],
-      Q2: [`${y}-04-01`, `${y}-06-30`],
-      Q3: [`${y}-07-01`, `${y}-09-30`],
-      Q4: [`${y}-10-01`, `${y}-12-31`],
-    }
-    if (filterQuarter !== 'all' && qMap[filterQuarter]) return { filterFrom: qMap[filterQuarter][0], filterTo: qMap[filterQuarter][1] }
-    return { filterFrom: `${y}-01-01`, filterTo: `${y}-12-31` }
-  })()
-
-  function applyDateFilter<T>(arr: T[], getDate: (item: T) => string | null | undefined) {
-    return arr.filter(item => {
-      const d = getDate(item)
-      if (!d) return true
-      if (filterFrom && d < filterFrom) return false
-      if (filterTo && d > filterTo) return false
-      return true
-    })
-  }
-
-  const filteredCollections = applyDateFilter(collections, c => (c as Collection).collection_date)
-  const filteredDisbursements = applyDateFilter(disbursements, d => (d as Disbursement).disb_date)
-  const filteredCsi = applyDateFilter(csiRecords, r => r.si_date)
-  const filteredJLines = applyDateFilter(jLines, l => (l as JournalLine).journal_entries?.entry_date)
+  const filteredCollections = applyDateFilter(df, collections, c => (c as Collection).collection_date)
+  const filteredDisbursements = applyDateFilter(df, disbursements, d => (d as Disbursement).disb_date)
+  const filteredCsi = applyDateFilter(df, csiRecords, r => r.si_date)
+  const filteredJLines = applyDateFilter(df, jLines, l => (l as JournalLine).journal_entries?.entry_date)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -1155,63 +1239,9 @@ function BookkeepingTab() {
     return <div className="flex items-center justify-center h-64"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
   }
 
-  const yearOptions = Array.from({ length: 5 }, (_, i) => String(currentYear - i))
-
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-3 p-3 rounded-lg bg-muted/30 border">
-        <div className="flex items-center gap-2">
-          <Label className="text-xs whitespace-nowrap">Filter by</Label>
-          <Select value={useCustom ? 'custom' : 'preset'} onValueChange={v => setUseCustom(v === 'custom')}>
-            <SelectTrigger className="h-8 text-xs w-24"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="preset">Preset</SelectItem>
-              <SelectItem value="custom">Custom</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        {!useCustom ? (
-          <>
-            <div className="flex items-center gap-2">
-              <Label className="text-xs">Year</Label>
-              <Select value={filterYear} onValueChange={v => { setFilterYear(v ?? 'all'); setFilterQuarter('all') }}>
-                <SelectTrigger className="h-8 text-xs w-24"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Years</SelectItem>
-                  {yearOptions.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="flex items-center gap-2">
-              <Label className="text-xs">Quarter</Label>
-              <Select value={filterQuarter} onValueChange={v => setFilterQuarter(v ?? 'all')} disabled={filterYear === 'all'}>
-                <SelectTrigger className="h-8 text-xs w-24"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Quarters</SelectItem>
-                  <SelectItem value="Q1">Q1 (Jan–Mar)</SelectItem>
-                  <SelectItem value="Q2">Q2 (Apr–Jun)</SelectItem>
-                  <SelectItem value="Q3">Q3 (Jul–Sep)</SelectItem>
-                  <SelectItem value="Q4">Q4 (Oct–Dec)</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="flex items-center gap-2">
-              <Label className="text-xs">From</Label>
-              <Input type="date" className="h-8 text-xs w-36" value={customFrom} onChange={e => setCustomFrom(e.target.value)} />
-            </div>
-            <div className="flex items-center gap-2">
-              <Label className="text-xs">To</Label>
-              <Input type="date" className="h-8 text-xs w-36" value={customTo} onChange={e => setCustomTo(e.target.value)} />
-            </div>
-          </>
-        )}
-        {(filterFrom || filterTo) && (
-          <span className="text-xs text-muted-foreground">{filterFrom ?? '—'} → {filterTo ?? '—'}</span>
-        )}
-      </div>
+      <DateFilterBar df={df} />
       <Tabs defaultValue="crj">
         <TabsList className="flex-wrap h-auto gap-1">
           <TabsTrigger value="crj" className="flex items-center gap-1.5"><BookOpen className="h-3.5 w-3.5" />Sales Journal</TabsTrigger>

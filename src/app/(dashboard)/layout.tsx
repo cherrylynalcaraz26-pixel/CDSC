@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { Sidebar, MobileSidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { SearchProvider } from '@/context/search-context'
@@ -10,13 +10,34 @@ import { CompanyProvider } from '@/context/company-context'
 import {
   LayoutDashboard, TrendingUp, ShoppingCart, Warehouse, Calculator, MessageSquare,
 } from 'lucide-react'
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 
-const BOTTOM_NAV = [
+interface BottomNavChild { label: string; href: string }
+
+const BOTTOM_NAV: { label: string; href: string; icon: React.ComponentType<{ className?: string }>; children?: BottomNavChild[] }[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'CRM', href: '/crm', icon: TrendingUp },
-  { label: 'Purchasing', href: '/sales-orders', icon: ShoppingCart },
-  { label: 'Warehouse', href: '/inventory', icon: Warehouse },
+  {
+    label: 'Purchasing', href: '/sales-orders', icon: ShoppingCart,
+    children: [
+      { label: 'Purchase Orders', href: '/purchase-orders' },
+      { label: 'Quotation', href: '/quotation' },
+      { label: 'Sales Orders', href: '/sales-orders' },
+    ],
+  },
+  {
+    label: 'Warehouse', href: '/inventory', icon: Warehouse,
+    children: [
+      { label: 'Receiving', href: '/receiving' },
+      { label: 'Inventory', href: '/inventory' },
+      { label: 'DR Logs', href: '/dr-logs' },
+      { label: 'CSI Monitoring', href: '/csi-monitoring' },
+      { label: 'Pull Out & Billing', href: '/pull-out-billing' },
+    ],
+  },
   { label: 'Accounting', href: '/accounting', icon: Calculator },
   { label: 'Messages', href: '/messages', icon: MessageSquare },
 ]
@@ -24,6 +45,7 @@ const BOTTOM_NAV = [
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const pathname = usePathname()
+  const router = useRouter()
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false
     return localStorage.getItem('sidebar-collapsed') === 'true'
@@ -56,9 +78,42 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Mobile bottom nav */}
       <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-[#111111] border-t border-white/10 flex items-stretch">
         {BOTTOM_NAV.map(link => {
-          const active = link.href === '/dashboard'
+          const isActiveHref = (href: string) => href === '/dashboard'
             ? pathname === '/dashboard'
-            : pathname === link.href || pathname.startsWith(link.href + '/')
+            : pathname === href || pathname.startsWith(href + '/')
+          const active = link.children
+            ? link.children.some(c => isActiveHref(c.href))
+            : isActiveHref(link.href)
+
+          if (link.children) {
+            return (
+              <DropdownMenu key={link.href}>
+                <DropdownMenuTrigger
+                  className={cn(
+                    'flex-1 flex flex-col items-center justify-center gap-1 py-3 text-[11px] font-medium transition-colors outline-none',
+                    active ? 'text-red-400' : 'text-white/40 hover:text-white/70'
+                  )}
+                >
+                  <link.icon className={cn('h-5 w-5 shrink-0', active ? 'text-red-400' : '')} />
+                  <span className="leading-tight truncate max-w-full px-1">{link.label}</span>
+                  {/* Dot indicator — signals this tab holds multiple pages */}
+                  <span className="flex items-center gap-0.5">
+                    {link.children.map((_, i) => (
+                      <span key={i} className={cn('h-1 w-1 rounded-full', active ? 'bg-red-400' : 'bg-white/40')} />
+                    ))}
+                  </span>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="center" side="top" className="mb-1 w-48">
+                  {link.children.map(child => (
+                    <DropdownMenuItem key={child.href} onClick={() => router.replace(child.href)} className={cn(isActiveHref(child.href) && 'font-semibold text-red-600')}>
+                      {child.label}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )
+          }
+
           return (
             <Link
               key={link.href}
