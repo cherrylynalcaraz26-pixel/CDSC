@@ -38,7 +38,7 @@ interface ClientOption {
   tin: string | null
   industry: string | null
 }
-interface SOItemOption { item_name: string; unit: string; quantity: number }
+interface SOItemOption { item_name: string; unit: string; quantity: number; selling_price: number }
 
 interface BlankFormCalib {
   pageWidthMm: number
@@ -198,7 +198,7 @@ export default function CSIMonitoringPage() {
     if (soIds.length > 0) {
       const { data: soItemsData } = await supabase
         .from('so_items')
-        .select('item_name, unit, quantity, so_id, sales_orders!inner(so_number)')
+        .select('item_name, unit, quantity, selling_price, so_id, sales_orders!inner(so_number)')
         .in('so_id', soIds)
       if (soItemsData) {
         const map: Record<string, SOItemOption[]> = {}
@@ -206,7 +206,7 @@ export default function CSIMonitoringPage() {
           const soNum = row.sales_orders?.so_number
           if (!soNum) continue
           if (!map[soNum]) map[soNum] = []
-          map[soNum].push({ item_name: row.item_name, unit: row.unit ?? '', quantity: Number(row.quantity) })
+          map[soNum].push({ item_name: row.item_name, unit: row.unit ?? '', quantity: Number(row.quantity), selling_price: Number(row.selling_price) || 0 })
         }
         setSoItemsMap(map)
       }
@@ -653,7 +653,7 @@ export default function CSIMonitoringPage() {
                         </SelectContent>
                       </Select>
                       {header.po_number && soItemsMap[header.po_number]?.length > 0 && (
-                        <button type="button" onClick={() => setItems(soItemsMap[header.po_number].map(i => ({ item_name: i.item_name, unit: i.unit, quantity: String(i.quantity), unit_price: '' })))}
+                        <button type="button" onClick={() => setItems(soItemsMap[header.po_number].map(i => ({ item_name: i.item_name, unit: i.unit, quantity: String(i.quantity), unit_price: i.selling_price ? String(i.selling_price) : '' })))}
                           className="w-full h-7 text-xs border border-dashed border-blue-400 text-blue-600 hover:bg-blue-50 rounded-md mt-1 font-medium">
                           Load items from SO
                         </button>

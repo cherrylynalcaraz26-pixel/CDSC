@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Fragment } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -17,7 +17,7 @@ import {
   Plus, MoreHorizontal, Eye, Printer, Loader2,
   Trash2, CheckCircle2, XCircle, ArrowRightLeft, X,
   Package, Search, Mail, Send, Pencil, FileText,
-  ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp, ChevronRight,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
@@ -116,6 +116,23 @@ export default function PurchaseOrdersPage() {
   // View PO modal
   const [viewPO, setViewPO] = useState<PO | null>(null)
   const [viewPOItems, setViewPOItems] = useState<{ item_name: string; quantity: number; unit: string | null; unit_price: number; selling_price: number | null; total_amount: number }[]>([])
+
+  // Row expand (click a row to show its details/items inline)
+  type POLineItem = { item_name: string; quantity: number; unit: string | null; unit_price: number; selling_price: number | null; total_amount: number }
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [expandedItems, setExpandedItems] = useState<Record<string, POLineItem[]>>({})
+
+  async function toggleExpand(po: PO) {
+    if (expandedId === po.id) { setExpandedId(null); return }
+    setExpandedId(po.id)
+    if (!expandedItems[po.id]) {
+      const { data } = await supabase.from('po_items').select('item_name,quantity,unit_of_measure,unit_cost,selling_price,total_cost').eq('po_id', po.id).order('created_at')
+      setExpandedItems(prev => ({
+        ...prev,
+        [po.id]: (data ?? []).map(r => ({ item_name: r.item_name, quantity: r.quantity, unit: r.unit_of_measure, unit_price: r.unit_cost, selling_price: r.selling_price, total_amount: r.total_cost })),
+      }))
+    }
+  }
 
   // Edit
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -696,6 +713,7 @@ export default function PurchaseOrdersPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-8" />
                   <TableHead>PO Number</TableHead>
                   <TableHead>PR Ref</TableHead>
                   <TableHead>Supplier</TableHead>
@@ -712,20 +730,26 @@ export default function PurchaseOrdersPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={11} className="text-center py-10">
+                    <TableCell colSpan={12} className="text-center py-10">
                       <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                     </TableCell>
                   </TableRow>
                 ) : displayedPos.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={11} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={12} className="text-center py-12 text-muted-foreground">
                       No purchase orders yet. Click <strong>Create PO</strong> to get started.
                     </TableCell>
                   </TableRow>
                 ) : displayedPos.map(po => {
                   const sCfg = STATUS_CFG[po.status] ?? STATUS_CFG.open
+                  const isExpanded = expandedId === po.id
+                  const lineItems = expandedItems[po.id] ?? []
                   return (
-                    <TableRow key={po.id}>
+                    <Fragment key={po.id}>
+                    <TableRow className="cursor-pointer hover:bg-muted/50" onClick={() => toggleExpand(po)}>
+                      <TableCell className="pr-0 text-muted-foreground">
+                        {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      </TableCell>
                       <TableCell className="font-mono text-xs font-semibold text-red-600">{po.po_number ?? '—'}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{(po.pr as any)?.pr_number ?? '—'}</TableCell>
                       <TableCell className="font-medium text-sm">{(po.supplier as any)?.company_name ?? '—'}</TableCell>
@@ -742,7 +766,7 @@ export default function PurchaseOrdersPage() {
                       <TableCell>
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${sCfg.cls}`}>{sCfg.label}</span>
                       </TableCell>
-                      <TableCell>
+                      <TableCell onClick={e => e.stopPropagation()}>
                         <DropdownMenu>
                           <DropdownMenuTrigger className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent">
                             <MoreHorizontal className="h-4 w-4" />
@@ -789,6 +813,49 @@ export default function PurchaseOrdersPage() {
                         </DropdownMenu>
                       </TableCell>
                     </TableRow>
+                    {isExpanded && (
+                      <TableRow className="bg-muted/20 hover:bg-muted/20">
+                        <TableCell colSpan={12} className="py-3 px-6">
+                          <div className="space-y-3">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                              <div><span className="text-muted-foreground block">Payment Terms</span>{po.payment_terms ?? '—'}</div>
+                              <div><span className="text-muted-foreground block">Discount</span>{po.discount_rate ? `${po.discount_rate}% (${fmt(po.discount_amount ?? 0)})` : '—'}</div>
+                              <div><span className="text-muted-foreground block">CWT</span>{fmt(po.cwt_amount ?? 0)}</div>
+                              <div><span className="text-muted-foreground block">Remarks</span>{po.remarks || '—'}</div>
+                            </div>
+                            {lineItems.length === 0 ? (
+                              <p className="text-xs text-muted-foreground italic">No line items found.</p>
+                            ) : (
+                              <div className="border rounded-md overflow-hidden text-xs bg-background">
+                                <table className="w-full">
+                                  <thead className="bg-muted/60">
+                                    <tr>
+                                      <th className="text-left px-3 py-1.5 font-medium">Item</th>
+                                      <th className="text-right px-3 py-1.5 font-medium w-20">Qty</th>
+                                      <th className="text-left px-3 py-1.5 font-medium w-24">Unit</th>
+                                      <th className="text-right px-3 py-1.5 font-medium w-28">Unit Cost</th>
+                                      <th className="text-right px-3 py-1.5 font-medium w-28">Amount</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {lineItems.map((it, i) => (
+                                      <tr key={i} className="border-t">
+                                        <td className="px-3 py-1">{it.item_name}</td>
+                                        <td className="px-3 py-1 text-right font-medium">{it.quantity}</td>
+                                        <td className="px-3 py-1 text-muted-foreground">{it.unit}</td>
+                                        <td className="px-3 py-1 text-right">{fmt(it.unit_price)}</td>
+                                        <td className="px-3 py-1 text-right font-medium">{fmt(it.total_amount)}</td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    </Fragment>
                   )
                 })}
               </TableBody>
