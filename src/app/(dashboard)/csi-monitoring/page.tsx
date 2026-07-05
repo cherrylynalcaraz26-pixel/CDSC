@@ -142,7 +142,8 @@ export default function CSIMonitoringPage() {
   const [itemOptions, setItemOptions] = useState<ItemOption[]>([])
   const [clientOptions, setClientOptions] = useState<ClientOption[]>([])
   const [soNumbers, setSoNumbers] = useState<{ id: string; so_number: string }[]>([])
-  const [drNumbers, setDrNumbers] = useState<{ id: string; dr_number: string }[]>([])
+  const [drNumbers, setDrNumbers] = useState<{ id: string; dr_number: string; po_number: string | null }[]>([])
+  const [drNumberLockedFromSo, setDrNumberLockedFromSo] = useState(false)
   const [soItemsMap, setSoItemsMap] = useState<Record<string, SOItemOption[]>>({})
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
@@ -186,12 +187,12 @@ export default function CSIMonitoringPage() {
       supabase.from('clients').select('id, company_name, show_csi_in_portal, address, city, province, tin, industry').eq('status', 'active').order('company_name'),
       supabase.from('sales_orders').select('id, so_number').not('so_number', 'is', null).order('created_at', { ascending: false }),
       supabase.from('dr_log_items').select('dr_number, item_name, dr_logs!inner(client_name)').order('item_name'),
-      supabase.from('dr_logs').select('id, dr_number').order('dr_date', { ascending: false }),
+      supabase.from('dr_logs').select('id, dr_number, po_number').order('dr_date', { ascending: false }),
     ])
     setDrItemsForCrossRef((drItemsData ?? []).map((d: any) => ({ dr_number: d.dr_number, item_name: d.item_name, client_name: d.dr_logs?.client_name ?? null })))
     setItemOptions((itemOptData ?? []) as ItemOption[])
     setClientOptions((clientData ?? []) as ClientOption[])
-    setDrNumbers((drLogData ?? []) as { id: string; dr_number: string }[])
+    setDrNumbers((drLogData ?? []) as { id: string; dr_number: string; po_number: string | null }[])
     const filteredSOs = (soData ?? []).filter((s: any) => s.so_number) as { id: string; so_number: string }[]
     setSoNumbers(filteredSOs)
     const soIds = filteredSOs.map(s => s.id)
@@ -499,6 +500,7 @@ export default function CSIMonitoringPage() {
     ])
     setHeader({ ...emptyHeader(), si_number: next })
     setItems([emptyItem()])
+    setDrNumberLockedFromSo(false)
     setOpen(true)
   }
 
@@ -514,6 +516,7 @@ export default function CSIMonitoringPage() {
       { value: next, tag: 'next' as const },
     ]
     setSiNumberOptions(options)
+    setDrNumberLockedFromSo(false)
     setHeader({
       si_date: first.si_date,
       si_number: first.si_number,
@@ -645,7 +648,7 @@ export default function CSIMonitoringPage() {
                   <div className="grid grid-cols-[2fr_1fr] gap-4">
                     <div className="space-y-1.5">
                       <Label>SO Number</Label>
-                      <Select value={header.po_number} onValueChange={v => setHeader(h => ({ ...h, po_number: v ?? '' }))}>
+                      <Select value={header.po_number} onValueChange={v => { setHeader(h => ({ ...h, po_number: v ?? '' })); setDrNumberLockedFromSo(false) }}>
                         <SelectTrigger><SelectValue placeholder="Select SO…" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="">— None —</SelectItem>
@@ -653,15 +656,29 @@ export default function CSIMonitoringPage() {
                         </SelectContent>
                       </Select>
                       {header.po_number && soItemsMap[header.po_number]?.length > 0 && (
-                        <button type="button" onClick={() => setItems(soItemsMap[header.po_number].map(i => ({ item_name: i.item_name, unit: i.unit, quantity: String(i.quantity), unit_price: i.selling_price ? String(i.selling_price) : '' })))}
-                          className="w-full h-7 text-xs border border-dashed border-blue-400 text-blue-600 hover:bg-blue-50 rounded-md mt-1 font-medium">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setItems(soItemsMap[header.po_number].map(i => ({ item_name: i.item_name, unit: i.unit, quantity: String(i.quantity), unit_price: i.selling_price ? String(i.selling_price) : '' })))
+                            // A DR already recorded against this SO is the correct DR for this invoice —
+                            // lock the field so it can't be swapped to an unrelated one by mistake.
+                            const linkedDr = drNumbers.find(d => d.po_number === header.po_number)
+                            if (linkedDr) {
+                              setHeader(h => ({ ...h, dr_number: linkedDr.dr_number }))
+                              setDrNumberLockedFromSo(true)
+                            } else {
+                              setDrNumberLockedFromSo(false)
+                            }
+                          }}
+                          className="w-full h-7 text-xs border border-dashed border-blue-400 text-blue-600 hover:bg-blue-50 rounded-md mt-1 font-medium"
+                        >
                           Load items from SO
                         </button>
                       )}
                     </div>
                     <div className="space-y-1.5">
                       <Label>DR Number</Label>
-                      <Select value={header.dr_number} onValueChange={v => setHeader(h => ({ ...h, dr_number: v ?? '' }))}>
+                      <Select value={header.dr_number} onValueChange={v => setHeader(h => ({ ...h, dr_number: v ?? '' }))} disabled={drNumberLockedFromSo}>
                         <SelectTrigger><SelectValue placeholder="Select DR…" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="">— None —</SelectItem>
@@ -671,6 +688,9 @@ export default function CSIMonitoringPage() {
                           )}
                         </SelectContent>
                       </Select>
+                      {drNumberLockedFromSo && (
+                        <p className="text-[11px] text-muted-foreground">Locked — matched from the loaded SO&apos;s DR.</p>
+                      )}
                     </div>
                   </div>
                 </div>
