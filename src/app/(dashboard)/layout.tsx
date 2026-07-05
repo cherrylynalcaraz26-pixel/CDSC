@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { Sidebar, MobileSidebar } from '@/components/layout/sidebar'
@@ -164,10 +164,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <CompanyProvider><SearchProvider>
       <div className="flex h-screen overflow-hidden bg-muted/30">
         {/* Desktop sidebar */}
-        <Sidebar collapsed={sidebarCollapsed} onToggleCollapse={toggleSidebar} />
+        <Suspense fallback={null}>
+          <Sidebar collapsed={sidebarCollapsed} onToggleCollapse={toggleSidebar} />
+        </Suspense>
 
         {/* Mobile drawer */}
-        <MobileSidebar open={mobileOpen} onClose={() => setMobileOpen(false)} />
+        <Suspense fallback={null}>
+          <MobileSidebar open={mobileOpen} onClose={() => setMobileOpen(false)} />
+        </Suspense>
 
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
           <Header onMenuClick={() => setMobileOpen(true)} sidebarCollapsed={sidebarCollapsed} />

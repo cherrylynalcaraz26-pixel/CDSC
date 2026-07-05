@@ -165,7 +165,7 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <div className="flex flex-col items-center gap-4">
         <div className="relative w-48 h-20">
-          <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="object-contain" priority />
+          <Image src="/cdsc-logo.png" alt="CDSC" fill className="object-contain" priority />
         </div>
         <div className="flex items-center gap-2 text-sm text-gray-400">
           <div className="h-1.5 w-1.5 rounded-full bg-red-500 animate-bounce [animation-delay:0ms]" />

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -1665,7 +1665,7 @@ function CSITab() {
   )
 }
 
-export default function AccountingPage() {
+function AccountingPageContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
@@ -1723,5 +1723,13 @@ export default function AccountingPage() {
         </div>
       </Tabs>
     </div>
+  )
+}
+
+export default function AccountingPage() {
+  return (
+    <Suspense fallback={null}>
+      <AccountingPageContent />
+    </Suspense>
   )
 }

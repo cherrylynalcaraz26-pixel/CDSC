@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
@@ -46,7 +46,7 @@ interface DRRow {
 
 type ModalType = 'receive' | 'issue' | 'adjust' | null
 
-export default function PortalStockPage() {
+function PortalStockPageContent() {
   const supabase = createClient()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -1363,5 +1363,13 @@ export default function PortalStockPage() {
         </div>
       )}
     </div>
+  )
+}
+
+export default function PortalStockPage() {
+  return (
+    <Suspense fallback={null}>
+      <PortalStockPageContent />
+    </Suspense>
   )
 }
