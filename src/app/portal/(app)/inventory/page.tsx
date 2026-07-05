@@ -61,29 +61,33 @@ export default function PortalInventoryPage() {
           setClientId(clientRow.id); setClientName(companyName)
           // Browse Catalog lists CDSC's master product catalog (so clients can shop
           // and place new orders), not the client's own already-received stock.
-          const [{ data, error }, { data: soRows }, { data: drRows }, { data: csiRows }] = await Promise.all([
+          // "My Items" history is scoped to the same show_in_portal-visible records
+          // the rest of the portal (My Orders, My Stock) uses — not everything CDSC
+          // has on file for this client.
+          const [{ data, error }, { data: soRows }, { data: csiRows }] = await Promise.all([
             supabase
               .from('items')
               .select('id, item_name, item_code, description, unit_of_measure, selling_price, category:categories(category_name)')
               .eq('status', 'active')
               .order('item_name'),
             companyName
-              ? supabase.from('sales_orders').select('so_items(item_name)').eq('client_name', companyName)
-              : Promise.resolve({ data: [] as { so_items: { item_name: string }[] }[] }),
+              ? supabase.from('sales_orders').select('so_number, so_items(item_name)').eq('client_name', companyName).eq('show_in_portal', true)
+              : Promise.resolve({ data: [] as { so_number: string | null; so_items: { item_name: string }[] }[] }),
             companyName
-              ? supabase.from('dr_logs').select('dr_number').eq('supplier_name', companyName)
-              : Promise.resolve({ data: [] as { dr_number: string }[] }),
-            companyName
-              ? supabase.from('csi_records').select('item_name').eq('client_name', companyName)
+              ? supabase.from('csi_records').select('item_name').eq('client_name', companyName).eq('show_in_portal', true)
               : Promise.resolve({ data: [] as { item_name: string }[] }),
           ])
           if (error) toast.error(error.message)
 
-          const drNums = (drRows ?? []).map(d => d.dr_number).filter(Boolean)
+          const visibleSoNumbers = (soRows ?? []).map(so => so.so_number).filter(Boolean) as string[]
           let drItemNames: string[] = []
-          if (drNums.length > 0) {
-            const { data: drItems } = await supabase.from('dr_log_items').select('item_name').in('dr_number', drNums)
-            drItemNames = (drItems ?? []).map(i => i.item_name)
+          if (visibleSoNumbers.length > 0) {
+            const { data: drRows } = await supabase.from('dr_logs').select('dr_number').eq('supplier_name', companyName).in('po_number', visibleSoNumbers)
+            const drNums = (drRows ?? []).map(d => d.dr_number).filter(Boolean)
+            if (drNums.length > 0) {
+              const { data: drItems } = await supabase.from('dr_log_items').select('item_name').in('dr_number', drNums)
+              drItemNames = (drItems ?? []).map(i => i.item_name)
+            }
           }
           const soItemNames = (soRows ?? []).flatMap(so => (so.so_items ?? []).map(it => it.item_name))
           const csiItemNames = (csiRows ?? []).map(r => r.item_name)
