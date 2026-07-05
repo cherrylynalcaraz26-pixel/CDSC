@@ -110,7 +110,7 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
         if (companyName) {
           const [drRes, stockRes, msgRes] = await Promise.all([
             supabase.from('dr_logs').select('dr_number,dr_date,status')
-              .eq('client_name', companyName).in('status', ['received', 'partial'])
+              .eq('supplier_name', companyName).in('status', ['received', 'partial'])
               .order('dr_date', { ascending: false }).limit(5),
             supabase.from('client_inventory').select('item_name,quantity_on_hand,low_stock_threshold')
               .eq('client_id', cid),

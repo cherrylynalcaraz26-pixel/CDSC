@@ -16,6 +16,7 @@ interface InventoryItem {
   unit: string | null
   selling_price: number | null
   description: string | null
+  isMine: boolean
 }
 
 // Item names/descriptions in the master catalog sometimes carry double
@@ -47,6 +48,7 @@ export default function PortalInventoryPage() {
   const [clientName, setClientName] = useState('')
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [localSearch, setLocalSearch] = useState('')
+  const [scope, setScope] = useState<'mine' | 'all'>('mine')
 
   useEffect(() => {
     async function load() {
@@ -55,15 +57,40 @@ export default function PortalInventoryPage() {
         const { data: clientRow } = await supabase
           .from('clients').select('id, company_name').eq('auth_user_id', session.user.id).single()
         if (clientRow) {
-          setClientId(clientRow.id); setClientName(clientRow.company_name)
+          const companyName = clientRow.company_name ?? ''
+          setClientId(clientRow.id); setClientName(companyName)
           // Browse Catalog lists CDSC's master product catalog (so clients can shop
           // and place new orders), not the client's own already-received stock.
-          const { data, error } = await supabase
-            .from('items')
-            .select('id, item_name, item_code, description, unit_of_measure, selling_price, category:categories(category_name)')
-            .eq('status', 'active')
-            .order('item_name')
+          const [{ data, error }, { data: soRows }, { data: drRows }, { data: csiRows }] = await Promise.all([
+            supabase
+              .from('items')
+              .select('id, item_name, item_code, description, unit_of_measure, selling_price, category:categories(category_name)')
+              .eq('status', 'active')
+              .order('item_name'),
+            companyName
+              ? supabase.from('sales_orders').select('so_items(item_name)').eq('client_name', companyName)
+              : Promise.resolve({ data: [] as { so_items: { item_name: string }[] }[] }),
+            companyName
+              ? supabase.from('dr_logs').select('dr_number').eq('supplier_name', companyName)
+              : Promise.resolve({ data: [] as { dr_number: string }[] }),
+            companyName
+              ? supabase.from('csi_records').select('item_name').eq('client_name', companyName)
+              : Promise.resolve({ data: [] as { item_name: string }[] }),
+          ])
           if (error) toast.error(error.message)
+
+          const drNums = (drRows ?? []).map(d => d.dr_number).filter(Boolean)
+          let drItemNames: string[] = []
+          if (drNums.length > 0) {
+            const { data: drItems } = await supabase.from('dr_log_items').select('item_name').in('dr_number', drNums)
+            drItemNames = (drItems ?? []).map(i => i.item_name)
+          }
+          const soItemNames = (soRows ?? []).flatMap(so => (so.so_items ?? []).map(it => it.item_name))
+          const csiItemNames = (csiRows ?? []).map(r => r.item_name)
+          const myNames = new Set(
+            [...soItemNames, ...drItemNames, ...csiItemNames].filter(Boolean).map(n => cleanText(n).toLowerCase())
+          )
+
           setItems((data ?? []).map((r: {
             id: string; item_name: string; item_code: string | null; description: string | null
             unit_of_measure: string | null; selling_price: number | null; category: { category_name: string }[] | null
@@ -75,7 +102,11 @@ export default function PortalInventoryPage() {
             unit: r.unit_of_measure,
             selling_price: r.selling_price != null ? Number(r.selling_price) : null,
             description: r.description ? cleanText(r.description) : null,
+            isMine: myNames.has(cleanText(r.item_name).toLowerCase()),
           })))
+          // Default to a scoped "My Items" view; fall back to the full catalog
+          // automatically if this client has no purchase history yet.
+          if (myNames.size === 0) setScope('all')
         }
       }
       setLoading(false)
@@ -84,6 +115,7 @@ export default function PortalInventoryPage() {
   }, [])
 
   const categories = ['', ...Array.from(new Set(items.map(i => i.category).filter(Boolean) as string[])).sort()]
+  const myItemCount = items.filter(i => i.isMine).length
 
   const filtered = items.filter(i => {
     const q = (search || localSearch).toLowerCase()
@@ -94,7 +126,8 @@ export default function PortalInventoryPage() {
       (i.unit ?? '').toLowerCase().includes(q) ||
       (i.description ?? '').toLowerCase().includes(q)
     const matchCat = !category || i.category === category
-    return matchSearch && matchCat
+    const matchScope = scope === 'all' || i.isMine
+    return matchSearch && matchCat && matchScope
   })
 
   // Cart helpers
@@ -207,6 +240,18 @@ export default function PortalInventoryPage() {
       {/* Search + filters */}
       <div className="space-y-3">
         <div className="flex gap-2 flex-wrap items-center">
+          <div className="flex border border-gray-300 rounded-lg overflow-hidden">
+            <button onClick={() => setScope('mine')}
+              className={cn('h-10 px-4 text-sm font-medium transition-colors whitespace-nowrap',
+                scope === 'mine' ? 'bg-red-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50')}>
+              My Items {!loading && `(${myItemCount})`}
+            </button>
+            <button onClick={() => setScope('all')}
+              className={cn('h-10 px-4 text-sm font-medium border-l border-gray-300 transition-colors whitespace-nowrap',
+                scope === 'all' ? 'bg-red-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50')}>
+              All Items {!loading && `(${items.length})`}
+            </button>
+          </div>
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
             <input
@@ -271,8 +316,15 @@ export default function PortalInventoryPage() {
         <div className="bg-white rounded-xl border border-gray-200 py-16 text-center">
           <Package className="h-9 w-9 text-gray-300 mx-auto mb-3" />
           <p className="text-gray-500 text-sm font-medium">
-            {search || category ? 'No products match your filters.' : 'No products available.'}
+            {scope === 'mine' && !search && !category
+              ? "You haven't ordered anything from the catalog yet."
+              : search || category ? 'No products match your filters.' : 'No products available.'}
           </p>
+          {scope === 'mine' && items.length > 0 && (
+            <button onClick={() => setScope('all')} className="mt-3 text-sm text-red-600 hover:underline">
+              Browse all {items.length} products
+            </button>
+          )}
           {(search || category) && (
             <button onClick={() => { setSearch(''); setCategory('') }}
               className="mt-3 text-sm text-red-600 hover:underline">
