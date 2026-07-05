@@ -710,7 +710,10 @@ export default function InventoryPage() {
                   ) : warehouseRows.length === 0 ? (
                     <TableRow><TableCell colSpan={7} className="text-center py-12 text-muted-foreground">No warehouse stock records found.</TableCell></TableRow>
                   ) : pagedWarehouseRows.map(r => {
-                    const noClientRecord = !r.hasClientRecord || !r.client_name
+                    // client_name is null for general-pool stock by design (that's how
+                    // Receiving always adds it) — that alone isn't a red flag. Only warn
+                    // when the item has no DR/CSI history anywhere.
+                    const noClientRecord = !r.hasClientRecord
                     return (
                       <TableRow key={r.id} className={noClientRecord ? 'bg-amber-50/60' : ''}>
                         <TableCell className="text-sm">
