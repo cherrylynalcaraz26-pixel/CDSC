@@ -239,10 +239,7 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
           <DropdownMenu>
             <DropdownMenuTrigger className="h-9 w-9 rounded-full flex items-center justify-center hover:ring-2 hover:ring-red-500/30 outline-none transition-all">
               <Avatar className="h-8 w-8">
-                {userAvatarUrl
-                  ? <AvatarImage src={userAvatarUrl} alt={userName} />
-                  : <AvatarImage src={logoSrc} alt={companyName} />
-                }
+                {userAvatarUrl && <AvatarImage src={userAvatarUrl} alt={userName} />}
                 <AvatarFallback className="bg-red-600 text-white text-xs font-semibold">
                   {initials}
                 </AvatarFallback>
