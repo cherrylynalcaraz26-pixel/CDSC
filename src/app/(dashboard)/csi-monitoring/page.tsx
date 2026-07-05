@@ -44,6 +44,7 @@ interface BlankFormCalib {
   pageWidthMm: number
   pageHeightMm: number
   fontSizePt: number
+  itemFontSizePt: number
   dateTop: number; dateLeft: number
   clientTop: number; clientLeft: number
   addressTop: number; addressLeft: number
@@ -65,19 +66,20 @@ const DEFAULT_BLANK_CALIB: BlankFormCalib = {
   pageWidthMm: 210,
   pageHeightMm: 297,
   fontSizePt: 10,
+  itemFontSizePt: 9,
   dateTop: 29, dateLeft: 135,
   clientTop: 35, clientLeft: 70,
   addressTop: 40, addressLeft: 60,
   tinTop: 45, tinLeft: 55,
   businessStyleTop: 50, businessStyleLeft: 75,
-  tableTop: 65,
+  tableTop: 60,
   rowHeight: 6,
-  colQtyLeft: 40,
-  colUnitLeft: 50,
-  colDescLeft: 60,
+  colQtyLeft: 45,
+  colUnitLeft: 55,
+  colDescLeft: 65,
   colUnitPriceLeft: 130,
-  colAmountLeft: 150,
-  totalDueTop: 200,
+  colAmountLeft: 147,
+  totalDueTop: 150,
   totalDueLeft: 150,
   maxRows: 15,
 }
@@ -367,7 +369,7 @@ export default function CSIMonitoringPage() {
     ${field(c.addressTop, c.addressLeft, addressLine)}
     ${field(c.tinTop, c.tinLeft, client?.tin ?? '')}
     ${field(c.businessStyleTop, c.businessStyleLeft, client?.industry ?? '')}
-    ${rows}
+    <div style="font-size:${c.itemFontSizePt}pt">${rows}</div>
     ${field(c.totalDueTop, c.totalDueLeft, totalDue.toLocaleString('en-PH', { minimumFractionDigits: 2 }))}
     </body></html>`
     const win = window.open('', '_blank', 'width=900,height=700')
@@ -1513,6 +1515,7 @@ export default function CSIMonitoringPage() {
               <CalibField label="Page Width" value={calibDraft.pageWidthMm} onChange={v => setCalibDraft(d => ({ ...d, pageWidthMm: v }))} />
               <CalibField label="Page Height" value={calibDraft.pageHeightMm} onChange={v => setCalibDraft(d => ({ ...d, pageHeightMm: v }))} />
               <CalibField label="Font Size (pt)" value={calibDraft.fontSizePt} onChange={v => setCalibDraft(d => ({ ...d, fontSizePt: v }))} />
+              <CalibField label="Item Row Font Size (pt)" value={calibDraft.itemFontSizePt} onChange={v => setCalibDraft(d => ({ ...d, itemFontSizePt: v }))} />
             </div>
             <CalibPair label="Date" top={calibDraft.dateTop} left={calibDraft.dateLeft}
               onChange={(top, left) => setCalibDraft(d => ({ ...d, dateTop: top, dateLeft: left }))} />
