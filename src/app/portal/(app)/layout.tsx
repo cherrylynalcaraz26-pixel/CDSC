@@ -271,19 +271,19 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
           {websiteHref && (
             collapsed ? (
               <div className="relative group">
-                <a href={websiteHref} target="_blank" rel="noopener noreferrer" title="View CDSC Industrial Website"
+                <a href={websiteHref} target="_blank" rel="noopener noreferrer" title="View our website"
                   className="flex items-center justify-center h-9 w-9 rounded-md transition-colors text-white/40 hover:text-white/80 hover:bg-white/5">
                   <Globe className="h-[15px] w-[15px] shrink-0" />
                 </a>
                 <div className="absolute left-full bottom-0 ml-1 hidden group-hover:block z-50 min-w-[180px] bg-[#1a1a1a] border border-white/10 rounded-lg py-1 shadow-xl pointer-events-none">
-                  <span className="block px-3 py-1.5 text-[13px] text-white/70">View CDSC Industrial Website</span>
+                  <span className="block px-3 py-1.5 text-[13px] text-white/70">View our website</span>
                 </div>
               </div>
             ) : (
               <a href={websiteHref} target="_blank" rel="noopener noreferrer"
                 className="flex items-center gap-2.5 w-full px-3 py-2 rounded-md text-[13px] font-medium text-white/40 hover:text-white/80 hover:bg-white/5 transition-colors">
                 <Globe className="h-[15px] w-[15px] shrink-0" />
-                View CDSC Industrial Website
+                View our website
               </a>
             )
           )}
@@ -342,7 +342,7 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
             <a href={websiteHref} target="_blank" rel="noopener noreferrer"
               className="flex items-center gap-2.5 w-full px-3 py-2 rounded-md text-[13px] font-medium transition-colors text-white/40 hover:text-white/80 hover:bg-white/5">
               <Globe className="h-[15px] w-[15px] shrink-0" />
-              View CDSC Industrial Website
+              View our website
             </a>
           )}
           <button onClick={signOut}
