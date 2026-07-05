@@ -23,8 +23,8 @@ import { Search, Loader2, ChevronRight, ChevronDown, Pencil, AlertTriangle, Plus
 import { toast } from 'sonner'
 import { useSearchContext } from '@/context/search-context'
 
-interface DrDetail  { dr_number: string; qty: number; unit: string; unit_price: number | null }
-interface CsiDetail { si_number: string; qty: number; unit: string; unit_price: number | null }
+interface DrDetail  { dr_number: string; qty: number; unit: string; unit_price: number | null; show_in_portal: boolean }
+interface CsiDetail { si_number: string; qty: number; unit: string; unit_price: number | null; show_in_portal: boolean }
 interface WsDetail  { id: string; notes: string | null; qty: number; unit: string; created_at: string }
 
 interface InventoryRow {
@@ -71,6 +71,7 @@ export default function InventoryPage() {
   const [confirmAction, setConfirmAction] = useState<(() => void) | null>(null)
   const [reportOpen, setReportOpen] = useState(false)
   const [reportClient, setReportClient] = useState('')
+  const [reportScope, setReportScope] = useState<'all' | 'portal'>('all')
 
   function askConfirm(msg: string, action: () => void) {
     setConfirmMsg(msg)
@@ -134,14 +135,28 @@ export default function InventoryPage() {
       from += PAGE
     }
 
+    // A DR's portal visibility is inherited from its linked Sales Order's show_in_portal
+    // flag (DRs don't carry their own) — used so the report can filter to portal-visible
+    // deliveries/invoices only, same rule the client portal itself uses.
+    const soPortalMap: Record<string, boolean> = {}
+    from = 0
+    while (true) {
+      const { data } = await supabase.from('sales_orders').select('so_number, show_in_portal').order('id').range(from, from + PAGE - 1)
+      if (!data || data.length === 0) break
+      for (const so of data) if (so.so_number) soPortalMap[so.so_number] = so.show_in_portal === true
+      if (data.length < PAGE) break
+      from += PAGE
+    }
+
     // Only DRs actually received (fully or partially) should count toward inventory — a
     // rejected or returned DR shouldn't add its items to the balance.
     const drClientMap: Record<string, string> = {}
+    const drPoNumberMap: Record<string, string> = {}
     from = 0
     while (true) {
       const { data } = await supabase
         .from('dr_logs')
-        .select('dr_number, supplier_name')
+        .select('dr_number, supplier_name, po_number')
         .not('supplier_name', 'is', null)
         .in('status', ['received', 'partial'])
         .order('id')
@@ -149,6 +164,7 @@ export default function InventoryPage() {
       if (!data || data.length === 0) break
       for (const dr of data) {
         if (dr.supplier_name) drClientMap[dr.dr_number] = dr.supplier_name
+        if (dr.po_number) drPoNumberMap[dr.dr_number] = dr.po_number
       }
       if (data.length < PAGE) break
       from += PAGE
@@ -167,6 +183,7 @@ export default function InventoryPage() {
           qty: val.qty,
           unit: val.unit,
           unit_price: itemCostMap[itemName] ?? null,
+          show_in_portal: soPortalMap[drPoNumberMap[drNum]] ?? false,
         })
       }
     }
@@ -176,7 +193,7 @@ export default function InventoryPage() {
     while (true) {
       const { data } = await supabase
         .from('csi_records')
-        .select('client_name, item_name, unit, quantity, si_number, unit_price')
+        .select('client_name, item_name, unit, quantity, si_number, unit_price, show_in_portal')
         .not('client_name', 'is', null)
         .order('id')
         .range(from, from + PAGE - 1)
@@ -191,6 +208,7 @@ export default function InventoryPage() {
           qty: Number(rec.quantity) || 0,
           unit: rec.unit ?? '',
           unit_price: rec.unit_price != null ? Number(rec.unit_price) : null,
+          show_in_portal: rec.show_in_portal === true,
         })
       }
       if (data.length < PAGE) break
@@ -1031,7 +1049,16 @@ export default function InventoryPage() {
 
       {/* Inline Inventory Report — shown instead of table when reportOpen */}
       {reportOpen && (() => {
-        const reportRows = rows.filter(r => r.client === reportClient)
+        const baseRows = rows.filter(r => r.client === reportClient)
+        const reportRows = reportScope === 'all' ? baseRows : baseRows
+          .map(r => {
+            const dr_details = r.dr_details.filter(d => d.show_in_portal)
+            const csi_details = r.csi_details.filter(d => d.show_in_portal)
+            const dr_qty = dr_details.reduce((s, d) => s + d.qty, 0)
+            const csi_qty = csi_details.reduce((s, d) => s + d.qty, 0)
+            return { ...r, dr_details, csi_details, dr_qty, csi_qty, balance: dr_qty + r.ws_qty - csi_qty }
+          })
+          .filter(r => r.dr_qty > 0 || r.csi_qty > 0)
         const totalBalance = reportRows.reduce((s, r) => s + r.balance, 0)
         const totalDr = reportRows.reduce((s, r) => s + r.dr_qty, 0)
         const totalWs = reportRows.reduce((s, r) => s + r.ws_qty, 0)
@@ -1059,6 +1086,16 @@ export default function InventoryPage() {
                   {clients.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
                 </SelectContent>
               </Select>
+              <div className="flex border border-gray-300 rounded-md overflow-hidden shrink-0">
+                <button
+                  onClick={() => setReportScope('all')}
+                  className={`h-8 px-3 text-xs font-medium transition-colors ${reportScope === 'all' ? 'bg-red-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                >All</button>
+                <button
+                  onClick={() => setReportScope('portal')}
+                  className={`h-8 px-3 text-xs font-medium border-l border-gray-300 transition-colors ${reportScope === 'portal' ? 'bg-red-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                >Visible in Client Portal</button>
+              </div>
               <Button
                 className="ml-auto bg-red-600 hover:bg-red-700 text-white h-8 text-sm gap-1.5 shrink-0"
                 onClick={() => {
@@ -1119,9 +1156,16 @@ export default function InventoryPage() {
                   <div className="text-xs text-gray-400 mt-0.5">As of {today}</div>
                 </div>
               </div>
-              <div className="mb-5">
-                <div className="text-[10px] text-gray-400 uppercase tracking-widest font-semibold mb-0.5">Client</div>
-                <div className="text-xl font-bold text-gray-900">{reportClient || '—'}</div>
+              <div className="mb-5 flex items-center gap-3">
+                <div>
+                  <div className="text-[10px] text-gray-400 uppercase tracking-widest font-semibold mb-0.5">Client</div>
+                  <div className="text-xl font-bold text-gray-900">{reportClient || '—'}</div>
+                </div>
+                {reportScope === 'portal' && (
+                  <span className="text-[10px] font-semibold uppercase tracking-wide px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                    Visible in Client Portal Only
+                  </span>
+                )}
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
                 {[
@@ -1364,188 +1408,6 @@ export default function InventoryPage() {
         </DialogContent>
       </Dialog>
 
-      {/* (old inline report removed — now rendered above dialogs) */}
-      {false && (() => {
-        const reportRows = rows.filter(r => r.client === reportClient)
-        const totalBalance = reportRows.reduce((s, r) => s + r.balance, 0)
-        const totalDr = reportRows.reduce((s, r) => s + r.dr_qty, 0)
-        const totalWs = reportRows.reduce((s, r) => s + r.ws_qty, 0)
-        const totalCsi = reportRows.reduce((s, r) => s + r.csi_qty, 0)
-        const totalEstValue = reportRows.reduce((s, r) => {
-          const price = r.csi_details.length > 0
-            ? r.csi_details[r.csi_details.length - 1].unit_price
-            : r.dr_details.length > 0 ? r.dr_details[r.dr_details.length - 1].unit_price : null
-          return s + (price != null ? r.balance * price : 0)
-        }, 0)
-        const today = new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
-        return (
-          <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-            {/* Toolbar */}
-            <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 border-b flex-wrap">
-              <FileText className="h-4 w-4 text-red-600 shrink-0" />
-              <span className="font-semibold text-sm text-gray-800 shrink-0">Inventory Report</span>
-              <div className="w-px h-4 bg-gray-300 mx-1 shrink-0" />
-              <label className="text-sm text-gray-500 shrink-0">Client:</label>
-              <Select value={reportClient} onValueChange={v => setReportClient(v ?? '')}>
-                <SelectTrigger className="w-64 h-8 text-sm">
-                  <SelectValue placeholder="Select client" />
-                </SelectTrigger>
-                <SelectContent>
-                  {clients.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Button
-                className="ml-auto bg-red-600 hover:bg-red-700 text-white h-8 text-sm gap-1.5 shrink-0"
-                onClick={() => {
-                  const el = document.getElementById('inventory-report-print')
-                  if (!el) return
-                  const win = window.open('', '_blank', 'width=1100,height=800')
-                  if (!win) return
-                  win.document.write(`<!DOCTYPE html><html><head><title>Inventory Report - ${reportClient}</title><style>
-                    * { box-sizing: border-box; margin: 0; padding: 0; }
-                    body { font-family: Arial, sans-serif; background: #fff; color: #111; padding: 32px; }
-                    .accent { background: #dc2626; height: 5px; border-radius: 3px; margin-bottom: 20px; }
-                    .letterhead { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px solid #e5e7eb; }
-                    .co-name { font-size: 22px; font-weight: 800; color: #dc2626; }
-                    .co-sub { font-size: 10px; color: #9ca3af; margin-top: 2px; }
-                    .rpt-title { text-align: right; font-size: 15px; font-weight: 700; }
-                    .rpt-date { font-size: 10px; color: #9ca3af; margin-top: 2px; }
-                    .cards { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 18px; }
-                    .card { border: 1px solid #e5e7eb; border-radius: 6px; padding: 10px 14px; background: #f9fafb; }
-                    .card-label { font-size: 9px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
-                    .card-val { font-size: 20px; font-weight: 700; margin-top: 3px; }
-                    .blue { color: #1d4ed8; } .green { color: #15803d; } .orange { color: #c2410c; } .red { color: #dc2626; }
-                    table { width: 100%; border-collapse: collapse; font-size: 11px; }
-                    th { background: #1f2937; color: #fff; text-align: left; padding: 7px 10px; font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
-                    th.r { text-align: right; }
-                    td { padding: 6px 10px; border-bottom: 1px solid #f3f4f6; }
-                    td.r { text-align: right; }
-                    tr:nth-child(even) td { background: #f9fafb; }
-                    tfoot td { font-weight: 700; background: #f3f4f6; border-top: 2px solid #d1d5db; }
-                    .note { margin-top: 20px; padding-top: 10px; border-top: 1px solid #f3f4f6; font-size: 9px; color: #9ca3af; display: flex; justify-content: space-between; }
-                    @media print { @page { margin: 12mm; size: A4 landscape; } }
-                  </style></head><body>
-                    <div class="accent"></div>
-                    <div class="letterhead">
-                      <div><img src="/cdsc-logo.jpg" style="height:50px;width:auto;display:block;margin-bottom:4px;" /><div style="font-size:11px;font-weight:600;color:#374151">CDSC Industrial Supply</div></div>
-                      <div><div class="rpt-title">Inventory Report</div><div class="rpt-date">As of ${today}</div></div>
-                    </div>
-                    ${el.innerHTML}
-                  </body></html>`)
-                  win.document.close()
-                  win.focus()
-                  setTimeout(() => { win.print() }, 400)
-                }}
-              >
-                <Printer className="h-4 w-4" /> Print / Save PDF
-              </Button>
-            </div>
-
-            {/* Report body */}
-            <div className="bg-white p-8" id="inventory-report-print">
-              {/* Letterhead */}
-              <div className="h-1 bg-red-600 rounded-full mb-6" />
-              <div className="flex justify-between items-start mb-6 pb-5 border-b border-gray-200">
-                <div>
-                  <img src="/cdsc-logo.jpg" alt="CDSC" className="h-12 w-auto object-contain" />
-                  <div className="text-xs font-semibold text-gray-700 mt-1">CDSC Industrial Supply</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-base font-bold text-gray-800">Inventory Report</div>
-                  <div className="text-xs text-gray-400 mt-0.5">As of {today}</div>
-                </div>
-              </div>
-
-              {/* Client */}
-              <div className="mb-5">
-                <div className="text-[10px] text-gray-400 uppercase tracking-widest font-semibold mb-0.5">Client</div>
-                <div className="text-xl font-bold text-gray-900">{reportClient || '—'}</div>
-              </div>
-
-              {/* Summary cards */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-                {[
-                  { label: 'DR Delivered', value: totalDr,      cls: 'text-blue-700' },
-                  { label: 'WH Stock',     value: totalWs,      cls: 'text-green-700' },
-                  { label: 'CSI Issued',   value: totalCsi,     cls: 'text-orange-600' },
-                  { label: 'Net Balance',  value: totalBalance, cls: totalBalance >= 0 ? 'text-green-700' : 'text-red-600' },
-                ].map(c => (
-                  <div key={c.label} className="border border-gray-200 rounded-lg px-4 py-3 bg-gray-50">
-                    <div className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">{c.label}</div>
-                    <div className={`text-2xl font-bold mt-1 ${c.cls}`}>{c.value}</div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Table */}
-              {reportRows.length === 0 ? (
-                <div className="text-center py-12 text-gray-400 italic text-sm">No inventory data for this client.</div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-xs border-collapse min-w-[700px]">
-                    <thead>
-                      <tr className="bg-gray-800 text-white">
-                        <th className="px-3 py-2.5 text-left font-semibold text-[10px] uppercase tracking-wide w-8">#</th>
-                        <th className="px-3 py-2.5 text-left font-semibold text-[10px] uppercase tracking-wide">Item Description</th>
-                        <th className="px-3 py-2.5 text-left font-semibold text-[10px] uppercase tracking-wide w-20">Unit</th>
-                        <th className="px-3 py-2.5 text-right font-semibold text-[10px] uppercase tracking-wide w-16">DR Qty</th>
-                        <th className="px-3 py-2.5 text-right font-semibold text-[10px] uppercase tracking-wide w-16">WH Stock</th>
-                        <th className="px-3 py-2.5 text-right font-semibold text-[10px] uppercase tracking-wide w-20">CSI Issued</th>
-                        <th className="px-3 py-2.5 text-right font-semibold text-[10px] uppercase tracking-wide w-16">Balance</th>
-                        <th className="px-3 py-2.5 text-right font-semibold text-[10px] uppercase tracking-wide w-28">Est. Unit Price</th>
-                        <th className="px-3 py-2.5 text-right font-semibold text-[10px] uppercase tracking-wide w-28">Est. Value</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {reportRows.map((r, i) => {
-                        const latestPrice = r.csi_details.length > 0
-                          ? r.csi_details[r.csi_details.length - 1].unit_price
-                          : r.dr_details.length > 0 ? r.dr_details[r.dr_details.length - 1].unit_price : null
-                        const estValue = latestPrice != null ? r.balance * latestPrice : null
-                        return (
-                          <tr key={r.item_name} className={i % 2 === 1 ? 'bg-gray-50' : 'bg-white'}>
-                            <td className="px-3 py-2 text-gray-400 border-b border-gray-100">{i + 1}</td>
-                            <td className="px-3 py-2 font-medium text-gray-800 border-b border-gray-100">{r.item_name}</td>
-                            <td className="px-3 py-2 text-gray-500 border-b border-gray-100">{uomName(r.unit)}</td>
-                            <td className="px-3 py-2 text-right text-gray-700 border-b border-gray-100">{r.dr_qty}</td>
-                            <td className="px-3 py-2 text-right border-b border-gray-100">
-                              {r.ws_qty > 0 ? <span className="text-green-600 font-medium">{r.ws_qty}</span> : <span className="text-gray-300">—</span>}
-                            </td>
-                            <td className="px-3 py-2 text-right text-gray-700 border-b border-gray-100">{r.csi_qty}</td>
-                            <td className={`px-3 py-2 text-right font-bold border-b border-gray-100 ${r.balance > 0 ? 'text-green-700' : r.balance < 0 ? 'text-red-600' : 'text-gray-400'}`}>{r.balance}</td>
-                            <td className="px-3 py-2 text-right text-blue-600 border-b border-gray-100">
-                              {latestPrice != null ? `₱${latestPrice.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : <span className="text-gray-300">—</span>}
-                            </td>
-                            <td className={`px-3 py-2 text-right font-semibold border-b border-gray-100 ${estValue != null && estValue < 0 ? 'text-red-600' : 'text-gray-800'}`}>
-                              {estValue != null ? `₱${estValue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : <span className="text-gray-300">—</span>}
-                            </td>
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                    <tfoot>
-                      <tr className="bg-gray-100">
-                        <td colSpan={6} className="px-3 py-2.5 text-right text-xs font-bold text-gray-600 border-t-2 border-gray-300">TOTAL</td>
-                        <td className={`px-3 py-2.5 text-right text-sm font-bold border-t-2 border-gray-300 ${totalBalance > 0 ? 'text-green-700' : totalBalance < 0 ? 'text-red-600' : 'text-gray-500'}`}>{totalBalance}</td>
-                        <td className="px-3 py-2.5 text-right text-xs text-gray-400 border-t-2 border-gray-300">—</td>
-                        <td className="px-3 py-2.5 text-right text-sm font-bold text-gray-800 border-t-2 border-gray-300">
-                          ₱{totalEstValue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-              )}
-
-              {/* Footer */}
-              <div className="mt-8 pt-4 border-t border-gray-100 text-[10px] text-gray-400 flex justify-between flex-wrap gap-2">
-                <span>Est. Unit Price is based on the latest CSI or DR record. Values are for reference only.</span>
-                <span>Generated {today} · CDSC Inventory System</span>
-              </div>
-            </div>
-          </div>
-        )
-      })()}
 
       {/* Confirm Dialog */}
       <Dialog open={confirmOpen} onOpenChange={o => { if (!o) setConfirmOpen(false) }}>
