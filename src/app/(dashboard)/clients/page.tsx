@@ -28,6 +28,7 @@ import {
   DropdownMenuTrigger, DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 import { format } from 'date-fns'
+import { uploadImageToDrive } from '@/lib/upload-image'
 
 const INDUSTRIES = [
   'Construction', 'Manufacturing', 'Mining', 'Oil & Gas', 'Power & Energy',
@@ -212,13 +213,7 @@ export default function ClientsPage() {
       let finalAvatarUrl = dialogAvatarUrl
       if (dialogAvatarFile) {
         setUploadingAvatar(true)
-        const targetId = editingId ?? `new-${Date.now()}`
-        const ext = dialogAvatarFile.name.split('.').pop()
-        const path = `client-avatars/${targetId}/avatar.${ext}`
-        const { error: upErr } = await supabase.storage.from('company-assets').upload(path, dialogAvatarFile, { upsert: true, contentType: dialogAvatarFile.type })
-        if (upErr) throw upErr
-        const { data: urlData } = supabase.storage.from('company-assets').getPublicUrl(path)
-        finalAvatarUrl = urlData.publicUrl
+        finalAvatarUrl = await uploadImageToDrive(dialogAvatarFile)
         setUploadingAvatar(false)
       }
 

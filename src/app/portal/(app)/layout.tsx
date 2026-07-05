@@ -6,6 +6,7 @@ import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
+import { cacheBustImageUrl } from '@/lib/upload-image'
 import {
   LayoutDashboard, FileText, Package, User, LogOut, Menu, X, Boxes,
   ClipboardList, Search, Bell, PanelLeftClose, PanelLeftOpen, MessageSquare, Send, ChevronRight, Globe,
@@ -69,7 +70,7 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
       if (!session) return
       const { data: clientRow } = await supabase.from('clients').select('logo_url, avatar_url').eq('auth_user_id', session.user.id).single()
       const rawLogo = (clientRow as any)?.logo_url ?? (clientRow as any)?.avatar_url ?? null
-      setClientLogoUrl(rawLogo ? `${rawLogo}?t=${Date.now()}` : null)
+      setClientLogoUrl(rawLogo ? cacheBustImageUrl(rawLogo) : null)
     }
     function onVisible() { if (document.visibilityState === 'visible') refreshLogo() }
     function onLogoUpdated(e: Event) {
@@ -103,7 +104,7 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
       const { data: clientRow } = await supabase.from('clients').select('id, company_name, logo_url, avatar_url').eq('auth_user_id', session.user.id).single()
       setClientName(clientRow?.company_name ?? '')
       const rawLogo = (clientRow as any)?.logo_url ?? (clientRow as any)?.avatar_url ?? null
-      setClientLogoUrl(rawLogo ? `${rawLogo}?t=${Date.now()}` : null)
+      setClientLogoUrl(rawLogo ? cacheBustImageUrl(rawLogo) : null)
       const { data: sysSettings } = await supabase.from('system_settings').select('website').single()
       setCompanyWebsite(sysSettings?.website ?? null)
       if (clientRow) {

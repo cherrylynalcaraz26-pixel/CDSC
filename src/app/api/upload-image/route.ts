@@ -1,0 +1,69 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { google } from 'googleapis'
+
+// Allow reasonably large images (logos, item photos)
+export const maxDuration = 30
+
+function getDriveClient() {
+  const clientEmail = process.env.GOOGLE_DRIVE_CLIENT_EMAIL
+  const privateKey = process.env.GOOGLE_DRIVE_PRIVATE_KEY?.replace(/\\n/g, '\n')
+  const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID
+  if (!clientEmail || !privateKey || !folderId) return null
+
+  const auth = new google.auth.JWT({
+    email: clientEmail,
+    key: privateKey,
+    scopes: ['https://www.googleapis.com/auth/drive'],
+  })
+  return { drive: google.drive({ version: 'v3', auth }), folderId }
+}
+
+// Every image in the app (item pictures, client logos) is uploaded here and stored in a
+// shared Google Drive folder via a service account, rather than Supabase storage.
+export async function POST(req: NextRequest) {
+  try {
+    const { fileBase64, fileName, mimeType } = await req.json()
+    if (!fileBase64 || !fileName || !mimeType) {
+      return NextResponse.json({ error: 'Missing required fields: fileBase64, fileName, mimeType' }, { status: 400 })
+    }
+
+    const client = getDriveClient()
+    if (!client) {
+      return NextResponse.json({
+        error: 'Google Drive is not configured on the server. Set GOOGLE_DRIVE_CLIENT_EMAIL, GOOGLE_DRIVE_PRIVATE_KEY, and GOOGLE_DRIVE_FOLDER_ID.',
+      }, { status: 500 })
+    }
+    const { drive, folderId } = client
+
+    const buffer = Buffer.from(fileBase64, 'base64')
+    const { Readable } = await import('stream')
+
+    const uploaded = await drive.files.create({
+      requestBody: {
+        name: fileName,
+        parents: [folderId],
+      },
+      media: {
+        mimeType,
+        body: Readable.from(buffer),
+      },
+      fields: 'id',
+    })
+
+    const fileId = uploaded.data.id
+    if (!fileId) throw new Error('Drive upload did not return a file id')
+
+    // Make the file viewable via link so it can be embedded as an <img src>.
+    await drive.permissions.create({
+      fileId,
+      requestBody: { role: 'reader', type: 'anyone' },
+    })
+
+    const url = `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`
+    return NextResponse.json({ success: true, url, fileId })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Failed to upload image'
+    console.error('[upload-image]', message)
+    return NextResponse.json({ error: message }, { status: 500 })
+  }
+}

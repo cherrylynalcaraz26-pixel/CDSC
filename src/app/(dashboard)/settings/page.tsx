@@ -20,6 +20,7 @@ import {
   CheckCircle2, Eye, EyeOff, Loader2, Plus, Trash2, X, Send,
 } from 'lucide-react'
 import { sendEmail } from '@/lib/send-email'
+import { uploadImageToDrive } from '@/lib/upload-image'
 
 const BUSINESS_TYPES = [
   'Sole Proprietorship', 'Partnership', 'Corporation', 'Trading Corporation',
@@ -220,7 +221,9 @@ function LivePreview({ s }: { s: Settings }) {
       (s.tin ? `TIN: ${s.tin}\n` : '') +
       `\nThank you.`
     )
-    window.location.href = `mailto:?subject=${subject}&body=${body}`
+    // Open Gmail's own compose window rather than mailto:, which depends on the OS having
+    // a desktop mail client configured — on a typical office PC that silently does nothing.
+    window.open(`https://mail.google.com/mail/?view=cm&fs=1&su=${subject}&body=${body}`, '_blank')
   }
 
   return (
@@ -343,12 +346,12 @@ function LivePreview({ s }: { s: Settings }) {
         </div>
         <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-5 text-white">
           <div className="flex items-center gap-3 mb-3">
-            <div className="h-10 w-10 rounded-lg bg-white/10 flex items-center justify-center overflow-hidden shrink-0">
+            <div className="h-10 w-10 rounded-lg bg-white flex items-center justify-center overflow-hidden shrink-0">
               {s.logo_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={s.logo_url} alt="logo" className="w-full h-full object-contain p-1" />
               ) : (
-                <Building2 className="h-5 w-5 text-white/60" />
+                <Building2 className="h-5 w-5 text-slate-400" />
               )}
             </div>
             <div>
@@ -384,12 +387,12 @@ function ProposalPreview({ s }: { s: Settings }) {
       <div className="border rounded-xl overflow-hidden bg-white shadow-sm text-sm">
         <div className="bg-gradient-to-r from-slate-800 to-slate-900 p-5">
           <div className="flex items-start gap-3">
-            <div className="h-12 w-12 rounded-lg bg-white/10 flex items-center justify-center overflow-hidden shrink-0">
+            <div className="h-12 w-12 rounded-lg bg-white flex items-center justify-center overflow-hidden shrink-0">
               {s.logo_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={s.logo_url} alt="logo" className="w-full h-full object-contain p-1" />
               ) : (
-                <Building2 className="h-6 w-6 text-white/50" />
+                <Building2 className="h-6 w-6 text-slate-400" />
               )}
             </div>
             <div>
@@ -1254,11 +1257,14 @@ export default function SettingsPage() {
   async function uploadLogo(file: File) {
     if (file.size > 2 * 1024 * 1024) { toast.error('File must be under 2 MB'); return }
     setUploading(true)
-    const ext = file.name.split('.').pop()
-    const path = `logos/company-logo.${ext}`
-    const { error: upErr } = await supabase.storage.from('company-assets').upload(path, file, { upsert: true })
-    if (upErr) { toast.error(upErr.message); setUploading(false); return }
-    const { data: { publicUrl } } = supabase.storage.from('company-assets').getPublicUrl(path)
+    let publicUrl: string
+    try {
+      publicUrl = await uploadImageToDrive(file)
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to upload logo')
+      setUploading(false)
+      return
+    }
     set('logo_url', publicUrl)
     // Also persist immediately so sidebar updates
     await supabase.from('system_settings').upsert({ id: 1, ...settings, logo_url: publicUrl })

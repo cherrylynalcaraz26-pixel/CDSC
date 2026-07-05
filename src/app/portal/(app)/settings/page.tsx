@@ -7,6 +7,7 @@ import {
   Loader2, Save, Eye, EyeOff, User, Lock, Building2, Tag, Plus, Trash2,
   FileCheck2, CheckCircle2, AlertCircle, Camera, ImagePlus, X,
 } from 'lucide-react'
+import { uploadImageToDrive, cacheBustImageUrl } from '@/lib/upload-image'
 
 type Tab = 'account' | 'bir' | 'department' | 'password'
 
@@ -63,7 +64,7 @@ export default function PortalSettingsPage() {
       setIndustry(clientRow?.industry ?? '')
       setWebsite((clientRow as any)?.website ?? '')
       const rawLogo = (clientRow as any)?.logo_url ?? (clientRow as any)?.avatar_url ?? null
-      setLogoUrl(rawLogo ? `${rawLogo}?t=${Date.now()}` : null)
+      setLogoUrl(rawLogo ? cacheBustImageUrl(rawLogo) : null)
       if (clientRow?.id) {
         setClientId(clientRow.id)
         const { data: deptData } = await supabase.from('client_departments').select('id, name').eq('client_id', clientRow.id).order('name')
@@ -90,13 +91,8 @@ export default function PortalSettingsPage() {
     if (!userId) return
     setUploadingAvatar(true)
     try {
-      const ext = file.name.split('.').pop()
-      const path = `portal-avatars/${userId}/avatar.${ext}`
-      const { error: upErr } = await supabase.storage.from('company-assets').upload(path, file, { upsert: true, contentType: file.type })
-      if (upErr) throw upErr
-      const { data: urlData } = supabase.storage.from('company-assets').getPublicUrl(path)
-      const url = `${urlData.publicUrl}?t=${Date.now()}`
-      const { error: dbErr } = await supabase.from('profiles').update({ avatar_url: urlData.publicUrl }).eq('id', userId)
+      const url = await uploadImageToDrive(file)
+      const { error: dbErr } = await supabase.from('profiles').update({ avatar_url: url }).eq('id', userId)
       if (dbErr) throw dbErr
       setAvatarUrl(url)
       toast.success('Avatar updated')
@@ -119,13 +115,8 @@ export default function PortalSettingsPage() {
     if (!clientId) return
     setUploadingLogo(true)
     try {
-      const ext = file.name.split('.').pop()
-      const path = `client-logos/${clientId}/logo.${ext}`
-      const { error: upErr } = await supabase.storage.from('company-assets').upload(path, file, { upsert: true, contentType: file.type })
-      if (upErr) throw upErr
-      const { data: urlData } = supabase.storage.from('company-assets').getPublicUrl(path)
-      const url = `${urlData.publicUrl}?t=${Date.now()}`
-      const { error: dbErr } = await supabase.from('clients').update({ logo_url: urlData.publicUrl }).eq('id', clientId)
+      const url = await uploadImageToDrive(file)
+      const { error: dbErr } = await supabase.from('clients').update({ logo_url: url }).eq('id', clientId)
       if (dbErr) throw dbErr
       setLogoUrl(url)
       window.dispatchEvent(new CustomEvent('portal-logo-updated', { detail: { url } }))
