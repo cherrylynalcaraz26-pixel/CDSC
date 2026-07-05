@@ -140,6 +140,7 @@ export default function CSIMonitoringPage() {
   const [itemOptions, setItemOptions] = useState<ItemOption[]>([])
   const [clientOptions, setClientOptions] = useState<ClientOption[]>([])
   const [soNumbers, setSoNumbers] = useState<{ id: string; so_number: string }[]>([])
+  const [drNumbers, setDrNumbers] = useState<{ id: string; dr_number: string }[]>([])
   const [soItemsMap, setSoItemsMap] = useState<Record<string, SOItemOption[]>>({})
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
@@ -177,15 +178,17 @@ export default function CSIMonitoringPage() {
 
   async function load() {
     setLoading(true)
-    const [{ data: itemOptData }, { data: clientData }, { data: soData }, { data: drItemsData }] = await Promise.all([
+    const [{ data: itemOptData }, { data: clientData }, { data: soData }, { data: drItemsData }, { data: drLogData }] = await Promise.all([
       supabase.from('items').select('item_name, unit_of_measure').order('item_name'),
       supabase.from('clients').select('id, company_name, show_csi_in_portal, address, city, province, tin, industry').eq('status', 'active').order('company_name'),
       supabase.from('sales_orders').select('id, so_number').not('so_number', 'is', null).order('created_at', { ascending: false }),
       supabase.from('dr_log_items').select('dr_number, item_name, dr_logs!inner(client_name)').order('item_name'),
+      supabase.from('dr_logs').select('id, dr_number').order('dr_date', { ascending: false }),
     ])
     setDrItemsForCrossRef((drItemsData ?? []).map((d: any) => ({ dr_number: d.dr_number, item_name: d.item_name, client_name: d.dr_logs?.client_name ?? null })))
     setItemOptions((itemOptData ?? []) as ItemOption[])
     setClientOptions((clientData ?? []) as ClientOption[])
+    setDrNumbers((drLogData ?? []) as { id: string; dr_number: string }[])
     const filteredSOs = (soData ?? []).filter((s: any) => s.so_number) as { id: string; so_number: string }[]
     setSoNumbers(filteredSOs)
     const soIds = filteredSOs.map(s => s.id)
@@ -652,7 +655,16 @@ export default function CSIMonitoringPage() {
                     </div>
                     <div className="space-y-1.5">
                       <Label>DR Number</Label>
-                      <Input placeholder="e.g. 00001" value={header.dr_number} onChange={e => setHeader(h => ({ ...h, dr_number: e.target.value }))} />
+                      <Select value={header.dr_number} onValueChange={v => setHeader(h => ({ ...h, dr_number: v ?? '' }))}>
+                        <SelectTrigger><SelectValue placeholder="Select DR…" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">— None —</SelectItem>
+                          {drNumbers.map(d => <SelectItem key={d.id} value={d.dr_number}>{d.dr_number}</SelectItem>)}
+                          {header.dr_number && !drNumbers.some(d => d.dr_number === header.dr_number) && (
+                            <SelectItem value={header.dr_number}>{header.dr_number}</SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                 </div>
@@ -891,8 +903,6 @@ export default function CSIMonitoringPage() {
         if (clientStats.length === 0) return null
 
         const grandTotal = clientStats.reduce((s, c) => s + c.totalAmount, 0)
-        const totalSIs = clientStats.reduce((s, c) => s + c.siCount, 0)
-        const totalLineItems = clientStats.reduce((s, c) => s + c.lineItems, 0)
 
         // Monthly trend data
         const monthMap: Record<string, number> = {}
@@ -931,22 +941,6 @@ export default function CSIMonitoringPage() {
 
         return (
           <div className="space-y-4">
-            {/* KPI strip */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              {[
-                { label: 'Total Revenue', value: formatPeso(grandTotal), sub: `across ${clientStats.length} clients`, color: 'from-red-500 to-rose-600' },
-                { label: 'SI Invoices', value: totalSIs, sub: 'charge sales invoices', color: 'from-blue-500 to-indigo-600' },
-                { label: 'Line Items', value: totalLineItems, sub: 'total invoice lines', color: 'from-emerald-500 to-teal-600' },
-                { label: 'Top Client', value: clientStats[0]?.shortName ?? '—', sub: formatPeso(clientStats[0]?.totalAmount ?? 0), color: 'from-violet-500 to-purple-600' },
-              ].map(k => (
-                <div key={k.label} className={`bg-gradient-to-br ${k.color} rounded-xl p-4 text-white`}>
-                  <div className="text-[10px] font-semibold uppercase tracking-widest text-white/60 mb-1">{k.label}</div>
-                  <div className="text-xl font-extrabold leading-tight truncate">{k.value}</div>
-                  <div className="text-[11px] text-white/60 mt-0.5 truncate">{k.sub}</div>
-                </div>
-              ))}
-            </div>
-
             {/* Charts group header */}
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-foreground">Analytics Charts</h3>
