@@ -269,7 +269,7 @@ export default function CSIMonitoringPage() {
     </head><body class="p-6 text-[11px]">
     <div class="border rounded-lg bg-white p-4 space-y-3 font-sans text-[11px]">
       <div class="flex justify-between items-start border-b pb-3">
-        <img src="/cdsc-logo.jpg" alt="CDSC" class="h-12 w-12 rounded object-cover" />
+        <img src="/cdsc-logo.jpg" alt="CDSC" class="h-12 w-28 object-contain" />
         <div class="text-right">
           <div class="text-[13px] font-bold text-red-700">${co?.company_name ?? 'CDSC Industrial Supply'}</div>
           ${co?.address ? `<div class="text-[9px] text-gray-500">${co.address}</div>` : ''}
@@ -780,7 +780,7 @@ export default function CSIMonitoringPage() {
                   <div ref={printRef} className="border rounded-lg bg-white text-[11px] p-4 shadow-sm space-y-3 font-sans">
                     {/* Header */}
                     <div className="flex justify-between items-start border-b pb-3">
-                      <img src="/cdsc-logo.jpg" alt="CDSC" className="h-12 w-12 rounded object-cover" />
+                      <img src="/cdsc-logo.jpg" alt="CDSC" className="h-12 w-28 object-contain" />
                       <div className="text-right">
                         <div className="text-[13px] font-bold text-red-700 mb-0.5">{companyInfo?.company_name || 'CDSC Industrial Supply'}</div>
                         {companyInfo?.address && <div className="text-[9px] text-gray-500">{companyInfo.address}</div>}
