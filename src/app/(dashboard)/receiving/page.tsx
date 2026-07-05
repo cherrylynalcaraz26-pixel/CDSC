@@ -274,12 +274,17 @@ export default function ReceivingPage() {
     if (error) { toast.error(error.message); setRrSaving(false); return }
 
     // Update inventory: add the PO's line-item quantities into warehouse_stock (unassigned
-    // to any client — this is general stock coming in from the supplier).
-    if (selectedPOData?.id) {
+    // to any client — this is general stock coming in from the supplier). Look the PO up
+    // fresh by po_number rather than relying on selectedPOData/`pos` — that list excludes
+    // already-completed POs, which is exactly the state of any PO you'd be receiving a
+    // second (or later) partial shipment against, and silently skipping this block would
+    // insert the receiving report without ever touching warehouse_stock.
+    const { data: rrPo } = await supabase.from('purchase_orders').select('id').eq('po_number', selectedPO).maybeSingle()
+    if (rrPo?.id) {
       const { data: poItems } = await supabase
         .from('po_items')
         .select('item_name, quantity, unit_of_measure')
-        .eq('po_id', selectedPOData.id)
+        .eq('po_id', rrPo.id)
       for (const it of poItems ?? []) {
         const qty = Number(it.quantity) || 0
         if (qty <= 0) continue
