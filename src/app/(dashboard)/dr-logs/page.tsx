@@ -528,7 +528,7 @@ export default function DRLogsPage() {
           .from('warehouse_stock')
           .select('quantity')
           .eq('item_name', it.item_name.trim())
-          .eq('client_name', clientName)
+          .is('client_name', null)
           .maybeSingle()
         const available = wsRow ? Number(wsRow.quantity) : 0
         if (available < qty) {
@@ -544,10 +544,11 @@ export default function DRLogsPage() {
     }
 
     // Editing a DR that had already decremented warehouse_stock would otherwise decrement it
-    // again on every save. Reverse the previous decrement (using the pre-edit persisted items,
-    // client, and status) before the block below applies the new one — so only the net change
-    // between the old and new item quantities ever hits the stock. This applies to every DR,
-    // not just ones linked to an SO reference.
+    // again on every save. Reverse the previous decrement (using the pre-edit persisted items
+    // and status) before the block below applies the new one — so only the net change between
+    // the old and new item quantities ever hits the stock. This applies to every DR, not just
+    // ones linked to an SO reference. Matches the general/unassigned pool (client_name IS NULL),
+    // since that's what Receiving actually adds stock into — not the DR's own client name.
     if (editing && (editing.status === 'received' || editing.status === 'partial')) {
       const prevItems = getItems(editing.dr_number)
       for (const it of prevItems) {
@@ -557,7 +558,7 @@ export default function DRLogsPage() {
           .from('warehouse_stock')
           .select('id, quantity')
           .eq('item_name', it.item_name.trim())
-          .eq('client_name', editing.supplier_name ?? '')
+          .is('client_name', null)
           .maybeSingle()
         if (wsRow) {
           await supabase.from('warehouse_stock').update({
@@ -578,7 +579,7 @@ export default function DRLogsPage() {
           .from('warehouse_stock')
           .select('id, quantity')
           .eq('item_name', it.item_name.trim())
-          .eq('client_name', clientName ?? '')
+          .is('client_name', null)
           .maybeSingle()
         if (wsRow) {
           await supabase.from('warehouse_stock').update({
