@@ -193,7 +193,40 @@ export default function ReceivingPage() {
       status: 'completed',
     })
     if (error) { toast.error(error.message); setRrSaving(false); return }
-    toast.success('Receiving report saved.')
+
+    // Update inventory: add the PO's line-item quantities into warehouse_stock (unassigned
+    // to any client — this is general stock coming in from the supplier).
+    if (selectedPOData?.id) {
+      const { data: poItems } = await supabase
+        .from('po_items')
+        .select('item_name, quantity, unit_of_measure')
+        .eq('po_id', selectedPOData.id)
+      for (const it of poItems ?? []) {
+        const qty = Number(it.quantity) || 0
+        if (qty <= 0) continue
+        const { data: wsRow } = await supabase
+          .from('warehouse_stock')
+          .select('id, quantity')
+          .eq('item_name', it.item_name)
+          .is('client_name', null)
+          .maybeSingle()
+        if (wsRow) {
+          await supabase.from('warehouse_stock').update({
+            quantity: Number(wsRow.quantity) + qty,
+            updated_at: new Date().toISOString(),
+          }).eq('id', wsRow.id)
+        } else {
+          await supabase.from('warehouse_stock').insert({
+            item_name: it.item_name,
+            unit: it.unit_of_measure ?? '',
+            quantity: qty,
+            client_name: null,
+          })
+        }
+      }
+    }
+
+    toast.success('Receiving report saved — inventory updated.')
     setRrOpen(false); resetRRForm(); loadRR()
     setRrSaving(false)
   }
