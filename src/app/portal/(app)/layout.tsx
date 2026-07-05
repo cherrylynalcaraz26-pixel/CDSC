@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 import {
   LayoutDashboard, FileText, Package, User, LogOut, Menu, X, Boxes,
-  ClipboardList, Search, Bell, PanelLeftClose, PanelLeftOpen, MessageSquare, Send, ChevronRight,
+  ClipboardList, Search, Bell, PanelLeftClose, PanelLeftOpen, MessageSquare, Send, ChevronRight, Globe,
 } from 'lucide-react'
 import { SearchProvider, useSearchContext } from '@/context/search-context'
 
@@ -33,6 +33,7 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
   const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null)
   const [clientLogoUrl, setClientLogoUrl] = useState<string | null>(null)
   const [clientId, setClientId] = useState<string | null>(null)
+  const [companyWebsite, setCompanyWebsite] = useState<string | null>(null)
   const [avatarOpen, setAvatarOpen] = useState(false)
   const avatarRef = useRef<HTMLDivElement>(null)
   const [mobileOpen, setMobileOpen] = useState(false)
@@ -103,6 +104,8 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
       setClientName(clientRow?.company_name ?? '')
       const rawLogo = (clientRow as any)?.logo_url ?? (clientRow as any)?.avatar_url ?? null
       setClientLogoUrl(rawLogo ? `${rawLogo}?t=${Date.now()}` : null)
+      const { data: sysSettings } = await supabase.from('system_settings').select('website').single()
+      setCompanyWebsite(sysSettings?.website ?? null)
       if (clientRow) {
         setClientId((clientRow as any).id)
         const companyName = (clientRow as any).company_name ?? ''
@@ -141,6 +144,8 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut()
     router.replace('/login')
   }
+
+  const websiteHref = companyWebsite ? (companyWebsite.startsWith('http') ? companyWebsite : `https://${companyWebsite}`) : null
 
   function isActive(href: string, exact: boolean) {
     return exact ? pathname === href : pathname.startsWith(href)
@@ -211,6 +216,25 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
             </Link>
           )
         })}
+        {websiteHref && (
+          collapsed ? (
+            <div className="relative group">
+              <a href={websiteHref} target="_blank" rel="noopener noreferrer" title="Website"
+                className="flex items-center justify-center h-9 rounded-md transition-colors text-white/40 hover:text-white/80 hover:bg-white/5">
+                <Globe className="h-[16px] w-[16px] shrink-0" />
+              </a>
+              <div className="absolute left-full top-0 ml-1 hidden group-hover:block z-50 min-w-[160px] bg-[#1a1a1a] border border-white/10 rounded-lg py-1 shadow-xl pointer-events-none">
+                <span className="block px-3 py-1.5 text-[13px] text-white/70">Website</span>
+              </div>
+            </div>
+          ) : (
+            <a href={websiteHref} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] font-medium transition-colors text-white/50 hover:text-white/80 hover:bg-white/5">
+              <Globe className="h-[15px] w-[15px] shrink-0" />
+              Website
+            </a>
+          )
+        )}
       </>
     )
   }
@@ -310,6 +334,13 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
               </Link>
             )
           })}
+          {websiteHref && (
+            <a href={websiteHref} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] font-medium transition-colors text-white/50 hover:text-white/80 hover:bg-white/5">
+              <Globe className="h-[15px] w-[15px] shrink-0" />
+              Website
+            </a>
+          )}
         </nav>
 
         <div className="p-3 border-t border-white/8">
