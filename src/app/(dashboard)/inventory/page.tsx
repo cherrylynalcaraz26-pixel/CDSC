@@ -107,7 +107,7 @@ export default function InventoryPage() {
     {
       let f = 0
       while (true) {
-        const { data } = await supabase.from('items').select('item_name, cost').range(f, f + PAGE - 1)
+        const { data } = await supabase.from('items').select('item_name, cost').order('id').range(f, f + PAGE - 1)
         if (!data || data.length === 0) break
         for (const it of data) itemCostMap[it.item_name] = it.cost ?? null
         if (data.length < PAGE) break
@@ -121,6 +121,7 @@ export default function InventoryPage() {
       const { data } = await supabase
         .from('dr_log_items')
         .select('item_name, unit, quantity, dr_number')
+        .order('id')
         .range(from, from + PAGE - 1)
       if (!data || data.length === 0) break
       for (const item of data) {
@@ -143,6 +144,7 @@ export default function InventoryPage() {
         .select('dr_number, supplier_name')
         .not('supplier_name', 'is', null)
         .in('status', ['received', 'partial'])
+        .order('id')
         .range(from, from + PAGE - 1)
       if (!data || data.length === 0) break
       for (const dr of data) {
@@ -176,6 +178,7 @@ export default function InventoryPage() {
         .from('csi_records')
         .select('client_name, item_name, unit, quantity, si_number, unit_price')
         .not('client_name', 'is', null)
+        .order('id')
         .range(from, from + PAGE - 1)
       if (!data || data.length === 0) break
       for (const rec of data) {
@@ -200,6 +203,7 @@ export default function InventoryPage() {
       const { data } = await supabase
         .from('warehouse_stock')
         .select('id, client_name, item_name, unit, quantity, notes, created_at')
+        .order('id')
         .range(from, from + PAGE - 1)
       if (!data || data.length === 0) break
       for (const rec of data) {
@@ -267,6 +271,7 @@ export default function InventoryPage() {
         .from('warehouse_stock')
         .select('id, client_name, item_name, unit, quantity, notes, created_at')
         .order('created_at', { ascending: false })
+        .order('id')
         .range(from, from + PAGE - 1)
       if (!data || data.length === 0) break
       for (const rec of data) {

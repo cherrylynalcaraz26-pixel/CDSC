@@ -361,15 +361,44 @@ function CollectionsTab() {
   const [clientSearch, setClientSearch] = useState('')
   const [clientDropdownOpen, setClientDropdownOpen] = useState(false)
   const [csiOptions, setCsiOptions] = useState<{ si_number: string; si_date: string; total: number }[]>([])
+  const [readyToCollect, setReadyToCollect] = useState<{ so_number: string; client_name: string; csi_total: number; collected_total: number; outstanding: number }[]>([])
 
   async function load() {
     setLoading(true)
-    const [{ data: colData }, { data: cliData }] = await Promise.all([
+    const [{ data: colData }, { data: cliData }, { data: drRows }, { data: csiRows }] = await Promise.all([
       supabase.from('collections').select('*').order('created_at', { ascending: false }),
       supabase.from('clients').select('id, company_name').eq('status', 'active').order('company_name'),
+      supabase.from('dr_logs').select('po_number, status').not('po_number', 'is', null).in('status', ['received', 'partial']),
+      supabase.from('csi_records').select('po_number, si_number, amount, client_name').not('po_number', 'is', null),
     ])
     setRecords((colData ?? []) as Collection[])
     setClients(cliData ?? [])
+
+    // A Sales Order is "ready to collect" once it's both been delivered (has a DR) and
+    // invoiced (has CSI records) — and still has an outstanding (uncollected) balance.
+    const drPoNumbers = new Set((drRows ?? []).map(d => d.po_number).filter(Boolean))
+    const csiByPo: Record<string, { siNumbers: Set<string>; total: number; clientName: string }> = {}
+    for (const r of (csiRows ?? [])) {
+      if (!r.po_number) continue
+      if (!csiByPo[r.po_number]) csiByPo[r.po_number] = { siNumbers: new Set(), total: 0, clientName: r.client_name ?? '' }
+      csiByPo[r.po_number].siNumbers.add(r.si_number)
+      csiByPo[r.po_number].total += Number(r.amount) || 0
+    }
+    const collectedBySi: Record<string, number> = {}
+    for (const c of ((colData ?? []) as Collection[])) {
+      if (c.status === 'posted' && c.si_number) collectedBySi[c.si_number] = (collectedBySi[c.si_number] ?? 0) + (c.amount ?? 0)
+    }
+    const list: typeof readyToCollect = []
+    for (const [poNumber, info] of Object.entries(csiByPo)) {
+      if (!drPoNumbers.has(poNumber)) continue
+      const collected = [...info.siNumbers].reduce((s, si) => s + (collectedBySi[si] ?? 0), 0)
+      const outstanding = info.total - collected
+      if (outstanding <= 0.01) continue
+      list.push({ so_number: poNumber, client_name: info.clientName, csi_total: info.total, collected_total: collected, outstanding })
+    }
+    list.sort((a, b) => b.outstanding - a.outstanding)
+    setReadyToCollect(list)
+
     setLoading(false)
   }
 
@@ -411,6 +440,15 @@ function CollectionsTab() {
     if (!siNumber) { setForm(p => ({ ...p, si_number: '' })); return }
     const csi = csiOptions.find(c => c.si_number === siNumber)
     setForm(p => ({ ...p, si_number: siNumber, amount: csi ? String(csi.total) : p.amount }))
+  }
+
+  function openCollectFor(row: { client_name: string }) {
+    resetForm()
+    const matched = clients.find(c => c.company_name === row.client_name)
+    setForm(p => ({ ...p, client_id: matched?.id ?? '', client_name: row.client_name }))
+    setClientSearch(row.client_name)
+    loadCsiOptions(row.client_name)
+    setOpen(true)
   }
 
   const filteredClients = clients.filter(c => !clientSearch || c.company_name.toLowerCase().includes(clientSearch.toLowerCase()))
@@ -485,6 +523,51 @@ function CollectionsTab() {
           <div className="text-sm text-muted-foreground">Voided</div>
         </CardContent></Card>
       </div>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-green-600" />Ready to Collect
+          </CardTitle>
+          <CardDescription>Sales Orders that have been delivered (DR) and invoiced (CSI) but still have an outstanding balance</CardDescription>
+        </CardHeader>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>SO Number</TableHead>
+                <TableHead>Client</TableHead>
+                <TableHead className="text-right">Billed (CSI)</TableHead>
+                <TableHead className="text-right">Collected</TableHead>
+                <TableHead className="text-right">Outstanding</TableHead>
+                <TableHead className="w-10" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow><TableCell colSpan={6} className="text-center py-8">
+                  <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
+                </TableCell></TableRow>
+              ) : readyToCollect.length === 0 ? (
+                <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                  No outstanding Sales Orders with both a DR and a CSI invoice.
+                </TableCell></TableRow>
+              ) : readyToCollect.map(row => (
+                <TableRow key={row.so_number}>
+                  <TableCell className="font-mono text-xs font-semibold text-blue-600">{row.so_number}</TableCell>
+                  <TableCell className="text-sm font-medium">{row.client_name || '—'}</TableCell>
+                  <TableCell className="text-right">{fmt(row.csi_total)}</TableCell>
+                  <TableCell className="text-right text-green-600">{fmt(row.collected_total)}</TableCell>
+                  <TableCell className="text-right font-semibold text-amber-600">{fmt(row.outstanding)}</TableCell>
+                  <TableCell>
+                    <Button size="sm" variant="outline" onClick={() => openCollectFor(row)}>Collect</Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="pb-3">
