@@ -330,6 +330,20 @@ export default function InventoryPage() {
   useEffect(() => { load() }, [])
   useEffect(() => { setPage(1) }, [clientFilter, itemFilter, statusFilter, search, viewMode])
 
+  // Keep WH Stock (and DR/CSI totals) live — e.g. once a delivery is recorded
+  // in DR Logs elsewhere, this page's Generate Report reflects it immediately
+  // instead of needing a manual refresh.
+  useEffect(() => {
+    const channel = supabase
+      .channel('inventory-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'warehouse_stock' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dr_logs' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dr_log_items' }, () => load())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'csi_records' }, () => load())
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [])
+
   function uomName(code: string) { return uomMap[code] || code }
 
   function openWarehouseUpdate(row: typeof warehouseRows[0]) {

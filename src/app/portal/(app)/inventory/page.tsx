@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Package, Loader2, Tag, ShoppingCart, Plus, Minus, X, Send, ChevronDown, ChevronUp, ShoppingBag, LayoutGrid, List, Search } from 'lucide-react'
+import { Package, Loader2, Tag, ShoppingCart, Plus, Minus, X, Send, ChevronDown, ChevronUp, ShoppingBag, LayoutGrid, List, Search, Info } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
@@ -203,6 +203,13 @@ export default function PortalInventoryPage() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Browse Catalog</h1>
         <p className="text-sm text-gray-500 mt-1">Browse our product catalog and add items to a new order.</p>
+      </div>
+
+      <div className="flex items-start gap-2 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
+        <Info className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
+        <p className="text-sm text-blue-800">
+          Placing a new order? You can select <span className="font-semibold">multiple items</span> — click <span className="font-semibold">Add to Order</span> on each product you need, then review and submit them together as one order.
+        </p>
       </div>
 
       {/* Stats row */}
