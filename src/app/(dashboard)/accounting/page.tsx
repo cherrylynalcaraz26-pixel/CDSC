@@ -18,9 +18,9 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
-  Plus, Download, Loader2, BookOpen, Banknote, TrendingUp, BarChart3,
+  Plus, Download, Loader2, BookOpen, Banknote, TrendingUp,
   Scale, FileSpreadsheet, Trash2, Calculator, Receipt, FileText, DollarSign,
-  FileBarChart, Zap, MoreHorizontal, Printer, Eye, CheckCircle2, XCircle, AlertTriangle,
+  Zap, MoreHorizontal, Printer, Eye, CheckCircle2, XCircle, AlertTriangle,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
@@ -30,7 +30,7 @@ import { format } from 'date-fns'
 interface Collection {
   id: string; or_number: string | null; collection_date: string | null
   client_name: string | null; amount: number; form_2307: number | null; status: string
-  payment_mode?: string | null
+  payment_mode?: string | null; si_number?: string | null
 }
 
 interface Disbursement {
@@ -355,9 +355,12 @@ function CollectionsTab() {
   const [clientFilter, setClientFilter] = useState('')
   const df = useDateRangeFilter()
   const [form, setForm] = useState({
-    client_id: '', client_name: '', amount: '',
+    or_number: '', client_id: '', client_name: '', amount: '', si_number: '',
     payment_mode: 'Cash', reference_number: '', collection_date: '', remarks: '',
   })
+  const [clientSearch, setClientSearch] = useState('')
+  const [clientDropdownOpen, setClientDropdownOpen] = useState(false)
+  const [csiOptions, setCsiOptions] = useState<{ si_number: string; si_date: string; total: number }[]>([])
 
   async function load() {
     setLoading(true)
@@ -373,8 +376,44 @@ function CollectionsTab() {
   useEffect(() => { load() }, [])
 
   function resetForm() {
-    setForm({ client_id: '', client_name: '', amount: '', payment_mode: 'Cash', reference_number: '', collection_date: '', remarks: '' })
+    setForm({ or_number: '', client_id: '', client_name: '', amount: '', si_number: '', payment_mode: 'Cash', reference_number: '', collection_date: '', remarks: '' })
+    setClientSearch('')
+    setClientDropdownOpen(false)
+    setCsiOptions([])
   }
+
+  // CSI invoices for this client that don't already have a posted collection linked —
+  // so the same invoice can't be selected (and collected) twice.
+  async function loadCsiOptions(clientName: string) {
+    if (!clientName) { setCsiOptions([]); return }
+    const [{ data: csiData }, { data: linkedRows }] = await Promise.all([
+      supabase.from('csi_records').select('si_number, si_date, amount').eq('client_name', clientName),
+      supabase.from('collections').select('si_number').eq('client_name', clientName).eq('status', 'posted').not('si_number', 'is', null),
+    ])
+    const linkedSet = new Set((linkedRows ?? []).map(r => r.si_number))
+    const map: Record<string, { si_number: string; si_date: string; total: number }> = {}
+    for (const r of (csiData ?? [])) {
+      if (!r.si_number || linkedSet.has(r.si_number)) continue
+      if (!map[r.si_number]) map[r.si_number] = { si_number: r.si_number, si_date: r.si_date, total: 0 }
+      map[r.si_number].total += Number(r.amount) || 0
+    }
+    setCsiOptions(Object.values(map).sort((a, b) => (b.si_date ?? '').localeCompare(a.si_date ?? '')))
+  }
+
+  function selectClient(c: { id: string; company_name: string }) {
+    setForm(p => ({ ...p, client_id: c.id, client_name: c.company_name, si_number: '' }))
+    setClientSearch(c.company_name)
+    setClientDropdownOpen(false)
+    loadCsiOptions(c.company_name)
+  }
+
+  function selectCsi(siNumber: string) {
+    if (!siNumber) { setForm(p => ({ ...p, si_number: '' })); return }
+    const csi = csiOptions.find(c => c.si_number === siNumber)
+    setForm(p => ({ ...p, si_number: siNumber, amount: csi ? String(csi.total) : p.amount }))
+  }
+
+  const filteredClients = clients.filter(c => !clientSearch || c.company_name.toLowerCase().includes(clientSearch.toLowerCase()))
 
   async function save() {
     if (!form.amount || Number(form.amount) <= 0) { toast.error('Enter a valid amount'); return }
@@ -384,6 +423,7 @@ function CollectionsTab() {
     if (!clientName.trim()) { toast.error('Client name required'); return }
     setSaving(true)
     const { error } = await supabase.from('collections').insert({
+      or_number: form.or_number.trim() || null,
       client_id: form.client_id || null,
       client_name: clientName.trim(),
       amount: Number(form.amount),
@@ -391,6 +431,7 @@ function CollectionsTab() {
       reference_number: form.reference_number || null,
       collection_date: form.collection_date || new Date().toISOString().split('T')[0],
       remarks: form.remarks || null,
+      si_number: form.si_number || null,
       status: 'posted',
     })
     if (error) toast.error(error.message)
@@ -552,27 +593,62 @@ function CollectionsTab() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>OR Number</Label>
-                <Input value="" disabled className="bg-muted text-muted-foreground" placeholder="Auto-generated" />
+                <Input placeholder="Leave blank to auto-generate" value={form.or_number}
+                  onChange={e => setForm(p => ({ ...p, or_number: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
                 <Label>Collection Date</Label>
                 <Input type="date" value={form.collection_date} onChange={e => setForm(p => ({ ...p, collection_date: e.target.value }))} />
               </div>
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 relative">
               <Label>Client</Label>
-              <Select value={form.client_id} onValueChange={v => setForm(p => ({ ...p, client_id: v ?? '', client_name: '' }))}>
-                <SelectTrigger><SelectValue placeholder="Select existing client" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">— Enter manually —</SelectItem>
-                  {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              {!form.client_id && (
-                <Input placeholder="Or type client name manually" value={form.client_name}
-                  onChange={e => setForm(p => ({ ...p, client_name: e.target.value }))} />
+              <Input
+                value={clientSearch}
+                onChange={e => {
+                  const val = e.target.value
+                  setClientSearch(val)
+                  setForm(p => ({ ...p, client_id: '', client_name: val, si_number: '' }))
+                  setClientDropdownOpen(true)
+                  setCsiOptions([])
+                }}
+                onFocus={() => setClientDropdownOpen(true)}
+                onBlur={() => setTimeout(() => setClientDropdownOpen(false), 150)}
+                placeholder="Type to search or enter a client name…"
+                className="w-full"
+              />
+              {clientDropdownOpen && filteredClients.length > 0 && (
+                <div className="absolute z-20 w-full mt-1 bg-popover border rounded-md shadow-lg max-h-48 overflow-y-auto">
+                  {filteredClients.map(c => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onMouseDown={() => selectClient(c)}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-accent border-b last:border-0"
+                    >
+                      {c.company_name}
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
+            {csiOptions.length > 0 && (
+              <div className="space-y-1.5">
+                <Label>Link to CSI Invoice (optional)</Label>
+                <Select value={form.si_number} onValueChange={v => selectCsi(v ?? '')}>
+                  <SelectTrigger><SelectValue placeholder="Select an unbilled CSI invoice…" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">— None —</SelectItem>
+                    {csiOptions.map(csi => (
+                      <SelectItem key={csi.si_number} value={csi.si_number}>
+                        {csi.si_number} — {csi.si_date ? format(new Date(csi.si_date), 'MMM d, yyyy') : '—'} — {fmt(csi.total)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Selecting an invoice fills in the Amount below automatically.</p>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Amount (₱) <span className="text-destructive">*</span></Label>
@@ -1244,16 +1320,7 @@ function BookkeepingTab({ activeSub, onSubChange }: { activeSub: string; onSubCh
     <div className="space-y-4">
       <DateFilterBar df={df} />
       <Tabs value={activeSub} onValueChange={v => onSubChange(v ?? 'crj')}>
-        <TabsList className="flex-wrap h-auto gap-1">
-          <TabsTrigger value="crj" className="flex items-center gap-1.5"><BookOpen className="h-3.5 w-3.5" />Sales Journal</TabsTrigger>
-          <TabsTrigger value="cdj" className="flex items-center gap-1.5"><Banknote className="h-3.5 w-3.5" />Disbursements</TabsTrigger>
-          <TabsTrigger value="gl" className="flex items-center gap-1.5"><BarChart3 className="h-3.5 w-3.5" />General Ledger</TabsTrigger>
-          <TabsTrigger value="tb" className="flex items-center gap-1.5"><Scale className="h-3.5 w-3.5" />Trial Balance</TabsTrigger>
-          <TabsTrigger value="is" className="flex items-center gap-1.5"><TrendingUp className="h-3.5 w-3.5" />Income Statement</TabsTrigger>
-          <TabsTrigger value="bs" className="flex items-center gap-1.5"><FileSpreadsheet className="h-3.5 w-3.5" />Balance Sheet</TabsTrigger>
-          <TabsTrigger value="bir" className="flex items-center gap-1.5"><Download className="h-3.5 w-3.5" />BIR / CAS</TabsTrigger>
-        </TabsList>
-        <div className="mt-4">
+        <div>
           <TabsContent value="crj"><SalesJournalTab collections={filteredCollections} csiRecords={filteredCsi} /></TabsContent>
           <TabsContent value="cdj"><DisbursementsTab filterFrom={filterFrom} filterTo={filterTo} /></TabsContent>
           <TabsContent value="gl"><GeneralLedgerTab lines={filteredJLines} /></TabsContent>
@@ -1525,22 +1592,32 @@ function BIRComplianceTab() {
 function CSITab() {
   const supabase = createClient()
   const [records, setRecords] = useState<any[]>([])
+  const [collectedSiNumbers, setCollectedSiNumbers] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     async function load() {
-      const { data } = await supabase
-        .from('csi_records')
-        .select('id, si_number, si_date, client_name, item_name, unit, quantity, unit_price, amount, collection_status')
-        .order('si_date', { ascending: false })
+      const [{ data }, { data: linkedRows }] = await Promise.all([
+        supabase
+          .from('csi_records')
+          .select('id, si_number, si_date, client_name, item_name, unit, quantity, unit_price, amount')
+          .order('si_date', { ascending: false }),
+        // A CSI invoice counts as collected once a posted OR/CR is linked to its si_number.
+        supabase.from('collections').select('si_number').eq('status', 'posted').not('si_number', 'is', null),
+      ])
       setRecords(data ?? [])
+      setCollectedSiNumbers(new Set((linkedRows ?? []).map(r => r.si_number)))
       setLoading(false)
     }
     load()
   }, [])
 
+  function collectionStatus(r: { si_number: string | null }) {
+    return r.si_number && collectedSiNumbers.has(r.si_number) ? 'collected' : 'pending'
+  }
+
   const totalBilled = records.reduce((s, r) => s + (r.amount ?? 0), 0)
-  const totalCollected = records.filter(r => r.collection_status === 'collected').reduce((s, r) => s + (r.amount ?? 0), 0)
+  const totalCollected = records.filter(r => collectionStatus(r) === 'collected').reduce((s, r) => s + (r.amount ?? 0), 0)
   const pending = totalBilled - totalCollected
 
   const byClient: Record<string, { billed: number; collected: number; count: number }> = {}
@@ -1549,7 +1626,7 @@ function CSITab() {
     if (!byClient[key]) byClient[key] = { billed: 0, collected: 0, count: 0 }
     byClient[key].billed += r.amount ?? 0
     byClient[key].count += 1
-    if (r.collection_status === 'collected') byClient[key].collected += r.amount ?? 0
+    if (collectionStatus(r) === 'collected') byClient[key].collected += r.amount ?? 0
   })
 
   const statusCls: Record<string, string> = {
@@ -1651,8 +1728,8 @@ function CSITab() {
                   <TableCell className="text-right">{fmt(r.unit_price ?? 0)}</TableCell>
                   <TableCell className="text-right font-medium">{fmt(r.amount ?? 0)}</TableCell>
                   <TableCell>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusCls[r.collection_status ?? 'pending'] ?? 'bg-gray-100 text-gray-700'}`}>
-                      {r.collection_status ?? 'pending'}
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusCls[collectionStatus(r)] ?? 'bg-gray-100 text-gray-700'}`}>
+                      {collectionStatus(r)}
                     </span>
                   </TableCell>
                 </TableRow>
@@ -1696,25 +1773,7 @@ function AccountingPageContent() {
       </div>
 
       <Tabs value={activeTab} onValueChange={v => setTab(v ?? 'overview')}>
-        <TabsList className="flex-wrap h-auto gap-1">
-          <TabsTrigger value="overview" className="flex items-center gap-1.5">
-            <Calculator className="h-3.5 w-3.5" />Overview
-          </TabsTrigger>
-          <TabsTrigger value="collections" className="flex items-center gap-1.5">
-            <Receipt className="h-3.5 w-3.5" />Collections (OR/CR)
-          </TabsTrigger>
-          <TabsTrigger value="bookkeeping" className="flex items-center gap-1.5">
-            <FileBarChart className="h-3.5 w-3.5" />Bookkeeping
-          </TabsTrigger>
-          <TabsTrigger value="csi" className="flex items-center gap-1.5">
-            <Receipt className="h-3.5 w-3.5" />CSI Revenue
-          </TabsTrigger>
-          <TabsTrigger value="bir" className="flex items-center gap-1.5">
-            <FileText className="h-3.5 w-3.5" />BIR Compliance
-          </TabsTrigger>
-        </TabsList>
-
-        <div className="mt-6">
+        <div>
           <TabsContent value="overview"><OverviewTab /></TabsContent>
           <TabsContent value="collections"><CollectionsTab /></TabsContent>
           <TabsContent value="csi"><CSITab /></TabsContent>
