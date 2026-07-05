@@ -14,11 +14,14 @@ interface InventoryItem {
   item_code: string | null
   category: string | null
   unit: string | null
-  quantity_on_hand: number | null
-  low_stock_threshold: number | null
-  unit_price: number | null
   selling_price: number | null
   description: string | null
+}
+
+// Item names/descriptions in the master catalog sometimes carry double
+// spaces or stray whitespace from data entry — normalize to one clean line.
+function cleanText(s: string) {
+  return s.replace(/\s+/g, ' ').trim()
 }
 
 interface CartEntry {
@@ -33,7 +36,6 @@ export default function PortalInventoryPage() {
   const { query: search, setQuery: setSearch } = useSearchContext()
   const [loading, setLoading] = useState(true)
   const [category, setCategory] = useState('')
-  const [stockFilter, setStockFilter] = useState(false)
 
   // Cart state
   const [cart, setCart] = useState<CartEntry[]>([])
@@ -54,12 +56,26 @@ export default function PortalInventoryPage() {
           .from('clients').select('id, company_name').eq('auth_user_id', session.user.id).single()
         if (clientRow) {
           setClientId(clientRow.id); setClientName(clientRow.company_name)
-          const { data } = await supabase
-            .from('client_inventory')
-            .select('id, item_name, item_code, category, unit, quantity_on_hand, low_stock_threshold, unit_price, selling_price, description')
-            .eq('client_id', clientRow.id)
+          // Browse Catalog lists CDSC's master product catalog (so clients can shop
+          // and place new orders), not the client's own already-received stock.
+          const { data, error } = await supabase
+            .from('items')
+            .select('id, item_name, item_code, description, unit_of_measure, selling_price, category:categories(category_name)')
+            .eq('status', 'active')
             .order('item_name')
-          setItems(data ?? [])
+          if (error) toast.error(error.message)
+          setItems((data ?? []).map((r: {
+            id: string; item_name: string; item_code: string | null; description: string | null
+            unit_of_measure: string | null; selling_price: number | null; category: { category_name: string }[] | null
+          }) => ({
+            id: r.id,
+            item_name: cleanText(r.item_name),
+            item_code: r.item_code,
+            category: r.category?.[0]?.category_name ?? null,
+            unit: r.unit_of_measure,
+            selling_price: r.selling_price != null ? Number(r.selling_price) : null,
+            description: r.description ? cleanText(r.description) : null,
+          })))
         }
       }
       setLoading(false)
@@ -78,8 +94,7 @@ export default function PortalInventoryPage() {
       (i.unit ?? '').toLowerCase().includes(q) ||
       (i.description ?? '').toLowerCase().includes(q)
     const matchCat = !category || i.category === category
-    const matchStock = !stockFilter || (i.quantity_on_hand ?? 0) > 0
-    return matchSearch && matchCat && matchStock
+    return matchSearch && matchCat
   })
 
   // Cart helpers
@@ -109,7 +124,7 @@ export default function PortalInventoryPage() {
 
   const cartCount = cart.reduce((s, e) => s + e.qty, 0)
   const cartTotal = cart.reduce((s, e) => {
-    const price = e.item.selling_price ?? e.item.unit_price ?? 0
+    const price = e.item.selling_price ?? 0
     return s + price * e.qty
   }, 0)
 
@@ -144,8 +159,9 @@ export default function PortalInventoryPage() {
           item_name: e.item.item_name,
           quantity: e.qty,
           unit: e.item.unit ?? null,
-          unit_price: e.item.selling_price ?? e.item.unit_price ?? 0,
-          total_amount: (e.item.selling_price ?? e.item.unit_price ?? 0) * e.qty,
+          unit_price: e.item.selling_price ?? 0,
+          selling_price: e.item.selling_price ?? null,
+          total_amount: (e.item.selling_price ?? 0) * e.qty,
         }))
         const { error: itemErr } = await supabase.from('so_items').insert(itemRows)
         if (itemErr) toast.error(`Items: ${itemErr.message}`)
@@ -166,7 +182,7 @@ export default function PortalInventoryPage() {
     <div className="space-y-6 pb-48 lg:pb-32">
       <div>
         <h1 className="text-2xl font-bold text-gray-900">Browse Catalog</h1>
-        <p className="text-sm text-gray-500 mt-1">Your delivered items and on-hand inventory.</p>
+        <p className="text-sm text-gray-500 mt-1">Browse our product catalog and add items to a new order.</p>
       </div>
 
       {/* Stats row */}
@@ -181,18 +197,12 @@ export default function PortalInventoryPage() {
         <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 flex items-center gap-3">
           <Tag className="h-5 w-5 text-orange-500" />
           <div>
-            <div className="text-xl font-bold text-gray-900">{loading ? '—' : items.filter(i => (i.quantity_on_hand ?? 0) <= (i.low_stock_threshold ?? 0) && (i.quantity_on_hand ?? 0) > 0).length}</div>
-            <div className="text-xs text-gray-500">Low Stock</div>
-          </div>
-        </div>
-        <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 flex items-center gap-3">
-          <Package className="h-5 w-5 text-green-500" />
-          <div>
-            <div className="text-xl font-bold text-gray-900">{loading ? '—' : items.filter(i => (i.quantity_on_hand ?? 0) > 0).length}</div>
-            <div className="text-xs text-gray-500">In Stock</div>
+            <div className="text-xl font-bold text-gray-900">{loading ? '—' : categories.length - 1}</div>
+            <div className="text-xs text-gray-500">Categories</div>
           </div>
         </div>
       </div>
+      <p className="text-xs text-gray-400 -mt-3">Prices shown are indicative and may change upon order confirmation.</p>
 
       {/* Search + filters */}
       <div className="space-y-3">
@@ -211,16 +221,6 @@ export default function PortalInventoryPage() {
               </button>
             )}
           </div>
-          <button
-            onClick={() => setStockFilter(v => !v)}
-            className={cn(
-              'h-10 px-4 text-sm font-medium rounded-lg border transition-colors whitespace-nowrap',
-              stockFilter
-                ? 'bg-green-600 text-white border-green-600'
-                : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
-            )}>
-            In Stock Only
-          </button>
           <div className="flex border border-gray-300 rounded-lg overflow-hidden">
             <button onClick={() => setViewMode('grid')}
               className={cn('h-10 w-10 flex items-center justify-center transition-colors',
@@ -258,10 +258,7 @@ export default function PortalInventoryPage() {
       {!loading && (
         <p className="text-xs text-gray-400">
           {filtered.length} product{filtered.length !== 1 ? 's' : ''}
-          {(search || localSearch || category || stockFilter) ? ' found' : ' available'}
-          {filtered.filter(i => (i.quantity_on_hand ?? 0) > 0).length !== filtered.length && (
-            <span className="ml-1 text-green-600">· {filtered.filter(i => (i.quantity_on_hand ?? 0) > 0).length} in stock</span>
-          )}
+          {(search || localSearch || category) ? ' found' : ' available'}
         </p>
       )}
 
@@ -274,10 +271,10 @@ export default function PortalInventoryPage() {
         <div className="bg-white rounded-xl border border-gray-200 py-16 text-center">
           <Package className="h-9 w-9 text-gray-300 mx-auto mb-3" />
           <p className="text-gray-500 text-sm font-medium">
-            {search || category || stockFilter ? 'No products match your filters.' : 'No products available.'}
+            {search || category ? 'No products match your filters.' : 'No products available.'}
           </p>
-          {(search || category || stockFilter) && (
-            <button onClick={() => { setSearch(''); setCategory(''); setStockFilter(false) }}
+          {(search || category) && (
+            <button onClick={() => { setSearch(''); setCategory('') }}
               className="mt-3 text-sm text-red-600 hover:underline">
               Clear filters
             </button>
@@ -286,9 +283,7 @@ export default function PortalInventoryPage() {
       ) : viewMode === 'grid' ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {filtered.map(item => {
-            const inStock = (item.quantity_on_hand ?? 0) > 0
-            const stockQty = item.quantity_on_hand ?? 0
-            const price = item.selling_price ?? item.unit_price
+            const price = item.selling_price
             const qty = cartQty(item.id)
             return (
               <div key={item.id} className={cn(
@@ -297,17 +292,16 @@ export default function PortalInventoryPage() {
               )}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
-                    <h3 className="font-semibold text-gray-900 text-sm leading-tight">{item.item_name}</h3>
+                    <h3 className="font-semibold text-gray-900 text-sm leading-tight truncate">{item.item_name}</h3>
                     {item.item_code && (
                       <p className="text-xs text-gray-400 mt-0.5">{item.item_code}</p>
                     )}
                   </div>
-                  <span className={cn(
-                    'text-xs px-2 py-0.5 rounded-full font-medium shrink-0',
-                    inStock ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
-                  )}>
-                    {inStock ? `${stockQty} ${item.unit ?? 'pcs'}` : 'Out of Stock'}
-                  </span>
+                  {item.unit && (
+                    <span className="text-xs px-2 py-0.5 rounded-full font-medium shrink-0 bg-gray-100 text-gray-500">
+                      per {item.unit}
+                    </span>
+                  )}
                 </div>
 
                 {item.description && (
@@ -315,11 +309,7 @@ export default function PortalInventoryPage() {
                 )}
 
                 <div className="flex items-center justify-between gap-2 mt-auto pt-1">
-                  <div>
-                    {item.low_stock_threshold != null && (item.quantity_on_hand ?? 0) <= item.low_stock_threshold && (item.quantity_on_hand ?? 0) > 0 && (
-                      <span className="text-xs bg-orange-50 text-orange-600 px-2 py-0.5 rounded-full font-medium">Low Stock</span>
-                    )}
-                  </div>
+                  <div />
                   {price != null && (
                     <span className="font-bold text-red-600 text-sm">{fmt(price)}</span>
                   )}
@@ -363,15 +353,14 @@ export default function PortalInventoryPage() {
               <tr className="bg-gray-50 border-b border-gray-200">
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Product</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase hidden sm:table-cell">Category</th>
-                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Stock</th>
+                <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Unit</th>
                 <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Price</th>
                 <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase">Order</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filtered.map(item => {
-                const inStock = (item.quantity_on_hand ?? 0) > 0
-                const price = item.selling_price ?? item.unit_price
+                const price = item.selling_price
                 const qty = cartQty(item.id)
                 return (
                   <tr key={item.id} className={cn('hover:bg-gray-50 transition-colors', qty > 0 && 'bg-red-50/40')}>
@@ -386,9 +375,8 @@ export default function PortalInventoryPage() {
                       )}
                     </td>
                     <td className="px-4 py-3 text-center">
-                      <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium',
-                        inStock ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600')}>
-                        {inStock ? `${item.quantity_on_hand} ${item.unit ?? 'pcs'}` : 'Out'}
+                      <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-gray-100 text-gray-500">
+                        {item.unit ?? '—'}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-right">
@@ -443,7 +431,7 @@ export default function PortalInventoryPage() {
                 {/* Cart items */}
                 <div className="max-h-56 overflow-y-auto divide-y">
                   {cart.map(e => {
-                    const price = e.item.selling_price ?? e.item.unit_price ?? 0
+                    const price = e.item.selling_price ?? 0
                     return (
                       <div key={e.item.id} className="px-5 py-3 flex items-center gap-3">
                         <div className="flex-1 min-w-0">

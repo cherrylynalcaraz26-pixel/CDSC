@@ -399,10 +399,10 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
                   onClick={() => setAvatarOpen(v => !v)}
                   className="h-9 w-9 rounded-full overflow-hidden flex items-center justify-center bg-red-600 text-white text-xs font-bold shrink-0 hover:ring-2 hover:ring-red-500/40 transition-all"
                 >
-                  {userAvatarUrl
-                    ? <img src={userAvatarUrl} alt={userName} className="h-full w-full object-cover" />
-                    : clientLogoUrl
-                      ? <img src={clientLogoUrl} alt={clientName} className="h-full w-full object-contain p-1 bg-white" />
+                  {clientLogoUrl
+                    ? <img src={clientLogoUrl} alt={clientName} className="h-full w-full object-contain p-1 bg-white" />
+                    : userAvatarUrl
+                      ? <img src={userAvatarUrl} alt={userName} className="h-full w-full object-cover" />
                       : initials}
                 </button>
 
@@ -411,10 +411,10 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
                     {/* User info */}
                     <div className="px-4 py-3 border-b flex items-center gap-3">
                       <div className="h-10 w-10 rounded-full overflow-hidden shrink-0 bg-white border border-gray-200 flex items-center justify-center text-red-600 text-sm font-bold">
-                        {userAvatarUrl
-                          ? <img src={userAvatarUrl} alt={userName} className="h-full w-full object-cover" />
-                          : clientLogoUrl
-                            ? <img src={clientLogoUrl} alt={clientName} className="h-full w-full object-contain p-1" />
+                        {clientLogoUrl
+                          ? <img src={clientLogoUrl} alt={clientName} className="h-full w-full object-contain p-1" />
+                          : userAvatarUrl
+                            ? <img src={userAvatarUrl} alt={userName} className="h-full w-full object-cover" />
                             : <span className="bg-red-600 text-white h-full w-full flex items-center justify-center text-sm font-bold">{initials}</span>}
                       </div>
                       <div className="min-w-0">

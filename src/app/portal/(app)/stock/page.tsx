@@ -358,6 +358,12 @@ export default function PortalStockPage() {
   })
 
   const lowStockItems = stock.filter(s => s.quantity_on_hand <= s.low_stock_threshold)
+  // DRs already fully received into stock (via a prior "Receive Stock" action) are hidden
+  // from the DR picker so the same delivery can't be received twice.
+  const receivedDRNumbers = new Set(
+    transactions.filter(t => t.transaction_type === 'received' && t.reference_no).map(t => t.reference_no)
+  )
+  const receivableDRs = availableDRs.filter(d => !receivedDRNumbers.has(d.dr_number))
   const itemHistory = historyItem
     ? transactions.filter(t => t.item_name === historyItem.item_name)
     : []
@@ -911,10 +917,10 @@ export default function PortalStockPage() {
                 </p>
               )}
 
-              {/* Accept from Delivery — PO-based or single DR */}
-              {modal === 'receive' && availableDRs.length > 0 && (() => {
-                const poNumbers = [...new Set(availableDRs.map(d => d.po_number).filter(Boolean) as string[])]
-                const poDRs = selectedPO ? availableDRs.filter(d => d.po_number === selectedPO) : []
+              {/* Accept from Delivery — PO-based or single DR (already-received DRs are excluded so they can't be double-received) */}
+              {modal === 'receive' && receivableDRs.length > 0 && (() => {
+                const poNumbers = [...new Set(receivableDRs.map(d => d.po_number).filter(Boolean) as string[])]
+                const poDRs = selectedPO ? receivableDRs.filter(d => d.po_number === selectedPO) : []
                 const allPOItems = poDRs.flatMap(dr => dr.items.map(it => ({ ...it, dr_number: dr.dr_number })))
 
                 function toggleBulkItem(it: { item_name: string; unit: string | null; quantity: number; dr_number: string }) {
@@ -1059,7 +1065,7 @@ export default function PortalStockPage() {
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Reference No.</label>
-                  {availableDRs.length > 0 && (
+                  {receivableDRs.length > 0 && (
                     <div className="flex rounded-md overflow-hidden border border-gray-200 text-xs">
                       <button type="button" onClick={() => setRefMode('dr')}
                         className={cn('px-2 py-0.5 font-medium transition-colors', refMode === 'dr' ? 'bg-red-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50')}>
@@ -1072,11 +1078,11 @@ export default function PortalStockPage() {
                     </div>
                   )}
                 </div>
-                {refMode === 'dr' && availableDRs.length > 0 ? (
+                {refMode === 'dr' && receivableDRs.length > 0 ? (
                   <select value={txRef} onChange={e => setTxRef(e.target.value)}
                     className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 bg-white">
                     <option value="">— Select DR —</option>
-                    {availableDRs.map(dr => (
+                    {receivableDRs.map(dr => (
                       <option key={dr.dr_number} value={dr.dr_number}>DR {dr.dr_number} ({dr.dr_date ? new Date(dr.dr_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric' }) : ''})</option>
                     ))}
                   </select>

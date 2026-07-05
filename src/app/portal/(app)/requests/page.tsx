@@ -192,22 +192,19 @@ export default function PortalRequests() {
         </Link>
       </div>
 
-      {/* Filter tabs */}
-      <div className="flex gap-1.5 flex-wrap">
-        {FILTERS.map(f => (
-          <button key={f.value} onClick={() => setFilter(f.value)}
-            className={cn(
-              'px-3.5 py-1.5 text-sm rounded-lg font-medium transition-colors',
-              filter === f.value
-                ? 'bg-red-600 text-white'
-                : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
-            )}>
-            {f.label}
-            {f.value === '' && !loading && (
-              <span className="ml-1.5 text-xs opacity-70">{orders.length}</span>
-            )}
-          </button>
-        ))}
+      {/* Status filter */}
+      <div className="w-full sm:w-56">
+        <select
+          value={filter}
+          onChange={e => setFilter(e.target.value)}
+          className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm font-medium text-gray-700 bg-white focus:outline-none focus:ring-2 focus:ring-red-500"
+        >
+          {FILTERS.map(f => (
+            <option key={f.value} value={f.value}>
+              {f.label}{f.value === '' && !loading ? ` (${orders.length})` : ''}
+            </option>
+          ))}
+        </select>
       </div>
 
       {/* Orders list */}

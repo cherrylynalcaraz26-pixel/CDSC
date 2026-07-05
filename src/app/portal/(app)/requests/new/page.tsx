@@ -35,6 +35,12 @@ function blankItem(): Item {
   return { description: '', quantity: '1', unit: '', unit_price: '', is_custom: false }
 }
 
+// Catalog item names sometimes carry double spaces from data entry —
+// normalize to one clean line before showing them.
+function cleanText(s: string) {
+  return s.replace(/\s+/g, ' ').trim()
+}
+
 export default function NewRequestPage() {
   const supabase = createClient()
   const router = useRouter()
@@ -58,7 +64,7 @@ export default function NewRequestPage() {
       ])
       if (clientRow) { setClientId(clientRow.id); setClientName(clientRow.company_name) }
       if (sys) setSysInfo(sys as SysInfo)
-      setCatalog((itemData ?? []) as CatalogItem[])
+      setCatalog((itemData ?? []).map((c: CatalogItem) => ({ ...c, item_name: cleanText(c.item_name) })))
     }
     init()
   }, [])
@@ -265,6 +271,7 @@ export default function NewRequestPage() {
               <div>
                 <h2 className="text-sm font-semibold text-gray-700">Items Requested</h2>
                 <p className="text-xs text-gray-400 mt-0.5">Select from catalog — or type a custom item name below the dropdown</p>
+                <p className="text-xs text-amber-600 mt-0.5">Selling prices shown are indicative and may change upon order confirmation.</p>
               </div>
               <button type="button"
                 onClick={() => setItems(p => [...p, blankItem()])}

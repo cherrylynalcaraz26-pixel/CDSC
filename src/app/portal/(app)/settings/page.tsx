@@ -212,23 +212,36 @@ export default function PortalSettingsPage() {
       <div className="flex items-center gap-4">
         {/* Avatar circle with upload overlay */}
         <div className="relative shrink-0 group">
-          <div className="h-14 w-14 rounded-full overflow-hidden bg-red-600 flex items-center justify-center">
-            {avatarUrl ? (
+          <div className={`h-14 w-14 rounded-full overflow-hidden flex items-center justify-center ${logoUrl ? 'bg-white border border-gray-200' : 'bg-red-600'}`}>
+            {logoUrl ? (
+              <img src={logoUrl} alt="Company logo" className="h-full w-full object-contain p-1.5" />
+            ) : avatarUrl ? (
               <img src={avatarUrl} alt="Avatar" className="h-full w-full object-cover" />
             ) : (
               <span className="text-white text-lg font-bold">{initials}</span>
             )}
           </div>
-          <button
-            type="button"
-            onClick={() => avatarInputRef.current?.click()}
-            disabled={uploadingAvatar}
-            className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-          >
-            {uploadingAvatar
-              ? <Loader2 className="h-4 w-4 text-white animate-spin" />
-              : <Camera className="h-4 w-4 text-white" />}
-          </button>
+          {!logoUrl && (<>
+            <button
+              type="button"
+              onClick={() => avatarInputRef.current?.click()}
+              disabled={uploadingAvatar}
+              className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+            >
+              {uploadingAvatar
+                ? <Loader2 className="h-4 w-4 text-white animate-spin" />
+                : <Camera className="h-4 w-4 text-white" />}
+            </button>
+            {avatarUrl && (
+              <button
+                type="button"
+                onClick={removeAvatar}
+                className="absolute -top-1 -right-1 h-4 w-4 bg-gray-700 rounded-full flex items-center justify-center"
+              >
+                <X className="h-2.5 w-2.5 text-white" />
+              </button>
+            )}
+          </>)}
           <input
             ref={avatarInputRef}
             type="file"
@@ -236,15 +249,6 @@ export default function PortalSettingsPage() {
             className="hidden"
             onChange={e => { const f = e.target.files?.[0]; if (f) uploadAvatar(f); e.target.value = '' }}
           />
-          {avatarUrl && (
-            <button
-              type="button"
-              onClick={removeAvatar}
-              className="absolute -top-1 -right-1 h-4 w-4 bg-gray-700 rounded-full flex items-center justify-center"
-            >
-              <X className="h-2.5 w-2.5 text-white" />
-            </button>
-          )}
         </div>
         <div>
           <div className="font-semibold text-gray-900">{fullName || '—'}</div>
