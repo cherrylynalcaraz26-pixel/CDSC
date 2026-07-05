@@ -60,11 +60,11 @@ const DEFAULT_BLANK_CALIB: BlankFormCalib = {
   dateTop: 29, dateLeft: 135,
   deliveredToTop: 35, deliveredToLeft: 70,
   addressTop: 40, addressLeft: 60,
-  tinTop: 47, tinLeft: 55,
+  tinTop: 45, tinLeft: 55,
   businessStyleTop: 50, businessStyleLeft: 75,
-  tableTop: 70,
+  tableTop: 63,
   rowHeight: 6,
-  colQtyLeft: 55,
+  colQtyLeft: 50,
   colUnitLeft: 60,
   colDescLeft: 85,
   maxRows: 23,
@@ -541,9 +541,10 @@ export default function DRLogsPage() {
 
     // Editing a DR that had already decremented warehouse_stock would otherwise decrement it
     // again on every save. Reverse the previous decrement (using the pre-edit persisted items,
-    // client, SO, and status) before the block below applies the new one — so only the net
-    // change between the old and new item quantities ever hits the stock.
-    if (editing && editing.po_number && (editing.status === 'received' || editing.status === 'partial')) {
+    // client, and status) before the block below applies the new one — so only the net change
+    // between the old and new item quantities ever hits the stock. This applies to every DR,
+    // not just ones linked to an SO reference.
+    if (editing && (editing.status === 'received' || editing.status === 'partial')) {
       const prevItems = getItems(editing.dr_number)
       for (const it of prevItems) {
         const qty = Number(it.quantity) || 0
@@ -557,6 +558,27 @@ export default function DRLogsPage() {
         if (wsRow) {
           await supabase.from('warehouse_stock').update({
             quantity: Number(wsRow.quantity) + qty,
+            updated_at: new Date().toISOString(),
+          }).eq('id', wsRow.id)
+        }
+      }
+    }
+
+    // Update warehouse_stock: decrement for each delivered item — regardless of whether this
+    // DR is linked to an SO reference.
+    if (form.status === 'received' || form.status === 'partial') {
+      for (const it of validItems) {
+        const qty = Number(it.quantity) || 0
+        if (qty <= 0) continue
+        const { data: wsRow } = await supabase
+          .from('warehouse_stock')
+          .select('id, quantity')
+          .eq('item_name', it.item_name.trim())
+          .eq('client_name', clientName ?? '')
+          .maybeSingle()
+        if (wsRow) {
+          await supabase.from('warehouse_stock').update({
+            quantity: Math.max(0, Number(wsRow.quantity) - qty),
             updated_at: new Date().toISOString(),
           }).eq('id', wsRow.id)
         }
@@ -586,26 +608,6 @@ export default function DRLogsPage() {
             quantity: Number(it.quantity) || 0,
           }))
         )
-      }
-
-      // Update warehouse_stock: decrement for each delivered item
-      if (form.status === 'received' || form.status === 'partial') {
-        for (const it of validItems) {
-          const qty = Number(it.quantity) || 0
-          if (qty <= 0) continue
-          const { data: wsRow } = await supabase
-            .from('warehouse_stock')
-            .select('id, quantity')
-            .eq('item_name', it.item_name.trim())
-            .eq('client_name', clientName ?? '')
-            .maybeSingle()
-          if (wsRow) {
-            await supabase.from('warehouse_stock').update({
-              quantity: Math.max(0, Number(wsRow.quantity) - qty),
-              updated_at: new Date().toISOString(),
-            }).eq('id', wsRow.id)
-          }
-        }
       }
     }
 
