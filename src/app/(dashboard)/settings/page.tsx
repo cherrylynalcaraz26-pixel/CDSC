@@ -153,8 +153,14 @@ function LivePreview({ s }: { s: Settings }) {
   const fullName = [s.company_name || 'Company Name', s.legal_suffix].filter(Boolean).join(' ')
   const addressLine = [s.address, s.city, s.province, s.zip_code].filter(Boolean).join(', ')
 
-  function handlePrint() {
-    const html = `<!DOCTYPE html><html><head><title>${fullName} – Company Profile</title>
+  const [emailOpen, setEmailOpen] = useState(false)
+  const [emailTo, setEmailTo] = useState('')
+  const [emailSubject, setEmailSubject] = useState('')
+  const [emailBody, setEmailBody] = useState('')
+  const [sendingEmail, setSendingEmail] = useState(false)
+
+  function buildProfileHtml() {
+    return `<!DOCTYPE html><html><head><title>${fullName} – Company Profile</title>
     <style>
       body { font-family: Arial, sans-serif; margin: 0; padding: 24px; color: #1e293b; }
       .header { display: flex; align-items: flex-start; gap: 16px; border-bottom: 2px solid #dc2626; padding-bottom: 16px; margin-bottom: 16px; }
@@ -199,19 +205,22 @@ function LivePreview({ s }: { s: Settings }) {
     ${s.brand_positioning ? `<div class="section"><div class="label">Brand Positioning</div><div class="value">${s.brand_positioning}</div></div>` : ''}
     <div class="footer">Generated: ${today} &nbsp;·&nbsp; ${fullName}</div>
     </body></html>`
+  }
 
+  function handlePrint() {
     const win = window.open('', '_blank')
     if (!win) return
-    win.document.write(html)
+    win.document.write(buildProfileHtml())
     win.document.close()
     win.focus()
     win.print()
   }
 
-  function handleEmail() {
-    const subject = encodeURIComponent(`Company Profile – ${fullName}`)
-    const body = encodeURIComponent(
-      `Dear Sir/Madam,\n\nPlease find below our company information:\n\n` +
+  function openEmailDialog() {
+    setEmailTo('')
+    setEmailSubject(`Company Profile – ${fullName}`)
+    setEmailBody(
+      `Dear Sir/Madam,\n\nPlease find attached our company profile:\n\n` +
       `Company: ${fullName}\n` +
       (s.tagline ? `Tagline: ${s.tagline}\n` : '') +
       (addressLine ? `Address: ${addressLine}\n` : '') +
@@ -221,9 +230,26 @@ function LivePreview({ s }: { s: Settings }) {
       (s.tin ? `TIN: ${s.tin}\n` : '') +
       `\nThank you.`
     )
-    // Open Gmail's own compose window rather than mailto:, which depends on the OS having
-    // a desktop mail client configured — on a typical office PC that silently does nothing.
-    window.open(`https://mail.google.com/mail/?view=cm&fs=1&su=${subject}&body=${body}`, '_blank')
+    setEmailOpen(true)
+  }
+
+  async function handleSendEmail() {
+    if (!emailTo.trim()) { toast.error('Recipient email is required'); return }
+    setSendingEmail(true)
+    try {
+      await sendEmail({
+        to: emailTo.trim(),
+        subject: emailSubject,
+        body: emailBody,
+        printHtml: buildProfileHtml(),
+        pdfFilename: `${fullName} - Company Profile.pdf`,
+      })
+      toast.success('Email sent')
+      setEmailOpen(false)
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to send email')
+    }
+    setSendingEmail(false)
   }
 
   return (
@@ -233,7 +259,7 @@ function LivePreview({ s }: { s: Settings }) {
         <span className="text-sm font-medium text-muted-foreground">Live Preview</span>
         <span className="ml-auto flex items-center gap-1.5">
           <button
-            onClick={handleEmail}
+            onClick={openEmailDialog}
             title="Send via Email"
             className="flex items-center gap-1 text-xs px-2 py-1 rounded-md border border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors"
           >
@@ -369,6 +395,52 @@ function LivePreview({ s }: { s: Settings }) {
           </div>
         </div>
       </div>
+
+      {/* Email Dialog */}
+      <Dialog open={emailOpen} onOpenChange={setEmailOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="h-4 w-4 text-blue-600" />
+              Send Company Profile by Email
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div className="space-y-1.5">
+              <Label>To (recipient email) <span className="text-destructive">*</span></Label>
+              <Input
+                type="email"
+                placeholder="client@example.com"
+                value={emailTo}
+                onChange={e => setEmailTo(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Subject</Label>
+              <Input
+                value={emailSubject}
+                onChange={e => setEmailSubject(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Message</Label>
+              <Textarea
+                rows={8}
+                value={emailBody}
+                onChange={e => setEmailBody(e.target.value)}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">A PDF of the company profile will be attached automatically.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEmailOpen(false)}>Cancel</Button>
+            <Button onClick={handleSendEmail} disabled={sendingEmail} className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5">
+              {sendingEmail ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              Send Email
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
