@@ -28,6 +28,7 @@ export default function PortalSettingsPage() {
   const [tin, setTin] = useState('')
   const [vatType, setVatType] = useState('')
   const [businessType, setBusinessType] = useState('')
+  const [industry, setIndustry] = useState('')
   const [website, setWebsite] = useState('')
 
   // Avatar & logo
@@ -53,12 +54,13 @@ export default function PortalSettingsPage() {
       setFullName(profile?.full_name ?? '')
       setAvatarUrl((profile as any)?.avatar_url ?? null)
       const { data: clientRow } = await supabase.from('clients')
-        .select('id, company_name, tin, vat_type, business_type, logo_url, avatar_url, website')
+        .select('id, company_name, tin, vat_type, business_type, industry, logo_url, avatar_url, website')
         .eq('auth_user_id', session.user.id).single()
       setCompanyName(clientRow?.company_name ?? '')
       setTin((clientRow as any)?.tin ?? '')
       setVatType((clientRow as any)?.vat_type ?? '')
       setBusinessType((clientRow as any)?.business_type ?? '')
+      setIndustry(clientRow?.industry ?? '')
       setWebsite((clientRow as any)?.website ?? '')
       const rawLogo = (clientRow as any)?.logo_url ?? (clientRow as any)?.avatar_url ?? null
       setLogoUrl(rawLogo ? `${rawLogo}?t=${Date.now()}` : null)
@@ -426,6 +428,15 @@ export default function PortalSettingsPage() {
             <label className="text-sm font-medium text-gray-700">Business Type</label>
             <input
               value={businessType || '—'}
+              disabled
+              className="w-full h-10 px-3 rounded-lg border border-gray-200 text-sm bg-gray-50 text-gray-700 cursor-not-allowed"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium text-gray-700">Industry</label>
+            <input
+              value={industry || '—'}
               disabled
               className="w-full h-10 px-3 rounded-lg border border-gray-200 text-sm bg-gray-50 text-gray-700 cursor-not-allowed"
             />

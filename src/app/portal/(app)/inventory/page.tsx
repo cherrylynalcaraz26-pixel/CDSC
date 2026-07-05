@@ -61,38 +61,21 @@ export default function PortalInventoryPage() {
           setClientId(clientRow.id); setClientName(companyName)
           // Browse Catalog lists CDSC's master product catalog (so clients can shop
           // and place new orders), not the client's own already-received stock.
-          // "My Items" history is scoped to the same show_in_portal-visible records
-          // the rest of the portal (My Orders, My Stock) uses — not everything CDSC
-          // has on file for this client.
-          const [{ data, error }, { data: soRows }, { data: csiRows }] = await Promise.all([
+          // "My Items" is scoped to items already received into their own stock
+          // ledger (client_inventory — the same data My Stock shows), i.e. items
+          // actually visible in their account, not just anything ever ordered.
+          const [{ data, error }, { data: inventoryRows }] = await Promise.all([
             supabase
               .from('items')
               .select('id, item_name, item_code, description, unit_of_measure, selling_price, category:categories(category_name)')
               .eq('status', 'active')
               .order('item_name'),
-            companyName
-              ? supabase.from('sales_orders').select('so_number, so_items(item_name)').eq('client_name', companyName).eq('show_in_portal', true)
-              : Promise.resolve({ data: [] as { so_number: string | null; so_items: { item_name: string }[] }[] }),
-            companyName
-              ? supabase.from('csi_records').select('item_name').eq('client_name', companyName).eq('show_in_portal', true)
-              : Promise.resolve({ data: [] as { item_name: string }[] }),
+            supabase.from('client_inventory').select('item_name').eq('client_id', clientRow.id),
           ])
           if (error) toast.error(error.message)
 
-          const visibleSoNumbers = (soRows ?? []).map(so => so.so_number).filter(Boolean) as string[]
-          let drItemNames: string[] = []
-          if (visibleSoNumbers.length > 0) {
-            const { data: drRows } = await supabase.from('dr_logs').select('dr_number').eq('supplier_name', companyName).in('po_number', visibleSoNumbers)
-            const drNums = (drRows ?? []).map(d => d.dr_number).filter(Boolean)
-            if (drNums.length > 0) {
-              const { data: drItems } = await supabase.from('dr_log_items').select('item_name').in('dr_number', drNums)
-              drItemNames = (drItems ?? []).map(i => i.item_name)
-            }
-          }
-          const soItemNames = (soRows ?? []).flatMap(so => (so.so_items ?? []).map(it => it.item_name))
-          const csiItemNames = (csiRows ?? []).map(r => r.item_name)
           const myNames = new Set(
-            [...soItemNames, ...drItemNames, ...csiItemNames].filter(Boolean).map(n => cleanText(n).toLowerCase())
+            (inventoryRows ?? []).map(r => r.item_name).filter(Boolean).map(n => cleanText(n).toLowerCase())
           )
 
           setItems((data ?? []).map((r: {
@@ -109,7 +92,7 @@ export default function PortalInventoryPage() {
             isMine: myNames.has(cleanText(r.item_name).toLowerCase()),
           })))
           // Default to a scoped "My Items" view; fall back to the full catalog
-          // automatically if this client has no purchase history yet.
+          // automatically if this client has no received stock yet.
           if (myNames.size === 0) setScope('all')
         }
       }

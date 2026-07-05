@@ -358,6 +358,7 @@ function PortalStockPageContent() {
   })
 
   const lowStockItems = stock.filter(s => s.quantity_on_hand <= s.low_stock_threshold)
+  const totalOnHand = stock.reduce((s, i) => s + (i.quantity_on_hand ?? 0), 0)
   // DRs already fully received into stock (via a prior "Receive Stock" action) are hidden
   // from the DR picker so the same delivery can't be received twice.
   const receivedDRNumbers = new Set(
@@ -478,10 +479,14 @@ function PortalStockPageContent() {
       )}
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <div className="bg-white border border-gray-200 rounded-xl px-4 py-3">
           <div className="text-xl font-bold text-gray-900">{loading ? '—' : stock.length}</div>
           <div className="text-xs text-gray-500">Total Items</div>
+        </div>
+        <div className="bg-white border border-gray-200 rounded-xl px-4 py-3">
+          <div className="text-xl font-bold text-gray-900">{loading ? '—' : totalOnHand.toLocaleString('en-PH')}</div>
+          <div className="text-xs text-gray-500">Total On Hand</div>
         </div>
         <div className="bg-white border border-gray-200 rounded-xl px-4 py-3">
           <div className="text-xl font-bold text-green-600">{loading ? '—' : stock.filter(s => s.quantity_on_hand > s.low_stock_threshold).length}</div>
