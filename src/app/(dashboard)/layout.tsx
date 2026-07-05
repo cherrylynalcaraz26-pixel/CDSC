@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { Sidebar, MobileSidebar } from '@/components/layout/sidebar'
@@ -10,9 +10,6 @@ import { CompanyProvider } from '@/context/company-context'
 import {
   LayoutDashboard, TrendingUp, ShoppingCart, Warehouse, Calculator, MessageSquare,
 } from 'lucide-react'
-import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 
 interface BottomNavChild { label: string; href: string }
@@ -58,6 +55,44 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     })
   }
 
+  function isActiveHref(href: string) {
+    return href === '/dashboard' ? pathname === '/dashboard' : pathname === href || pathname.startsWith(href + '/')
+  }
+
+  // Swipe-to-cycle for grouped bottom-nav tabs (e.g. Purchasing: Purchase Orders /
+  // Quotation / Sales Orders) — swipe left/right on the tab moves to the next/previous
+  // page in the group; a plain tap goes to whichever page in the group is current.
+  const touchStart = useRef<{ x: number; y: number } | null>(null)
+  const justSwiped = useRef(false)
+
+  function handleGroupTouchStart(e: React.TouchEvent) {
+    const t = e.touches[0]
+    touchStart.current = { x: t.clientX, y: t.clientY }
+  }
+
+  function handleGroupTouchEnd(children: BottomNavChild[], e: React.TouchEvent) {
+    const start = touchStart.current
+    touchStart.current = null
+    if (!start) return
+    const t = e.changedTouches[0]
+    const dx = t.clientX - start.x
+    const dy = t.clientY - start.y
+    if (Math.abs(dx) > 30 && Math.abs(dx) > Math.abs(dy)) {
+      const current = children.findIndex(c => isActiveHref(c.href))
+      const idx = current === -1 ? 0 : current
+      const next = dx < 0 ? (idx + 1) % children.length : (idx - 1 + children.length) % children.length
+      justSwiped.current = true
+      router.replace(children[next].href)
+      setTimeout(() => { justSwiped.current = false }, 400)
+    }
+  }
+
+  function handleGroupClick(children: BottomNavChild[]) {
+    if (justSwiped.current) return
+    const current = children.findIndex(c => isActiveHref(c.href))
+    router.replace(children[current === -1 ? 0 : current].href)
+  }
+
   return (
     <CompanyProvider><SearchProvider>
       <div className="flex h-screen overflow-hidden bg-muted/30">
@@ -78,42 +113,28 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Mobile bottom nav */}
       <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-[#111111] border-t border-white/10 flex items-stretch">
         {BOTTOM_NAV.map(link => {
-          const isActiveHref = (href: string) => href === '/dashboard'
-            ? pathname === '/dashboard'
-            : pathname === href || pathname.startsWith(href + '/')
           const active = link.children
             ? link.children.some(c => isActiveHref(c.href))
             : isActiveHref(link.href)
 
           if (link.children) {
+            const children = link.children
             return (
-              <DropdownMenu key={link.href}>
-                <DropdownMenuTrigger
-                  className={cn(
-                    'flex-1 flex flex-col items-center justify-center gap-1 py-3 text-[11px] font-medium transition-colors outline-none',
-                    active ? 'text-red-400' : 'text-white/40 hover:text-white/70'
-                  )}
-                >
-                  {/* Dot indicator sits as a badge on the icon itself (not an extra row) —
-                      signals this tab holds multiple pages without changing the tab's height */}
-                  <span className="relative">
-                    <link.icon className={cn('h-5 w-5 shrink-0', active ? 'text-red-400' : '')} />
-                    <span className="absolute -top-1 -right-1.5 flex items-center gap-[1px]">
-                      {link.children.map((_, i) => (
-                        <span key={i} className={cn('h-[3px] w-[3px] rounded-full', active ? 'bg-red-400' : 'bg-white/50')} />
-                      ))}
-                    </span>
-                  </span>
-                  <span className="leading-tight truncate max-w-full px-1">{link.label}</span>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="center" side="top" className="mb-1 w-48">
-                  {link.children.map(child => (
-                    <DropdownMenuItem key={child.href} onClick={() => router.replace(child.href)} className={cn(isActiveHref(child.href) && 'font-semibold text-red-600')}>
-                      {child.label}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <div
+                key={link.href}
+                role="button"
+                tabIndex={0}
+                onTouchStart={handleGroupTouchStart}
+                onTouchEnd={e => handleGroupTouchEnd(children, e)}
+                onClick={() => handleGroupClick(children)}
+                className={cn(
+                  'flex-1 flex flex-col items-center justify-center gap-1 py-3 text-[11px] font-medium transition-colors select-none touch-pan-y',
+                  active ? 'text-red-400' : 'text-white/40 hover:text-white/70'
+                )}
+              >
+                <link.icon className={cn('h-5 w-5 shrink-0', active ? 'text-red-400' : '')} />
+                <span className="leading-tight truncate max-w-full px-1">{link.label}</span>
+              </div>
             )
           }
 
