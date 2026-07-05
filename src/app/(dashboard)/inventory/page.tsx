@@ -3,6 +3,7 @@
 import { useState, useEffect, Fragment } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
@@ -19,9 +20,10 @@ import { Badge } from '@/components/ui/badge'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Search, Loader2, ChevronRight, ChevronDown, Pencil, AlertTriangle, Plus, X, MoreHorizontal, Trash2, FileText, Printer } from 'lucide-react'
+import { Search, Loader2, ChevronRight, ChevronDown, Pencil, AlertTriangle, Plus, X, MoreHorizontal, Trash2, FileText, Printer, Mail, Send, Truck } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSearchContext } from '@/context/search-context'
+import { sendEmail } from '@/lib/send-email'
 
 interface DrDetail  { dr_number: string; qty: number; unit: string; unit_price: number | null; show_in_portal: boolean }
 interface CsiDetail { si_number: string; qty: number; unit: string; unit_price: number | null; show_in_portal: boolean }
@@ -65,6 +67,10 @@ export default function InventoryPage() {
   const [warehouseUpdateQty, setWarehouseUpdateQty] = useState('')
   const [warehouseUpdateNotes, setWarehouseUpdateNotes] = useState('')
   const [warehouseUpdateSaving, setWarehouseUpdateSaving] = useState(false)
+  const [wsMarkDelivered, setWsMarkDelivered] = useState(false)
+  const [wsDeliverClientId, setWsDeliverClientId] = useState('')
+  const [wsDeliverQty, setWsDeliverQty] = useState('')
+  const [clientOptions, setClientOptions] = useState<{ id: string; company_name: string }[]>([])
 
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [confirmMsg, setConfirmMsg] = useState('')
@@ -73,6 +79,11 @@ export default function InventoryPage() {
   const [reportClient, setReportClient] = useState('')
   const [reportScope, setReportScope] = useState<'all' | 'portal'>('all')
   const [clientOnHandMap, setClientOnHandMap] = useState<Record<string, Record<string, number>>>({})
+  const [emailReportOpen, setEmailReportOpen] = useState(false)
+  const [emailReportTo, setEmailReportTo] = useState('')
+  const [emailReportSubject, setEmailReportSubject] = useState('')
+  const [emailReportBody, setEmailReportBody] = useState('')
+  const [emailReportSending, setEmailReportSending] = useState(false)
 
   function askConfirm(msg: string, action: () => void) {
     setConfirmMsg(msg)
@@ -221,14 +232,16 @@ export default function InventoryPage() {
     // Report's "Client WH Stock" column so it reflects what that client actually has at
     // their site, instead of CDSC's own shared warehouse pool.
     const clientIdToName: Record<string, string> = {}
+    const clientOptionsList: { id: string; company_name: string }[] = []
     from = 0
     while (true) {
       const { data } = await supabase.from('clients').select('id, company_name').order('id').range(from, from + PAGE - 1)
       if (!data || data.length === 0) break
-      for (const c of data) clientIdToName[c.id] = c.company_name
+      for (const c of data) { clientIdToName[c.id] = c.company_name; clientOptionsList.push(c) }
       if (data.length < PAGE) break
       from += PAGE
     }
+    setClientOptions(clientOptionsList.sort((a, b) => a.company_name.localeCompare(b.company_name)))
     const onHandByClient: Record<string, Record<string, number>> = {}
     from = 0
     while (true) {
@@ -384,12 +397,65 @@ export default function InventoryPage() {
     setWarehouseUpdateRow({ id: row.id, item_name: row.item_name, unit: row.unit, notes: row.notes })
     setWarehouseUpdateQty(String(row.quantity))
     setWarehouseUpdateNotes(row.notes ?? '')
+    setWsMarkDelivered(false)
+    setWsDeliverClientId('')
+    setWsDeliverQty(String(row.quantity))
     setWarehouseUpdateOpen(true)
   }
 
   async function saveWarehouseUpdate() {
     if (!warehouseUpdateRow) return
     setWarehouseUpdateSaving(true)
+
+    // "Already delivered" is a manual fallback for when a DR's auto-decrement doesn't find
+    // a matching row (e.g. an item-name mismatch) — it removes the delivered quantity from
+    // this general pool and, if a client is picked, credits it to that client's own On Hand
+    // ledger the same way the DR auto-sync does.
+    if (wsMarkDelivered) {
+      const qty = Number(wsDeliverQty)
+      if (!qty || qty <= 0) { toast.error('Enter a valid quantity delivered'); setWarehouseUpdateSaving(false); return }
+      const { data: wsRow } = await supabase.from('warehouse_stock').select('quantity').eq('id', warehouseUpdateRow.id).maybeSingle()
+      const newQty = Math.max(0, (Number(wsRow?.quantity) || 0) - qty)
+      const { error } = await supabase.from('warehouse_stock').update({
+        quantity: newQty,
+        notes: warehouseUpdateNotes.trim() || null,
+        updated_at: new Date().toISOString(),
+      }).eq('id', warehouseUpdateRow.id)
+      if (error) { toast.error(error.message); setWarehouseUpdateSaving(false); return }
+
+      const deliverClient = clientOptions.find(c => c.id === wsDeliverClientId)
+      if (deliverClient) {
+        const { data: ciRow } = await supabase.from('client_inventory').select('id, quantity_on_hand').eq('client_id', deliverClient.id).eq('item_name', warehouseUpdateRow.item_name).maybeSingle()
+        if (ciRow) {
+          await supabase.from('client_inventory').update({
+            quantity_on_hand: Number(ciRow.quantity_on_hand) + qty,
+            updated_at: new Date().toISOString(),
+          }).eq('id', ciRow.id)
+        } else {
+          await supabase.from('client_inventory').insert({
+            client_id: deliverClient.id,
+            item_name: warehouseUpdateRow.item_name,
+            unit: warehouseUpdateRow.unit || null,
+            quantity_on_hand: qty,
+            low_stock_threshold: 0,
+          })
+        }
+        await supabase.from('client_inventory_transactions').insert({
+          client_id: deliverClient.id,
+          item_name: warehouseUpdateRow.item_name,
+          unit: warehouseUpdateRow.unit || null,
+          transaction_type: 'received',
+          quantity: qty,
+          notes: 'Manually marked delivered from Warehouse',
+        })
+      }
+      toast.success('Marked as delivered — warehouse stock updated')
+      setWarehouseUpdateOpen(false)
+      load()
+      setWarehouseUpdateSaving(false)
+      return
+    }
+
     const { error } = await supabase.from('warehouse_stock').update({
       quantity: Number(warehouseUpdateQty),
       notes: warehouseUpdateNotes.trim() || null,
@@ -689,15 +755,17 @@ export default function InventoryPage() {
           )}
         </div>
 
-        <Select value={clientFilter} onValueChange={v => setClientFilter(v ?? 'all')}>
-          <SelectTrigger className="w-56">
-            <SelectValue placeholder="Filter by client" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Clients</SelectItem>
-            {clients.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-          </SelectContent>
-        </Select>
+        {viewMode !== 'by_warehouse' && (
+          <Select value={clientFilter} onValueChange={v => setClientFilter(v ?? 'all')}>
+            <SelectTrigger className="w-56">
+              <SelectValue placeholder="Filter by client" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Clients</SelectItem>
+              {clients.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )}
         <Select value={statusFilter} onValueChange={v => setStatusFilter(v ?? 'all')}>
           <SelectTrigger className="w-40">
             <SelectValue placeholder="Filter by status" />
@@ -711,8 +779,8 @@ export default function InventoryPage() {
         </Select>
       </div>}
 
-      {/* Client inventory summary box — hidden when report is open */}
-      {!reportOpen && clientFilter !== 'all' && (
+      {/* Client inventory summary box — hidden when report is open or viewing By Warehouse */}
+      {!reportOpen && viewMode !== 'by_warehouse' && clientFilter !== 'all' && (
         <Card className="border-blue-200 bg-blue-50/40">
           <CardContent className="pt-4 pb-3">
             <div className="flex items-center gap-2 mb-3">
@@ -1133,10 +1201,143 @@ export default function InventoryPage() {
           const price = r.csi_details.length > 0
             ? r.csi_details[r.csi_details.length - 1].unit_price
             : r.dr_details.length > 0 ? r.dr_details[r.dr_details.length - 1].unit_price : null
-          return s + (price != null ? r.balance * price : 0)
+          return s + (price != null ? r.dr_qty * price : 0)
         }, 0)
         const today = new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
+
+        // Built from the report data using plain HTML/CSS (not a clone of the live DOM) —
+        // the on-screen preview's styling comes from Tailwind utility classes, which don't
+        // exist in a blank print window or an email client, so cloning it rendered unstyled.
+        function buildReportHtml() {
+          const cardsHtml = [
+            { label: 'DR Delivered', value: totalDr, cls: 'blue' },
+            { label: 'Client WH Stock', value: totalOnHand, cls: 'green' },
+            { label: 'CSI Issued', value: totalCsi, cls: 'orange' },
+            { label: 'Net Balance', value: totalBalance, cls: totalBalance >= 0 ? 'green' : 'red' },
+          ].map(c => `<div class="card"><div class="card-label">${c.label}</div><div class="card-val ${c.cls}">${c.value}</div></div>`).join('')
+          const rowsHtml = reportRows.length === 0
+            ? `<tr><td colspan="9" style="text-align:center;padding:24px;color:#9ca3af;font-style:italic">No inventory data for this client.</td></tr>`
+            : reportRows.map((r, i) => {
+              const latestPrice = r.csi_details.length > 0
+                ? r.csi_details[r.csi_details.length - 1].unit_price
+                : r.dr_details.length > 0 ? r.dr_details[r.dr_details.length - 1].unit_price : null
+              const estValue = latestPrice != null ? r.dr_qty * latestPrice : null
+              const balColor = r.balance > 0 ? '#15803d' : r.balance < 0 ? '#dc2626' : '#9ca3af'
+              return `<tr>
+                <td>${i + 1}</td>
+                <td style="font-weight:600;color:#1f2937">${r.item_name}</td>
+                <td>${uomName(r.unit)}</td>
+                <td class="r">${r.dr_qty}</td>
+                <td class="r" style="color:#15803d;font-weight:600">${r.client_on_hand > 0 ? r.client_on_hand : '—'}</td>
+                <td class="r">${r.csi_qty}</td>
+                <td class="r" style="font-weight:700;color:${balColor}">${r.balance}</td>
+                <td class="r">${latestPrice != null ? `₱${latestPrice.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}</td>
+                <td class="r" style="font-weight:600">${estValue != null ? `₱${estValue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}</td>
+              </tr>`
+            }).join('')
+          return `<!DOCTYPE html><html><head><title>Inventory Report - ${reportClient}</title><style>
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body { font-family: Arial, sans-serif; background: #fff; color: #111; padding: 32px; }
+            .accent { background: #dc2626; height: 5px; border-radius: 3px; margin-bottom: 20px; }
+            .letterhead { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px solid #e5e7eb; }
+            .co-name { font-size: 22px; font-weight: 800; color: #dc2626; }
+            .co-sub { font-size: 10px; color: #9ca3af; margin-top: 2px; }
+            .rpt-title { text-align: right; font-size: 15px; font-weight: 700; }
+            .rpt-date { font-size: 10px; color: #9ca3af; margin-top: 2px; }
+            .client-block { margin-bottom: 18px; }
+            .client-label { font-size: 9px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-bottom: 2px; }
+            .client-name { font-size: 18px; font-weight: 800; color: #111827; }
+            .scope-badge { display: inline-block; margin-left: 10px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 3px 8px; border-radius: 999px; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+            .cards { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 18px; }
+            .card { border: 1px solid #e5e7eb; border-radius: 6px; padding: 10px 14px; background: #f9fafb; }
+            .card-label { font-size: 9px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+            .card-val { font-size: 20px; font-weight: 700; margin-top: 3px; }
+            .blue { color: #1d4ed8; } .green { color: #15803d; } .orange { color: #c2410c; } .red { color: #dc2626; }
+            table { width: 100%; border-collapse: collapse; font-size: 11px; }
+            th { background: #1f2937; color: #fff; text-align: left; padding: 7px 10px; font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
+            th.r { text-align: right; }
+            td { padding: 6px 10px; border-bottom: 1px solid #f3f4f6; }
+            td.r { text-align: right; }
+            tr:nth-child(even) td { background: #f9fafb; }
+            tfoot td { font-weight: 700; background: #f3f4f6; border-top: 2px solid #d1d5db; }
+            .note { margin-top: 20px; padding-top: 10px; border-top: 1px solid #f3f4f6; font-size: 9px; color: #9ca3af; display: flex; justify-content: space-between; }
+            @media print { @page { margin: 12mm; size: A4 landscape; } }
+          </style></head><body>
+            <div class="accent"></div>
+            <div class="letterhead">
+              <div><img src="/cdsc-logo.jpg" style="height:50px;width:auto;display:block;margin-bottom:4px;" /><div style="font-size:11px;font-weight:600;color:#374151">CDSC Industrial Supply</div></div>
+              <div><div class="rpt-title">Inventory Report</div><div class="rpt-date">As of ${today}</div></div>
+            </div>
+            <div class="client-block">
+              <div class="client-label">Client</div>
+              <div><span class="client-name">${reportClient || '—'}</span>${reportScope === 'portal' ? '<span class="scope-badge">Visible in Client Portal Only</span>' : ''}</div>
+            </div>
+            <div class="cards">${cardsHtml}</div>
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:24px">#</th>
+                  <th>Item Description</th>
+                  <th style="width:70px">Unit</th>
+                  <th class="r" style="width:60px">DR Qty</th>
+                  <th class="r" style="width:80px">Client WH Stock</th>
+                  <th class="r" style="width:70px">CSI Issued</th>
+                  <th class="r" style="width:60px">Balance</th>
+                  <th class="r" style="width:90px">Est. Unit Price</th>
+                  <th class="r" style="width:90px">Est. Value</th>
+                </tr>
+              </thead>
+              <tbody>${rowsHtml}</tbody>
+              <tfoot>
+                <tr>
+                  <td colspan="6" class="r">TOTAL</td>
+                  <td class="r" style="color:${totalBalance > 0 ? '#15803d' : totalBalance < 0 ? '#dc2626' : '#6b7280'}">${totalBalance}</td>
+                  <td class="r">—</td>
+                  <td class="r">₱${totalEstValue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+                </tr>
+              </tfoot>
+            </table>
+            <div class="note">
+              <span>Est. Unit Price is based on the latest CSI or DR record; Est. Value = DR Qty × Est. Unit Price. Values are for reference only.</span>
+              <span>Generated ${today} &middot; CDSC Inventory System</span>
+            </div>
+          </body></html>`
+        }
+
+        async function openReportEmailDialog() {
+          setEmailReportSubject(`Stock Update – ${reportClient}`)
+          setEmailReportBody(
+            `Hi,\n\nHere is your current stock summary with us as of ${today}:\n\n` +
+            `DR Delivered: ${totalDr}\nClient WH Stock (On Hand): ${totalOnHand}\nCSI Issued: ${totalCsi}\nNet Balance: ${totalBalance}\n\n` +
+            `Kindly review your balance below. Let us know if you'd like to update your stock records or place a new order.\n\nThank you.`
+          )
+          setEmailReportTo('')
+          setEmailReportOpen(true)
+          const { data } = await supabase.from('clients').select('email').eq('company_name', reportClient).maybeSingle()
+          if (data?.email) setEmailReportTo(data.email)
+        }
+
+        async function handleSendReportEmail() {
+          if (!emailReportTo.trim()) { toast.error('Recipient email is required'); return }
+          setEmailReportSending(true)
+          try {
+            await sendEmail({
+              to: emailReportTo.trim(),
+              subject: emailReportSubject,
+              body: emailReportBody,
+              printHtml: buildReportHtml(),
+              pdfFilename: `${reportClient} - Inventory Report.pdf`,
+            })
+            toast.success('Email sent')
+            setEmailReportOpen(false)
+          } catch (err: unknown) {
+            toast.error(err instanceof Error ? err.message : 'Failed to send email')
+          }
+          setEmailReportSending(false)
+        }
+
         return (
+          <>
           <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
             {/* Toolbar */}
             <div className="flex items-center gap-3 px-4 py-3 bg-gray-50 border-b flex-wrap">
@@ -1163,107 +1364,18 @@ export default function InventoryPage() {
                 >Visible in Client Portal</button>
               </div>
               <Button
-                className="ml-auto bg-red-600 hover:bg-red-700 text-white h-8 text-sm gap-1.5 shrink-0"
+                variant="outline"
+                className="ml-auto h-8 text-sm gap-1.5 shrink-0"
+                onClick={() => openReportEmailDialog()}
+              >
+                <Mail className="h-4 w-4" /> Email Client
+              </Button>
+              <Button
+                className="bg-red-600 hover:bg-red-700 text-white h-8 text-sm gap-1.5 shrink-0"
                 onClick={() => {
                   const win = window.open('', '_blank', 'width=1100,height=800')
                   if (!win) return
-                  // Built from the same report data as the on-screen preview using plain HTML/CSS
-                  // (not a clone of the live DOM) — the preview's styling comes from Tailwind
-                  // utility classes, which don't exist in this blank print window, so cloning it
-                  // rendered unstyled. This mirrors the print stylesheet below exactly instead.
-                  const cardsHtml = [
-                    { label: 'DR Delivered', value: totalDr, cls: 'blue' },
-                    { label: 'Client WH Stock', value: totalOnHand, cls: 'green' },
-                    { label: 'CSI Issued', value: totalCsi, cls: 'orange' },
-                    { label: 'Net Balance', value: totalBalance, cls: totalBalance >= 0 ? 'green' : 'red' },
-                  ].map(c => `<div class="card"><div class="card-label">${c.label}</div><div class="card-val ${c.cls}">${c.value}</div></div>`).join('')
-                  const rowsHtml = reportRows.length === 0
-                    ? `<tr><td colspan="9" style="text-align:center;padding:24px;color:#9ca3af;font-style:italic">No inventory data for this client.</td></tr>`
-                    : reportRows.map((r, i) => {
-                      const latestPrice = r.csi_details.length > 0
-                        ? r.csi_details[r.csi_details.length - 1].unit_price
-                        : r.dr_details.length > 0 ? r.dr_details[r.dr_details.length - 1].unit_price : null
-                      const estValue = latestPrice != null ? r.balance * latestPrice : null
-                      const balColor = r.balance > 0 ? '#15803d' : r.balance < 0 ? '#dc2626' : '#9ca3af'
-                      return `<tr>
-                        <td>${i + 1}</td>
-                        <td style="font-weight:600;color:#1f2937">${r.item_name}</td>
-                        <td>${uomName(r.unit)}</td>
-                        <td class="r">${r.dr_qty}</td>
-                        <td class="r" style="color:#15803d;font-weight:600">${r.client_on_hand > 0 ? r.client_on_hand : '—'}</td>
-                        <td class="r">${r.csi_qty}</td>
-                        <td class="r" style="font-weight:700;color:${balColor}">${r.balance}</td>
-                        <td class="r">${latestPrice != null ? `₱${latestPrice.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}</td>
-                        <td class="r" style="font-weight:600">${estValue != null ? `₱${estValue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}</td>
-                      </tr>`
-                    }).join('')
-                  win.document.write(`<!DOCTYPE html><html><head><title>Inventory Report - ${reportClient}</title><style>
-                    * { box-sizing: border-box; margin: 0; padding: 0; }
-                    body { font-family: Arial, sans-serif; background: #fff; color: #111; padding: 32px; }
-                    .accent { background: #dc2626; height: 5px; border-radius: 3px; margin-bottom: 20px; }
-                    .letterhead { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px solid #e5e7eb; }
-                    .co-name { font-size: 22px; font-weight: 800; color: #dc2626; }
-                    .co-sub { font-size: 10px; color: #9ca3af; margin-top: 2px; }
-                    .rpt-title { text-align: right; font-size: 15px; font-weight: 700; }
-                    .rpt-date { font-size: 10px; color: #9ca3af; margin-top: 2px; }
-                    .client-block { margin-bottom: 18px; }
-                    .client-label { font-size: 9px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-bottom: 2px; }
-                    .client-name { font-size: 18px; font-weight: 800; color: #111827; }
-                    .scope-badge { display: inline-block; margin-left: 10px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 3px 8px; border-radius: 999px; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
-                    .cards { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 18px; }
-                    .card { border: 1px solid #e5e7eb; border-radius: 6px; padding: 10px 14px; background: #f9fafb; }
-                    .card-label { font-size: 9px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
-                    .card-val { font-size: 20px; font-weight: 700; margin-top: 3px; }
-                    .blue { color: #1d4ed8; } .green { color: #15803d; } .orange { color: #c2410c; } .red { color: #dc2626; }
-                    table { width: 100%; border-collapse: collapse; font-size: 11px; }
-                    th { background: #1f2937; color: #fff; text-align: left; padding: 7px 10px; font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
-                    th.r { text-align: right; }
-                    td { padding: 6px 10px; border-bottom: 1px solid #f3f4f6; }
-                    td.r { text-align: right; }
-                    tr:nth-child(even) td { background: #f9fafb; }
-                    tfoot td { font-weight: 700; background: #f3f4f6; border-top: 2px solid #d1d5db; }
-                    .note { margin-top: 20px; padding-top: 10px; border-top: 1px solid #f3f4f6; font-size: 9px; color: #9ca3af; display: flex; justify-content: space-between; }
-                    @media print { @page { margin: 12mm; size: A4 landscape; } }
-                  </style></head><body>
-                    <div class="accent"></div>
-                    <div class="letterhead">
-                      <div><img src="/cdsc-logo.jpg" style="height:50px;width:auto;display:block;margin-bottom:4px;" /><div style="font-size:11px;font-weight:600;color:#374151">CDSC Industrial Supply</div></div>
-                      <div><div class="rpt-title">Inventory Report</div><div class="rpt-date">As of ${today}</div></div>
-                    </div>
-                    <div class="client-block">
-                      <div class="client-label">Client</div>
-                      <div><span class="client-name">${reportClient || '—'}</span>${reportScope === 'portal' ? '<span class="scope-badge">Visible in Client Portal Only</span>' : ''}</div>
-                    </div>
-                    <div class="cards">${cardsHtml}</div>
-                    <table>
-                      <thead>
-                        <tr>
-                          <th style="width:24px">#</th>
-                          <th>Item Description</th>
-                          <th style="width:70px">Unit</th>
-                          <th class="r" style="width:60px">DR Qty</th>
-                          <th class="r" style="width:80px">Client WH Stock</th>
-                          <th class="r" style="width:70px">CSI Issued</th>
-                          <th class="r" style="width:60px">Balance</th>
-                          <th class="r" style="width:90px">Est. Unit Price</th>
-                          <th class="r" style="width:90px">Est. Value</th>
-                        </tr>
-                      </thead>
-                      <tbody>${rowsHtml}</tbody>
-                      <tfoot>
-                        <tr>
-                          <td colspan="6" class="r">TOTAL</td>
-                          <td class="r" style="color:${totalBalance > 0 ? '#15803d' : totalBalance < 0 ? '#dc2626' : '#6b7280'}">${totalBalance}</td>
-                          <td class="r">—</td>
-                          <td class="r">₱${totalEstValue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                    <div class="note">
-                      <span>Est. Unit Price is based on the latest CSI or DR record. Values are for reference only.</span>
-                      <span>Generated ${today} &middot; CDSC Inventory System</span>
-                    </div>
-                  </body></html>`)
+                  win.document.write(buildReportHtml())
                   win.document.close()
                   win.focus()
                   setTimeout(() => { win.print() }, 400)
@@ -1333,7 +1445,7 @@ export default function InventoryPage() {
                         const latestPrice = r.csi_details.length > 0
                           ? r.csi_details[r.csi_details.length - 1].unit_price
                           : r.dr_details.length > 0 ? r.dr_details[r.dr_details.length - 1].unit_price : null
-                        const estValue = latestPrice != null ? r.balance * latestPrice : null
+                        const estValue = latestPrice != null ? r.dr_qty * latestPrice : null
                         return (
                           <tr key={r.item_name} className={i % 2 === 1 ? 'bg-gray-50' : 'bg-white'}>
                             <td className="px-3 py-2 text-gray-400 border-b border-gray-100">{i + 1}</td>
@@ -1369,16 +1481,63 @@ export default function InventoryPage() {
                 </div>
               )}
               <div className="mt-8 pt-4 border-t border-gray-100 text-[10px] text-gray-400 flex justify-between flex-wrap gap-2">
-                <span>Est. Unit Price is based on the latest CSI or DR record. Values are for reference only.</span>
+                <span>Est. Unit Price is based on the latest CSI or DR record; Est. Value = DR Qty × Est. Unit Price. Values are for reference only.</span>
                 <span>Generated {today} · CDSC Inventory System</span>
               </div>
             </div>
           </div>
+
+          {/* Email Client Dialog */}
+          <Dialog open={emailReportOpen} onOpenChange={setEmailReportOpen}>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-blue-600" />
+                  Email Stock Report to {reportClient}
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-3 py-1">
+                <div className="space-y-1.5">
+                  <Label>To (recipient email) <span className="text-destructive">*</span></Label>
+                  <Input
+                    type="email"
+                    placeholder="client@example.com"
+                    value={emailReportTo}
+                    onChange={e => setEmailReportTo(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Subject</Label>
+                  <Input
+                    value={emailReportSubject}
+                    onChange={e => setEmailReportSubject(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Message</Label>
+                  <Textarea
+                    rows={8}
+                    value={emailReportBody}
+                    onChange={e => setEmailReportBody(e.target.value)}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">A PDF of this stock report will be attached automatically.</p>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setEmailReportOpen(false)}>Cancel</Button>
+                <Button onClick={handleSendReportEmail} disabled={emailReportSending} className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5">
+                  {emailReportSending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  Send Email
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          </>
         )
       })()}
 
       <Dialog open={warehouseUpdateOpen} onOpenChange={o => { if (!o) setWarehouseUpdateOpen(false) }}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Pencil className="h-4 w-4 text-blue-600" /> Update Warehouse Stock
@@ -1387,24 +1546,64 @@ export default function InventoryPage() {
           {warehouseUpdateRow && (
             <div className="space-y-4 py-2">
               <div className="rounded-md bg-muted/40 px-3 py-2 text-sm font-medium">{warehouseUpdateRow.item_name}</div>
-              <div className="space-y-1.5">
-                <Label>Quantity <span className="text-red-500">*</span></Label>
-                <Input type="number" min="0" value={warehouseUpdateQty} onChange={e => setWarehouseUpdateQty(e.target.value)} placeholder="0" />
+
+              <div className="flex border rounded-md overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setWsMarkDelivered(false)}
+                  className={`flex-1 h-8 text-xs font-medium transition-colors ${!wsMarkDelivered ? 'bg-blue-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
+                >Update Quantity</button>
+                <button
+                  type="button"
+                  onClick={() => setWsMarkDelivered(true)}
+                  className={`flex-1 h-8 text-xs font-medium border-l transition-colors flex items-center justify-center gap-1.5 ${wsMarkDelivered ? 'bg-blue-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
+                ><Truck className="h-3.5 w-3.5" />Already Delivered</button>
               </div>
-              <div className="space-y-1.5">
-                <Label>Warehouse Note</Label>
-                <Input value={warehouseUpdateNotes} onChange={e => setWarehouseUpdateNotes(e.target.value)} placeholder="Notes about this stock entry" />
-              </div>
+
+              {wsMarkDelivered ? (
+                <>
+                  <div className="space-y-1.5">
+                    <Label>Quantity Delivered <span className="text-red-500">*</span></Label>
+                    <Input type="number" min="0" value={wsDeliverQty} onChange={e => setWsDeliverQty(e.target.value)} placeholder="0" />
+                    <p className="text-xs text-muted-foreground">Subtracted from this warehouse row&apos;s on-hand quantity.</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Delivered To Client <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                    <Select value={wsDeliverClientId} onValueChange={v => setWsDeliverClientId(v ?? '')}>
+                      <SelectTrigger><SelectValue placeholder="Select client…" /></SelectTrigger>
+                      <SelectContent>
+                        {clientOptions.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">If picked, this quantity is credited to that client&apos;s own On Hand ledger.</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Warehouse Note</Label>
+                    <Input value={warehouseUpdateNotes} onChange={e => setWarehouseUpdateNotes(e.target.value)} placeholder="Notes about this stock entry" />
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="space-y-1.5">
+                    <Label>Quantity <span className="text-red-500">*</span></Label>
+                    <Input type="number" min="0" value={warehouseUpdateQty} onChange={e => setWarehouseUpdateQty(e.target.value)} placeholder="0" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Warehouse Note</Label>
+                    <Input value={warehouseUpdateNotes} onChange={e => setWarehouseUpdateNotes(e.target.value)} placeholder="Notes about this stock entry" />
+                  </div>
+                </>
+              )}
             </div>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setWarehouseUpdateOpen(false)}>Cancel</Button>
             <Button
               onClick={saveWarehouseUpdate}
-              disabled={warehouseUpdateSaving || !warehouseUpdateQty.trim()}
+              disabled={warehouseUpdateSaving || (wsMarkDelivered ? !wsDeliverQty.trim() : !warehouseUpdateQty.trim())}
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
-              {warehouseUpdateSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : 'Update Stock'}
+              {warehouseUpdateSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : wsMarkDelivered ? 'Mark as Delivered' : 'Update Stock'}
             </Button>
           </DialogFooter>
         </DialogContent>
