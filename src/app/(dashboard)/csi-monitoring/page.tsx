@@ -1148,10 +1148,10 @@ export default function CSIMonitoringPage() {
           )}
         </div>
         <Select value={clientFilter} onValueChange={v => setClientFilter(v === '__all__' ? '' : (v ?? ''))}>
-          <SelectTrigger className="h-9 w-48 text-sm">
-            <SelectValue placeholder="All Clients" />
+          <SelectTrigger className="h-9 w-72 text-sm">
+            <SelectValue placeholder="All Clients" className="truncate" />
           </SelectTrigger>
-          <SelectContent>
+          <SelectContent className="min-w-[320px]">
             <SelectItem value="__all__">All Clients</SelectItem>
             {clientOptions.map(c => <SelectItem key={c.id} value={c.company_name}>{c.company_name}</SelectItem>)}
           </SelectContent>

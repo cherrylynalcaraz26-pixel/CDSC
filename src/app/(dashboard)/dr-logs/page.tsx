@@ -835,16 +835,6 @@ export default function DRLogsPage() {
             </button>
           )}
         </div>
-        <Select value={statusFilter} onValueChange={v => setStatusFilter(v ?? 'all')}>
-          <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="received">Received</SelectItem>
-            <SelectItem value="partial">Partial</SelectItem>
-            <SelectItem value="rejected">Rejected</SelectItem>
-            <SelectItem value="returned">Returned</SelectItem>
-          </SelectContent>
-        </Select>
         <Select value={clientFilter || '_all'} onValueChange={(v: string | null) => setClientFilter(!v || v === '_all' ? '' : v)}>
           <SelectTrigger className="min-w-[220px]"><SelectValue placeholder="All Clients" /></SelectTrigger>
           <SelectContent className="min-w-[300px]">
@@ -857,6 +847,16 @@ export default function DRLogsPage() {
           <SelectContent>
             <SelectItem value="all">All Years</SelectItem>
             {availableYears.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={statusFilter} onValueChange={v => setStatusFilter(v ?? 'all')}>
+          <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="received">Received</SelectItem>
+            <SelectItem value="partial">Partial</SelectItem>
+            <SelectItem value="rejected">Rejected</SelectItem>
+            <SelectItem value="returned">Returned</SelectItem>
           </SelectContent>
         </Select>
         <div className="flex rounded-md border overflow-hidden">

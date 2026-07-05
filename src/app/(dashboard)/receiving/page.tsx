@@ -20,7 +20,7 @@ import { toast } from 'sonner'
 import { useSearchContext } from '@/context/search-context'
 
 interface PO { id: string; po_number: string; status: string; supplier?: { company_name: string } | null; delivery_date: string | null }
-interface RR { id: string; rr_number: string; po_number: string; supplier: string; delivery_date: string; received_by: string; status: string; dr_number?: string | null }
+interface RR { id: string; rr_number: string; po_number: string; supplier: string | null; delivery_date: string; received_by: string; status: string; dr_number?: string | null }
 interface POItemLine { item_name: string; quantity: number; unit_of_measure: string }
 interface Supplier { id: string; company_name: string }
 interface Client { id: string; company_name: string }
@@ -100,10 +100,14 @@ export default function ReceivingPage() {
 
   async function loadRR() {
     setLoading(true)
-    const [{ data: poData }, { data: rrData }] = await Promise.all([
+    const [{ data: poData }, { data: rrData }, { data: allPoData }] = await Promise.all([
       supabase.from('purchase_orders').select('id, po_number, delivery_date, status, supplier:suppliers(company_name)')
         .not('po_number', 'is', null).in('status', ['open', 'partially_delivered', 'completed']).order('created_at', { ascending: false }),
       supabase.from('receiving_reports').select('*').order('created_at', { ascending: false }),
+      // Unfiltered by status — used only to backfill an RR's Supplier column when it was
+      // saved without one (e.g. a PO number typed in free-form instead of picked from the
+      // dropdown), regardless of what state that PO is in now.
+      supabase.from('purchase_orders').select('po_number, supplier:suppliers(company_name)').not('po_number', 'is', null),
     ])
     // A PO marked "completed" without ever being received would otherwise vanish from this
     // list, since completion and receiving are separate manual steps — so keep completed POs
@@ -111,7 +115,12 @@ export default function ReceivingPage() {
     const receivedPONumbers = new Set(((rrData ?? []) as RR[]).map(rr => rr.po_number))
     const pending = ((poData ?? []) as unknown as PO[]).filter(po => po.status !== 'completed' || !receivedPONumbers.has(po.po_number))
     setPOs(pending)
-    setRRs((rrData ?? []) as RR[])
+    const supplierByPoNumber: Record<string, string> = {}
+    for (const po of (allPoData ?? []) as unknown as { po_number: string; supplier: { company_name: string } | null }[]) {
+      const name = po.supplier?.company_name
+      if (name) supplierByPoNumber[po.po_number] = name
+    }
+    setRRs(((rrData ?? []) as RR[]).map(rr => ({ ...rr, supplier: rr.supplier || supplierByPoNumber[rr.po_number] || null })))
     setLoading(false)
   }
 
