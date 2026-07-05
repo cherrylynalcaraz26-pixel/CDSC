@@ -19,7 +19,7 @@ import {
 import { toast } from 'sonner'
 import { useSearchContext } from '@/context/search-context'
 
-interface PO { id: string; po_number: string; supplier?: { company_name: string } | null; delivery_date: string | null }
+interface PO { id: string; po_number: string; status: string; supplier?: { company_name: string } | null; delivery_date: string | null }
 interface RR { id: string; rr_number: string; po_number: string; supplier: string; delivery_date: string; received_by: string; status: string }
 interface Supplier { id: string; company_name: string }
 interface Client { id: string; company_name: string }
@@ -110,11 +110,16 @@ export default function ReceivingPage() {
   async function loadRR() {
     setLoading(true)
     const [{ data: poData }, { data: rrData }] = await Promise.all([
-      supabase.from('purchase_orders').select('id, po_number, delivery_date, supplier:suppliers(company_name)')
-        .not('po_number', 'is', null).in('status', ['open', 'partially_delivered']).order('created_at', { ascending: false }),
+      supabase.from('purchase_orders').select('id, po_number, delivery_date, status, supplier:suppliers(company_name)')
+        .not('po_number', 'is', null).in('status', ['open', 'partially_delivered', 'completed']).order('created_at', { ascending: false }),
       supabase.from('receiving_reports').select('*').order('created_at', { ascending: false }),
     ])
-    setPOs((poData ?? []) as unknown as PO[])
+    // A PO marked "completed" without ever being received would otherwise vanish from this
+    // list, since completion and receiving are separate manual steps — so keep completed POs
+    // visible here until a receiving report actually exists for them.
+    const receivedPONumbers = new Set(((rrData ?? []) as RR[]).map(rr => rr.po_number))
+    const pending = ((poData ?? []) as unknown as PO[]).filter(po => po.status !== 'completed' || !receivedPONumbers.has(po.po_number))
+    setPOs(pending)
     setRRs((rrData ?? []) as RR[])
     setLoading(false)
   }
@@ -335,25 +340,36 @@ export default function ReceivingPage() {
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center gap-2"><Package className="h-4 w-4" />Pending Deliveries (Open POs)</CardTitle>
+              <CardTitle className="text-base flex items-center gap-2"><Package className="h-4 w-4" />Pending Deliveries</CardTitle>
             </CardHeader>
             <CardContent>
               {loading ? (
                 <div className="flex justify-center py-4"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
               ) : pos.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-4">No open purchase orders pending delivery.</p>
+                <p className="text-sm text-muted-foreground text-center py-4">No purchase orders pending delivery.</p>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {pos.map(po => (
-                    <div key={po.id} className="flex items-center justify-between p-3 border rounded-lg bg-yellow-50/50 border-yellow-200">
-                      <div>
-                        <div className="font-mono text-sm font-semibold text-primary">{po.po_number}</div>
-                        <div className="text-sm">{(po.supplier as any)?.company_name ?? '—'}</div>
-                        <div className="text-xs text-muted-foreground">Expected: {po.delivery_date ?? 'TBD'}</div>
+                  {pos.map(po => {
+                    const needsReceivingDespiteCompleted = po.status === 'completed'
+                    return (
+                      <div
+                        key={po.id}
+                        className={`flex items-center justify-between p-3 border rounded-lg ${needsReceivingDespiteCompleted ? 'bg-orange-50/50 border-orange-200' : 'bg-yellow-50/50 border-yellow-200'}`}
+                      >
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <div className="font-mono text-sm font-semibold text-primary">{po.po_number}</div>
+                            {needsReceivingDespiteCompleted && (
+                              <Badge variant="outline" className="text-[10px] text-orange-700 border-orange-300">Completed — not yet received</Badge>
+                            )}
+                          </div>
+                          <div className="text-sm">{(po.supplier as any)?.company_name ?? '—'}</div>
+                          <div className="text-xs text-muted-foreground">Expected: {po.delivery_date ?? 'TBD'}</div>
+                        </div>
+                        <Button size="sm" variant="outline" onClick={() => { setSelectedPO(po.po_number); setRrOpen(true) }}>Receive</Button>
                       </div>
-                      <Button size="sm" variant="outline" onClick={() => { setSelectedPO(po.po_number); setRrOpen(true) }}>Receive</Button>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </CardContent>

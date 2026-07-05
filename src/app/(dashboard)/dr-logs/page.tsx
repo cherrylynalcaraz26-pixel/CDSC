@@ -225,7 +225,7 @@ export default function DRLogsPage() {
           <div class="text-[9px] font-semibold uppercase text-gray-400">DR Number</div>
           <div class="font-mono font-bold text-gray-800">${log.dr_number}</div>
           <div class="text-[9px] font-semibold uppercase text-gray-400 mt-1.5">Date</div>
-          <div class="text-gray-800">${log.dr_date ? new Date(log.dr_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</div>
+          <div class="text-gray-800">${log.dr_date ? format(parseISO(log.dr_date), 'MM/dd/yyyy') : '—'}</div>
           <div class="text-[9px] font-semibold uppercase text-gray-400 mt-1.5">Status</div>
           <div class="text-gray-800">${log.status}</div>
         </div>
@@ -266,7 +266,7 @@ export default function DRLogsPage() {
     const items = (drItems ?? []).slice(0, blankCalib.maxRows)
     const client = clients.find(c => c.company_name === log.supplier_name)
     const c = blankCalib
-    const dateStr = log.dr_date ? new Date(log.dr_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : ''
+    const dateStr = log.dr_date ? format(parseISO(log.dr_date), 'MM/dd/yyyy') : ''
     const addressLine = [client?.address, client?.city, client?.province].filter(Boolean).join(', ')
     const field = (top: number, left: number, value: string) =>
       value ? `<div style="position:absolute;top:${top}mm;left:${left}mm;">${value}</div>` : ''
@@ -807,7 +807,7 @@ export default function DRLogsPage() {
                               : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                           </TableCell>
                           <TableCell className="text-sm whitespace-nowrap">
-                            {format(parseISO(log.dr_date), 'MMM d, yyyy')}
+                            {format(parseISO(log.dr_date), 'MM/dd/yyyy')}
                           </TableCell>
                           <TableCell className="font-mono text-sm font-semibold text-red-600">{log.dr_number}</TableCell>
                           <TableCell className="text-sm font-medium">{log.supplier_name ?? '—'}</TableCell>
@@ -963,7 +963,7 @@ export default function DRLogsPage() {
                           <TableRow key={`${row.id ?? i}-flat`}>
                             <TableCell className="font-mono text-sm font-semibold text-red-600">{row.dr_number}</TableCell>
                             <TableCell className="text-sm whitespace-nowrap">
-                              {format(parseISO(row.log.dr_date), 'MMM d, yyyy')}
+                              {format(parseISO(row.log.dr_date), 'MM/dd/yyyy')}
                             </TableCell>
                             <TableCell className="text-sm">{row.log.supplier_name ?? '—'}</TableCell>
                             <TableCell className="text-right font-medium text-sm">{Number(row.quantity)}</TableCell>
@@ -1223,7 +1223,7 @@ export default function DRLogsPage() {
                         <div className="text-[9px] font-semibold uppercase text-gray-400">DR Number</div>
                         <div className="font-mono font-bold text-gray-800">{form.dr_number || '—'}</div>
                         <div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5">Date</div>
-                        <div className="text-gray-800">{form.dr_date ? new Date(form.dr_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</div>
+                        <div className="text-gray-800">{form.dr_date ? format(parseISO(form.dr_date), 'MM/dd/yyyy') : '—'}</div>
                       </div>
                     </div>
 
