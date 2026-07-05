@@ -571,12 +571,13 @@ function PortalStockPageContent() {
                 <div className="text-xl font-bold text-gray-900">{clientName}</div>
               </div>
               {/* Summary cards */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
                 {[
-                  { label: 'Total Items',   value: stock.length,      cls: 'text-gray-800' },
-                  { label: 'In Stock',      value: inStock.length,    cls: 'text-green-700' },
-                  { label: 'Low Stock',     value: lowStock.length,   cls: 'text-amber-600' },
-                  { label: 'Out of Stock',  value: outOfStock.length, cls: 'text-red-600' },
+                  { label: 'Total Items',    value: stock.length,                     cls: 'text-gray-800' },
+                  { label: 'Total On Hand',  value: totalOnHand.toLocaleString('en-PH'), cls: 'text-gray-800' },
+                  { label: 'In Stock',       value: inStock.length,                   cls: 'text-green-700' },
+                  { label: 'Low Stock',      value: lowStock.length,                  cls: 'text-amber-600' },
+                  { label: 'Out of Stock',   value: outOfStock.length,                cls: 'text-red-600' },
                 ].map(c => (
                   <div key={c.label} className="border border-gray-200 rounded-lg px-4 py-3 bg-gray-50">
                     <div className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">{c.label}</div>
