@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -1200,7 +1201,7 @@ function BIRExportTab({ collections, disbursements }: { collections: Collection[
 
 // ── Bookkeeping Tab (wrapper that loads data for sub-tabs) ────────────────────
 
-function BookkeepingTab() {
+function BookkeepingTab({ activeSub, onSubChange }: { activeSub: string; onSubChange: (v: string) => void }) {
   const supabase = createClient()
   const [collections, setCollections] = useState<Collection[]>([])
   const [disbursements, setDisbursements] = useState<Disbursement[]>([])
@@ -1242,7 +1243,7 @@ function BookkeepingTab() {
   return (
     <div className="space-y-4">
       <DateFilterBar df={df} />
-      <Tabs defaultValue="crj">
+      <Tabs value={activeSub} onValueChange={v => onSubChange(v ?? 'crj')}>
         <TabsList className="flex-wrap h-auto gap-1">
           <TabsTrigger value="crj" className="flex items-center gap-1.5"><BookOpen className="h-3.5 w-3.5" />Sales Journal</TabsTrigger>
           <TabsTrigger value="cdj" className="flex items-center gap-1.5"><Banknote className="h-3.5 w-3.5" />Disbursements</TabsTrigger>
@@ -1665,6 +1666,28 @@ function CSITab() {
 }
 
 export default function AccountingPage() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const pathname = usePathname()
+  const activeTab = searchParams.get('tab') ?? 'overview'
+  const activeSub = searchParams.get('sub') ?? 'crj'
+
+  // Drives the tab (and Bookkeeping's inner sub-tab) from the URL, so the sidebar can
+  // link directly into a specific tab (e.g. /accounting?tab=bookkeeping&sub=gl).
+  function setTab(tab: string) {
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('tab', tab)
+    if (tab !== 'bookkeeping') params.delete('sub')
+    router.replace(`${pathname}?${params.toString()}`)
+  }
+
+  function setSub(sub: string) {
+    const params = new URLSearchParams(searchParams.toString())
+    params.set('tab', 'bookkeeping')
+    params.set('sub', sub)
+    router.replace(`${pathname}?${params.toString()}`)
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -1672,7 +1695,7 @@ export default function AccountingPage() {
         <p className="text-muted-foreground text-sm">Financial management and BIR compliance</p>
       </div>
 
-      <Tabs defaultValue="overview">
+      <Tabs value={activeTab} onValueChange={v => setTab(v ?? 'overview')}>
         <TabsList className="flex-wrap h-auto gap-1">
           <TabsTrigger value="overview" className="flex items-center gap-1.5">
             <Calculator className="h-3.5 w-3.5" />Overview
@@ -1695,7 +1718,7 @@ export default function AccountingPage() {
           <TabsContent value="overview"><OverviewTab /></TabsContent>
           <TabsContent value="collections"><CollectionsTab /></TabsContent>
           <TabsContent value="csi"><CSITab /></TabsContent>
-          <TabsContent value="bookkeeping"><BookkeepingTab /></TabsContent>
+          <TabsContent value="bookkeeping"><BookkeepingTab activeSub={activeSub} onSubChange={setSub} /></TabsContent>
           <TabsContent value="bir"><BIRComplianceTab /></TabsContent>
         </div>
       </Tabs>

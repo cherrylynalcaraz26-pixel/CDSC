@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
-import { usePathname } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -13,6 +13,7 @@ import {
   SlidersHorizontal, ArrowRightLeft, LogOut, X, Wrench,
   Receipt, PanelLeftClose, PanelLeftOpen, ClipboardList, BoxesIcon,
   TrendingUp, MessageSquare, Globe,
+  BookOpen, Banknote, BarChart3, Scale, FileSpreadsheet, Download,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useCompany } from '@/context/company-context'
@@ -45,7 +46,27 @@ const navigation: NavItem[] = [
       { label: 'Pull Out & Billing', href: '/pull-out-billing', icon: FileText },
     ],
   },
-  { label: 'Accounting', href: '/accounting', icon: Calculator },
+  {
+    label: 'Accounting', icon: Calculator,
+    children: [
+      { label: 'Overview', href: '/accounting?tab=overview', icon: Calculator },
+      { label: 'Collections', href: '/accounting?tab=collections', icon: Receipt },
+      { label: 'CSI Revenue', href: '/accounting?tab=csi', icon: Receipt },
+      { label: 'BIR Compliance', href: '/accounting?tab=bir', icon: FileText },
+      {
+        label: 'Bookkeeping', icon: FileBarChart,
+        children: [
+          { label: 'Sales Journal', href: '/accounting?tab=bookkeeping&sub=crj', icon: BookOpen },
+          { label: 'Disbursements', href: '/accounting?tab=bookkeeping&sub=cdj', icon: Banknote },
+          { label: 'General Ledger', href: '/accounting?tab=bookkeeping&sub=gl', icon: BarChart3 },
+          { label: 'Trial Balance', href: '/accounting?tab=bookkeeping&sub=tb', icon: Scale },
+          { label: 'Income Statement', href: '/accounting?tab=bookkeeping&sub=is', icon: TrendingUp },
+          { label: 'Balance Sheet', href: '/accounting?tab=bookkeeping&sub=bs', icon: FileSpreadsheet },
+          { label: 'BIR / CAS', href: '/accounting?tab=bookkeeping&sub=bir', icon: Download },
+        ],
+      },
+    ],
+  },
   { label: 'Messages', href: '/messages', icon: MessageSquare },
   {
     label: 'Setup', icon: Wrench,
@@ -59,13 +80,32 @@ const navigation: NavItem[] = [
   { label: 'Company Profile', href: '/settings', icon: Settings },
 ]
 
-function checkActive(pathname: string, href: string) {
-  if (href === '/dashboard') return pathname === '/dashboard'
-  return pathname === href || pathname.startsWith(href + '/')
+// Some sidebar links (Accounting's sub-tabs) share one route and are distinguished only
+// by query string (?tab=...&sub=...) — so active-state matching needs to compare those
+// too, falling back to each param's default value when the URL doesn't have it yet.
+const QUERY_PARAM_DEFAULTS: Record<string, string> = { tab: 'overview', sub: 'crj' }
+
+function checkActive(pathname: string, href: string, search: URLSearchParams) {
+  const [hrefPath, hrefQuery] = href.split('?')
+  const pathMatches = hrefPath === '/dashboard' ? pathname === '/dashboard' : (pathname === hrefPath || pathname.startsWith(hrefPath + '/'))
+  if (!pathMatches) return false
+  if (!hrefQuery) return true
+  const hrefParams = new URLSearchParams(hrefQuery)
+  for (const [key, value] of hrefParams.entries()) {
+    const current = search.get(key) ?? QUERY_PARAM_DEFAULTS[key] ?? ''
+    if (current !== value) return false
+  }
+  return true
 }
 
-function hasActiveChild(pathname: string, children: NavItem[]): boolean {
-  return children.some(c => c.href ? checkActive(pathname, c.href) : false)
+function itemMatches(pathname: string, search: URLSearchParams, item: NavItem): boolean {
+  if (item.href) return checkActive(pathname, item.href, search)
+  if (item.children) return hasActiveChild(pathname, search, item.children)
+  return false
+}
+
+function hasActiveChild(pathname: string, search: URLSearchParams, children: NavItem[]): boolean {
+  return children.some(c => itemMatches(pathname, search, c))
 }
 
 function NavLink({
@@ -76,8 +116,9 @@ function NavLink({
   onNavigate?: () => void
 }) {
   const pathname = usePathname()
-  const active = item.href ? checkActive(pathname, item.href) : false
-  const childActive = item.children ? hasActiveChild(pathname, item.children) : false
+  const searchParams = useSearchParams()
+  const active = item.href ? checkActive(pathname, item.href, searchParams) : false
+  const childActive = item.children ? hasActiveChild(pathname, searchParams, item.children) : false
   const [open, setOpen] = useState(() => childActive)
 
   if (item.children) {
@@ -93,10 +134,34 @@ function NavLink({
           >
             <item.icon className="h-[16px] w-[16px] shrink-0" />
           </button>
-          <div className="absolute left-full top-0 ml-1 hidden group-hover:block z-50 min-w-[180px] bg-[#1a1a1a] border border-white/10 rounded-lg py-1 shadow-xl">
+          <div className="absolute left-full top-0 ml-1 hidden group-hover:block z-50 min-w-[180px] max-h-[80vh] overflow-y-auto bg-[#1a1a1a] border border-white/10 rounded-lg py-1 shadow-xl">
             <p className="text-[11px] font-semibold text-white/30 px-3 py-1.5 uppercase tracking-wider">{item.label}</p>
             {item.children.map(child => {
-              const cActive = child.href ? checkActive(pathname, child.href) : false
+              if (child.children) {
+                return (
+                  <div key={child.label}>
+                    <p className="text-[10px] font-semibold text-white/25 px-3 pt-2 pb-1 uppercase tracking-wider border-t border-white/5 mt-1">{child.label}</p>
+                    {child.children.map(grandchild => {
+                      const gActive = grandchild.href ? checkActive(pathname, grandchild.href, searchParams) : false
+                      return (
+                        <Link
+                          key={grandchild.label}
+                          href={grandchild.href!}
+                          onClick={onNavigate}
+                          className={cn(
+                            'flex items-center gap-2 px-3 py-1.5 text-[13px] transition-colors',
+                            gActive ? 'text-red-400 bg-red-600/10' : 'text-white/60 hover:text-white hover:bg-white/10',
+                          )}
+                        >
+                          <grandchild.icon className="h-3.5 w-3.5 shrink-0" />
+                          {grandchild.label}
+                        </Link>
+                      )
+                    })}
+                  </div>
+                )
+              }
+              const cActive = child.href ? checkActive(pathname, child.href, searchParams) : false
               return (
                 <Link
                   key={child.label}
