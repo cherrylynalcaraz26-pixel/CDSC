@@ -180,20 +180,25 @@ export default function ReceivingPage() {
 
   async function loadSalesDeliveries() {
     setSalesdLoading(true)
-    const { data } = await supabase
-      .from('dr_logs')
-      .select('id, dr_number, po_number, supplier_name, client_name, dr_date, status')
-      .order('dr_date', { ascending: false })
+    const [{ data }, { data: csiData }] = await Promise.all([
+      supabase
+        .from('dr_logs')
+        .select('id, dr_number, po_number, supplier_name, dr_date, status')
+        .order('dr_date', { ascending: false }),
+      supabase.from('csi_records').select('dr_number').not('dr_number', 'is', null),
+    ])
+    const invoicedDrNumbers = new Set((csiData ?? []).map((r: { dr_number: string }) => r.dr_number))
     const mapped = (data ?? []).map((log: any) => ({
       id: log.id,
       delivery_number: log.dr_number,
       dr_number: log.dr_number,
       so_number: log.po_number,
       quote_number: log.po_number,
-      client_name: log.client_name ?? log.supplier_name,
+      client_name: log.supplier_name,
       delivery_date: log.dr_date,
       delivered_by: null,
       status: log.status,
+      hasCsi: invoicedDrNumbers.has(log.dr_number),
       notes: null,
       created_at: '',
     }))
@@ -717,7 +722,7 @@ export default function ReceivingPage() {
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-lg font-semibold">Sales Deliveries</h3>
-              <p className="text-muted-foreground text-sm">Outgoing deliveries synced from DR Logs — record DRs linked to an SO Reference to appear here</p>
+              <p className="text-muted-foreground text-sm">Outgoing deliveries synced from DR Logs</p>
             </div>
             <Button variant="outline" size="sm" onClick={loadSalesDeliveries}>
               <Loader2 className={`h-3.5 w-3.5 mr-1.5 ${salesdLoading ? 'animate-spin' : 'hidden'}`} />Refresh
@@ -736,13 +741,14 @@ export default function ReceivingPage() {
                     <TableHead>Client</TableHead>
                     <TableHead>Delivery Date</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>CSI</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {salesdLoading ? (
-                    <TableRow><TableCell colSpan={6} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
                   ) : salesDeliveries.filter(d => filterQ(`${d.delivery_number} ${(d as any).dr_number ?? ''} ${(d as any).so_number ?? ''} ${d.client_name ?? ''} ${d.status}`)).length === 0 ? (
-                    <TableRow><TableCell colSpan={6} className="text-center py-10 text-muted-foreground text-sm">No sales deliveries yet. Create a DR Log with an SO Reference to populate this list.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground text-sm">No sales deliveries yet. Create a DR Log to populate this list.</TableCell></TableRow>
                   ) : salesDeliveries.filter(d => filterQ(`${d.delivery_number} ${(d as any).dr_number ?? ''} ${(d as any).so_number ?? ''} ${d.client_name ?? ''} ${d.status}`)).map(d => {
                     const sd = d as any
                     const statusCls = sd.status === 'delivered' ? 'bg-green-100 text-green-700' : sd.status === 'partial' ? 'bg-yellow-100 text-yellow-700' : 'bg-orange-100 text-orange-700'
@@ -755,6 +761,13 @@ export default function ReceivingPage() {
                         <TableCell className="text-sm">{d.delivery_date}</TableCell>
                         <TableCell>
                           <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize ${statusCls}`}>{sd.status}</span>
+                        </TableCell>
+                        <TableCell>
+                          {sd.hasCsi ? (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">Invoiced</span>
+                          ) : (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">No CSI</span>
+                          )}
                         </TableCell>
                       </TableRow>
                     )
