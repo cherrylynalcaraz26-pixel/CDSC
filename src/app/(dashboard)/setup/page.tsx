@@ -20,8 +20,9 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Plus, Pencil, Trash2, X, MoreHorizontal } from 'lucide-react'
+import { Plus, Pencil, Trash2, X, MoreHorizontal, LayoutGrid, List, ImagePlus, Loader2, Package } from 'lucide-react'
 import { toast } from 'sonner'
+import { uploadImageToDrive } from '@/lib/upload-image'
 
 /* ─── UOM ─────────────────────────────────────────────── */
 interface UOM { id: string; code: string; name: string; description: string | null; is_active: boolean }
@@ -1104,6 +1105,7 @@ interface ItemRow {
   id: string; item_code: string; item_name: string
   brand: string | null; unit_of_measure: string; cost: number
   selling_price: number | null; attribute: string | null; status: string
+  image_url: string | null
 }
 interface UOMOption { id: string; code: string; name: string }
 interface BrandOption { id: string; name: string }
@@ -1119,14 +1121,18 @@ function ItemListTab() {
   const [search, setSearch] = useState('')
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<ItemRow | null>(null)
-  const [form, setForm] = useState({ item_code: '', item_name: '', brand: '', unit_of_measure: '', cost: '', selling_price: '', attribute: '' })
+  const [form, setForm] = useState({ item_code: '', item_name: '', brand: '', unit_of_measure: '', cost: '', selling_price: '', attribute: '', image_url: '' })
   const [saving, setSaving] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<'list' | 'box'>('list')
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [uploadingImage, setUploadingImage] = useState(false)
 
   async function load() {
     setLoading(true)
     const [{ data: itemData }, { data: uomData }, { data: brandData }, { data: attrData }] = await Promise.all([
-      supabase.from('items').select('id, item_code, item_name, brand, unit_of_measure, cost, selling_price, attribute, status').order('item_name'),
+      supabase.from('items').select('id, item_code, item_name, brand, unit_of_measure, cost, selling_price, attribute, status, image_url').order('item_name'),
       supabase.from('uom_list').select('id, code, name').eq('is_active', true).order('code'),
       supabase.from('brands').select('id, name').eq('is_active', true).order('name'),
       supabase.from('attributes').select('id, name').eq('is_active', true).order('name'),
@@ -1160,18 +1166,42 @@ function ItemListTab() {
       const num = parseInt(last.item_code.replace('ITM-', ''), 10)
       if (!isNaN(num)) nextCode = 'ITM-' + String(num + 1).padStart(3, '0')
     }
-    setForm({ item_code: nextCode, item_name: '', brand: '', unit_of_measure: '', cost: '', selling_price: '', attribute: '' })
+    setForm({ item_code: nextCode, item_name: '', brand: '', unit_of_measure: '', cost: '', selling_price: '', attribute: '', image_url: '' })
+    setImageFile(null)
+    setImagePreview(null)
     setOpen(true)
   }
   function openEdit(r: ItemRow) {
     setEditing(r)
-    setForm({ item_code: r.item_code, item_name: r.item_name, brand: r.brand ?? '', unit_of_measure: r.unit_of_measure, cost: String(r.cost), selling_price: r.selling_price !== null ? String(r.selling_price) : '', attribute: r.attribute ?? '' })
+    setForm({ item_code: r.item_code, item_name: r.item_name, brand: r.brand ?? '', unit_of_measure: r.unit_of_measure, cost: String(r.cost), selling_price: r.selling_price !== null ? String(r.selling_price) : '', attribute: r.attribute ?? '', image_url: r.image_url ?? '' })
+    setImageFile(null)
+    setImagePreview(r.image_url ?? null)
     setOpen(true)
+  }
+
+  function handleImageSelect(file: File) {
+    setImageFile(file)
+    setImagePreview(URL.createObjectURL(file))
   }
 
   async function save() {
     if (!form.item_name.trim()) { toast.error('Item name required'); return }
     setSaving(true)
+
+    let imageUrl = form.image_url || null
+    if (imageFile) {
+      setUploadingImage(true)
+      try {
+        imageUrl = await uploadImageToDrive(imageFile)
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : 'Failed to upload image')
+        setUploadingImage(false)
+        setSaving(false)
+        return
+      }
+      setUploadingImage(false)
+    }
+
     const payload = {
       item_code: form.item_code.trim() || undefined,
       item_name: form.item_name.trim(),
@@ -1180,6 +1210,7 @@ function ItemListTab() {
       cost: parseFloat(form.cost) || 0,
       selling_price: form.selling_price.trim() ? parseFloat(form.selling_price) : null,
       attribute: form.attribute.trim() || null,
+      image_url: imageUrl,
     }
     const { error } = editing
       ? await supabase.from('items').update(payload).eq('id', editing.id)
@@ -1206,15 +1237,70 @@ function ItemListTab() {
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <Input placeholder="Search items…" value={search} onChange={e => setSearch(e.target.value)} className="max-w-sm" />
-        <Button onClick={openAdd} className="bg-red-600 hover:bg-red-700 gap-1.5 ml-auto">
+        <div className="flex border rounded-md overflow-hidden shrink-0 ml-auto">
+          <button onClick={() => setViewMode('list')}
+            className={`h-9 w-9 flex items-center justify-center transition-colors ${viewMode === 'list' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-accent'}`}>
+            <List className="h-4 w-4" />
+          </button>
+          <button onClick={() => setViewMode('box')}
+            className={`h-9 w-9 flex items-center justify-center border-l transition-colors ${viewMode === 'box' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-accent'}`}>
+            <LayoutGrid className="h-4 w-4" />
+          </button>
+        </div>
+        <Button onClick={openAdd} className="bg-red-600 hover:bg-red-700 gap-1.5">
           <Plus className="h-4 w-4" />Add New Item
         </Button>
       </div>
       <div className="text-xs text-muted-foreground">{filtered.length} items</div>
+      {viewMode === 'box' ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          {loading ? (
+            <div className="col-span-full text-center py-6 text-muted-foreground">Loading…</div>
+          ) : filtered.length === 0 ? (
+            <div className="col-span-full text-center py-6 text-muted-foreground">No items found</div>
+          ) : filtered.map(r => (
+            <div key={r.id} className="rounded-lg border bg-card overflow-hidden flex flex-col">
+              <div className="h-28 bg-muted/40 flex items-center justify-center overflow-hidden">
+                {r.image_url ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={r.image_url} alt={r.item_name} className="h-full w-full object-contain p-2" />
+                ) : (
+                  <Package className="h-7 w-7 text-muted-foreground/30" />
+                )}
+              </div>
+              <div className="p-3 flex-1 flex flex-col gap-1">
+                <div className="font-mono text-xs text-muted-foreground">{r.item_code}</div>
+                <div className="font-medium text-sm leading-tight line-clamp-2">{r.item_name}</div>
+                <div className="text-xs text-muted-foreground">{r.brand ?? '—'}</div>
+                <div className="mt-auto flex items-center justify-between pt-2">
+                  <span className="font-semibold text-sm">₱{r.cost.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+                  <button onClick={() => toggleStatus(r)}>
+                    <Badge className={r.status === 'active' ? 'bg-green-100 text-green-800 cursor-pointer' : 'bg-gray-100 text-gray-600 cursor-pointer'}>
+                      {r.status}
+                    </Badge>
+                  </button>
+                </div>
+              </div>
+              <div className="border-t px-3 py-2 flex items-center justify-end">
+                <DropdownMenu>
+                  <DropdownMenuTrigger className="h-7 w-7 flex items-center justify-center rounded hover:bg-accent">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem onClick={() => openEdit(r)}><Pencil className="h-3.5 w-3.5 mr-2" />Edit</DropdownMenuItem>
+                    <DropdownMenuItem className="text-destructive" onClick={() => setDeleteId(r.id)}><Trash2 className="h-3.5 w-3.5 mr-2" />Delete</DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
       <div className="rounded-lg border bg-card overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-14">Image</TableHead>
               <TableHead>Code</TableHead>
               <TableHead>Name</TableHead>
               <TableHead>Brand</TableHead>
@@ -1228,11 +1314,21 @@ function ItemListTab() {
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={9} className="text-center py-6 text-muted-foreground">Loading…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={10} className="text-center py-6 text-muted-foreground">Loading…</TableCell></TableRow>
             ) : filtered.length === 0 ? (
-              <TableRow><TableCell colSpan={9} className="text-center py-6 text-muted-foreground">No items found</TableCell></TableRow>
+              <TableRow><TableCell colSpan={10} className="text-center py-6 text-muted-foreground">No items found</TableCell></TableRow>
             ) : filtered.map(r => (
               <TableRow key={r.id}>
+                <TableCell>
+                  <div className="h-9 w-9 rounded border bg-muted/40 flex items-center justify-center overflow-hidden shrink-0">
+                    {r.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={r.image_url} alt={r.item_name} className="h-full w-full object-contain p-0.5" />
+                    ) : (
+                      <Package className="h-4 w-4 text-muted-foreground/30" />
+                    )}
+                  </div>
+                </TableCell>
                 <TableCell className="font-mono text-sm">{r.item_code}</TableCell>
                 <TableCell className="font-medium text-sm">{r.item_name}</TableCell>
                 <TableCell className="text-sm text-muted-foreground">{r.brand ?? '—'}</TableCell>
@@ -1267,10 +1363,42 @@ function ItemListTab() {
           </TableBody>
         </Table>
       </div>
+      )}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>{editing ? 'Edit Item' : 'Add Item'}</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
+            <div className="space-y-1.5">
+              <Label>Picture</Label>
+              <div className="flex items-center gap-3">
+                <div className="h-16 w-16 rounded-lg border bg-muted/40 flex items-center justify-center overflow-hidden shrink-0">
+                  {imagePreview ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={imagePreview} alt="Item preview" className="h-full w-full object-contain p-1" />
+                  ) : (
+                    <Package className="h-6 w-6 text-muted-foreground/30" />
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button type="button" variant="outline" size="sm" disabled={uploadingImage} onClick={() => document.getElementById('config-item-picture-input')?.click()}>
+                    {uploadingImage ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5 mr-1.5" />}
+                    {imagePreview ? 'Change Picture' : 'Upload Picture'}
+                  </Button>
+                  {imagePreview && (
+                    <Button type="button" variant="ghost" size="sm" onClick={() => { setImageFile(null); setImagePreview(null); setForm(p => ({ ...p, image_url: '' })) }}>
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                  <input
+                    id="config-item-picture-input"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handleImageSelect(f); e.target.value = '' }}
+                  />
+                </div>
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label className="flex items-center gap-1.5">
