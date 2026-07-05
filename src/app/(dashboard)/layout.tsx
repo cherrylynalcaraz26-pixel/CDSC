@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { Sidebar, MobileSidebar } from '@/components/layout/sidebar'
@@ -62,33 +62,100 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   // Swipe-to-cycle for grouped bottom-nav tabs (e.g. Purchasing: Purchase Orders /
   // Quotation / Sales Orders) — swipe left/right on the tab moves to the next/previous
   // page in the group; a plain tap goes to whichever page in the group is current.
-  const touchStart = useRef<{ x: number; y: number } | null>(null)
-  const justSwiped = useRef(false)
+  //
+  // Attached as native (non-passive) listeners rather than React's onTouch* props:
+  // React binds touch handlers as passive by default, so calling preventDefault() from
+  // them doesn't actually stop the browser's own gesture handling (edge-swipe-back,
+  // rubber-band scroll) from hijacking the touch sequence before our JS finishes — which
+  // is what made swipes not register at all. A manual { passive: false } listener lets us
+  // seize the gesture the moment we detect it's horizontal.
+  const navRef = useRef<HTMLElement | null>(null)
+  const pathnameRef = useRef(pathname)
+  useEffect(() => { pathnameRef.current = pathname }, [pathname])
 
-  function handleGroupTouchStart(e: React.TouchEvent) {
-    const t = e.touches[0]
-    touchStart.current = { x: t.clientX, y: t.clientY }
-  }
+  useEffect(() => {
+    const el = navRef.current
+    if (!el) return
 
-  function handleGroupTouchEnd(children: BottomNavChild[], e: React.TouchEvent) {
-    const start = touchStart.current
-    touchStart.current = null
-    if (!start) return
-    const t = e.changedTouches[0]
-    const dx = t.clientX - start.x
-    const dy = t.clientY - start.y
-    if (Math.abs(dx) > 30 && Math.abs(dx) > Math.abs(dy)) {
-      const current = children.findIndex(c => isActiveHref(c.href))
-      const idx = current === -1 ? 0 : current
-      const next = dx < 0 ? (idx + 1) % children.length : (idx - 1 + children.length) % children.length
-      justSwiped.current = true
-      router.replace(children[next].href)
-      setTimeout(() => { justSwiped.current = false }, 400)
+    let startX = 0
+    let startY = 0
+    let dragging = false
+    let activeChildren: BottomNavChild[] | null = null
+
+    function isActive(href: string) {
+      return href === '/dashboard' ? pathnameRef.current === '/dashboard' : pathnameRef.current === href || pathnameRef.current.startsWith(href + '/')
     }
-  }
+
+    function findGroupChildren(target: EventTarget | null): BottomNavChild[] | null {
+      let node = target as HTMLElement | null
+      while (node && node !== el) {
+        const key = node.getAttribute?.('data-group')
+        if (key) {
+          const group = BOTTOM_NAV.find(l => l.href === key)
+          return group?.children ?? null
+        }
+        node = node.parentElement
+      }
+      return null
+    }
+
+    function navigateWithin(children: BottomNavChild[], offset: number) {
+      const current = children.findIndex(c => isActive(c.href))
+      const idx = current === -1 ? 0 : current
+      const target = offset === 0 ? idx : (idx + offset + children.length) % children.length
+      router.replace(children[target].href)
+    }
+
+    function onTouchStart(e: TouchEvent) {
+      const t = e.touches[0]
+      startX = t.clientX
+      startY = t.clientY
+      dragging = false
+      activeChildren = findGroupChildren(e.target)
+    }
+
+    function onTouchMove(e: TouchEvent) {
+      if (!activeChildren) return
+      const t = e.touches[0]
+      const dx = t.clientX - startX
+      const dy = t.clientY - startY
+      if (!dragging && Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
+        dragging = true
+      }
+      if (dragging) e.preventDefault()
+    }
+
+    function onTouchEnd(e: TouchEvent) {
+      if (!activeChildren) return
+      const t = e.changedTouches[0]
+      const dx = t.clientX - startX
+      if (dragging && Math.abs(dx) > 30) {
+        navigateWithin(activeChildren, dx < 0 ? 1 : -1)
+      } else if (!dragging) {
+        navigateWithin(activeChildren, 0)
+      }
+      activeChildren = null
+      dragging = false
+    }
+
+    function onTouchCancel() {
+      activeChildren = null
+      dragging = false
+    }
+
+    el.addEventListener('touchstart', onTouchStart, { passive: true })
+    el.addEventListener('touchmove', onTouchMove, { passive: false })
+    el.addEventListener('touchend', onTouchEnd, { passive: true })
+    el.addEventListener('touchcancel', onTouchCancel, { passive: true })
+    return () => {
+      el.removeEventListener('touchstart', onTouchStart)
+      el.removeEventListener('touchmove', onTouchMove)
+      el.removeEventListener('touchend', onTouchEnd)
+      el.removeEventListener('touchcancel', onTouchCancel)
+    }
+  }, [router])
 
   function handleGroupClick(children: BottomNavChild[]) {
-    if (justSwiped.current) return
     const current = children.findIndex(c => isActiveHref(c.href))
     router.replace(children[current === -1 ? 0 : current].href)
   }
@@ -111,22 +178,21 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </div>
 
       {/* Mobile bottom nav */}
-      <nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-[#111111] border-t border-white/10 flex items-stretch">
+      <nav ref={navRef} className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-[#111111] border-t border-white/10 flex items-stretch">
         {BOTTOM_NAV.map(link => {
           const active = link.children
             ? link.children.some(c => isActiveHref(c.href))
             : isActiveHref(link.href)
 
           if (link.children) {
-            const children = link.children
+            const groupChildren = link.children
             return (
               <div
                 key={link.href}
+                data-group={link.href}
                 role="button"
                 tabIndex={0}
-                onTouchStart={handleGroupTouchStart}
-                onTouchEnd={e => handleGroupTouchEnd(children, e)}
-                onClick={() => handleGroupClick(children)}
+                onClick={() => handleGroupClick(groupChildren)}
                 className={cn(
                   'flex-1 flex flex-col items-center justify-center gap-1 py-3 text-[11px] font-medium transition-colors select-none touch-pan-y',
                   active ? 'text-red-400' : 'text-white/40 hover:text-white/70'
