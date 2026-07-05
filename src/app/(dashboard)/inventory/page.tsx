@@ -133,6 +133,8 @@ export default function InventoryPage() {
       from += PAGE
     }
 
+    // Only DRs actually received (fully or partially) should count toward inventory — a
+    // rejected or returned DR shouldn't add its items to the balance.
     const drClientMap: Record<string, string> = {}
     from = 0
     while (true) {
@@ -140,6 +142,7 @@ export default function InventoryPage() {
         .from('dr_logs')
         .select('dr_number, supplier_name')
         .not('supplier_name', 'is', null)
+        .in('status', ['received', 'partial'])
         .range(from, from + PAGE - 1)
       if (!data || data.length === 0) break
       for (const dr of data) {
