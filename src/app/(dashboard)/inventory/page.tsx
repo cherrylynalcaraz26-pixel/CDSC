@@ -72,6 +72,7 @@ export default function InventoryPage() {
   const [reportOpen, setReportOpen] = useState(false)
   const [reportClient, setReportClient] = useState('')
   const [reportScope, setReportScope] = useState<'all' | 'portal'>('all')
+  const [clientOnHandMap, setClientOnHandMap] = useState<Record<string, Record<string, number>>>({})
 
   function askConfirm(msg: string, action: () => void) {
     setConfirmMsg(msg)
@@ -214,6 +215,39 @@ export default function InventoryPage() {
       if (data.length < PAGE) break
       from += PAGE
     }
+
+    // Each client's own self-reported "On Hand" quantity (client_inventory, kept live by
+    // the portal's Receive/Issue actions and the DR-log auto-sync) — used by the Generate
+    // Report's "Client WH Stock" column so it reflects what that client actually has at
+    // their site, instead of CDSC's own shared warehouse pool.
+    const clientIdToName: Record<string, string> = {}
+    from = 0
+    while (true) {
+      const { data } = await supabase.from('clients').select('id, company_name').order('id').range(from, from + PAGE - 1)
+      if (!data || data.length === 0) break
+      for (const c of data) clientIdToName[c.id] = c.company_name
+      if (data.length < PAGE) break
+      from += PAGE
+    }
+    const onHandByClient: Record<string, Record<string, number>> = {}
+    from = 0
+    while (true) {
+      const { data } = await supabase
+        .from('client_inventory')
+        .select('client_id, item_name, quantity_on_hand')
+        .order('id')
+        .range(from, from + PAGE - 1)
+      if (!data || data.length === 0) break
+      for (const rec of data) {
+        const clientName = clientIdToName[rec.client_id]
+        if (!clientName) continue
+        if (!onHandByClient[clientName]) onHandByClient[clientName] = {}
+        onHandByClient[clientName][rec.item_name] = (onHandByClient[clientName][rec.item_name] ?? 0) + (Number(rec.quantity_on_hand) || 0)
+      }
+      if (data.length < PAGE) break
+      from += PAGE
+    }
+    setClientOnHandMap(onHandByClient)
 
     const wsMap: Record<string, { qty: number; details: WsDetail[] }> = {}
     from = 0
@@ -1073,19 +1107,27 @@ export default function InventoryPage() {
 
       {/* Inline Inventory Report — shown instead of table when reportOpen */}
       {reportOpen && (() => {
+        const onHandMap = clientOnHandMap[reportClient] ?? {}
         const baseRows = rows.filter(r => r.client === reportClient)
-        const reportRows = reportScope === 'all' ? baseRows : baseRows
+        const scopedRows = reportScope === 'all' ? baseRows : baseRows
           .map(r => {
             const dr_details = r.dr_details.filter(d => d.show_in_portal)
             const csi_details = r.csi_details.filter(d => d.show_in_portal)
             const dr_qty = dr_details.reduce((s, d) => s + d.qty, 0)
             const csi_qty = csi_details.reduce((s, d) => s + d.qty, 0)
-            return { ...r, dr_details, csi_details, dr_qty, csi_qty, balance: dr_qty + r.ws_qty - csi_qty }
+            return { ...r, dr_details, csi_details, dr_qty, csi_qty }
           })
           .filter(r => r.dr_qty > 0 || r.csi_qty > 0)
+        // "Client WH Stock" is that client's own self-reported On Hand quantity
+        // (client_inventory), not CDSC's shared warehouse pool — each client's report
+        // should reflect what they actually have at their site.
+        const reportRows = scopedRows.map(r => {
+          const client_on_hand = onHandMap[r.item_name] ?? 0
+          return { ...r, client_on_hand, balance: r.dr_qty + client_on_hand - r.csi_qty }
+        })
         const totalBalance = reportRows.reduce((s, r) => s + r.balance, 0)
         const totalDr = reportRows.reduce((s, r) => s + r.dr_qty, 0)
-        const totalWs = reportRows.reduce((s, r) => s + r.ws_qty, 0)
+        const totalOnHand = reportRows.reduce((s, r) => s + r.client_on_hand, 0)
         const totalCsi = reportRows.reduce((s, r) => s + r.csi_qty, 0)
         const totalEstValue = reportRows.reduce((s, r) => {
           const price = r.csi_details.length > 0
@@ -1123,10 +1165,38 @@ export default function InventoryPage() {
               <Button
                 className="ml-auto bg-red-600 hover:bg-red-700 text-white h-8 text-sm gap-1.5 shrink-0"
                 onClick={() => {
-                  const el = document.getElementById('inventory-report-print')
-                  if (!el) return
                   const win = window.open('', '_blank', 'width=1100,height=800')
                   if (!win) return
+                  // Built from the same report data as the on-screen preview using plain HTML/CSS
+                  // (not a clone of the live DOM) — the preview's styling comes from Tailwind
+                  // utility classes, which don't exist in this blank print window, so cloning it
+                  // rendered unstyled. This mirrors the print stylesheet below exactly instead.
+                  const cardsHtml = [
+                    { label: 'DR Delivered', value: totalDr, cls: 'blue' },
+                    { label: 'Client WH Stock', value: totalOnHand, cls: 'green' },
+                    { label: 'CSI Issued', value: totalCsi, cls: 'orange' },
+                    { label: 'Net Balance', value: totalBalance, cls: totalBalance >= 0 ? 'green' : 'red' },
+                  ].map(c => `<div class="card"><div class="card-label">${c.label}</div><div class="card-val ${c.cls}">${c.value}</div></div>`).join('')
+                  const rowsHtml = reportRows.length === 0
+                    ? `<tr><td colspan="9" style="text-align:center;padding:24px;color:#9ca3af;font-style:italic">No inventory data for this client.</td></tr>`
+                    : reportRows.map((r, i) => {
+                      const latestPrice = r.csi_details.length > 0
+                        ? r.csi_details[r.csi_details.length - 1].unit_price
+                        : r.dr_details.length > 0 ? r.dr_details[r.dr_details.length - 1].unit_price : null
+                      const estValue = latestPrice != null ? r.balance * latestPrice : null
+                      const balColor = r.balance > 0 ? '#15803d' : r.balance < 0 ? '#dc2626' : '#9ca3af'
+                      return `<tr>
+                        <td>${i + 1}</td>
+                        <td style="font-weight:600;color:#1f2937">${r.item_name}</td>
+                        <td>${uomName(r.unit)}</td>
+                        <td class="r">${r.dr_qty}</td>
+                        <td class="r" style="color:#15803d;font-weight:600">${r.client_on_hand > 0 ? r.client_on_hand : '—'}</td>
+                        <td class="r">${r.csi_qty}</td>
+                        <td class="r" style="font-weight:700;color:${balColor}">${r.balance}</td>
+                        <td class="r">${latestPrice != null ? `₱${latestPrice.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}</td>
+                        <td class="r" style="font-weight:600">${estValue != null ? `₱${estValue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}</td>
+                      </tr>`
+                    }).join('')
                   win.document.write(`<!DOCTYPE html><html><head><title>Inventory Report - ${reportClient}</title><style>
                     * { box-sizing: border-box; margin: 0; padding: 0; }
                     body { font-family: Arial, sans-serif; background: #fff; color: #111; padding: 32px; }
@@ -1136,6 +1206,10 @@ export default function InventoryPage() {
                     .co-sub { font-size: 10px; color: #9ca3af; margin-top: 2px; }
                     .rpt-title { text-align: right; font-size: 15px; font-weight: 700; }
                     .rpt-date { font-size: 10px; color: #9ca3af; margin-top: 2px; }
+                    .client-block { margin-bottom: 18px; }
+                    .client-label { font-size: 9px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; margin-bottom: 2px; }
+                    .client-name { font-size: 18px; font-weight: 800; color: #111827; }
+                    .scope-badge { display: inline-block; margin-left: 10px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.4px; padding: 3px 8px; border-radius: 999px; background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
                     .cards { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-bottom: 18px; }
                     .card { border: 1px solid #e5e7eb; border-radius: 6px; padding: 10px 14px; background: #f9fafb; }
                     .card-label { font-size: 9px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
@@ -1156,7 +1230,39 @@ export default function InventoryPage() {
                       <div><img src="/cdsc-logo.jpg" style="height:50px;width:auto;display:block;margin-bottom:4px;" /><div style="font-size:11px;font-weight:600;color:#374151">CDSC Industrial Supply</div></div>
                       <div><div class="rpt-title">Inventory Report</div><div class="rpt-date">As of ${today}</div></div>
                     </div>
-                    ${el.innerHTML}
+                    <div class="client-block">
+                      <div class="client-label">Client</div>
+                      <div><span class="client-name">${reportClient || '—'}</span>${reportScope === 'portal' ? '<span class="scope-badge">Visible in Client Portal Only</span>' : ''}</div>
+                    </div>
+                    <div class="cards">${cardsHtml}</div>
+                    <table>
+                      <thead>
+                        <tr>
+                          <th style="width:24px">#</th>
+                          <th>Item Description</th>
+                          <th style="width:70px">Unit</th>
+                          <th class="r" style="width:60px">DR Qty</th>
+                          <th class="r" style="width:80px">Client WH Stock</th>
+                          <th class="r" style="width:70px">CSI Issued</th>
+                          <th class="r" style="width:60px">Balance</th>
+                          <th class="r" style="width:90px">Est. Unit Price</th>
+                          <th class="r" style="width:90px">Est. Value</th>
+                        </tr>
+                      </thead>
+                      <tbody>${rowsHtml}</tbody>
+                      <tfoot>
+                        <tr>
+                          <td colspan="6" class="r">TOTAL</td>
+                          <td class="r" style="color:${totalBalance > 0 ? '#15803d' : totalBalance < 0 ? '#dc2626' : '#6b7280'}">${totalBalance}</td>
+                          <td class="r">—</td>
+                          <td class="r">₱${totalEstValue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                    <div class="note">
+                      <span>Est. Unit Price is based on the latest CSI or DR record. Values are for reference only.</span>
+                      <span>Generated ${today} &middot; CDSC Inventory System</span>
+                    </div>
                   </body></html>`)
                   win.document.close()
                   win.focus()
@@ -1168,7 +1274,7 @@ export default function InventoryPage() {
             </div>
 
             {/* Report body */}
-            <div className="bg-white p-8" id="inventory-report-print">
+            <div className="bg-white p-8">
               <div className="h-1 bg-red-600 rounded-full mb-6" />
               <div className="flex justify-between items-start mb-6 pb-5 border-b border-gray-200">
                 <div>
@@ -1193,9 +1299,9 @@ export default function InventoryPage() {
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
                 {[
-                  { label: 'DR Delivered', value: totalDr,      cls: 'text-blue-700' },
-                  { label: 'WH Stock',     value: totalWs,      cls: 'text-green-700' },
-                  { label: 'CSI Issued',   value: totalCsi,     cls: 'text-orange-600' },
+                  { label: 'DR Delivered',   value: totalDr,      cls: 'text-blue-700' },
+                  { label: 'Client WH Stock', value: totalOnHand, cls: 'text-green-700' },
+                  { label: 'CSI Issued',     value: totalCsi,     cls: 'text-orange-600' },
                   { label: 'Net Balance',  value: totalBalance, cls: totalBalance >= 0 ? 'text-green-700' : 'text-red-600' },
                 ].map(c => (
                   <div key={c.label} className="border border-gray-200 rounded-lg px-4 py-3 bg-gray-50">
@@ -1215,7 +1321,7 @@ export default function InventoryPage() {
                         <th className="px-3 py-2.5 text-left font-semibold text-[10px] uppercase tracking-wide">Item Description</th>
                         <th className="px-3 py-2.5 text-left font-semibold text-[10px] uppercase tracking-wide w-20">Unit</th>
                         <th className="px-3 py-2.5 text-right font-semibold text-[10px] uppercase tracking-wide w-16">DR Qty</th>
-                        <th className="px-3 py-2.5 text-right font-semibold text-[10px] uppercase tracking-wide w-16">WH Stock</th>
+                        <th className="px-3 py-2.5 text-right font-semibold text-[10px] uppercase tracking-wide w-20">Client WH Stock</th>
                         <th className="px-3 py-2.5 text-right font-semibold text-[10px] uppercase tracking-wide w-20">CSI Issued</th>
                         <th className="px-3 py-2.5 text-right font-semibold text-[10px] uppercase tracking-wide w-16">Balance</th>
                         <th className="px-3 py-2.5 text-right font-semibold text-[10px] uppercase tracking-wide w-28">Est. Unit Price</th>
@@ -1235,7 +1341,7 @@ export default function InventoryPage() {
                             <td className="px-3 py-2 text-gray-500 border-b border-gray-100">{uomName(r.unit)}</td>
                             <td className="px-3 py-2 text-right text-gray-700 border-b border-gray-100">{r.dr_qty}</td>
                             <td className="px-3 py-2 text-right border-b border-gray-100">
-                              {r.ws_qty > 0 ? <span className="text-green-600 font-medium">{r.ws_qty}</span> : <span className="text-gray-300">—</span>}
+                              {r.client_on_hand > 0 ? <span className="text-green-600 font-medium">{r.client_on_hand}</span> : <span className="text-gray-300">—</span>}
                             </td>
                             <td className="px-3 py-2 text-right text-gray-700 border-b border-gray-100">{r.csi_qty}</td>
                             <td className={`px-3 py-2 text-right font-bold border-b border-gray-100 ${r.balance > 0 ? 'text-green-700' : r.balance < 0 ? 'text-red-600' : 'text-gray-400'}`}>{r.balance}</td>

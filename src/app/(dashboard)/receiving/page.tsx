@@ -30,7 +30,7 @@ interface ReturnItem { item_name: string; unit: string; quantity: string; reason
 interface ItemReturn { id: string; return_number: string; return_type: string; return_date: string; supplier_name: string | null; notes: string | null; status: string }
 
 interface SalesDeliveryItem { item_name: string; unit: string; quantity: string }
-interface SalesDelivery { id: string; delivery_number: string; quote_number: string | null; client_name: string | null; delivery_date: string; delivered_by: string | null; status: string; notes: string | null; created_at: string }
+interface SalesDelivery { id: string; delivery_number: string; quote_number: string | null; client_name: string | null; delivery_date: string; delivered_by: string | null; status: string; notes: string | null; created_at: string; dr_number?: string | null; so_number?: string | null; hasCsi?: boolean }
 
 const emptyReturnItem = (): ReturnItem => ({ item_name: '', unit: '', quantity: '', reason: '' })
 const emptySalesItem = (): SalesDeliveryItem => ({ item_name: '', unit: '', quantity: '' })
@@ -93,6 +93,10 @@ export default function ReceivingPage() {
   const [salesdLoading, setSalesdLoading] = useState(true)
   const [salesdDateFrom, setSalesdDateFrom] = useState('')
   const [salesdDateTo, setSalesdDateTo] = useState('')
+  const [salesDetailOpen, setSalesDetailOpen] = useState(false)
+  const [salesDetailRow, setSalesDetailRow] = useState<SalesDelivery | null>(null)
+  const [salesDetailItems, setSalesDetailItems] = useState<{ item_name: string; unit: string | null; quantity: number }[]>([])
+  const [salesDetailLoading, setSalesDetailLoading] = useState(false)
 
   const selectedPOData = pos.find(p => p.po_number === selectedPO)
   const selectedSupplier = suppliers.find(s => s.id === returnSupplierId)
@@ -191,6 +195,19 @@ export default function ReceivingPage() {
     }))
     setSalesDeliveries(mapped as SalesDelivery[])
     setSalesdLoading(false)
+  }
+
+  async function openSalesDetail(d: SalesDelivery) {
+    setSalesDetailRow(d)
+    setSalesDetailOpen(true)
+    setSalesDetailLoading(true)
+    const { data } = await supabase
+      .from('dr_log_items')
+      .select('item_name, unit, quantity')
+      .eq('dr_number', d.dr_number ?? d.delivery_number)
+      .order('id')
+    setSalesDetailItems((data ?? []) as { item_name: string; unit: string | null; quantity: number }[])
+    setSalesDetailLoading(false)
   }
 
   useEffect(() => {
@@ -664,20 +681,19 @@ export default function ReceivingPage() {
                       {salesdDateFrom || salesdDateTo ? 'No sales deliveries in this date range.' : 'No sales deliveries yet. Create a DR Log to populate this list.'}
                     </TableCell></TableRow>
                   ) : filteredSalesDeliveries.map(d => {
-                    const sd = d as any
-                    const statusCls = sd.status === 'delivered' ? 'bg-green-100 text-green-700' : sd.status === 'partial' ? 'bg-yellow-100 text-yellow-700' : 'bg-orange-100 text-orange-700'
+                    const statusCls = d.status === 'delivered' ? 'bg-green-100 text-green-700' : d.status === 'partial' ? 'bg-yellow-100 text-yellow-700' : 'bg-orange-100 text-orange-700'
                     return (
-                      <TableRow key={d.id}>
+                      <TableRow key={d.id} className="cursor-pointer hover:bg-muted/40" onClick={() => openSalesDetail(d)}>
                         <TableCell className="font-mono text-xs font-semibold text-red-600">{d.delivery_number}</TableCell>
-                        <TableCell className="text-xs font-mono text-muted-foreground">{sd.dr_number ?? '—'}</TableCell>
-                        <TableCell className="text-xs font-mono text-blue-600">{sd.so_number ?? '—'}</TableCell>
+                        <TableCell className="text-xs font-mono text-muted-foreground">{d.dr_number ?? '—'}</TableCell>
+                        <TableCell className="text-xs font-mono text-blue-600">{d.so_number ?? '—'}</TableCell>
                         <TableCell className="text-sm font-medium">{d.client_name ?? '—'}</TableCell>
                         <TableCell className="text-sm">{d.delivery_date}</TableCell>
                         <TableCell>
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize ${statusCls}`}>{sd.status}</span>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium capitalize ${statusCls}`}>{d.status}</span>
                         </TableCell>
                         <TableCell>
-                          {sd.hasCsi ? (
+                          {d.hasCsi ? (
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">Invoiced</span>
                           ) : (
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">No CSI</span>
@@ -874,7 +890,17 @@ export default function ReceivingPage() {
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">PO Details</p>
                 <div className="grid grid-cols-3 gap-4">
                   <div><span className="text-xs text-muted-foreground block">PO Number</span><span className="font-mono font-semibold text-red-600">{selectedPO}</span></div>
-                  <div><span className="text-xs text-muted-foreground block">Supplier</span><span className="font-medium">{rrSupplier ?? '—'}</span></div>
+                  <div className="space-y-1">
+                    <span className="text-xs text-muted-foreground block">Supplier</span>
+                    <Select value={rrSupplier ?? ''} onValueChange={v => setRrSupplier(v || null)}>
+                      <SelectTrigger className="h-8 text-sm">
+                        {rrSupplier ? <span className="truncate">{rrSupplier}</span> : <span className="text-muted-foreground">Select supplier</span>}
+                      </SelectTrigger>
+                      <SelectContent>
+                        {suppliers.map(s => <SelectItem key={s.id} value={s.company_name}>{s.company_name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div><span className="text-xs text-muted-foreground block">Expected</span><span>{selectedPOData?.delivery_date ?? '—'}</span></div>
                 </div>
               </div>
@@ -1001,6 +1027,61 @@ export default function ReceivingPage() {
             <Button onClick={handleSaveSalesDelivery} disabled={salesdSaving} className="bg-red-600 hover:bg-red-700">
               {salesdSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : <><CheckCircle2 className="h-4 w-4 mr-2" />Save Sales Delivery</>}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Sales Delivery Detail */}
+      <Dialog open={salesDetailOpen} onOpenChange={setSalesDetailOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><ShoppingBag className="h-4 w-4" />Sales Delivery Details</DialogTitle>
+          </DialogHeader>
+          {salesDetailRow && (
+            <div className="space-y-4 py-1">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div><span className="text-xs text-muted-foreground block">Delivery #</span><span className="font-mono font-semibold text-red-600">{salesDetailRow.delivery_number}</span></div>
+                <div><span className="text-xs text-muted-foreground block">SO Reference</span><span className="font-mono text-blue-600">{salesDetailRow.so_number ?? '—'}</span></div>
+                <div><span className="text-xs text-muted-foreground block">Client</span><span className="font-medium">{salesDetailRow.client_name ?? '—'}</span></div>
+                <div><span className="text-xs text-muted-foreground block">Delivery Date</span><span>{salesDetailRow.delivery_date}</span></div>
+                <div><span className="text-xs text-muted-foreground block">Status</span><span className="capitalize">{salesDetailRow.status}</span></div>
+                <div><span className="text-xs text-muted-foreground block">CSI</span>
+                  {salesDetailRow.hasCsi
+                    ? <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">Invoiced</span>
+                    : <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-500">No CSI</span>}
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Items</Label>
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/40">
+                        <TableHead>Item</TableHead>
+                        <TableHead className="w-24">Unit</TableHead>
+                        <TableHead className="w-20 text-right">Qty</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {salesDetailLoading ? (
+                        <TableRow><TableCell colSpan={3} className="text-center py-6"><Loader2 className="h-4 w-4 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
+                      ) : salesDetailItems.length === 0 ? (
+                        <TableRow><TableCell colSpan={3} className="text-center py-6 text-muted-foreground text-sm">No items recorded for this delivery.</TableCell></TableRow>
+                      ) : salesDetailItems.map((it, idx) => (
+                        <TableRow key={idx}>
+                          <TableCell className="text-sm">{it.item_name}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{it.unit ?? '—'}</TableCell>
+                          <TableCell className="text-sm text-right font-medium">{it.quantity}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSalesDetailOpen(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
