@@ -94,14 +94,17 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                     active ? 'text-red-400' : 'text-white/40 hover:text-white/70'
                   )}
                 >
-                  <link.icon className={cn('h-5 w-5 shrink-0', active ? 'text-red-400' : '')} />
-                  <span className="leading-tight truncate max-w-full px-1">{link.label}</span>
-                  {/* Dot indicator — signals this tab holds multiple pages */}
-                  <span className="flex items-center gap-0.5">
-                    {link.children.map((_, i) => (
-                      <span key={i} className={cn('h-1 w-1 rounded-full', active ? 'bg-red-400' : 'bg-white/40')} />
-                    ))}
+                  {/* Dot indicator sits as a badge on the icon itself (not an extra row) —
+                      signals this tab holds multiple pages without changing the tab's height */}
+                  <span className="relative">
+                    <link.icon className={cn('h-5 w-5 shrink-0', active ? 'text-red-400' : '')} />
+                    <span className="absolute -top-1 -right-1.5 flex items-center gap-[1px]">
+                      {link.children.map((_, i) => (
+                        <span key={i} className={cn('h-[3px] w-[3px] rounded-full', active ? 'bg-red-400' : 'bg-white/50')} />
+                      ))}
+                    </span>
                   </span>
+                  <span className="leading-tight truncate max-w-full px-1">{link.label}</span>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="center" side="top" className="mb-1 w-48">
                   {link.children.map(child => (
