@@ -158,7 +158,7 @@ export default function CSIMonitoringPage() {
   const [inventoryItem, setInventoryItem] = useState<string>('')
   const [inventoryOpen, setInventoryOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'form' | 'preview'>('form')
-  const [siNumberOptions, setSiNumberOptions] = useState<string[]>([])
+  const [siNumberOptions, setSiNumberOptions] = useState<{ value: string; tag: 'current' | 'next' | 'missing' }[]>([])
   const [companyInfo, setCompanyInfo] = useState<{ company_name: string; address: string; phone: string; email: string; tin: string } | null>(null)
   const [blankCalib, setBlankCalib] = useState<BlankFormCalib>(() => loadBlankCalib())
   const [calibOpen, setCalibOpen] = useState(false)
@@ -484,7 +484,10 @@ export default function CSIMonitoringPage() {
   function openAdd() {
     setEditingSiNumber(null)
     const { next, missing } = getSiNumberSuggestions()
-    setSiNumberOptions([...missing, next])
+    setSiNumberOptions([
+      ...missing.map(value => ({ value, tag: 'missing' as const })),
+      { value: next, tag: 'next' as const },
+    ])
     setHeader({ ...emptyHeader(), si_number: next })
     setItems([emptyItem()])
     setOpen(true)
@@ -495,6 +498,13 @@ export default function CSIMonitoringPage() {
     if (siRecords.length === 0) return
     const first = siRecords[0]
     setEditingSiNumber(siNumber)
+    const { next, missing } = getSiNumberSuggestions()
+    const options: { value: string; tag: 'current' | 'next' | 'missing' }[] = [
+      { value: siNumber, tag: 'current' },
+      ...missing.map(value => ({ value, tag: 'missing' as const })),
+      { value: next, tag: 'next' as const },
+    ]
+    setSiNumberOptions(options)
     setHeader({
       si_date: first.si_date,
       si_number: first.si_number,
@@ -598,25 +608,19 @@ export default function CSIMonitoringPage() {
                     </div>
                     <div className="space-y-1.5">
                       <Label>SI Number <span className="text-destructive">*</span></Label>
-                      {editingSiNumber ? (
-                        <Input placeholder="e.g. 00001" value={header.si_number} onChange={e => setHeader(h => ({ ...h, si_number: e.target.value }))} />
-                      ) : (
-                        <Select value={header.si_number} onValueChange={v => setHeader(h => ({ ...h, si_number: v ?? '' }))}>
-                          <SelectTrigger><SelectValue placeholder="Select SI number…" /></SelectTrigger>
-                          <SelectContent>
-                            {siNumberOptions.map((n, i) => (
-                              <SelectItem key={n} value={n}>
-                                {n}
-                                {i === siNumberOptions.length - 1 ? (
-                                  <span className="text-xs text-muted-foreground ml-1.5">(Next)</span>
-                                ) : (
-                                  <span className="text-xs text-amber-600 ml-1.5">(Missing)</span>
-                                )}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
+                      <Select value={header.si_number} onValueChange={v => setHeader(h => ({ ...h, si_number: v ?? '' }))}>
+                        <SelectTrigger><SelectValue placeholder="Select SI number…" /></SelectTrigger>
+                        <SelectContent>
+                          {siNumberOptions.map(opt => (
+                            <SelectItem key={opt.value} value={opt.value}>
+                              {opt.value}
+                              {opt.tag === 'current' && <span className="text-xs text-muted-foreground ml-1.5">(Current)</span>}
+                              {opt.tag === 'next' && <span className="text-xs text-muted-foreground ml-1.5">(Next)</span>}
+                              {opt.tag === 'missing' && <span className="text-xs text-amber-600 ml-1.5">(Missing)</span>}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
                   <div className="space-y-1.5">
