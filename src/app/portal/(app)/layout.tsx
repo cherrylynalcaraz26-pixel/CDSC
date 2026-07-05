@@ -216,25 +216,6 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
             </Link>
           )
         })}
-        {websiteHref && (
-          collapsed ? (
-            <div className="relative group">
-              <a href={websiteHref} target="_blank" rel="noopener noreferrer" title="Website"
-                className="flex items-center justify-center h-9 rounded-md transition-colors text-white/40 hover:text-white/80 hover:bg-white/5">
-                <Globe className="h-[16px] w-[16px] shrink-0" />
-              </a>
-              <div className="absolute left-full top-0 ml-1 hidden group-hover:block z-50 min-w-[160px] bg-[#1a1a1a] border border-white/10 rounded-lg py-1 shadow-xl pointer-events-none">
-                <span className="block px-3 py-1.5 text-[13px] text-white/70">Website</span>
-              </div>
-            </div>
-          ) : (
-            <a href={websiteHref} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] font-medium transition-colors text-white/50 hover:text-white/80 hover:bg-white/5">
-              <Globe className="h-[15px] w-[15px] shrink-0" />
-              Website
-            </a>
-          )
-        )}
       </>
     )
   }
@@ -285,7 +266,26 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
           <SidebarNav />
         </nav>
 
-        <div className={cn('p-3 border-t border-white/8', collapsed && 'flex flex-col items-center')}>
+        <div className={cn('p-3 border-t border-white/8 space-y-1', collapsed && 'flex flex-col items-center')}>
+          {websiteHref && (
+            collapsed ? (
+              <div className="relative group">
+                <a href={websiteHref} target="_blank" rel="noopener noreferrer" title="View CDSC Industrial Website"
+                  className="flex items-center justify-center h-9 w-9 rounded-md transition-colors text-white/40 hover:text-white/80 hover:bg-white/5">
+                  <Globe className="h-[15px] w-[15px] shrink-0" />
+                </a>
+                <div className="absolute left-full bottom-0 ml-1 hidden group-hover:block z-50 min-w-[180px] bg-[#1a1a1a] border border-white/10 rounded-lg py-1 shadow-xl pointer-events-none">
+                  <span className="block px-3 py-1.5 text-[13px] text-white/70">View CDSC Industrial Website</span>
+                </div>
+              </div>
+            ) : (
+              <a href={websiteHref} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-2.5 w-full px-3 py-2 rounded-md text-[13px] font-medium text-white/40 hover:text-white/80 hover:bg-white/5 transition-colors">
+                <Globe className="h-[15px] w-[15px] shrink-0" />
+                View CDSC Industrial Website
+              </a>
+            )
+          )}
           <button onClick={signOut} title="Sign Out"
             className={cn(
               'flex items-center gap-2.5 rounded-md text-[13px] font-medium text-white/40 hover:text-red-400 hover:bg-white/5 transition-colors',
@@ -334,16 +334,16 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
               </Link>
             )
           })}
-          {websiteHref && (
-            <a href={websiteHref} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] font-medium transition-colors text-white/50 hover:text-white/80 hover:bg-white/5">
-              <Globe className="h-[15px] w-[15px] shrink-0" />
-              Website
-            </a>
-          )}
         </nav>
 
-        <div className="p-3 border-t border-white/8">
+        <div className="p-3 border-t border-white/8 space-y-1">
+          {websiteHref && (
+            <a href={websiteHref} target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-2.5 w-full px-3 py-2 rounded-md text-[13px] font-medium transition-colors text-white/40 hover:text-white/80 hover:bg-white/5">
+              <Globe className="h-[15px] w-[15px] shrink-0" />
+              View CDSC Industrial Website
+            </a>
+          )}
           <button onClick={signOut}
             className="flex items-center gap-2.5 w-full px-3 py-2 text-[13px] font-medium text-white/40 hover:text-red-400 hover:bg-white/5 rounded-md transition-colors">
             <LogOut className="h-[15px] w-[15px] shrink-0" /> Sign Out
