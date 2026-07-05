@@ -23,6 +23,7 @@ import { Plus, Search, MoreHorizontal, Loader2, Truck, Trash2, ChevronDown, Chev
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
+import { usePersistedState } from '@/lib/use-persisted-state'
 
 interface Supplier { id: string; company_name: string }
 interface Client {
@@ -146,10 +147,10 @@ export default function DRLogsPage() {
   const [allItems, setAllItems] = useState<DRItem[]>([])
   const { query: search } = useSearchContext()
   const [loading, setLoading] = useState(true)
-  const [statusFilter, setStatusFilter] = useState('all')
-  const [clientFilter, setClientFilter] = useState('')
-  const [yearFilter, setYearFilter] = useState('all')
-  const [drFilter, setDrFilter] = useState('')
+  const [statusFilter, setStatusFilter] = usePersistedState('dr-logs:statusFilter', 'all')
+  const [clientFilter, setClientFilter] = usePersistedState('dr-logs:clientFilter', '')
+  const [yearFilter, setYearFilter] = usePersistedState('dr-logs:yearFilter', 'all')
+  const [drFilter, setDrFilter] = usePersistedState('dr-logs:drFilter', '')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<DRLog | null>(null)
@@ -158,8 +159,8 @@ export default function DRLogsPage() {
   const [items, setItems] = useState<DRItem[]>([emptyItem()])
   const [saving, setSaving] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
-  const [viewMode, setViewMode] = useState<'by-dr' | 'all-items'>('by-dr')
-  const [itemFilter, setItemFilter] = useState('')
+  const [viewMode, setViewMode] = usePersistedState<'by-dr' | 'all-items'>('dr-logs:viewMode', 'by-dr')
+  const [itemFilter, setItemFilter] = usePersistedState('dr-logs:itemFilter', '')
   const [drActiveTab, setDrActiveTab] = useState<'form' | 'preview'>('form')
   const [companyInfo, setCompanyInfo] = useState<{ company_name: string; address: string; phone: string; email: string; tin: string } | null>(null)
   const [itemSearches, setItemSearches] = useState<Record<number, string>>({})
@@ -836,21 +837,27 @@ export default function DRLogsPage() {
           )}
         </div>
         <Select value={clientFilter || '_all'} onValueChange={(v: string | null) => setClientFilter(!v || v === '_all' ? '' : v)}>
-          <SelectTrigger className="min-w-[220px]"><SelectValue placeholder="All Clients" /></SelectTrigger>
+          <SelectTrigger className="min-w-[220px]">
+            <SelectValue>{(v: string) => v === '_all' ? 'Client' : v}</SelectValue>
+          </SelectTrigger>
           <SelectContent className="min-w-[300px]">
             <SelectItem value="_all">All Clients</SelectItem>
             {clients.map(c => <SelectItem key={c.id} value={c.company_name}>{c.company_name}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={yearFilter} onValueChange={v => setYearFilter(v ?? 'all')}>
-          <SelectTrigger className="w-32"><SelectValue placeholder="All Years" /></SelectTrigger>
+          <SelectTrigger className="w-32">
+            <SelectValue>{(v: string) => v === 'all' ? 'Filter by Year' : v}</SelectValue>
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Years</SelectItem>
             {availableYears.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
           </SelectContent>
         </Select>
         <Select value={statusFilter} onValueChange={v => setStatusFilter(v ?? 'all')}>
-          <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+          <SelectTrigger className="w-40">
+            <SelectValue>{(v: string) => v === 'all' ? 'Status' : STATUS_CFG[v]?.label ?? v}</SelectValue>
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Status</SelectItem>
             <SelectItem value="received">Received</SelectItem>

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import nodemailer from 'nodemailer'
 
-// Allow up to 10 MB request body for PDF attachments
 export const maxDuration = 30
 
 export async function POST(req: NextRequest) {

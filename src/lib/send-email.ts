@@ -770,14 +770,17 @@ async function htmlToPdfBase64(html: string): Promise<string> {
   iframe.style.height = contentH + 'px'
   await new Promise(r => setTimeout(r, 50))
   try {
-    const canvas = await html2canvas(iBody, { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: 794, windowHeight: contentH, logging: false })
-    const imgData = canvas.toDataURL('image/png')
+    // scale 1.5 + JPEG (not PNG) keeps long reports well under the email API's request
+    // size limit — a tall table rendered at scale 2 as lossless PNG could produce a
+    // multi-MB base64 payload and trip a 413 on send.
+    const canvas = await html2canvas(iBody, { scale: 1.5, useCORS: true, backgroundColor: '#ffffff', windowWidth: 794, windowHeight: contentH, logging: false })
+    const imgData = canvas.toDataURL('image/jpeg', 0.85)
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' })
     const pageW = pdf.internal.pageSize.getWidth()
     const pageH = pdf.internal.pageSize.getHeight()
     const imgH = (canvas.height / canvas.width) * pageW
-    if (imgH <= pageH) { pdf.addImage(imgData, 'PNG', 0, 0, pageW, imgH) }
-    else { const n = Math.ceil(imgH / pageH); for (let p = 0; p < n; p++) { if (p > 0) pdf.addPage(); pdf.addImage(imgData, 'PNG', 0, -(p * pageH), pageW, imgH) } }
+    if (imgH <= pageH) { pdf.addImage(imgData, 'JPEG', 0, 0, pageW, imgH) }
+    else { const n = Math.ceil(imgH / pageH); for (let p = 0; p < n; p++) { if (p > 0) pdf.addPage(); pdf.addImage(imgData, 'JPEG', 0, -(p * pageH), pageW, imgH) } }
     return pdf.output('datauristring').split(',')[1]
   } finally { document.body.removeChild(iframe) }
 }
@@ -803,6 +806,7 @@ export async function sendEmail(payload: SendEmailPayload): Promise<void> {
 
   if (!res.ok) {
     const data = await res.json().catch(() => ({}))
+    if (res.status === 413) throw new Error('The attached PDF is too large to email. Try a shorter report or fewer items.')
     throw new Error(data.error ?? `Email API error ${res.status}`)
   }
 }

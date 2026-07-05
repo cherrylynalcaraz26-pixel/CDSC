@@ -22,6 +22,7 @@ import { Plus, X, Search, MoreHorizontal, Loader2, FileText, LayoutGrid, List, C
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
+import { usePersistedState } from '@/lib/use-persisted-state'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   Cell, Legend, AreaChart, Area,
@@ -149,15 +150,15 @@ export default function CSIMonitoringPage() {
   const [open, setOpen] = useState(false)
   const [chartsExpanded, setChartsExpanded] = useState(false)
   const [editingSiNumber, setEditingSiNumber] = useState<string | null>(null)
-  const [siFilter, setSiFilter] = useState('')
-  const [itemFilter, setItemFilter] = useState('')
-  const [clientFilter, setClientFilter] = useState('')
-  const [yearFilter, setYearFilter] = useState('all')
+  const [siFilter, setSiFilter] = usePersistedState('csi-monitoring:siFilter', '')
+  const [itemFilter, setItemFilter] = usePersistedState('csi-monitoring:itemFilter', '')
+  const [clientFilter, setClientFilter] = usePersistedState('csi-monitoring:clientFilter', '')
+  const [yearFilter, setYearFilter] = usePersistedState('csi-monitoring:yearFilter', 'all')
   const [header, setHeader] = useState(emptyHeader())
   const [items, setItems] = useState<CSIItem[]>([emptyItem()])
   const [saving, setSaving] = useState(false)
   const [deleteId, setDeleteId] = useState<number | null>(null)
-  const [viewMode, setViewMode] = useState<'by-si' | 'all-items' | 'cross-ref'>('by-si')
+  const [viewMode, setViewMode] = usePersistedState<'by-si' | 'all-items' | 'cross-ref'>('csi-monitoring:viewMode', 'by-si')
   const [drItemsForCrossRef, setDrItemsForCrossRef] = useState<{ dr_number: string; item_name: string; client_name: string | null }[]>([])
   const [expandedSIs, setExpandedSIs] = useState<Set<string>>(new Set())
   const [inventoryItem, setInventoryItem] = useState<string>('')
@@ -1147,9 +1148,9 @@ export default function CSIMonitoringPage() {
             </button>
           )}
         </div>
-        <Select value={clientFilter} onValueChange={v => setClientFilter(v === '__all__' ? '' : (v ?? ''))}>
+        <Select value={clientFilter || '__all__'} onValueChange={v => setClientFilter(!v || v === '__all__' ? '' : v)}>
           <SelectTrigger className="h-9 w-72 text-sm">
-            <SelectValue placeholder="All Clients" className="truncate" />
+            <SelectValue className="truncate">{(v: string) => v === '__all__' ? 'Client' : v}</SelectValue>
           </SelectTrigger>
           <SelectContent className="min-w-[320px]">
             <SelectItem value="__all__">All Clients</SelectItem>
@@ -1157,7 +1158,9 @@ export default function CSIMonitoringPage() {
           </SelectContent>
         </Select>
         <Select value={yearFilter} onValueChange={v => setYearFilter(v ?? 'all')}>
-          <SelectTrigger className="h-9 w-32 text-sm"><SelectValue placeholder="All Years" /></SelectTrigger>
+          <SelectTrigger className="h-9 w-32 text-sm">
+            <SelectValue>{(v: string) => v === 'all' ? 'Filter by Year' : v}</SelectValue>
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Years</SelectItem>
             {availableYears.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
