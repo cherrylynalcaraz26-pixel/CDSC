@@ -118,8 +118,8 @@ export default function InquiryPage() {
       <header className="sticky top-0 z-10 bg-white/80 backdrop-blur-md border-b border-slate-100">
         <div className="max-w-5xl mx-auto px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="relative h-7 w-7 shrink-0">
-              <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="rounded-md object-cover" />
+            <div className="relative h-7 w-16 shrink-0">
+              <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="object-contain" />
             </div>
             <span className="font-bold text-slate-800 text-sm">CDSC Industrial Supply</span>
           </div>
@@ -290,8 +290,8 @@ export default function InquiryPage() {
       <footer className="border-t border-slate-100 mt-16">
         <div className="max-w-5xl mx-auto px-6 py-6 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="relative h-5 w-5 shrink-0">
-              <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="rounded object-cover" />
+            <div className="relative h-5 w-12 shrink-0">
+              <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="object-contain" />
             </div>
             <span className="text-xs text-slate-400">CDSC Industrial Supply</span>
           </div>
