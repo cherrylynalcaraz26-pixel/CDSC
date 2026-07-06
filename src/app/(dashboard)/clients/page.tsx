@@ -376,7 +376,9 @@ export default function ClientsPage() {
       {/* Filters + View Toggle */}
       <div className="flex items-center gap-3 flex-wrap">
         <Select value={filterStatus || '_all'} onValueChange={(v: string | null) => setFilterStatus(!v || v === '_all' ? '' : v)}>
-          <SelectTrigger className="w-36 h-9"><SelectValue placeholder="All status" /></SelectTrigger>
+          <SelectTrigger className="w-40 h-9">
+            <SelectValue>{() => `Status: ${filterStatus ? (filterStatus === 'active' ? 'Active' : 'Inactive') : 'All'}`}</SelectValue>
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="_all">All Status</SelectItem>
             <SelectItem value="active">Active</SelectItem>
@@ -384,7 +386,9 @@ export default function ClientsPage() {
           </SelectContent>
         </Select>
         <Select value={filterIndustry || '_all'} onValueChange={(v: string | null) => setFilterIndustry(!v || v === '_all' ? '' : v)}>
-          <SelectTrigger className="w-44 h-9"><SelectValue placeholder="All industries" /></SelectTrigger>
+          <SelectTrigger className="w-52 h-9">
+            <SelectValue>{() => `Industries: ${filterIndustry || 'All'}`}</SelectValue>
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="_all">All Industries</SelectItem>
             {industries.map(i => <SelectItem key={i!} value={i!}>{i}</SelectItem>)}

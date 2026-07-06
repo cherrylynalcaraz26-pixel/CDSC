@@ -21,6 +21,7 @@ import {
   Plus, Download, Loader2, BookOpen, Banknote, TrendingUp,
   Scale, FileSpreadsheet, Trash2, Calculator, Receipt, FileText, DollarSign,
   Zap, MoreHorizontal, Printer, Eye, CheckCircle2, XCircle, AlertTriangle,
+  ChevronDown, ChevronRight,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
@@ -1870,6 +1871,8 @@ function CSITab() {
   const [collectedSiNumbers, setCollectedSiNumbers] = useState<Set<string>>(new Set())
   const [loading, setLoading] = useState(true)
   const [clientFilter, setClientFilter] = useState('')
+  const [expandedClient, setExpandedClient] = useState<string | null>(null)
+  const [expandedSi, setExpandedSi] = useState<string | null>(null)
   const df = useDateRangeFilter()
 
   useEffect(() => {
@@ -1917,6 +1920,20 @@ function CSITab() {
     pending:    'bg-yellow-100 text-yellow-700',
     partial:    'bg-blue-100 text-blue-700',
   }
+
+  // Compress "All CSI Records" down to one row per SI number.
+  interface SiGroup { si_number: string; si_date: string | null; client_name: string | null; total: number; items: typeof records }
+  const bySiNumber: Record<string, SiGroup> = {}
+  filteredRecords.forEach(r => {
+    const key = r.si_number ?? `_no_si_${r.id}`
+    if (!bySiNumber[key]) bySiNumber[key] = { si_number: r.si_number ?? '—', si_date: r.si_date, client_name: r.client_name, total: 0, items: [] }
+    bySiNumber[key].total += r.amount ?? 0
+    bySiNumber[key].items.push(r)
+  })
+  const siGroups = Object.values(bySiNumber).sort((a, b) => {
+    if (a.si_date && b.si_date) return a.si_date > b.si_date ? -1 : a.si_date < b.si_date ? 1 : 0
+    return 0
+  })
 
   return (
     <div className="space-y-6">
@@ -1966,15 +1983,66 @@ function CSITab() {
                 <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">Loading…</TableCell></TableRow>
               ) : Object.entries(byClient).length === 0 ? (
                 <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No CSI records found</TableCell></TableRow>
-              ) : Object.entries(byClient).sort((a, b) => b[1].billed - a[1].billed).map(([client, data]) => (
-                <TableRow key={client}>
-                  <TableCell className="font-medium">{client}</TableCell>
-                  <TableCell className="text-right">{data.count}</TableCell>
-                  <TableCell className="text-right">{fmt(data.billed)}</TableCell>
-                  <TableCell className="text-right text-green-600">{fmt(data.collected)}</TableCell>
-                  <TableCell className="text-right text-yellow-600">{fmt(data.billed - data.collected)}</TableCell>
-                </TableRow>
-              ))}
+              ) : Object.entries(byClient).sort((a, b) => b[1].billed - a[1].billed).map(([client, data]) => {
+                const isExpanded = expandedClient === client
+                const clientRecords = filteredRecords.filter(r => (r.client_name ?? '—') === client)
+                return (
+                  <>
+                    <TableRow
+                      key={client}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => setExpandedClient(prev => (prev === client ? null : client))}
+                    >
+                      <TableCell className="font-medium">
+                        <div className="flex items-center gap-1.5">
+                          {isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
+                          {client}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">{data.count}</TableCell>
+                      <TableCell className="text-right">{fmt(data.billed)}</TableCell>
+                      <TableCell className="text-right text-green-600">{fmt(data.collected)}</TableCell>
+                      <TableCell className="text-right text-yellow-600">{fmt(data.billed - data.collected)}</TableCell>
+                    </TableRow>
+                    {isExpanded && (
+                      <TableRow key={`${client}-expanded`} className="bg-muted/30 hover:bg-muted/30">
+                        <TableCell colSpan={5} className="py-3 px-6">
+                          <div className="border rounded-md overflow-hidden text-xs">
+                            <table className="w-full">
+                              <thead className="bg-muted/60">
+                                <tr>
+                                  <th className="text-left px-3 py-1.5 font-medium">SI Number</th>
+                                  <th className="text-left px-3 py-1.5 font-medium">Date</th>
+                                  <th className="text-left px-3 py-1.5 font-medium">Item</th>
+                                  <th className="text-right px-3 py-1.5 font-medium">Qty</th>
+                                  <th className="text-right px-3 py-1.5 font-medium">Amount</th>
+                                  <th className="text-left px-3 py-1.5 font-medium">Status</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {clientRecords.map(r => (
+                                  <tr key={r.id} className="border-t">
+                                    <td className="px-3 py-1.5 font-mono">{r.si_number ?? '—'}</td>
+                                    <td className="px-3 py-1.5">{r.si_date ? format(new Date(r.si_date), 'MMM dd, yyyy') : '—'}</td>
+                                    <td className="px-3 py-1.5">{r.item_name ?? '—'}</td>
+                                    <td className="px-3 py-1.5 text-right">{r.quantity ?? 0} {r.unit ?? ''}</td>
+                                    <td className="px-3 py-1.5 text-right font-medium">{fmt(r.amount ?? 0)}</td>
+                                    <td className="px-3 py-1.5">
+                                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${statusCls[collectionStatus(r)] ?? 'bg-gray-100 text-gray-700'}`}>
+                                        {collectionStatus(r)}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </>
+                )
+              })}
             </TableBody>
           </Table>
         </CardContent>
@@ -2008,37 +2076,75 @@ function CSITab() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-8" />
                 <TableHead>SI Number</TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead>Client</TableHead>
-                <TableHead>Item</TableHead>
-                <TableHead className="text-right">Qty</TableHead>
-                <TableHead className="text-right">Unit Price</TableHead>
+                <TableHead className="text-right">Items</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Loading…</TableCell></TableRow>
-              ) : filteredRecords.length === 0 ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No CSI records found</TableCell></TableRow>
-              ) : filteredRecords.map((r: any) => (
-                <TableRow key={r.id}>
-                  <TableCell className="font-mono text-sm">{r.si_number ?? '—'}</TableCell>
-                  <TableCell>{r.si_date ? format(new Date(r.si_date), 'MMM dd, yyyy') : '—'}</TableCell>
-                  <TableCell>{r.client_name ?? '—'}</TableCell>
-                  <TableCell>{r.item_name ?? '—'}</TableCell>
-                  <TableCell className="text-right">{r.quantity ?? 0} {r.unit ?? ''}</TableCell>
-                  <TableCell className="text-right">{fmt(r.unit_price ?? 0)}</TableCell>
-                  <TableCell className="text-right font-medium">{fmt(r.amount ?? 0)}</TableCell>
-                  <TableCell>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusCls[collectionStatus(r)] ?? 'bg-gray-100 text-gray-700'}`}>
-                      {collectionStatus(r)}
-                    </span>
-                  </TableCell>
-                </TableRow>
-              ))}
+                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Loading…</TableCell></TableRow>
+              ) : siGroups.length === 0 ? (
+                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No CSI records found</TableCell></TableRow>
+              ) : siGroups.map(group => {
+                const isExpanded = expandedSi === group.si_number
+                const status = collectionStatus({ si_number: group.si_number })
+                return (
+                  <>
+                    <TableRow
+                      key={group.si_number}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => setExpandedSi(prev => (prev === group.si_number ? null : group.si_number))}
+                    >
+                      <TableCell className="pr-0">
+                        {isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                      </TableCell>
+                      <TableCell className="font-mono text-sm">{group.si_number}</TableCell>
+                      <TableCell>{group.si_date ? format(new Date(group.si_date), 'MMM dd, yyyy') : '—'}</TableCell>
+                      <TableCell>{group.client_name ?? '—'}</TableCell>
+                      <TableCell className="text-right">{group.items.length}</TableCell>
+                      <TableCell className="text-right font-medium">{fmt(group.total)}</TableCell>
+                      <TableCell>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${statusCls[status] ?? 'bg-gray-100 text-gray-700'}`}>
+                          {status}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                    {isExpanded && (
+                      <TableRow key={`${group.si_number}-expanded`} className="bg-muted/30 hover:bg-muted/30">
+                        <TableCell colSpan={7} className="py-3 px-6">
+                          <div className="border rounded-md overflow-hidden text-xs">
+                            <table className="w-full">
+                              <thead className="bg-muted/60">
+                                <tr>
+                                  <th className="text-left px-3 py-1.5 font-medium">Item</th>
+                                  <th className="text-right px-3 py-1.5 font-medium">Qty</th>
+                                  <th className="text-right px-3 py-1.5 font-medium">Unit Price</th>
+                                  <th className="text-right px-3 py-1.5 font-medium">Amount</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {group.items.map(r => (
+                                  <tr key={r.id} className="border-t">
+                                    <td className="px-3 py-1.5">{r.item_name ?? '—'}</td>
+                                    <td className="px-3 py-1.5 text-right">{r.quantity ?? 0} {r.unit ?? ''}</td>
+                                    <td className="px-3 py-1.5 text-right">{fmt(r.unit_price ?? 0)}</td>
+                                    <td className="px-3 py-1.5 text-right font-medium">{fmt(r.amount ?? 0)}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </>
+                )
+              })}
             </TableBody>
           </Table>
         </CardContent>

@@ -146,6 +146,12 @@ export default function UsersPage() {
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Failed to create account')
+      if (portalForm.company) {
+        await supabase.from('clients').update({
+          portal_access: true,
+          auth_user_id: json.userId ?? null,
+        }).eq('company_name', portalForm.company)
+      }
       toast.success(`Portal account created for ${portalForm.email}`)
       setPortalOpen(false)
       setPortalForm({ email: '', full_name: '', company: '', password: '', confirmPassword: '' })
@@ -233,7 +239,9 @@ export default function UsersPage() {
       {/* Filters */}
       <div className="flex items-center gap-3 flex-wrap">
         <Select value={filterRole || '_all'} onValueChange={v => setFilterRole(!v || v === '_all' ? '' : v)}>
-          <SelectTrigger className="w-44 h-9"><SelectValue placeholder="All roles" /></SelectTrigger>
+          <SelectTrigger className="w-48 h-9">
+            <SelectValue>{() => `Roles: ${filterRole ? roleOf(filterRole).label : 'All'}`}</SelectValue>
+          </SelectTrigger>
           <SelectContent>
             <SelectItem value="_all">All roles</SelectItem>
             {ROLES.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
