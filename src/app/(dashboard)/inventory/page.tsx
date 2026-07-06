@@ -505,11 +505,18 @@ export default function InventoryPage() {
     const matched = itemOptions.find(o => o.item_name === poItem.item_name)
     const unit = poItem.unit_of_measure ?? matched?.unit_of_measure ?? ''
     setAddItems(prev => {
+      const existingIdx = prev.findIndex(r => r.item_name === poItem.item_name)
+      if (existingIdx >= 0) {
+        const next = prev.filter((_, i) => i !== existingIdx)
+        return next.length > 0 ? next : [{ item_name: '', quantity: '', unit: '' }]
+      }
       const emptyIdx = prev.findIndex(r => !r.item_name)
       const row = { item_name: poItem.item_name, quantity: String(poItem.quantity), unit }
       if (emptyIdx >= 0) return prev.map((r, i) => i === emptyIdx ? row : r)
       return [...prev, row]
     })
+    setAddItemSearches({})
+    setAddItemDropdowns({})
   }
 
   function selectAddItemForRow(idx: number, opt: ItemOption) {

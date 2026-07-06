@@ -1289,7 +1289,7 @@ export default function DRLogsPage() {
 
                 <div className="space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">Delivery Items</p>
-                  <div className="border rounded-lg overflow-hidden">
+                  <div className="border rounded-lg overflow-hidden [&_[data-slot=table-container]]:overflow-x-hidden">
                     <Table className="table-fixed w-full">
                       <TableHeader>
                         <TableRow className="bg-muted/40">
