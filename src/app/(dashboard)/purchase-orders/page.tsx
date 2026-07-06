@@ -67,6 +67,7 @@ interface PO {
   remarks: string | null
   supplier?: { company_name: string } | null
   pr?: { pr_number: string } | null
+  pr_id?: string | null
 }
 
 interface Supplier { id: string; company_name: string; payment_terms: string | null; ewt_rate: number | null; email: string | null }
@@ -98,6 +99,8 @@ export default function PurchaseOrdersPage() {
   // Form state
   const [supplierId, setSupplierId] = useState('')
   const [poNumber, setPoNumber] = useState('')
+  const [prId, setPrId] = useState('')
+  const [purchaseRequests, setPurchaseRequests] = useState<{ id: string; pr_number: string | null }[]>([])
   const [deliveryDate, setDeliveryDate] = useState('')
   const [paymentTerms, setPaymentTerms] = useState('30 days')
   const [remarks, setRemarks] = useState('')
@@ -176,6 +179,8 @@ export default function PurchaseOrdersPage() {
     setPOs((poData ?? []) as PO[])
     setSuppliers(supData ?? [])
     setItems((itemData ?? []) as ItemOption[])
+    const { data: prData } = await supabase.from('purchase_requests').select('id, pr_number').order('created_at', { ascending: false })
+    setPurchaseRequests(prData ?? [])
     const { data: sysData } = await supabase.from('system_settings').select('company_name, address, phone, email, tin, logo_url').single()
     if (sysData) setCompanyInfo(sysData)
     const { data: wsData } = await supabase.from('warehouse_stock').select('item_name, quantity')
@@ -220,7 +225,7 @@ export default function PurchaseOrdersPage() {
 
   function resetForm() {
     setEditingId(null)
-    setSupplierId(''); setPoNumber(''); setDeliveryDate('')
+    setSupplierId(''); setPoNumber(''); setDeliveryDate(''); setPrId('')
     setPaymentTerms('30 days'); setRemarks(''); setLines([emptyLine()])
     setActiveTab('form'); setDiscountType('none'); setDiscountCustom('')
     setEwtType('services'); setPreparedBy(''); setApprovedBy(''); setVatInclusive(false)
@@ -232,6 +237,7 @@ export default function PurchaseOrdersPage() {
     setSupplierId((po.supplier as any)?.id ?? (po as any).supplier_id ?? '')
     setPoNumber(po.po_number ?? '')
     setDeliveryDate(po.delivery_date ?? '')
+    setPrId(po.pr_id ?? '')
     setPaymentTerms(po.payment_terms ?? '30 days')
     setRemarks(po.remarks ?? '')
 
@@ -286,6 +292,7 @@ export default function PurchaseOrdersPage() {
     const payload = {
       po_number: poNumber || null,
       supplier_id: supplierId || null,
+      pr_id: prId || null,
       delivery_date: deliveryDate || null,
       payment_terms: paymentTerms || null,
       remarks: remarks || null,
@@ -900,6 +907,22 @@ export default function PurchaseOrdersPage() {
                     <div className="space-y-1.5">
                       <Label>Delivery Date</Label>
                       <Input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} />
+                    </div>
+                  </div>
+
+                  {/* PR Ref */}
+                  <div className="space-y-1.5">
+                    <Label>PR Ref</Label>
+                    <div className="flex gap-1">
+                      <Select value={prId || '_none'} onValueChange={v => setPrId(!v || v === '_none' ? '' : v)}>
+                        <SelectTrigger className="flex-1">
+                          <SelectValue>{(v: string) => v === '_none' ? 'No linked PR' : (purchaseRequests.find(p => p.id === v)?.pr_number ?? '—')}</SelectValue>
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="_none">— None —</SelectItem>
+                          {purchaseRequests.map(pr => <SelectItem key={pr.id} value={pr.id}>{pr.pr_number ?? pr.id}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
 

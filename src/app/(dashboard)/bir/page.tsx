@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -8,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Progress } from '@/components/ui/progress'
 import { Separator } from '@/components/ui/separator'
-import { CheckCircle2, XCircle, AlertTriangle, Download, FileBarChart, Zap, FileText } from 'lucide-react'
+import { CheckCircle2, XCircle, AlertTriangle, Download, FileBarChart, Zap, FileText, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 const birForms = [
@@ -29,12 +30,6 @@ const readinessChecks = [
   { check: 'SLSP purchases data complete', status: 'pass', detail: 'Q1 2025 complete' },
 ]
 
-const ewtSummary = [
-  { supplier: 'ABC Trading Corporation', tin: '123-456-789-000', atc: 'WC010', gross: 450000, vat_excl: 401785.71, ewt_rate: 2, ewt: 8035.71 },
-  { supplier: 'XYZ Technology Inc.', tin: '987-654-321-000', atc: 'WC158', gross: 320000, vat_excl: 285714.29, ewt_rate: 2, ewt: 5714.29 },
-  { supplier: 'DEF General Supply', tin: '456-789-123-000', atc: 'WC010', gross: 85000, vat_excl: 75892.86, ewt_rate: 1, ewt: 758.93 },
-]
-
 const vatSummary = [
   { month: 'Jan 2025', gross_purchases: 820000, input_vat: 88071.43, output_vat: 0, net_vat: 88071.43 },
   { month: 'Feb 2025', gross_purchases: 640000, input_vat: 68571.43, output_vat: 0, net_vat: 68571.43 },
@@ -43,8 +38,76 @@ const vatSummary = [
 
 const readinessScore = Math.round((readinessChecks.filter(c => c.status === 'pass').length / readinessChecks.length) * 100)
 
+interface EwtRow { supplier: string; tin: string | null; atc: string | null; address: string | null; gross: number; vat_excl: number; ewt_rate: number; ewt: number }
+interface SlspRow { month: string; supplier: string; tin: string | null; refNo: string; gross: number; vat: number; net: number }
+
 export default function BIRPage() {
+  const supabase = createClient()
   const [activeTab, setActiveTab] = useState('overview')
+  const [loadingTax, setLoadingTax] = useState(true)
+  const [ewtRows, setEwtRows] = useState<EwtRow[]>([])
+  const [slspRows, setSlspRows] = useState<SlspRow[]>([])
+
+  useEffect(() => {
+    async function loadTaxData() {
+      setLoadingTax(true)
+      const [{ data: poData }, { data: supData }, { data: rrData }] = await Promise.all([
+        supabase.from('purchase_orders')
+          .select('po_number, supplier_id, po_date, vat_amount, ewt_amount, total_amount')
+          .neq('status', 'cancelled'),
+        supabase.from('suppliers').select('id, company_name, tin, atc_code, ewt_rate, address, bir_registered_address'),
+        supabase.from('receiving_reports').select('po_number, si_number, dr_number'),
+      ])
+      const supplierById = new Map((supData ?? []).map(s => [s.id, s]))
+      const refByPoNumber = new Map((rrData ?? []).map(r => [r.po_number, r.si_number || r.dr_number || null]))
+
+      // EWT Summary / Alphalist: purchases that actually had withholding tax applied,
+      // aggregated per supplier (Alphalist is an annual roll-up of the same data).
+      const ewtBySupplier = new Map<string, { gross: number; vat_excl: number; ewt: number }>()
+      for (const po of poData ?? []) {
+        const ewt = Number(po.ewt_amount) || 0
+        if (ewt <= 0 || !po.supplier_id) continue
+        const gross = Number(po.total_amount) || 0
+        const vatExcl = gross - (Number(po.vat_amount) || 0)
+        const acc = ewtBySupplier.get(po.supplier_id) ?? { gross: 0, vat_excl: 0, ewt: 0 }
+        acc.gross += gross; acc.vat_excl += vatExcl; acc.ewt += ewt
+        ewtBySupplier.set(po.supplier_id, acc)
+      }
+      const ewtList: EwtRow[] = [...ewtBySupplier.entries()].map(([supplierId, acc]) => {
+        const sup = supplierById.get(supplierId)
+        return {
+          supplier: sup?.company_name ?? 'Unknown Supplier',
+          tin: sup?.tin ?? null,
+          atc: sup?.atc_code ?? null,
+          address: sup?.bir_registered_address ?? sup?.address ?? null,
+          gross: acc.gross, vat_excl: acc.vat_excl,
+          ewt_rate: sup?.ewt_rate != null ? Number(sup.ewt_rate) : (acc.vat_excl > 0 ? (acc.ewt / acc.vat_excl) * 100 : 0),
+          ewt: acc.ewt,
+        }
+      }).sort((a, b) => b.ewt - a.ewt)
+      setEwtRows(ewtList)
+
+      // SLSP: every VAT-bearing purchase, one row per PO.
+      const slspList: SlspRow[] = (poData ?? [])
+        .filter(po => (Number(po.vat_amount) || 0) > 0)
+        .map(po => {
+          const sup = po.supplier_id ? supplierById.get(po.supplier_id) : null
+          const gross = Number(po.total_amount) || 0
+          const vat = Number(po.vat_amount) || 0
+          return {
+            month: po.po_date ? new Date(po.po_date).toLocaleDateString('en-PH', { month: 'short', year: 'numeric' }) : '—',
+            supplier: sup?.company_name ?? 'Unknown Supplier',
+            tin: sup?.tin ?? null,
+            refNo: refByPoNumber.get(po.po_number ?? '') || po.po_number || '—',
+            gross, vat, net: gross - vat,
+          }
+        })
+        .sort((a, b) => (a.month > b.month ? 1 : -1))
+      setSlspRows(slspList)
+      setLoadingTax(false)
+    }
+    loadTaxData()
+  }, [])
 
   function exportAlphalist() { toast.success('Alphalist exported to Excel') }
   function exportSLSP() { toast.success('SLSP exported to Excel/CSV') }
@@ -179,24 +242,30 @@ export default function BIRPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {ewtSummary.map(row => (
-                    <TableRow key={row.supplier}>
-                      <TableCell className="font-medium text-sm">{row.supplier}</TableCell>
-                      <TableCell className="font-mono text-xs">{row.tin}</TableCell>
-                      <TableCell className="font-mono text-xs">{row.atc}</TableCell>
-                      <TableCell className="text-right">₱{row.gross.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                      <TableCell className="text-right">₱{row.vat_excl.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                      <TableCell className="text-right">{row.ewt_rate}%</TableCell>
-                      <TableCell className="text-right font-semibold text-red-700">₱{row.ewt.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
+                  {loadingTax ? (
+                    <TableRow><TableCell colSpan={7} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
+                  ) : ewtRows.length === 0 ? (
+                    <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground">No purchases with withholding tax recorded yet.</TableCell></TableRow>
+                  ) : (<>
+                    {ewtRows.map(row => (
+                      <TableRow key={row.supplier}>
+                        <TableCell className="font-medium text-sm">{row.supplier}</TableCell>
+                        <TableCell className="font-mono text-xs">{row.tin ?? '—'}</TableCell>
+                        <TableCell className="font-mono text-xs">{row.atc ?? '—'}</TableCell>
+                        <TableCell className="text-right">₱{row.gross.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
+                        <TableCell className="text-right">₱{row.vat_excl.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
+                        <TableCell className="text-right">{row.ewt_rate.toFixed(2)}%</TableCell>
+                        <TableCell className="text-right font-semibold text-red-700">₱{row.ewt.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow className="bg-muted/50 font-bold">
+                      <TableCell colSpan={3}>TOTAL</TableCell>
+                      <TableCell className="text-right">₱{ewtRows.reduce((s, r) => s + r.gross, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
+                      <TableCell className="text-right">₱{ewtRows.reduce((s, r) => s + r.vat_excl, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
+                      <TableCell></TableCell>
+                      <TableCell className="text-right text-red-700">₱{ewtRows.reduce((s, r) => s + r.ewt, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
                     </TableRow>
-                  ))}
-                  <TableRow className="bg-muted/50 font-bold">
-                    <TableCell colSpan={3}>TOTAL</TableCell>
-                    <TableCell className="text-right">₱{ewtSummary.reduce((s, r) => s + r.gross, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                    <TableCell className="text-right">₱{ewtSummary.reduce((s, r) => s + r.vat_excl, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                    <TableCell></TableCell>
-                    <TableCell className="text-right text-red-700">₱{ewtSummary.reduce((s, r) => s + r.ewt, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                  </TableRow>
+                  </>)}
                 </TableBody>
               </Table>
             </CardContent>
@@ -278,13 +347,17 @@ export default function BIRPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {ewtSummary.map((row, i) => (
+                  {loadingTax ? (
+                    <TableRow><TableCell colSpan={7} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
+                  ) : ewtRows.length === 0 ? (
+                    <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground">No payees with withholding tax recorded yet.</TableCell></TableRow>
+                  ) : ewtRows.map((row, i) => (
                     <TableRow key={row.supplier}>
                       <TableCell className="text-sm text-muted-foreground">{i + 1}</TableCell>
                       <TableCell className="font-medium text-sm">{row.supplier}</TableCell>
-                      <TableCell className="font-mono text-xs">{row.tin}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">Makati City, Metro Manila</TableCell>
-                      <TableCell className="font-mono text-xs">{row.atc}</TableCell>
+                      <TableCell className="font-mono text-xs">{row.tin ?? '—'}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{row.address ?? '—'}</TableCell>
+                      <TableCell className="font-mono text-xs">{row.atc ?? '—'}</TableCell>
                       <TableCell className="text-right">₱{row.gross.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
                       <TableCell className="text-right font-semibold text-red-700">₱{row.ewt.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
                     </TableRow>
@@ -311,9 +384,9 @@ export default function BIRPage() {
             </CardHeader>
             <CardContent>
               <div className="p-4 bg-muted/50 rounded-lg text-sm text-muted-foreground mb-4">
-                <strong className="text-foreground">Period:</strong> Q1 2025 (January — March) &nbsp;|&nbsp;
-                <strong className="text-foreground">Total VAT Purchases:</strong> ₱2,410,000 &nbsp;|&nbsp;
-                <strong className="text-foreground">Total Input VAT:</strong> ₱258,428.57
+                <strong className="text-foreground">Period:</strong> {slspRows.length > 0 ? `${slspRows[0].month} — ${slspRows[slspRows.length - 1].month}` : 'No purchases recorded'} &nbsp;|&nbsp;
+                <strong className="text-foreground">Total VAT Purchases:</strong> ₱{slspRows.reduce((s, r) => s + r.gross, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} &nbsp;|&nbsp;
+                <strong className="text-foreground">Total Input VAT:</strong> ₱{slspRows.reduce((s, r) => s + r.vat, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </div>
               <Table>
                 <TableHeader>
@@ -328,24 +401,21 @@ export default function BIRPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  <TableRow>
-                    <TableCell className="text-sm">Jan 2025</TableCell>
-                    <TableCell className="text-sm">ABC Trading</TableCell>
-                    <TableCell className="font-mono text-xs">123-456-789-000</TableCell>
-                    <TableCell className="font-mono text-xs">SI-2025-1234</TableCell>
-                    <TableCell className="text-right">₱180,000.00</TableCell>
-                    <TableCell className="text-right text-blue-600">₱19,285.71</TableCell>
-                    <TableCell className="text-right">₱160,714.29</TableCell>
-                  </TableRow>
-                  <TableRow>
-                    <TableCell className="text-sm">Jan 2025</TableCell>
-                    <TableCell className="text-sm">XYZ Technology</TableCell>
-                    <TableCell className="font-mono text-xs">987-654-321-000</TableCell>
-                    <TableCell className="font-mono text-xs">SI-2025-0987</TableCell>
-                    <TableCell className="text-right">₱640,000.00</TableCell>
-                    <TableCell className="text-right text-blue-600">₱68,571.43</TableCell>
-                    <TableCell className="text-right">₱571,428.57</TableCell>
-                  </TableRow>
+                  {loadingTax ? (
+                    <TableRow><TableCell colSpan={7} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
+                  ) : slspRows.length === 0 ? (
+                    <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground">No VAT purchases recorded yet.</TableCell></TableRow>
+                  ) : slspRows.map((row, i) => (
+                    <TableRow key={i}>
+                      <TableCell className="text-sm">{row.month}</TableCell>
+                      <TableCell className="text-sm">{row.supplier}</TableCell>
+                      <TableCell className="font-mono text-xs">{row.tin ?? '—'}</TableCell>
+                      <TableCell className="font-mono text-xs">{row.refNo}</TableCell>
+                      <TableCell className="text-right">₱{row.gross.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
+                      <TableCell className="text-right text-blue-600">₱{row.vat.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
+                      <TableCell className="text-right">₱{row.net.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
             </CardContent>

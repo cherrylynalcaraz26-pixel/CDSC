@@ -508,6 +508,120 @@ function PortalStockPageContent() {
         const inStock = stock.filter(s => s.quantity_on_hand > s.low_stock_threshold)
         const lowStock = stock.filter(s => s.quantity_on_hand > 0 && s.quantity_on_hand <= s.low_stock_threshold)
         const outOfStock = stock.filter(s => s.quantity_on_hand === 0)
+        const fmtPeso = (v: number) => '₱' + v.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        const fmtDate = (d: string) => new Date(d).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })
+
+        // Built from the report data using plain HTML/CSS (not a clone of the live DOM) —
+        // the on-screen preview's styling comes from Tailwind utility classes, which don't
+        // exist in a blank print window, so cloning it rendered unstyled.
+        function buildStockReportHtml() {
+          const cardsHtml = [
+            { label: 'Total Items', value: stock.length, cls: '' },
+            { label: 'Total On Hand', value: totalOnHand.toLocaleString('en-PH'), cls: '' },
+            { label: 'In Stock', value: inStock.length, cls: 'green' },
+            { label: 'Low Stock', value: lowStock.length, cls: 'amber' },
+            { label: 'Out of Stock', value: outOfStock.length, cls: 'red' },
+          ].map(c => `<div class="card"><div class="card-label">${c.label}</div><div class="card-val ${c.cls}">${c.value}</div></div>`).join('')
+
+          const stockRowsHtml = stock.length === 0
+            ? `<tr><td colspan="6" style="text-align:center;padding:24px;color:#9ca3af;font-style:italic">No stock records.</td></tr>`
+            : stock.map((s, i) => {
+              const isOut = s.quantity_on_hand === 0
+              const isLow = !isOut && s.quantity_on_hand <= s.low_stock_threshold
+              const qtyColor = isOut ? '#dc2626' : isLow ? '#d97706' : '#15803d'
+              const statusLabel = isOut ? 'Out of Stock' : isLow ? 'Low Stock' : 'In Stock'
+              const statusCls = isOut ? 'badge-red' : isLow ? 'badge-amber' : 'badge-green'
+              return `<tr>
+                <td>${i + 1}</td>
+                <td style="font-weight:600;color:#1f2937">${s.item_name}</td>
+                <td>${s.unit ?? 'pcs'}</td>
+                <td class="r" style="font-weight:700;color:${qtyColor}">${s.quantity_on_hand}</td>
+                <td class="r">${s.low_stock_threshold}</td>
+                <td style="text-align:center"><span class="badge ${statusCls}">${statusLabel}</span></td>
+              </tr>`
+            }).join('')
+
+          const siGroups: { si_number: string; si_date: string; items: typeof csiRecords; total: number }[] = []
+          const seen = new Set<string>()
+          for (const r of csiRecords) {
+            if (!seen.has(r.si_number)) {
+              seen.add(r.si_number)
+              const grpItems = csiRecords.filter(x => x.si_number === r.si_number)
+              siGroups.push({ si_number: r.si_number, si_date: r.si_date, items: grpItems, total: grpItems.reduce((s, x) => s + (Number(x.amount) || 0), 0) })
+            }
+          }
+          const grandTotal = csiRecords.reduce((s, r) => s + (Number(r.amount) || 0), 0)
+          const csiRowsHtml = siGroups.flatMap((g, gi) => g.items.map((item, ii) => `<tr${gi % 2 === 1 ? ' style="background:#f9fafb"' : ''}>
+            <td style="color:#6b7280;white-space:nowrap">${ii === 0 ? fmtDate(g.si_date) : ''}</td>
+            <td style="font-family:monospace;font-weight:600;color:#dc2626">${ii === 0 ? g.si_number : ''}</td>
+            <td>${item.item_name}</td>
+            <td>${item.unit ?? '—'}</td>
+            <td class="r">${Number(item.quantity)}</td>
+            <td class="r">${item.unit_price ? fmtPeso(Number(item.unit_price)) : '—'}</td>
+            <td class="r">${item.amount ? fmtPeso(Number(item.amount)) : '—'}</td>
+          </tr>`)).join('')
+
+          const csiSectionHtml = csiRecords.length === 0 ? '' : `
+            <div style="margin-top:32px">
+              <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid #e5e7eb">
+                <div><div style="font-size:13px;font-weight:800;color:#1f2937">CSI Issued</div><div style="font-size:9px;color:#9ca3af;margin-top:2px">Charge Sales Invoices issued to ${clientName}</div></div>
+                <div style="text-align:right"><div style="font-size:9px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.5px">Total Invoiced</div><div style="font-size:15px;font-weight:800;color:#dc2626">${fmtPeso(grandTotal)}</div></div>
+              </div>
+              <table>
+                <thead><tr class="csi-head">
+                  <th>Date</th><th>SI Number</th><th>Item Description</th><th style="width:60px">Unit</th>
+                  <th class="r" style="width:60px">Qty</th><th class="r" style="width:90px">Unit Price</th><th class="r" style="width:90px">Amount</th>
+                </tr></thead>
+                <tbody>${csiRowsHtml}</tbody>
+                <tfoot><tr><td colspan="6" class="r" style="font-weight:700">Grand Total</td><td class="r" style="font-weight:700;color:#dc2626">${fmtPeso(grandTotal)}</td></tr></tfoot>
+              </table>
+            </div>`
+
+          return `<!DOCTYPE html><html><head><title>Stock Report - ${clientName}</title><style>
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body { font-family: Arial, sans-serif; background: #fff; color: #111; padding: 32px; }
+            .accent { background: #dc2626; height: 5px; border-radius: 3px; margin-bottom: 20px; }
+            .letterhead { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px solid #e5e7eb; }
+            .cards { display: grid; grid-template-columns: repeat(5,1fr); gap: 10px; margin-bottom: 18px; }
+            .card { border: 1px solid #e5e7eb; border-radius: 6px; padding: 10px 14px; background: #f9fafb; }
+            .card-label { font-size: 9px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+            .card-val { font-size: 20px; font-weight: 700; margin-top: 3px; color: #1f2937; }
+            .card-val.green { color: #15803d; } .card-val.amber { color: #d97706; } .card-val.red { color: #dc2626; }
+            table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 4px; }
+            th { background: #1f2937; color: #fff; text-align: left; padding: 7px 10px; font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
+            th.csi-head { background: #b91c1c; }
+            th.r { text-align: right; }
+            td { padding: 6px 10px; border-bottom: 1px solid #f3f4f6; }
+            td.r { text-align: right; }
+            tr:nth-child(even) td { background: #f9fafb; }
+            tfoot td { font-weight: 700; background: #f3f4f6; border-top: 2px solid #d1d5db; }
+            .badge { font-size: 9px; padding: 2px 8px; border-radius: 999px; font-weight: 600; }
+            .badge-green { background: #dcfce7; color: #15803d; } .badge-amber { background: #fef3c7; color: #b45309; } .badge-red { background: #fee2e2; color: #dc2626; }
+            .note { margin-top: 20px; padding-top: 10px; border-top: 1px solid #f3f4f6; font-size: 9px; color: #9ca3af; display: flex; justify-content: space-between; }
+            @media print { @page { margin: 12mm; size: A4 landscape; } }
+          </style></head><body>
+            <div class="accent"></div>
+            <div class="letterhead">
+              <div><img src="/cdsc-logo.jpg" style="height:50px;width:auto;display:block;margin-bottom:4px;" /><div style="font-size:11px;font-weight:600;color:#374151">CDSC Industrial Supply</div></div>
+              <div style="text-align:right"><div style="font-size:15px;font-weight:700">Stock Report</div><div style="font-size:10px;color:#9ca3af;margin-top:2px">As of ${today}</div></div>
+            </div>
+            <div style="margin-bottom:14px"><div style="font-size:9px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;font-weight:600;margin-bottom:2px">Client</div><div style="font-size:18px;font-weight:700">${clientName}</div></div>
+            <div class="cards">${cardsHtml}</div>
+            <table>
+              <thead><tr>
+                <th style="width:24px">#</th><th>Item Description</th><th style="width:70px">Unit</th>
+                <th class="r" style="width:80px">On Hand</th><th class="r" style="width:80px">Low Stock At</th><th style="width:90px;text-align:center">Status</th>
+              </tr></thead>
+              <tbody>${stockRowsHtml}</tbody>
+            </table>
+            ${csiSectionHtml}
+            <div class="note">
+              <span>Stock levels reflect current on-hand quantities as of the report date.</span>
+              <span>Generated ${today} &middot; CDSC Inventory System</span>
+            </div>
+          </body></html>`
+        }
+
         return (
           <div className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
             {/* Toolbar */}
@@ -517,33 +631,9 @@ function PortalStockPageContent() {
               <button
                 className="ml-auto inline-flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-4 py-1.5 rounded-lg transition-colors shrink-0"
                 onClick={() => {
-                  const el = document.getElementById('stock-report-print')
-                  if (!el) return
                   const win = window.open('', '_blank', 'width=1000,height=800')
                   if (!win) return
-                  win.document.write(`<!DOCTYPE html><html><head><title>Stock Report - ${clientName}</title><style>
-                    * { box-sizing: border-box; margin: 0; padding: 0; }
-                    body { font-family: Arial, sans-serif; background: #fff; color: #111; padding: 32px; }
-                    .accent { background: #dc2626; height: 5px; border-radius: 3px; margin-bottom: 20px; }
-                    .letterhead { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px solid #e5e7eb; }
-                    .co-name { font-size: 22px; font-weight: 800; color: #dc2626; }
-                    .co-sub { font-size: 10px; color: #9ca3af; margin-top: 2px; }
-                    table { width: 100%; border-collapse: collapse; font-size: 11px; }
-                    th { background: #1f2937; color: #fff; text-align: left; padding: 7px 10px; font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
-                    th.r { text-align: right; }
-                    td { padding: 6px 10px; border-bottom: 1px solid #f3f4f6; }
-                    td.r { text-align: right; }
-                    tr:nth-child(even) td { background: #f9fafb; }
-                    @media print { @page { margin: 12mm; size: A4 landscape; } }
-                  </style></head><body>
-                    <div class="accent"></div>
-                    <div class="letterhead">
-                      <div><img src="/cdsc-logo.jpg" style="height:50px;width:auto;display:block;margin-bottom:4px;" /><div style="font-size:11px;font-weight:600;color:#374151">CDSC Industrial Supply</div></div>
-                      <div style="text-align:right"><div style="font-size:15px;font-weight:700">Stock Report</div><div style="font-size:10px;color:#9ca3af;margin-top:2px">As of ${today}</div></div>
-                    </div>
-                    <div style="margin-bottom:14px"><div style="font-size:9px;color:#9ca3af;text-transform:uppercase;letter-spacing:1px;font-weight:600;margin-bottom:2px">Client</div><div style="font-size:18px;font-weight:700">${clientName}</div></div>
-                    ${el.innerHTML}
-                  </body></html>`)
+                  win.document.write(buildStockReportHtml())
                   win.document.close()
                   win.focus()
                   setTimeout(() => { win.print() }, 400)
@@ -554,7 +644,7 @@ function PortalStockPageContent() {
             </div>
 
             {/* Report body */}
-            <div className="bg-white p-8" id="stock-report-print">
+            <div className="bg-white p-8">
               <div className="h-1 bg-red-600 rounded-full mb-6" />
               <div className="flex justify-between items-start mb-6 pb-5 border-b border-gray-200">
                 <div>

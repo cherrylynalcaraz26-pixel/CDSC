@@ -31,6 +31,7 @@ interface Collection {
   id: string; or_number: string | null; collection_date: string | null
   client_name: string | null; amount: number; form_2307: number | null; status: string
   payment_mode?: string | null; si_number?: string | null
+  reference_number?: string | null; remarks?: string | null; client_id?: string | null
 }
 
 interface Disbursement {
@@ -362,6 +363,8 @@ function CollectionsTab() {
   const [clientDropdownOpen, setClientDropdownOpen] = useState(false)
   const [csiOptions, setCsiOptions] = useState<{ si_number: string; si_date: string; total: number }[]>([])
   const [readyToCollect, setReadyToCollect] = useState<{ so_number: string; client_name: string; csi_total: number; collected_total: number; outstanding: number }[]>([])
+  const [companyInfo, setCompanyInfo] = useState<{ company_name: string | null; address: string | null; phone: string | null; tin: string | null } | null>(null)
+  const [viewRecord, setViewRecord] = useState<Collection | null>(null)
 
   async function load() {
     setLoading(true)
@@ -373,6 +376,8 @@ function CollectionsTab() {
     ])
     setRecords((colData ?? []) as Collection[])
     setClients(cliData ?? [])
+    const { data: sysData } = await supabase.from('system_settings').select('company_name, address, phone, tin').single()
+    if (sysData) setCompanyInfo(sysData)
 
     // A Sales Order is "ready to collect" once it's both been delivered (has a DR) and
     // invoiced (has CSI records) — and still has an outstanding (uncollected) balance.
@@ -489,6 +494,77 @@ function CollectionsTab() {
     else { toast.success('Deleted'); load() }
   }
 
+  // `r === null` prints a blank OR template (blank lines instead of data) for manual/
+  // handwritten use — same layout either way so a filled-out blank matches a system one.
+  function buildOrHtml(r: Collection | null) {
+    const net = r ? (r.amount ?? 0) - (r.form_2307 ?? 0) : 0
+    const field = (v: string | null | undefined) => v ? v : '&nbsp;'
+    return `<!DOCTYPE html><html><head><title>Official Receipt${r?.or_number ? ' ' + r.or_number : ''}</title><style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: Arial, sans-serif; color: #111; padding: 40px; background: #fff; }
+      .sheet { max-width: 640px; margin: 0 auto; border: 1px solid #d1d5db; border-radius: 8px; padding: 28px; }
+      .accent { background: #dc2626; height: 5px; border-radius: 3px; margin-bottom: 20px; }
+      .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 2px solid #1f2937; padding-bottom: 14px; margin-bottom: 20px; }
+      .co-name { font-size: 18px; font-weight: 800; color: #1f2937; }
+      .co-sub { font-size: 10px; color: #6b7280; margin-top: 4px; line-height: 1.6; }
+      .title { text-align: right; }
+      .title .doc { font-size: 20px; font-weight: 900; color: #dc2626; letter-spacing: 1px; }
+      .title .or-no { font-size: 11px; margin-top: 6px; color: #6b7280; }
+      .title .or-no b { font-family: monospace; font-size: 14px; color: #111; }
+      .row { display: flex; gap: 10px; margin-bottom: 14px; font-size: 12px; align-items: flex-end; }
+      .row .lbl { width: 130px; color: #6b7280; text-transform: uppercase; font-size: 9px; font-weight: 700; padding-bottom: 4px; }
+      .row .val { flex: 1; border-bottom: 1px solid #9ca3af; padding-bottom: 4px; min-height: 16px; font-weight: 600; }
+      .amt-box { margin-top: 22px; border: 1px solid #e5e7eb; border-radius: 6px; padding: 14px 16px; }
+      .amt-line { display: flex; justify-content: space-between; font-size: 12px; padding: 4px 0; }
+      .amt-line.total { border-top: 1px solid #d1d5db; margin-top: 6px; padding-top: 8px; font-weight: 800; font-size: 15px; }
+      .sign { display: flex; justify-content: space-between; margin-top: 56px; }
+      .sign div { width: 44%; text-align: center; border-top: 1px solid #111; padding-top: 6px; font-size: 10px; color: #6b7280; }
+      @media print { @page { margin: 12mm; size: A4 portrait; } }
+    </style></head><body>
+      <div class="sheet">
+        <div class="accent"></div>
+        <div class="head">
+          <div>
+            <div class="co-name">${companyInfo?.company_name ?? 'CDSC Industrial Supply'}</div>
+            <div class="co-sub">
+              ${companyInfo?.address ? `${companyInfo.address}<br/>` : ''}
+              ${companyInfo?.phone ? `Tel: ${companyInfo.phone}<br/>` : ''}
+              ${companyInfo?.tin ? `TIN: ${companyInfo.tin}` : ''}
+            </div>
+          </div>
+          <div class="title">
+            <div class="doc">Official Receipt</div>
+            <div class="or-no">No. <b>${r ? (r.or_number ?? '—') : '____________________'}</b></div>
+          </div>
+        </div>
+        <div class="row"><div class="lbl">Date</div><div class="val">${r ? (r.collection_date ? format(new Date(r.collection_date), 'MMMM d, yyyy') : '') : field(null)}</div></div>
+        <div class="row"><div class="lbl">Received From</div><div class="val">${r ? field(r.client_name) : field(null)}</div></div>
+        <div class="row"><div class="lbl">Payment Mode</div><div class="val">${r ? field(r.payment_mode) : field(null)}</div></div>
+        <div class="row"><div class="lbl">Reference No.</div><div class="val">${r ? field(r.reference_number) : field(null)}</div></div>
+        <div class="row"><div class="lbl">SI Reference</div><div class="val">${r ? field(r.si_number) : field(null)}</div></div>
+        <div class="row"><div class="lbl">For</div><div class="val">${r ? field(r.remarks) : field(null)}</div></div>
+        <div class="amt-box">
+          <div class="amt-line"><span>Gross Amount</span><span>${r ? fmt(r.amount ?? 0) : '&nbsp;'}</span></div>
+          <div class="amt-line"><span>Less: Form 2307 (EWT)</span><span>${r ? (r.form_2307 ? fmt(r.form_2307) : '—') : '&nbsp;'}</span></div>
+          <div class="amt-line total"><span>Net Amount Received</span><span>${r ? fmt(net) : '&nbsp;'}</span></div>
+        </div>
+        <div class="sign">
+          <div>Received By</div>
+          <div>Authorized Signature</div>
+        </div>
+      </div>
+    </body></html>`
+  }
+
+  function printOR(r: Collection | null) {
+    const win = window.open('', '_blank', 'width=760,height=900')
+    if (!win) return
+    win.document.write(buildOrHtml(r))
+    win.document.close()
+    win.focus()
+    setTimeout(() => { win.print() }, 400)
+  }
+
   const filteredRecords = applyDateFilter(
     df,
     clientFilter ? records.filter(r => (r.client_name ?? '').toLowerCase().includes(clientFilter.toLowerCase())) : records,
@@ -502,9 +578,14 @@ function CollectionsTab() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">Official Receipts and Collection Receipts management</p>
-        <Button onClick={() => { resetForm(); setOpen(true) }} className="bg-red-600 hover:bg-red-700">
-          <Plus className="h-4 w-4 mr-2" />New Collection
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => printOR(null)}>
+            <Printer className="h-4 w-4 mr-2" />Print Blank OR
+          </Button>
+          <Button onClick={() => { resetForm(); setOpen(true) }} className="bg-red-600 hover:bg-red-700">
+            <Plus className="h-4 w-4 mr-2" />New Collection
+          </Button>
+        </div>
       </div>
 
       <DateFilterBar df={df} />
@@ -645,10 +726,10 @@ function CollectionsTab() {
                         <MoreHorizontal className="h-4 w-4" />
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-44">
-                        <DropdownMenuItem onClick={() => toast.info(`OR: ${r.or_number}`)}>
+                        <DropdownMenuItem onClick={() => setViewRecord(r)}>
                           <Eye className="mr-2 h-4 w-4" />View
                         </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => window.print()}>
+                        <DropdownMenuItem onClick={() => printOR(r)}>
                           <Printer className="mr-2 h-4 w-4" />Print OR
                         </DropdownMenuItem>
                         {r.status === 'posted' && (
@@ -763,6 +844,42 @@ function CollectionsTab() {
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
             <Button onClick={save} disabled={saving} className="bg-red-600 hover:bg-red-700">
               {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : 'Post Collection'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View OR Dialog */}
+      <Dialog open={!!viewRecord} onOpenChange={o => { if (!o) setViewRecord(null) }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Receipt className="h-4 w-4 text-red-600" />Official Receipt</DialogTitle>
+          </DialogHeader>
+          {viewRecord && (
+            <div className="space-y-3 py-1 text-sm">
+              <div className="grid grid-cols-2 gap-3">
+                <div><span className="text-xs text-muted-foreground block">OR Number</span><span className="font-mono font-semibold text-red-600">{viewRecord.or_number ?? '—'}</span></div>
+                <div><span className="text-xs text-muted-foreground block">Date</span><span>{viewRecord.collection_date ? format(new Date(viewRecord.collection_date), 'MMM d, yyyy') : '—'}</span></div>
+                <div><span className="text-xs text-muted-foreground block">Client</span><span className="font-medium">{viewRecord.client_name ?? '—'}</span></div>
+                <div><span className="text-xs text-muted-foreground block">Status</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_CLS[viewRecord.status] ?? 'bg-gray-100 text-gray-600'}`}>{viewRecord.status}</span>
+                </div>
+                <div><span className="text-xs text-muted-foreground block">Payment Mode</span><span className="capitalize">{(viewRecord.payment_mode ?? '—').replace('_', ' ')}</span></div>
+                <div><span className="text-xs text-muted-foreground block">Reference No.</span><span>{viewRecord.reference_number ?? '—'}</span></div>
+                <div><span className="text-xs text-muted-foreground block">SI Reference</span><span>{viewRecord.si_number ?? '—'}</span></div>
+                <div><span className="text-xs text-muted-foreground block">For</span><span>{viewRecord.remarks ?? '—'}</span></div>
+              </div>
+              <div className="rounded-lg border bg-muted/30 p-3 space-y-1">
+                <div className="flex justify-between"><span className="text-muted-foreground">Gross Amount</span><span className="font-medium">{fmt(viewRecord.amount ?? 0)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Form 2307 (EWT)</span><span>{viewRecord.form_2307 ? fmt(viewRecord.form_2307) : '—'}</span></div>
+                <div className="flex justify-between border-t pt-1 font-bold text-green-700"><span>Net Total</span><span>{fmt((viewRecord.amount ?? 0) - (viewRecord.form_2307 ?? 0))}</span></div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setViewRecord(null)}>Close</Button>
+            <Button onClick={() => printOR(viewRecord)} className="bg-red-600 hover:bg-red-700 gap-1.5">
+              <Printer className="h-4 w-4" />Print OR
             </Button>
           </DialogFooter>
         </DialogContent>
