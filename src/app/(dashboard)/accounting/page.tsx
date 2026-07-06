@@ -56,6 +56,7 @@ interface JournalLine {
 
 const fmt = (n: number) => `₱${n.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
 const fmtNoPeso = (n: number) => n.toLocaleString('en-PH', { minimumFractionDigits: 2 })
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
 // Keeps the OR's "In Payment For" line readable when many invoices are selected —
 // e.g. "SI No. 1111, 2222, 3333, 4444, 5555, and etc." instead of a huge list.
@@ -1550,15 +1551,21 @@ function SalesJournalTab({ collections, csiRecords }: { collections: Collection[
 function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filterTo?: string }) {
   const supabase = createClient()
   const [disbs, setDisbs] = useState<Disbursement[]>([])
+  const [payees, setPayees] = useState<{ id: string; name: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({ disb_date: '', payee: '', description: '', amount: '', expense_account: '5950', payment_mode: 'cash', check_number: '', remarks: '' })
+  const [payeeDropdownOpen, setPayeeDropdownOpen] = useState(false)
 
   async function load() {
     setLoading(true)
-    const { data } = await supabase.from('disbursements').select('*').order('disb_date', { ascending: false })
+    const [{ data }, { data: payeeData }] = await Promise.all([
+      supabase.from('disbursements').select('*').order('disb_date', { ascending: false }),
+      supabase.from('payees').select('id, name').order('name'),
+    ])
     setDisbs((data ?? []) as Disbursement[])
+    setPayees(payeeData ?? [])
     setLoading(false)
   }
 
@@ -1566,7 +1573,10 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
 
   function resetForm() {
     setForm({ disb_date: '', payee: '', description: '', amount: '', expense_account: '5950', payment_mode: 'cash', check_number: '', remarks: '' })
+    setPayeeDropdownOpen(false)
   }
+
+  const filteredPayees = payees.filter(p => !form.payee || p.name.toLowerCase().includes(form.payee.toLowerCase()))
 
   async function save() {
     if (!form.payee.trim()) { toast.error('Payee is required'); return }
@@ -1593,6 +1603,10 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
         { entry_id: jeId, account_code: '1100', account_name: 'Cash on Hand', memo, debit: 0, credit: Number(form.amount) },
       ])
       await supabase.from('disbursements').update({ journal_entry_id: jeId }).eq('id', (disbData as any).id)
+    }
+    const payeeName = form.payee.trim()
+    if (!payees.some(p => p.name.toLowerCase() === payeeName.toLowerCase())) {
+      await supabase.from('payees').insert({ name: payeeName })
     }
     toast.success('Disbursement recorded')
     setOpen(false); resetForm(); load()
@@ -1687,30 +1701,48 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
                 <Label>Payment Mode</Label>
                 <Select value={form.payment_mode} onValueChange={v => setForm(p => ({ ...p, payment_mode: v ?? 'cash' }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{PAYMENT_MODES_DISB.map(m => <SelectItem key={m} value={m}>{m.replace('_',' ')}</SelectItem>)}</SelectContent>
+                  <SelectContent>{PAYMENT_MODES_DISB.map(m => <SelectItem key={m} value={m}>{cap(m.replace('_',' '))}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 relative">
               <Label>Payee <span className="text-destructive">*</span></Label>
-              <Input placeholder="Recipient / vendor name" value={form.payee} onChange={e => setForm(p => ({ ...p, payee: e.target.value }))} />
+              <Input
+                placeholder="Type to search or enter a payee name…"
+                value={form.payee}
+                onChange={e => { setForm(p => ({ ...p, payee: e.target.value })); setPayeeDropdownOpen(true) }}
+                onFocus={() => setPayeeDropdownOpen(true)}
+                onBlur={() => setTimeout(() => setPayeeDropdownOpen(false), 150)}
+              />
+              {payeeDropdownOpen && filteredPayees.length > 0 && (
+                <div className="absolute z-20 w-full mt-1 bg-popover border rounded-md shadow-lg max-h-48 overflow-y-auto">
+                  {filteredPayees.map(p => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onMouseDown={() => { setForm(f => ({ ...f, payee: p.name })); setPayeeDropdownOpen(false) }}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-accent border-b last:border-0"
+                    >
+                      {p.name}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label>Description</Label>
               <Input placeholder="Purpose of payment" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Expense Account</Label>
-                <Select value={form.expense_account} onValueChange={v => setForm(p => ({ ...p, expense_account: v ?? '5950' }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{EXPENSE_ACCOUNTS.map(a => <SelectItem key={a.code} value={a.code}>{a.code} – {a.name}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Amount (₱) <span className="text-destructive">*</span></Label>
-                <Input type="number" min={0} step="0.01" placeholder="0.00" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} />
-              </div>
+            <div className="space-y-1.5">
+              <Label>Expense Account</Label>
+              <Select value={form.expense_account} onValueChange={v => setForm(p => ({ ...p, expense_account: v ?? '5950' }))}>
+                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>{EXPENSE_ACCOUNTS.map(a => <SelectItem key={a.code} value={a.code}>{a.code} – {a.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Amount (₱) <span className="text-destructive">*</span></Label>
+              <Input type="number" min={0} step="0.01" placeholder="0.00" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} />
             </div>
             {form.payment_mode === 'check' && (
               <div className="space-y-1.5">

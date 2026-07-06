@@ -38,6 +38,62 @@ const vatSummary = [
 
 const readinessScore = Math.round((readinessChecks.filter(c => c.status === 'pass').length / readinessChecks.length) * 100)
 
+const FILING_STATUS_CLS: Record<string, string> = {
+  filed: 'bg-green-100 text-green-700 border-green-300',
+  due_soon: 'bg-red-100 text-red-700 border-red-300',
+  pending: 'bg-yellow-100 text-yellow-700 border-yellow-300',
+}
+
+// Groups BIR forms by the year/month of their due date, so each month can render
+// as its own mini calendar grid with due dates marked on the right day.
+function groupFormsByMonth(forms: typeof birForms) {
+  const map = new Map<string, { year: number; month: number; forms: typeof birForms }>()
+  for (const f of forms) {
+    const d = new Date(f.due)
+    const key = `${d.getFullYear()}-${d.getMonth()}`
+    if (!map.has(key)) map.set(key, { year: d.getFullYear(), month: d.getMonth(), forms: [] })
+    map.get(key)!.forms.push(f)
+  }
+  return [...map.values()].sort((a, b) => a.year - b.year || a.month - b.month)
+}
+
+function FilingMonthCalendar({ year, month, forms }: { year: number; month: number; forms: typeof birForms }) {
+  const firstDow = new Date(year, month, 1).getDay()
+  const daysInMonth = new Date(year, month + 1, 0).getDate()
+  const cells: (number | null)[] = [...Array(firstDow).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)]
+  const byDay = new Map<number, typeof birForms>()
+  for (const f of forms) {
+    const day = new Date(f.due).getDate()
+    if (!byDay.has(day)) byDay.set(day, [])
+    byDay.get(day)!.push(f)
+  }
+  const monthLabel = new Date(year, month, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  return (
+    <div className="border rounded-lg p-3 w-64">
+      <div className="text-sm font-semibold mb-2 text-center">{monthLabel}</div>
+      <div className="grid grid-cols-7 gap-1 text-center text-[10px] text-muted-foreground mb-1">
+        {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => <div key={d}>{d}</div>)}
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {cells.map((day, i) => {
+          const dayForms = day ? byDay.get(day) : undefined
+          const firstStatus = dayForms?.[0]?.status
+          const cls = firstStatus ? FILING_STATUS_CLS[firstStatus] : 'border-transparent'
+          return (
+            <div
+              key={i}
+              title={dayForms?.map(f => `${f.form} — ${f.description}`).join('\n')}
+              className={`aspect-square flex items-center justify-center text-xs rounded border ${day ? cls : ''}`}
+            >
+              {day ?? ''}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 interface EwtRow { supplier: string; tin: string | null; atc: string | null; address: string | null; gross: number; vat_excl: number; ewt_rate: number; ewt: number }
 interface SlspRow { month: string; supplier: string; tin: string | null; refNo: string; gross: number; vat: number; net: number }
 
@@ -165,6 +221,24 @@ export default function BIRPage() {
         </TabsList>
 
         <TabsContent value="overview">
+          <Card className="mb-4">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Filing Calendar — Due Dates</CardTitle>
+              <CardDescription>Each highlighted day has a BIR form due — hover a date for details</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-4 mb-4">
+                {groupFormsByMonth(birForms).map(g => (
+                  <FilingMonthCalendar key={`${g.year}-${g.month}`} year={g.year} month={g.month} forms={g.forms} />
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-4 text-xs">
+                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded border bg-green-100 border-green-300" />Filed</span>
+                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded border bg-red-100 border-red-300" />Due Soon</span>
+                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded border bg-yellow-100 border-yellow-300" />Pending</span>
+              </div>
+            </CardContent>
+          </Card>
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">BIR Filing Calendar 2025</CardTitle>

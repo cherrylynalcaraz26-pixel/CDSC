@@ -515,7 +515,7 @@ export default function PullOutBillingPage() {
         )}
         <div className="flex gap-2 ml-auto">
           {([
-            { key: 'stock',     icon: <FileText className="h-3.5 w-3.5" />,     label: 'Stock' },
+            { key: 'stock',     icon: <FileText className="h-3.5 w-3.5" />,     label: 'By Item' },
             { key: 'client',    icon: <Users className="h-3.5 w-3.5" />,        label: 'By Client' },
             { key: 'movements', icon: <TrendingUp className="h-3.5 w-3.5" />,   label: 'Movements' },
             { key: 'requests',  icon: <RotateCcw className="h-3.5 w-3.5" />,    label: 'Requests' },
