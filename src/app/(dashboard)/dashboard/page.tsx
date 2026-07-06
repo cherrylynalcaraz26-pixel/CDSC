@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
-  BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar, LineChart, Line, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts'
 import {
   Package, ShoppingCart, Truck, FileText, ClipboardList,
@@ -36,7 +36,7 @@ interface RecentPO { id: string; po_number: string | null; created_at: string; s
 interface ORClientRow { client: string; collected: number; ewt: number; ors: number }
 interface CSIClientRow { client: string; billed: number; invoices: number; items: number }
 interface ReconRow { client: string; csi_billed: number; or_collected: number; diff: number; status: 'Balanced' | 'Outstanding' | 'Over-collected' }
-interface MonthlySOBar { month: string; revenue: number; orders: number; csiRevenue: number }
+interface MonthlySOBar { month: string; revenue: number; orders: number; csiRevenue: number; poAmount: number; net: number }
 interface TopClient { client: string; revenue: number; orders: number }
 
 interface Insight {
@@ -244,6 +244,8 @@ export default function DashboardPage() {
       const { data: soAll } = await supabase.from('sales_orders').select('so_date, created_at, client_name, total_amount, status').not('status', 'eq', 'cancelled')
       const soList = soAll ?? []
       const allCSIDetail = csiDetailData.data ?? []
+      const { data: poAll } = await supabase.from('purchase_orders').select('created_at, total_amount, status').not('status', 'eq', 'cancelled')
+      const poList = poAll ?? []
       const soBars: MonthlySOBar[] = Array.from({ length: 6 }, (_, i) => {
         const d = subMonths(now, 5 - i)
         const start = startOfMonth(d).toISOString().slice(0, 10)
@@ -253,11 +255,16 @@ export default function DashboardPage() {
           return dt >= start && dt <= end
         })
         const monthCSI = allCSIDetail.filter((r: any) => r.si_date && r.si_date >= start && r.si_date <= end)
+        const monthPOs = poList.filter(p => (p.created_at ?? '').slice(0, 10) >= start && (p.created_at ?? '').slice(0, 10) <= end)
+        const revenue = monthSOs.reduce((sum: number, s: any) => sum + (Number(s.total_amount) || 0), 0)
+        const poAmount = monthPOs.reduce((sum, p) => sum + (Number(p.total_amount) || 0), 0)
         return {
           month: format(d, 'MMM'),
-          revenue: monthSOs.reduce((sum: number, s: any) => sum + (Number(s.total_amount) || 0), 0),
+          revenue,
           orders: monthSOs.length,
           csiRevenue: monthCSI.reduce((sum: number, r: any) => sum + (Number(r.quantity) || 0) * (Number(r.unit_price) || 0), 0),
+          poAmount,
+          net: revenue - poAmount,
         }
       })
       setSoMonthlyBars(soBars)
@@ -443,11 +450,12 @@ export default function DashboardPage() {
         </CardHeader>
         {soPipelineOpen && (
           <CardContent className="p-0 mt-3">
-            <div className="grid grid-cols-3 text-center text-[10px] font-semibold uppercase tracking-wider border-b border-t">
+            <div className="grid grid-cols-4 text-center text-[10px] font-semibold uppercase tracking-wider border-b border-t">
               {[
                 { label: 'SO Created', color: 'text-blue-600 bg-blue-50' },
                 { label: 'DR Logged',  color: 'text-orange-600 bg-orange-50' },
                 { label: 'CSI Billed', color: 'text-purple-600 bg-purple-50' },
+                { label: 'Collected',  color: 'text-green-600 bg-green-50' },
               ].map(s => (
                 <div key={s.label} className={`py-2 ${s.color}`}>{s.label}</div>
               ))}
@@ -461,13 +469,15 @@ export default function DashboardPage() {
                 {pipelineSOs.map(so => {
                   const hasDR = drLogSONumbers.has(so.so_number ?? '') || (!!so.client_po_number && drLogSONumbers.has(so.client_po_number))
                   const hasCsi = csiRows.some(r => r.client === (so.client_name ?? '').trim())
+                  const hasCollected = collectedClients.has((so.client_name ?? '').trim())
                   const stages = [
-                    { done: true,    label: so.so_number ?? '—', sub: so.client_name ?? '' },
-                    { done: hasDR,   label: hasDR ? 'Logged' : 'Pending' },
-                    { done: hasCsi,  label: hasCsi ? 'Billed' : 'Pending' },
+                    { done: true,        label: so.so_number ?? '—', sub: so.client_name ?? '' },
+                    { done: hasDR,       label: hasDR ? 'Logged' : 'Pending' },
+                    { done: hasCsi,      label: hasCsi ? 'Billed' : 'Pending' },
+                    { done: hasCollected, label: hasCollected ? 'Collected' : 'Pending' },
                   ]
                   return (
-                    <div key={so.id} className="grid grid-cols-3 text-center text-xs cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => router.push('/sales-orders')}>
+                    <div key={so.id} className="grid grid-cols-4 text-center text-xs cursor-pointer hover:bg-muted/30 transition-colors" onClick={() => router.push('/sales-orders')}>
                       {stages.map((s, i) => (
                         <div key={i} className={`py-2.5 px-1 border-r last:border-r-0 ${s.done ? '' : 'opacity-40'}`}>
                           <div className={`inline-flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold mx-auto mb-0.5 ${s.done ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
@@ -691,6 +701,30 @@ export default function DashboardPage() {
                   </div>
                 )}
               </div>
+            </div>
+
+            {/* Sales vs Purchases + Net */}
+            <div className="pt-2 border-t space-y-2">
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground">Sales Orders vs Purchases — Net (Last 6 Months)</p>
+                <p className="text-[10px] text-muted-foreground">Bars compare monthly Sales Order and Purchase Order totals; the line is the Net difference (Sales − Purchases)</p>
+              </div>
+              {loading || soMonthlyBars.every(m => m.revenue === 0 && m.poAmount === 0) ? (
+                <div className="h-52 flex items-center justify-center text-muted-foreground text-xs border rounded-lg">{loading ? 'Loading…' : 'No sales or purchase data yet'}</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={220}>
+                  <ComposedChart data={soMonthlyBars} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="month" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `₱${(v / 1000).toFixed(0)}k`} />
+                    <Tooltip formatter={(v: any) => [`₱${(v ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`]} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                    <Bar dataKey="revenue" name="Sales Orders" fill="#2563eb" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="poAmount" name="Purchases" fill="#f97316" radius={[3, 3, 0, 0]} />
+                    <Line type="monotone" dataKey="net" name="Net" stroke="#16a34a" strokeWidth={2} dot={{ r: 3 }} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </CardContent>
         )}

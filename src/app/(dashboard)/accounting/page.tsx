@@ -21,7 +21,7 @@ import {
   Plus, Download, Loader2, BookOpen, Banknote, TrendingUp,
   Scale, FileSpreadsheet, Trash2, Calculator, Receipt, FileText, DollarSign,
   Zap, MoreHorizontal, Printer, Eye, CheckCircle2, XCircle, AlertTriangle,
-  ChevronDown, ChevronRight,
+  ChevronDown, ChevronRight, SlidersHorizontal,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
@@ -344,6 +344,73 @@ function OverviewTab() {
 
 // ── Collections Tab ───────────────────────────────────────────────────────────
 
+// Official Receipts are pre-printed, BIR-registered booklets — printing has to overlay
+// data at exact coordinates on the physical form rather than render a whole new design,
+// same as DR Logs' "Print (Blank Form)" feature.
+interface OrBlankCalib {
+  pageWidthMm: number
+  pageHeightMm: number
+  fontSizePt: number
+  dateTop: number; dateLeft: number
+  receivedFromTop: number; receivedFromLeft: number
+  paymentModeTop: number; paymentModeLeft: number
+  referenceNoTop: number; referenceNoLeft: number
+  siReferenceTop: number; siReferenceLeft: number
+  forTop: number; forLeft: number
+  grossAmountTop: number; grossAmountLeft: number
+  lessEwtTop: number; lessEwtLeft: number
+  netAmountTop: number; netAmountLeft: number
+}
+
+const DEFAULT_OR_BLANK_CALIB: OrBlankCalib = {
+  pageWidthMm: 210,
+  pageHeightMm: 297,
+  fontSizePt: 10,
+  dateTop: 25, dateLeft: 150,
+  receivedFromTop: 33, receivedFromLeft: 45,
+  paymentModeTop: 41, paymentModeLeft: 45,
+  referenceNoTop: 41, referenceNoLeft: 120,
+  siReferenceTop: 49, siReferenceLeft: 45,
+  forTop: 57, forLeft: 45,
+  grossAmountTop: 70, grossAmountLeft: 150,
+  lessEwtTop: 77, lessEwtLeft: 150,
+  netAmountTop: 84, netAmountLeft: 150,
+}
+
+const OR_BLANK_CALIB_KEY = 'cdsc_or_blank_form_calib'
+
+function loadOrBlankCalib(): OrBlankCalib {
+  if (typeof window === 'undefined') return DEFAULT_OR_BLANK_CALIB
+  try {
+    const raw = window.localStorage.getItem(OR_BLANK_CALIB_KEY)
+    if (!raw) return DEFAULT_OR_BLANK_CALIB
+    return { ...DEFAULT_OR_BLANK_CALIB, ...JSON.parse(raw) }
+  } catch {
+    return DEFAULT_OR_BLANK_CALIB
+  }
+}
+
+function OrCalibField({ label, value, onChange }: { label: string; value: number; onChange: (v: number) => void }) {
+  return (
+    <div className="space-y-1">
+      <Label className="text-xs">{label}</Label>
+      <Input type="number" step="0.5" value={value} onChange={e => onChange(Number(e.target.value) || 0)} className="h-8 text-sm" />
+    </div>
+  )
+}
+
+function OrCalibPair({ label, top, left, onChange }: { label: string; top: number; left: number; onChange: (top: number, left: number) => void }) {
+  return (
+    <div className="space-y-1">
+      <Label className="text-xs">{label}</Label>
+      <div className="grid grid-cols-2 gap-2">
+        <Input type="number" step="0.5" value={top} placeholder="Top" onChange={e => onChange(Number(e.target.value) || 0, left)} className="h-8 text-sm" />
+        <Input type="number" step="0.5" value={left} placeholder="Left" onChange={e => onChange(top, Number(e.target.value) || 0)} className="h-8 text-sm" />
+      </div>
+    </div>
+  )
+}
+
 function CollectionsTab() {
   const supabase = createClient()
   const [records, setRecords] = useState<Collection[]>([])
@@ -353,6 +420,9 @@ function CollectionsTab() {
   const [saving, setSaving] = useState(false)
   const [clientFilter, setClientFilter] = useState('')
   const df = useDateRangeFilter()
+  const [orBlankCalib, setOrBlankCalib] = useState<OrBlankCalib>(() => loadOrBlankCalib())
+  const [orCalibOpen, setOrCalibOpen] = useState(false)
+  const [orCalibDraft, setOrCalibDraft] = useState<OrBlankCalib>(DEFAULT_OR_BLANK_CALIB)
   const [form, setForm] = useState({
     or_number: '', client_id: '', client_name: '', amount: '', si_number: '',
     payment_mode: 'Cash', reference_number: '', collection_date: '', remarks: '',
@@ -563,6 +633,78 @@ function CollectionsTab() {
     setTimeout(() => { win.print() }, 400)
   }
 
+  function saveOrCalib(next: OrBlankCalib) {
+    setOrBlankCalib(next)
+    window.localStorage.setItem(OR_BLANK_CALIB_KEY, JSON.stringify(next))
+  }
+
+  function openOrCalib() {
+    setOrCalibDraft(orBlankCalib)
+    setOrCalibOpen(true)
+  }
+
+  // Overlays a collection's real field values on a blank page at the calibrated
+  // coordinates, for printing directly onto a pre-printed OR booklet page loaded into
+  // the printer — same approach as DR Logs' "Print (Blank Form)".
+  function printORBlank(r: Collection) {
+    const c = orBlankCalib
+    const net = (r.amount ?? 0) - (r.form_2307 ?? 0)
+    const dateStr = r.collection_date ? format(new Date(r.collection_date), 'MM/dd/yyyy') : ''
+    const field = (top: number, left: number, value: string) =>
+      value ? `<div style="position:absolute;top:${top}mm;left:${left}mm;">${value}</div>` : ''
+    const html = `<!DOCTYPE html><html><head><title>OR ${r.or_number ?? ''} (Blank Form)</title>
+    <style>
+      @page { size: ${c.pageWidthMm}mm ${c.pageHeightMm}mm; margin: 0; }
+      html, body { margin: 0; padding: 0; }
+      body { position: relative; width: ${c.pageWidthMm}mm; height: ${c.pageHeightMm}mm; font-family: Arial, sans-serif; font-size: ${c.fontSizePt}pt; color: #000; }
+      div { white-space: nowrap; }
+    </style>
+    </head><body>
+    ${field(c.dateTop, c.dateLeft, dateStr)}
+    ${field(c.receivedFromTop, c.receivedFromLeft, r.client_name ?? '')}
+    ${field(c.paymentModeTop, c.paymentModeLeft, (r.payment_mode ?? '').replace('_', ' '))}
+    ${field(c.referenceNoTop, c.referenceNoLeft, r.reference_number ?? '')}
+    ${field(c.siReferenceTop, c.siReferenceLeft, r.si_number ?? '')}
+    ${field(c.forTop, c.forLeft, r.remarks ?? '')}
+    ${field(c.grossAmountTop, c.grossAmountLeft, fmt(r.amount ?? 0))}
+    ${field(c.lessEwtTop, c.lessEwtLeft, r.form_2307 ? fmt(r.form_2307) : '')}
+    ${field(c.netAmountTop, c.netAmountLeft, fmt(net))}
+    </body></html>`
+    const win = window.open('', '_blank', 'width=900,height=700')
+    if (!win) return
+    win.document.write(html)
+    win.document.close()
+    setTimeout(() => { win.focus(); win.print(); win.close() }, 500)
+  }
+
+  // Prints a 5mm-spaced ruler grid on the current calibration's page size, so you can
+  // hold it up against the physical OR booklet page and read off Top/Left offsets.
+  function printOrCalibGrid() {
+    const c = orBlankCalib
+    const vLines: string[] = []
+    for (let x = 0; x <= c.pageWidthMm; x += 5) {
+      vLines.push(`<div style="position:absolute;top:0;left:${x}mm;width:0;border-left:${x % 20 === 0 ? '0.5pt solid #000' : '0.25pt solid #999'};height:${c.pageHeightMm}mm;"></div>`)
+      if (x % 20 === 0) vLines.push(`<div style="position:absolute;top:0;left:${x + 0.5}mm;font-size:6pt;">${x}</div>`)
+    }
+    const hLines: string[] = []
+    for (let y = 0; y <= c.pageHeightMm; y += 5) {
+      hLines.push(`<div style="position:absolute;top:${y}mm;left:0;height:0;border-top:${y % 20 === 0 ? '0.5pt solid #000' : '0.25pt solid #999'};width:${c.pageWidthMm}mm;"></div>`)
+      if (y % 20 === 0) hLines.push(`<div style="position:absolute;top:${y}mm;left:0;font-size:6pt;">${y}</div>`)
+    }
+    const html = `<!DOCTYPE html><html><head><title>Calibration Grid</title>
+    <style>
+      @page { size: ${c.pageWidthMm}mm ${c.pageHeightMm}mm; margin: 0; }
+      html, body { margin: 0; padding: 0; }
+      body { position: relative; width: ${c.pageWidthMm}mm; height: ${c.pageHeightMm}mm; font-family: Arial, sans-serif; color: #000; }
+    </style>
+    </head><body>${vLines.join('')}${hLines.join('')}</body></html>`
+    const win = window.open('', '_blank', 'width=900,height=700')
+    if (!win) return
+    win.document.write(html)
+    win.document.close()
+    setTimeout(() => { win.focus(); win.print(); win.close() }, 500)
+  }
+
   const filteredRecords = applyDateFilter(
     df,
     clientFilter ? records.filter(r => (r.client_name ?? '').toLowerCase().includes(clientFilter.toLowerCase())) : records,
@@ -577,8 +719,8 @@ function CollectionsTab() {
       <div className="flex items-center justify-between">
         <p className="text-sm text-muted-foreground">Official Receipts and Collection Receipts management</p>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => printOR(null)}>
-            <Printer className="h-4 w-4 mr-2" />Print Blank OR
+          <Button variant="outline" size="icon" title="Calibrate Blank Form Print" onClick={openOrCalib}>
+            <SlidersHorizontal className="h-4 w-4" />
           </Button>
           <Button onClick={() => { resetForm(); setOpen(true) }} className="bg-red-600 hover:bg-red-700">
             <Plus className="h-4 w-4 mr-2" />New Collection
@@ -650,14 +792,14 @@ function CollectionsTab() {
 
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <CardTitle className="text-base flex items-center gap-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 items-center gap-3">
+            <CardTitle className="text-base flex items-center gap-2 justify-self-start">
               <Receipt className="h-4 w-4 text-red-600" />Collection Records
             </CardTitle>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 justify-self-center">
               <Select value={clientFilter} onValueChange={v => setClientFilter(v ?? '')}>
-                <SelectTrigger className="h-8 text-xs w-48">
-                  <SelectValue placeholder="All Clients" />
+                <SelectTrigger className="h-8 text-xs w-64">
+                  <SelectValue>{() => clientFilter || 'All Clients'}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">All Clients</SelectItem>
@@ -672,6 +814,7 @@ function CollectionsTab() {
                 </Button>
               )}
             </div>
+            <div className="hidden sm:block" />
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -729,6 +872,9 @@ function CollectionsTab() {
                         </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => printOR(r)}>
                           <Printer className="mr-2 h-4 w-4" />Print OR
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => printORBlank(r)}>
+                          <FileText className="mr-2 h-4 w-4" />Print (Blank Form)
                         </DropdownMenuItem>
                         {r.status === 'posted' && (
                           <DropdownMenuItem onClick={() => voidRecord(r.id)} className="text-destructive">
@@ -876,8 +1022,64 @@ function CollectionsTab() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setViewRecord(null)}>Close</Button>
+            {viewRecord && (
+              <Button variant="outline" onClick={() => printORBlank(viewRecord)} className="gap-1.5">
+                <FileText className="h-4 w-4" />Print (Blank Form)
+              </Button>
+            )}
             <Button onClick={() => printOR(viewRecord)} className="bg-red-600 hover:bg-red-700 gap-1.5">
               <Printer className="h-4 w-4" />Print OR
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={orCalibOpen} onOpenChange={setOrCalibOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Calibrate Blank Form Print</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground -mt-2">
+            All values are in millimeters, measured from the top-left corner of the page. Load your blank OR
+            booklet page into the printer, click <strong>Print Test Grid</strong>, hold it up to the form to read
+            off where the blank line for each field falls, then enter those numbers below. Make sure your print
+            dialog uses 100% scale with no margins.
+          </p>
+          <Button type="button" variant="outline" size="sm" onClick={printOrCalibGrid} className="w-fit gap-1.5">
+            <Printer className="h-3.5 w-3.5" /> Print Test Grid
+          </Button>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-3">
+            <div className="col-span-2 grid grid-cols-3 gap-3">
+              <OrCalibField label="Page Width" value={orCalibDraft.pageWidthMm} onChange={v => setOrCalibDraft(d => ({ ...d, pageWidthMm: v }))} />
+              <OrCalibField label="Page Height" value={orCalibDraft.pageHeightMm} onChange={v => setOrCalibDraft(d => ({ ...d, pageHeightMm: v }))} />
+              <OrCalibField label="Font Size (pt)" value={orCalibDraft.fontSizePt} onChange={v => setOrCalibDraft(d => ({ ...d, fontSizePt: v }))} />
+            </div>
+            <OrCalibPair label="Date" top={orCalibDraft.dateTop} left={orCalibDraft.dateLeft}
+              onChange={(top, left) => setOrCalibDraft(d => ({ ...d, dateTop: top, dateLeft: left }))} />
+            <OrCalibPair label="Received From" top={orCalibDraft.receivedFromTop} left={orCalibDraft.receivedFromLeft}
+              onChange={(top, left) => setOrCalibDraft(d => ({ ...d, receivedFromTop: top, receivedFromLeft: left }))} />
+            <OrCalibPair label="Payment Mode" top={orCalibDraft.paymentModeTop} left={orCalibDraft.paymentModeLeft}
+              onChange={(top, left) => setOrCalibDraft(d => ({ ...d, paymentModeTop: top, paymentModeLeft: left }))} />
+            <OrCalibPair label="Reference No." top={orCalibDraft.referenceNoTop} left={orCalibDraft.referenceNoLeft}
+              onChange={(top, left) => setOrCalibDraft(d => ({ ...d, referenceNoTop: top, referenceNoLeft: left }))} />
+            <OrCalibPair label="SI Reference" top={orCalibDraft.siReferenceTop} left={orCalibDraft.siReferenceLeft}
+              onChange={(top, left) => setOrCalibDraft(d => ({ ...d, siReferenceTop: top, siReferenceLeft: left }))} />
+            <OrCalibPair label="For" top={orCalibDraft.forTop} left={orCalibDraft.forLeft}
+              onChange={(top, left) => setOrCalibDraft(d => ({ ...d, forTop: top, forLeft: left }))} />
+            <div className="col-span-2 border-t pt-3 grid grid-cols-2 gap-3">
+              <OrCalibPair label="Gross Amount" top={orCalibDraft.grossAmountTop} left={orCalibDraft.grossAmountLeft}
+                onChange={(top, left) => setOrCalibDraft(d => ({ ...d, grossAmountTop: top, grossAmountLeft: left }))} />
+              <OrCalibPair label="Less EWT" top={orCalibDraft.lessEwtTop} left={orCalibDraft.lessEwtLeft}
+                onChange={(top, left) => setOrCalibDraft(d => ({ ...d, lessEwtTop: top, lessEwtLeft: left }))} />
+            </div>
+            <OrCalibPair label="Net Amount" top={orCalibDraft.netAmountTop} left={orCalibDraft.netAmountLeft}
+              onChange={(top, left) => setOrCalibDraft(d => ({ ...d, netAmountTop: top, netAmountLeft: left }))} />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setOrCalibDraft(DEFAULT_OR_BLANK_CALIB)}>Reset to Defaults</Button>
+            <Button type="button" variant="outline" onClick={() => setOrCalibOpen(false)}>Cancel</Button>
+            <Button type="button" onClick={() => { saveOrCalib(orCalibDraft); setOrCalibOpen(false); toast.success('Calibration saved') }} className="bg-red-600 hover:bg-red-700">
+              Save
             </Button>
           </DialogFooter>
         </DialogContent>
