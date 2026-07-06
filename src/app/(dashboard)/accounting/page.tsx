@@ -353,7 +353,7 @@ function OverviewTab() {
                     <TableCell className="text-right text-red-600">({fmt(ewt)})</TableCell>
                     <TableCell className="text-right font-medium">{fmt(net)}</TableCell>
                     <TableCell>
-                      <Badge variant="secondary" className="text-xs">{po.status}</Badge>
+                      <Badge variant="secondary" className="text-xs capitalize">{po.status}</Badge>
                     </TableCell>
                   </TableRow>
                 )
@@ -1089,7 +1089,7 @@ function CollectionsTab() {
                   <TableCell className="text-right text-sm text-muted-foreground">{r.form_2307 ? fmt(r.form_2307) : '—'}</TableCell>
                   <TableCell className="text-right font-semibold text-green-700">{fmt((r.amount ?? 0) - (r.form_2307 ?? 0))}</TableCell>
                   <TableCell>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_CLS[r.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${STATUS_CLS[r.status] ?? 'bg-gray-100 text-gray-600'}`}>
                       {r.status}
                     </span>
                   </TableCell>
@@ -1238,7 +1238,7 @@ function CollectionsTab() {
                 <div><span className="text-xs text-muted-foreground block">Date</span><span>{viewRecord.collection_date ? format(new Date(viewRecord.collection_date), 'MMM d, yyyy') : '—'}</span></div>
                 <div><span className="text-xs text-muted-foreground block">Client</span><span className="font-medium">{viewRecord.client_name ?? '—'}</span></div>
                 <div><span className="text-xs text-muted-foreground block">Status</span>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_CLS[viewRecord.status] ?? 'bg-gray-100 text-gray-600'}`}>{viewRecord.status}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${STATUS_CLS[viewRecord.status] ?? 'bg-gray-100 text-gray-600'}`}>{viewRecord.status}</span>
                 </div>
                 <div><span className="text-xs text-muted-foreground block">Payment Mode</span><span className="capitalize">{(viewRecord.payment_mode ?? '—').replace('_', ' ')}</span></div>
                 <div><span className="text-xs text-muted-foreground block">Reference No.</span><span>{viewRecord.reference_number ?? '—'}</span></div>

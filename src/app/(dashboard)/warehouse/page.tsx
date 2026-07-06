@@ -99,7 +99,7 @@ export default function WarehousePage() {
                       <TableCell className="text-sm">{t.to}</TableCell>
                       <TableCell className="text-sm">{t.items}</TableCell>
                       <TableCell className="text-sm">{t.date}</TableCell>
-                      <TableCell><Badge variant={t.status === 'completed' ? 'outline' : 'default'} className="text-xs">✓ {t.status}</Badge></TableCell>
+                      <TableCell><Badge variant={t.status === 'completed' ? 'outline' : 'default'} className="text-xs capitalize">✓ {t.status}</Badge></TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -135,7 +135,7 @@ export default function WarehousePage() {
                       <TableCell className="text-sm">{a.items}</TableCell>
                       <TableCell className="text-sm">{a.reason}</TableCell>
                       <TableCell className="text-sm">{a.date}</TableCell>
-                      <TableCell><Badge variant={a.status === 'approved' ? 'outline' : 'secondary'} className="text-xs">{a.status}</Badge></TableCell>
+                      <TableCell><Badge variant={a.status === 'approved' ? 'outline' : 'secondary'} className="text-xs capitalize">{a.status}</Badge></TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

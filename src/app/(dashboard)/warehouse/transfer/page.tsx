@@ -143,7 +143,7 @@ export default function StockTransferPage() {
                   {t.transfer_date ? format(new Date(t.transfer_date), 'MMM d, yyyy') : format(new Date(t.created_at), 'MMM d, yyyy')}
                 </TableCell>
                 <TableCell>
-                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColor[t.status] ?? 'bg-gray-100 text-gray-800'}`}>
+                  <span className={`text-xs px-2 py-1 rounded-full font-medium capitalize ${statusColor[t.status] ?? 'bg-gray-100 text-gray-800'}`}>
                     {t.status}
                   </span>
                 </TableCell>

@@ -117,7 +117,7 @@ export default function CategoriesPage() {
                 <TableCell className="font-mono text-sm">{cat.category_code ?? '—'}</TableCell>
                 <TableCell className="font-medium">{cat.category_name}</TableCell>
                 <TableCell>
-                  <Badge className={cat.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}>
+                  <Badge className={`capitalize ${cat.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
                     {cat.status}
                   </Badge>
                 </TableCell>

@@ -75,7 +75,7 @@ export default function EmployeeRequestsPage() {
                   <TableCell className="text-sm">{er.items} items</TableCell>
                   <TableCell className="text-sm">{er.date}</TableCell>
                   <TableCell>
-                    <Badge variant={STATUS_COLORS[er.status as keyof typeof STATUS_COLORS]} className="text-xs">
+                    <Badge variant={STATUS_COLORS[er.status as keyof typeof STATUS_COLORS]} className="text-xs capitalize">
                       {er.status === 'released' ? '✓ Released' : er.status}
                     </Badge>
                   </TableCell>

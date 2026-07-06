@@ -186,7 +186,7 @@ export default function CollectionsPage() {
                   <TableCell className="text-right text-sm text-muted-foreground">{r.form_2307 ? fmt(r.form_2307) : '—'}</TableCell>
                   <TableCell className="text-right font-semibold text-green-700">{fmt((r.amount ?? 0) - (r.form_2307 ?? 0))}</TableCell>
                   <TableCell>
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_CLS[r.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${STATUS_CLS[r.status] ?? 'bg-gray-100 text-gray-600'}`}>
                       {r.status}
                     </span>
                   </TableCell>

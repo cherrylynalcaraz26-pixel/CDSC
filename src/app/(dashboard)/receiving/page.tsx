@@ -603,7 +603,7 @@ export default function ReceivingPage() {
                           <TableCell className="text-sm">{rr.delivery_date}</TableCell>
                           <TableCell className="text-sm">{rr.received_by ?? '—'}</TableCell>
                           <TableCell>
-                            <Badge variant="outline" className="text-xs text-green-700 border-green-300">✓ {rr.status}</Badge>
+                            <Badge variant="outline" className="text-xs text-green-700 border-green-300 capitalize">✓ {rr.status}</Badge>
                           </TableCell>
                           <TableCell onClick={e => e.stopPropagation()}>
                             <DropdownMenu>
@@ -906,7 +906,7 @@ export default function ReceivingPage() {
                         <TableCell className="text-sm">{ret.return_date}</TableCell>
                         <TableCell><Badge variant="outline" className="text-xs capitalize">{ret.return_type === 'supplier' ? 'To Supplier' : 'To Warehouse'}</Badge></TableCell>
                         <TableCell className="text-sm">{ret.return_type === 'supplier' ? (ret.supplier_name ?? '—') : (ret.client_name ? `Warehouse — ${ret.client_name}` : 'Warehouse')}</TableCell>
-                        <TableCell><Badge variant="outline" className="text-xs text-green-700 border-green-300">✓ {ret.status}</Badge></TableCell>
+                        <TableCell><Badge variant="outline" className="text-xs text-green-700 border-green-300 capitalize">✓ {ret.status}</Badge></TableCell>
                         <TableCell className="text-sm text-muted-foreground">{ret.notes ?? '—'}</TableCell>
                         <TableCell>
                           <DropdownMenu>

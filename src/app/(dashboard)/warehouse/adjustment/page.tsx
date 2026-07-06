@@ -133,7 +133,7 @@ export default function StockAdjustmentPage() {
                   {a.adjustment_date ? format(new Date(a.adjustment_date), 'MMM d, yyyy') : format(new Date(a.created_at), 'MMM d, yyyy')}
                 </TableCell>
                 <TableCell>
-                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${a.status === 'approved' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+                  <span className={`text-xs px-2 py-1 rounded-full font-medium capitalize ${a.status === 'approved' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
                     {a.status}
                   </span>
                 </TableCell>

@@ -88,7 +88,6 @@ export default function DashboardPage() {
   const [pipelinePOs, setPipelinePOs] = useState<any[]>([])
   const [receivedPONumbers, setReceivedPONumbers] = useState<Set<string>>(new Set())
   const [pipelineSOs, setPipelineSOs] = useState<any[]>([])
-  const [collectedClients, setCollectedClients] = useState<Set<string>>(new Set())
   const [drLogSONumbers, setDrLogSONumbers] = useState<Set<string>>(new Set())
   const [poPipelineOpen, setPoPipelineOpen] = useState(true)
   const [soPipelineOpen, setSoPipelineOpen] = useState(true)
@@ -140,8 +139,8 @@ export default function DashboardPage() {
         supabase.from('csi_records').select('id, si_date', { count: 'exact' }),
         supabase.from('dr_logs').select('id, dr_number, dr_date, supplier_name, status').order('dr_date', { ascending: false }).limit(8),
         supabase.from('purchase_orders').select('id, po_number, created_at, status, total_amount, supplier:suppliers(company_name)').order('created_at', { ascending: false }).limit(6),
-        supabase.from('collections').select('client_name, or_number, amount, form_2307, status, collection_date'),
-        supabase.from('csi_records').select('client_name, si_number, item_name, quantity, unit_price, si_date'),
+        supabase.from('collections').select('client_name, or_number, amount, form_2307, status, collection_date, si_number'),
+        supabase.from('csi_records').select('client_name, si_number, item_name, quantity, unit_price, si_date, po_number'),
       ])
 
       const allPOs = pos.data ?? []
@@ -224,11 +223,28 @@ export default function DashboardPage() {
       // --- SO Pipeline ---
       // Delivered orders still belong here — CSI billing and collection (the pipeline's
       // later stages) happen *after* delivery, so only cancelled orders are done-and-hidden.
+      // Once an order's CSI invoices are all posted-collected there's nothing left to act
+      // on, so — unlike DR/CSI status, which are shown either way — fully collected orders
+      // are dropped from the list entirely rather than just checked off.
       const openSOsData = await supabase.from('sales_orders').select('id, so_number, client_po_number, status, client_name').not('status', 'eq', 'cancelled').order('created_at', { ascending: false }).limit(10)
-      const colClientsData = await supabase.from('collections').select('client_name')
       const drSOData = await supabase.from('dr_logs').select('po_number')
-      setPipelineSOs(openSOsData.data ?? [])
-      setCollectedClients(new Set((colClientsData.data ?? []).map((r: any) => (r.client_name ?? '').trim()).filter(Boolean)))
+      const postedSiNumbers = new Set(
+        (collectionData.data ?? []).filter(c => c.status === 'posted' && c.si_number).map(c => c.si_number)
+      )
+      const csiBySo = new Map<string, string[]>()
+      for (const r of (csiDetailData.data ?? [])) {
+        if (!r.po_number || !r.si_number) continue
+        if (!csiBySo.has(r.po_number)) csiBySo.set(r.po_number, [])
+        csiBySo.get(r.po_number)!.push(r.si_number)
+      }
+      const soWithStatus = (openSOsData.data ?? []).map(so => {
+        const soRef = so.so_number ?? ''
+        const siNumbers = csiBySo.get(soRef) ?? (so.client_po_number ? csiBySo.get(so.client_po_number) ?? [] : [])
+        const hasCsi = siNumbers.length > 0
+        const hasCollected = hasCsi && siNumbers.every(si => postedSiNumbers.has(si))
+        return { ...so, hasCsi, hasCollected }
+      })
+      setPipelineSOs(soWithStatus.filter(so => !so.hasCollected))
       setDrLogSONumbers(new Set((drSOData.data ?? []).map((r: any) => r.po_number).filter(Boolean)))
 
       setMonthlyData(bars)
@@ -424,7 +440,7 @@ export default function DashboardPage() {
                             {s.done ? '✓' : (i + 1)}
                           </div>
                           <div className="font-medium truncate px-1">{s.label}</div>
-                          {s.sub && <div className="text-[10px] text-muted-foreground">{s.sub}</div>}
+                          {s.sub && <div className="text-[10px] text-muted-foreground capitalize">{s.sub}</div>}
                         </div>
                       ))}
                     </div>
@@ -470,8 +486,8 @@ export default function DashboardPage() {
               <div className="divide-y">
                 {pipelineSOs.map(so => {
                   const hasDR = drLogSONumbers.has(so.so_number ?? '') || (!!so.client_po_number && drLogSONumbers.has(so.client_po_number))
-                  const hasCsi = csiRows.some(r => r.client === (so.client_name ?? '').trim())
-                  const hasCollected = collectedClients.has((so.client_name ?? '').trim())
+                  const hasCsi = so.hasCsi
+                  const hasCollected = so.hasCollected
                   const stages = [
                     { done: true,        label: so.so_number ?? '—', sub: so.client_name ?? '' },
                     { done: hasDR,       label: hasDR ? 'Logged' : 'Pending' },
@@ -794,7 +810,7 @@ export default function DashboardPage() {
                       {dr.dr_date ? format(new Date(dr.dr_date), 'MMM d, yyyy') : '—'}
                     </td>
                     <td className="px-4 py-2">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[dr.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${STATUS_COLORS[dr.status] ?? 'bg-gray-100 text-gray-600'}`}>
                         {dr.status}
                       </span>
                     </td>
@@ -882,7 +898,7 @@ export default function DashboardPage() {
                       <td className="px-3 py-2 text-xs text-muted-foreground">{r.collection_date ? format(new Date(r.collection_date), 'MMM d, yyyy') : '—'}</td>
                       <td className="px-3 py-2 text-xs text-right text-green-600 tabular-nums font-medium">₱{(Number(r.amount) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
                       <td className="px-3 py-2 text-xs text-right text-orange-500 tabular-nums">₱{(Number(r.form_2307) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
-                      <td className="px-3 py-2 text-xs">{r.status ?? '—'}</td>
+                      <td className="px-3 py-2 text-xs capitalize">{r.status ?? '—'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1009,7 +1025,7 @@ export default function DashboardPage() {
                       {format(new Date(po.created_at), 'MMM d, yyyy')}
                     </td>
                     <td className="px-4 py-2">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[po.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${STATUS_COLORS[po.status] ?? 'bg-gray-100 text-gray-600'}`}>
                         {po.status.replace(/_/g, ' ')}
                       </span>
                     </td>

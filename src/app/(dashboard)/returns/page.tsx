@@ -146,7 +146,7 @@ export default function ReturnsPage() {
                   {r.return_date ? format(new Date(r.return_date), 'MMM d, yyyy') : format(new Date(r.created_at), 'MMM d, yyyy')}
                 </TableCell>
                 <TableCell>
-                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColor[r.status] ?? 'bg-gray-100 text-gray-800'}`}>
+                  <span className={`text-xs px-2 py-1 rounded-full font-medium capitalize ${statusColor[r.status] ?? 'bg-gray-100 text-gray-800'}`}>
                     {r.status}
                   </span>
                 </TableCell>

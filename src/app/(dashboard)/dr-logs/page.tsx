@@ -232,7 +232,7 @@ export default function DRLogsPage() {
           <div class="text-[9px] font-semibold uppercase text-gray-400 mt-1.5">Date</div>
           <div class="text-gray-800">${log.dr_date ? format(parseISO(log.dr_date), 'MM/dd/yyyy') : '—'}</div>
           <div class="text-[9px] font-semibold uppercase text-gray-400 mt-1.5">Status</div>
-          <div class="text-gray-800">${log.status}</div>
+          <div class="text-gray-800 capitalize">${log.status}</div>
         </div>
       </div>
       <table class="w-full border-collapse">

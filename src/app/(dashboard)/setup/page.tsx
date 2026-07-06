@@ -577,7 +577,7 @@ function CategoriesTab() {
                 <TableCell className="font-medium">{r.category_name}</TableCell>
                 <TableCell>
                   <button onClick={() => toggleStatus(r)}>
-                    <Badge className={r.status === 'active' ? 'bg-green-100 text-green-800 cursor-pointer' : 'bg-gray-100 text-gray-600 cursor-pointer'}>
+                    <Badge className={`capitalize ${r.status === 'active' ? 'bg-green-100 text-green-800 cursor-pointer' : 'bg-gray-100 text-gray-600 cursor-pointer'}`}>
                       {r.status}
                     </Badge>
                   </button>
@@ -1042,7 +1042,7 @@ function ClientsTab() {
                 <TableCell className="text-sm">₱{(c.credit_limit ?? 0).toLocaleString('en-PH')}</TableCell>
                 <TableCell>
                   <button onClick={() => toggleStatus(c)}>
-                    <Badge className={c.status === 'active' ? 'bg-green-100 text-green-800 cursor-pointer' : 'bg-gray-100 text-gray-600 cursor-pointer'}>
+                    <Badge className={`capitalize ${c.status === 'active' ? 'bg-green-100 text-green-800 cursor-pointer' : 'bg-gray-100 text-gray-600 cursor-pointer'}`}>
                       {c.status}
                     </Badge>
                   </button>
@@ -1305,7 +1305,7 @@ function ItemListTab() {
                 <div className="mt-auto flex items-center justify-between pt-2">
                   <span className="font-semibold text-sm">₱{r.cost.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
                   <button onClick={() => toggleStatus(r)}>
-                    <Badge className={r.status === 'active' ? 'bg-green-100 text-green-800 cursor-pointer' : 'bg-gray-100 text-gray-600 cursor-pointer'}>
+                    <Badge className={`capitalize ${r.status === 'active' ? 'bg-green-100 text-green-800 cursor-pointer' : 'bg-gray-100 text-gray-600 cursor-pointer'}`}>
                       {r.status}
                     </Badge>
                   </button>
@@ -1372,7 +1372,7 @@ function ItemListTab() {
                 </TableCell>
                 <TableCell>
                   <button onClick={() => toggleStatus(r)}>
-                    <Badge className={r.status === 'active' ? 'bg-green-100 text-green-800 cursor-pointer' : 'bg-gray-100 text-gray-600 cursor-pointer'}>
+                    <Badge className={`capitalize ${r.status === 'active' ? 'bg-green-100 text-green-800 cursor-pointer' : 'bg-gray-100 text-gray-600 cursor-pointer'}`}>
                       {r.status}
                     </Badge>
                   </button>
