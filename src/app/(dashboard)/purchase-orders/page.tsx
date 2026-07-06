@@ -91,6 +91,7 @@ export default function PurchaseOrdersPage() {
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'form' | 'preview'>('form')
   const [companyInfo, setCompanyInfo] = useState<{
     company_name: string; address: string; phone: string; email: string; tin: string; logo_url?: string
@@ -229,6 +230,18 @@ export default function PurchaseOrdersPage() {
     setPaymentTerms('30 days'); setRemarks(''); setLines([emptyLine()])
     setActiveTab('form'); setDiscountType('none'); setDiscountCustom('')
     setEwtType('services'); setPreparedBy(''); setApprovedBy(''); setVatInclusive(false)
+  }
+
+  function handleCancelClick() {
+    const hasData = supplierId || poNumber || lines.some(l => l.item_name)
+    if (hasData) { setDiscardConfirmOpen(true); return }
+    setOpen(false); resetForm()
+  }
+
+  function discardForm() {
+    setDiscardConfirmOpen(false)
+    setOpen(false)
+    resetForm()
   }
 
   async function openEdit(po: PO) {
@@ -610,11 +623,7 @@ export default function PurchaseOrdersPage() {
           <p className="text-muted-foreground text-sm">Manage supplier purchase orders, track deliveries and payments</p>
         </div>
         {open ? (
-          <Button variant="outline" onClick={() => {
-            const hasData = supplierId || poNumber || lines.some(l => l.item_name)
-            if (hasData && !window.confirm('You have unsaved changes. Discard them?')) return
-            setOpen(false); resetForm()
-          }}>
+          <Button variant="outline" onClick={handleCancelClick}>
             <X className="h-4 w-4 mr-2" />Cancel
           </Button>
         ) : (
@@ -1154,7 +1163,7 @@ export default function PurchaseOrdersPage() {
                   </div>
 
                   <div className="flex justify-end gap-2 pt-2">
-                    <Button variant="outline" onClick={() => { setOpen(false); resetForm() }}>Cancel</Button>
+                    <Button variant="outline" onClick={handleCancelClick}>Cancel</Button>
                     <Button type="button" variant="outline" className="gap-1.5" onClick={handlePrint}>
                       <Printer className="h-4 w-4" />Print
                     </Button>
@@ -1162,7 +1171,9 @@ export default function PurchaseOrdersPage() {
                       <Mail className="h-4 w-4" />Email
                     </Button>
                     <Button onClick={submitPO} disabled={saving} className="bg-red-600 hover:bg-red-700">
-                      {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Creating…</> : 'Create Purchase Order'}
+                      {saving
+                        ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />{editingId ? 'Saving…' : 'Creating…'}</>
+                        : editingId ? 'Save Update' : 'Create Purchase Order'}
                     </Button>
                   </div>
                 </CardContent>
@@ -1454,6 +1465,20 @@ export default function PurchaseOrdersPage() {
                 {sendingEmail ? <><Loader2 className="h-4 w-4 animate-spin" />Sending…</> : <><Send className="h-4 w-4" />Send Email</>}
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Discard Confirmation */}
+      <Dialog open={discardConfirmOpen} onOpenChange={setDiscardConfirmOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Unsaved Changes</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">You have unsaved changes. Do you want to keep editing or discard them?</p>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setDiscardConfirmOpen(false)}>Keep Editing</Button>
+            <Button variant="destructive" onClick={discardForm}>Discard</Button>
           </div>
         </DialogContent>
       </Dialog>

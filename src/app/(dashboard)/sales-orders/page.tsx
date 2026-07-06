@@ -59,6 +59,7 @@ export default function SalesOrdersPage() {
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false)
   const [mobileTab, setMobileTab] = useState<'form' | 'preview'>('form')
   const [itemSearchIdx, setItemSearchIdx] = useState<number | null>(null)
   const [itemQuery, setItemQuery] = useState('')
@@ -81,6 +82,8 @@ export default function SalesOrdersPage() {
 
   // delivery summary per so_number for list display
   const [soDeliveryMap, setSoDeliveryMap] = useState<Record<string, { total: number; pending: number; partial: number; delivered: number }>>({})
+  // so_numbers whose CSI invoices have been fully collected (Pipeline "Collected" stage)
+  const [collectedSONumbers, setCollectedSONumbers] = useState<Set<string>>(new Set())
 
 
   // Email SO
@@ -159,6 +162,31 @@ export default function SalesOrdersPage() {
         else map[d.so_number].pending++
       }
       setSoDeliveryMap(map)
+
+      // Collected status per SO — invoiced (CSI) vs. posted collections against those SIs.
+      const [{ data: csiData }, { data: colData }] = await Promise.all([
+        supabase.from('csi_records').select('po_number, si_number, amount').in('po_number', soNums),
+        supabase.from('collections').select('si_number, amount').eq('status', 'posted').not('si_number', 'is', null),
+      ])
+      const invoicedBySo: Record<string, { total: number; siNumbers: Set<string> }> = {}
+      for (const c of (csiData ?? [])) {
+        if (!c.po_number) continue
+        if (!invoicedBySo[c.po_number]) invoicedBySo[c.po_number] = { total: 0, siNumbers: new Set() }
+        invoicedBySo[c.po_number].total += Number(c.amount) || 0
+        if (c.si_number) invoicedBySo[c.po_number].siNumbers.add(c.si_number)
+      }
+      const collectedBySi: Record<string, number> = {}
+      for (const c of (colData ?? [])) {
+        if (!c.si_number) continue
+        collectedBySi[c.si_number] = (collectedBySi[c.si_number] ?? 0) + (Number(c.amount) || 0)
+      }
+      const collectedSet = new Set<string>()
+      for (const [soNum, info] of Object.entries(invoicedBySo)) {
+        if (info.total <= 0) continue
+        const collected = [...info.siNumbers].reduce((s, si) => s + (collectedBySi[si] ?? 0), 0)
+        if (collected >= info.total - 0.01) collectedSet.add(soNum)
+      }
+      setCollectedSONumbers(collectedSet)
     }
 
     setLoading(false)
@@ -170,6 +198,18 @@ export default function SalesOrdersPage() {
     setSoNumber(''); setSoDate(today()); setClientId(''); setClientPONumber('')
     setDeliveryDate(''); setRemarks(''); setLines([emptyLine()]); setMobileTab('form')
     setEditingSOId(null)
+  }
+
+  function handleCancelClick() {
+    const hasData = clientId || soNumber || lines.some(l => l.item_name)
+    if (hasData) { setDiscardConfirmOpen(true); return }
+    setOpen(false); resetForm()
+  }
+
+  function discardForm() {
+    setDiscardConfirmOpen(false)
+    setOpen(false)
+    resetForm()
   }
 
   async function submitSO() {
@@ -631,6 +671,14 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
   })()
   const deliveryStr = deliveryDate ? new Date(deliveryDate + 'T00:00:00').toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }) : ''
 
+  // Pipeline stays focused on orders with a next action — drop cancelled orders, and
+  // drop delivered orders once payment's been fully collected (nothing left to chase).
+  function isPipelineActive(so: SO) {
+    if (so.status === 'cancelled') return false
+    if (so.status === 'delivered' && collectedSONumbers.has(so.so_number ?? '')) return false
+    return true
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -639,11 +687,7 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
           <p className="text-muted-foreground text-sm">Create and manage client sales orders</p>
         </div>
         {open ? (
-          <Button variant="outline" onClick={() => {
-            const hasData = clientId || soNumber || lines.some(l => l.item_name)
-            if (hasData && !window.confirm('You have unsaved changes. Discard them?')) return
-            setOpen(false); resetForm()
-          }}>
+          <Button variant="outline" onClick={handleCancelClick}>
             <X className="h-4 w-4 mr-2" />Cancel
           </Button>
         ) : (
@@ -863,13 +907,17 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
                   </div>
 
                   <div className="flex justify-end gap-2 pt-2">
-                    <Button variant="outline" onClick={() => {
-                      const hasData = clientId || soNumber || lines.some(l => l.item_name)
-                      if (hasData && !window.confirm('You have unsaved changes. Discard them?')) return
-                      setOpen(false); resetForm()
-                    }}>Cancel</Button>
+                    <Button variant="outline" onClick={handleCancelClick}>Cancel</Button>
                     <Button type="button" variant="outline" className="gap-1.5" onClick={handlePrint}>
                       <Printer className="h-4 w-4" />Print
+                    </Button>
+                    <Button
+                      type="button" variant="outline" className="gap-1.5"
+                      disabled={!editingSOId}
+                      title={!editingSOId ? 'Save the sales order first' : undefined}
+                      onClick={() => { const so = sos.find(s => s.id === editingSOId); if (so) openEmailSO(so) }}
+                    >
+                      <Mail className="h-4 w-4" />Email
                     </Button>
                     <Button onClick={submitSO} disabled={saving} className="bg-red-600 hover:bg-red-700">
                       {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />{editingSOId ? 'Updating…' : 'Creating…'}</> : editingSOId ? 'Update Sales Order' : 'Create Sales Order'}
@@ -1017,33 +1065,36 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
           </CardHeader>
           {pipelineOpen && (
             <CardContent className="p-0 mt-3">
-              <div className="grid grid-cols-4 text-center text-[10px] font-semibold uppercase tracking-wider border-b border-t">
+              <div className="grid grid-cols-5 text-center text-[10px] font-semibold uppercase tracking-wider border-b border-t">
                 {[
                   { label: 'SO Created',  color: 'text-blue-600 bg-blue-50' },
                   { label: 'Confirmed',   color: 'text-indigo-600 bg-indigo-50' },
                   { label: 'Processing',  color: 'text-yellow-600 bg-yellow-50' },
                   { label: 'Shipped',     color: 'text-orange-600 bg-orange-50' },
+                  { label: 'Collected',   color: 'text-green-600 bg-green-50' },
                 ].map(s => (
                   <div key={s.label} className={`py-2 ${s.color}`}>{s.label}</div>
                 ))}
               </div>
               {loading ? (
                 <div className="text-center py-6"><Loader2 className="h-4 w-4 animate-spin mx-auto text-muted-foreground" /></div>
-              ) : sos.filter(s => !['cancelled', 'delivered'].includes(s.status)).length === 0 ? (
+              ) : sos.filter(s => isPipelineActive(s)).length === 0 ? (
                 <div className="text-center py-6 text-xs text-muted-foreground">No active sales orders</div>
               ) : (
                 <div className="divide-y max-h-64 overflow-y-auto">
-                  {sos.filter(s => !['cancelled', 'delivered'].includes(s.status)).map(so => {
+                  {sos.filter(s => isPipelineActive(s)).map(so => {
                     const statusOrder = ['draft', 'confirmed', 'processing', 'shipped', 'delivered']
                     const stageIdx = statusOrder.indexOf(so.status)
+                    const collected = collectedSONumbers.has(so.so_number ?? '')
                     const stages = [
                       { done: true,          label: so.so_number ?? '—',           sub: so.client_name ?? '' },
                       { done: stageIdx >= 1, label: stageIdx >= 1 ? 'Confirmed'  : 'Pending' },
                       { done: stageIdx >= 2, label: stageIdx >= 2 ? 'Processing' : 'Pending' },
                       { done: stageIdx >= 3, label: stageIdx >= 3 ? 'Shipped'    : 'Pending' },
+                      { done: collected,     label: collected ? 'Collected' : 'Pending' },
                     ]
                     return (
-                      <div key={so.id} className="grid grid-cols-4 text-center text-xs">
+                      <div key={so.id} className="grid grid-cols-5 text-center text-xs">
                         {stages.map((s, i) => (
                           <div key={i} className={`py-2.5 px-1 border-r last:border-r-0 ${s.done ? '' : 'opacity-40'}`}>
                             <div className={`inline-flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold mx-auto mb-0.5 ${s.done ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
@@ -1063,7 +1114,8 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
         </Card>
       )}
 
-      {/* Sales Order List */}
+      {/* Sales Order List — hidden while creating/editing */}
+      {!open && (
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Sales Order List</CardTitle>
@@ -1194,6 +1246,7 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
           </Table>
         </CardContent>
       </Card>
+      )}
 
       {/* View SO Dialog */}
       <Dialog open={!!viewSO} onOpenChange={o => { if (!o) { setViewSO(null); setViewSODeliveries([]); setViewSOCSIs([]) } }}>
@@ -1461,6 +1514,20 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
                 ))}
               </tbody>
             </table>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Discard Confirmation */}
+      <Dialog open={discardConfirmOpen} onOpenChange={setDiscardConfirmOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Unsaved Changes</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">You have unsaved changes. Do you want to keep editing or discard them?</p>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setDiscardConfirmOpen(false)}>Keep Editing</Button>
+            <Button variant="destructive" onClick={discardForm}>Discard</Button>
           </div>
         </DialogContent>
       </Dialog>
