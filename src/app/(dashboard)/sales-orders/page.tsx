@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -13,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import {
   Plus, MoreHorizontal, Eye, Printer, Trash2, CheckCircle2, XCircle,
   Loader2, X, FileText, Package, Search, Mail, ChevronDown, ChevronUp,
-  Globe, EyeOff,
+  Globe, EyeOff, Receipt,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
@@ -51,6 +52,7 @@ const today = () => new Date().toISOString().split('T')[0]
 
 export default function SalesOrdersPage() {
   const supabase = createClient()
+  const router = useRouter()
   const printRef = useRef<HTMLDivElement>(null)
   const [sos, setSOs] = useState<SO[]>([])
   const [items, setItems] = useState<ItemOption[]>([])
@@ -1204,6 +1206,17 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
                           <DropdownMenuItem onClick={() => openEmailSO(so)}>
                             <Mail className="mr-2 h-4 w-4" />Send Email
                           </DropdownMenuItem>
+                          {so.status === 'delivered' && (
+                            collectedSONumbers.has(so.so_number ?? '') ? (
+                              <DropdownMenuItem onClick={() => router.push(`/accounting?tab=collections&client=${encodeURIComponent(so.client_name ?? '')}`)} className="text-green-600">
+                                <CheckCircle2 className="mr-2 h-4 w-4" />Collected — Update Collection
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem onClick={() => router.push(`/accounting?tab=collections&client=${encodeURIComponent(so.client_name ?? '')}`)} className="text-amber-600">
+                                <Receipt className="mr-2 h-4 w-4" />Collect Payment
+                              </DropdownMenuItem>
+                            )
+                          )}
                           <DropdownMenuSeparator />
                           {so.status === 'draft' && (
                             <DropdownMenuItem onClick={() => updateStatus(so.id, 'confirmed')} className="text-blue-600">

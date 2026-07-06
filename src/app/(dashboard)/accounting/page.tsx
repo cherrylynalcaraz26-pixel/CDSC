@@ -497,12 +497,13 @@ function OrBlankPreview({ calib, data }: { calib: OrBlankCalib; data: OrBlankPre
 
 function CollectionsTab() {
   const supabase = createClient()
+  const searchParams = useSearchParams()
   const [records, setRecords] = useState<Collection[]>([])
   const [clients, setClients] = useState<{ id: string; company_name: string; tin: string | null; address: string | null; city: string | null; province: string | null; industry: string | null }[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [clientFilter, setClientFilter] = useState('')
+  const [clientFilter, setClientFilter] = useState(() => searchParams.get('client') ?? '')
   const df = useDateRangeFilter()
   const [orBlankCalib, setOrBlankCalib] = useState<OrBlankCalib>(() => loadOrBlankCalib())
   const [orCalibOpen, setOrCalibOpen] = useState(false)
@@ -809,7 +810,7 @@ function CollectionsTab() {
     }).join('')
     return `<!DOCTYPE html><html><head><title>Official Receipt (Blank Form)</title>
     <style>
-      @page { size: ${c.pageWidthMm}mm ${c.pageHeightMm}mm; margin: 0; }
+      @page { size: portrait; margin: 0; }
       html, body { margin: 0; padding: 0; }
       body { position: relative; width: ${c.pageWidthMm}mm; height: ${c.pageHeightMm}mm; font-family: Arial, sans-serif; font-size: ${c.fontSizePt}pt; color: #000; }
       div { white-space: nowrap; }
@@ -867,7 +868,7 @@ function CollectionsTab() {
     }
     const html = `<!DOCTYPE html><html><head><title>Calibration Grid</title>
     <style>
-      @page { size: ${c.pageWidthMm}mm ${c.pageHeightMm}mm; margin: 0; }
+      @page { size: portrait; margin: 0; }
       html, body { margin: 0; padding: 0; }
       body { position: relative; width: ${c.pageWidthMm}mm; height: ${c.pageHeightMm}mm; font-family: Arial, sans-serif; color: #000; }
     </style>
@@ -1056,6 +1057,7 @@ function CollectionsTab() {
                 <TableHead>OR Number</TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead>Client</TableHead>
+                <TableHead>CSI</TableHead>
                 <TableHead>Payment Mode</TableHead>
                 <TableHead className="text-right">Gross Amount</TableHead>
                 <TableHead className="text-right">Form 2307</TableHead>
@@ -1066,11 +1068,11 @@ function CollectionsTab() {
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={9} className="text-center py-10">
+                <TableRow><TableCell colSpan={10} className="text-center py-10">
                   <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                 </TableCell></TableRow>
               ) : filteredRecords.length === 0 ? (
-                <TableRow><TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
+                <TableRow><TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
                   {clientFilter ? `No collections found for "${clientFilter}".` : 'No collections yet. Click New Collection to record one.'}
                 </TableCell></TableRow>
               ) : filteredRecords.map(r => (
@@ -1080,6 +1082,7 @@ function CollectionsTab() {
                     {r.collection_date ? format(new Date(r.collection_date), 'MMM d, yyyy') : '—'}
                   </TableCell>
                   <TableCell className="font-medium text-sm">{r.client_name ?? '—'}</TableCell>
+                  <TableCell className="font-mono text-xs">{r.si_number ?? '—'}</TableCell>
                   <TableCell>
                     <span className="text-xs bg-muted px-2 py-0.5 rounded-full capitalize">
                       {(r.payment_mode ?? '').replace('_', ' ')}
