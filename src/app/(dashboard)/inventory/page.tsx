@@ -98,12 +98,9 @@ export default function InventoryPage() {
   const [saving, setSaving] = useState(false)
 
   const [addOpen, setAddOpen] = useState(false)
-  const [addItemName, setAddItemName] = useState('')
-  const [addItemSearch, setAddItemSearch] = useState('')
-  const [addItemFocus, setAddItemFocus] = useState(false)
-  const [addSelectedItem, setAddSelectedItem] = useState<ItemOption | null>(null)
-  const [addQty, setAddQty] = useState('')
-  const [addUnit, setAddUnit] = useState('')
+  const [addItems, setAddItems] = useState<{ item_name: string; quantity: string; unit: string }[]>([{ item_name: '', quantity: '', unit: '' }])
+  const [addItemSearches, setAddItemSearches] = useState<Record<number, string>>({})
+  const [addItemDropdowns, setAddItemDropdowns] = useState<Record<number, boolean>>({})
   const [addNotes, setAddNotes] = useState('')
   const [addSaving, setAddSaving] = useState(false)
   const [itemOptions, setItemOptions] = useState<ItemOption[]>([])
@@ -478,12 +475,9 @@ export default function InventoryPage() {
   }
 
   function openAddDialog() {
-    setAddItemName('')
-    setAddItemSearch('')
-    setAddItemFocus(false)
-    setAddSelectedItem(null)
-    setAddQty('')
-    setAddUnit('')
+    setAddItems([{ item_name: '', quantity: '', unit: '' }])
+    setAddItemSearches({})
+    setAddItemDropdowns({})
     setAddNotes('')
     setAddPoId('')
     setAddPoItems([])
@@ -509,20 +503,33 @@ export default function InventoryPage() {
 
   function handleAddPoItemSelect(poItem: { item_name: string; quantity: number; unit_of_measure: string | null }) {
     const matched = itemOptions.find(o => o.item_name === poItem.item_name)
-    setAddItemName(poItem.item_name)
-    setAddItemSearch('')
-    setAddItemFocus(false)
-    setAddSelectedItem(matched ?? null)
-    setAddUnit(poItem.unit_of_measure ?? matched?.unit_of_measure ?? '')
-    setAddQty(String(poItem.quantity))
+    const unit = poItem.unit_of_measure ?? matched?.unit_of_measure ?? ''
+    setAddItems(prev => {
+      const emptyIdx = prev.findIndex(r => !r.item_name)
+      const row = { item_name: poItem.item_name, quantity: String(poItem.quantity), unit }
+      if (emptyIdx >= 0) return prev.map((r, i) => i === emptyIdx ? row : r)
+      return [...prev, row]
+    })
   }
 
-  function handleAddItemSelect(opt: ItemOption) {
-    setAddItemName(opt.item_name)
-    setAddItemSearch('')
-    setAddItemFocus(false)
-    setAddSelectedItem(opt)
-    setAddUnit(opt.unit_of_measure ?? '')
+  function selectAddItemForRow(idx: number, opt: ItemOption) {
+    setAddItems(prev => prev.map((row, i) => i === idx ? { ...row, item_name: opt.item_name, unit: opt.unit_of_measure ?? '' } : row))
+    setAddItemSearches(s => ({ ...s, [idx]: opt.item_name }))
+    setAddItemDropdowns(d => ({ ...d, [idx]: false }))
+  }
+
+  function updateAddItem(idx: number, field: 'quantity' | 'unit', value: string) {
+    setAddItems(prev => prev.map((row, i) => i === idx ? { ...row, [field]: value } : row))
+  }
+
+  function addAddItemRow() {
+    setAddItems(prev => [...prev, { item_name: '', quantity: '', unit: '' }])
+  }
+
+  function removeAddItemRow(idx: number) {
+    setAddItems(prev => prev.length > 1 ? prev.filter((_, i) => i !== idx) : prev)
+    setAddItemSearches(s => { const next = { ...s }; delete next[idx]; return next })
+    setAddItemDropdowns(d => { const next = { ...d }; delete next[idx]; return next })
   }
 
   async function receiveAllPoItems() {
@@ -547,19 +554,23 @@ export default function InventoryPage() {
   }
 
   async function saveAddStock() {
-    if (!addItemName.trim() || !addQty.trim()) return
+    const validItems = addItems.filter(it => it.item_name.trim() && it.quantity.trim())
+    if (validItems.length === 0) return
     setAddSaving(true)
-    const { error } = await supabase.from('warehouse_stock').insert({
+    const rows = validItems.map(it => ({
       client_name: null,
-      item_name: addItemName.trim(),
-      unit: addUnit.trim(),
-      quantity: Number(addQty),
+      item_name: it.item_name.trim(),
+      unit: it.unit.trim(),
+      quantity: Number(it.quantity),
       notes: addNotes.trim() || null,
-    })
+    }))
+    const { error } = await supabase.from('warehouse_stock').insert(rows)
     if (error) {
       toast.error(error.message)
     } else {
-      toast.success(addPoId ? 'Stock received' : 'Warehouse stock added')
+      toast.success(addPoId
+        ? `${rows.length} item${rows.length !== 1 ? 's' : ''} received`
+        : `${rows.length} item${rows.length !== 1 ? 's' : ''} added`)
       setAddOpen(false)
       load()
     }
@@ -1694,7 +1705,7 @@ export default function InventoryPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={addOpen} onOpenChange={o => { if (!o) { setAddOpen(false); setAddItemFocus(false) } }}>
+      <Dialog open={addOpen} onOpenChange={o => { if (!o) setAddOpen(false) }}>
         <DialogContent className="w-[95vw] max-w-lg sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1734,7 +1745,7 @@ export default function InventoryPage() {
                     </Button>
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground">Pick a single item below, or receive every item on this PO at once.</p>
+                <p className="text-xs text-muted-foreground">Click items to add them below, or receive every item on this PO at once.</p>
                 <div className="border rounded-lg max-h-40 overflow-y-auto">
                   {addPoItemsLoading ? (
                     <div className="flex items-center justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>
@@ -1743,7 +1754,7 @@ export default function InventoryPage() {
                   ) : addPoItems.map((it, i) => (
                     <button
                       key={i} type="button"
-                      className={`w-full text-left px-3 py-2 text-sm hover:bg-muted border-b last:border-0 flex items-center justify-between gap-2 ${addItemName === it.item_name ? 'bg-red-50' : ''}`}
+                      className={`w-full text-left px-3 py-2 text-sm hover:bg-muted border-b last:border-0 flex items-center justify-between gap-2 ${addItems.some(r => r.item_name === it.item_name) ? 'bg-red-50' : ''}`}
                       onClick={() => handleAddPoItemSelect(it)}
                     >
                       <span className="font-medium truncate">{it.item_name}</span>
@@ -1754,78 +1765,80 @@ export default function InventoryPage() {
               </div>
             )}
 
-            {/* Item picker */}
+            {/* Item rows — supports adding multiple items in one submission */}
             <div className="space-y-1.5">
-              <Label>Item Name <span className="text-red-500">*</span></Label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                <input
-                  className="w-full rounded-md border border-input bg-background pl-9 pr-8 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring placeholder:text-muted-foreground"
-                  placeholder={addItemName || 'Search and select item…'}
-                  value={addItemSearch}
-                  onChange={e => { setAddItemSearch(e.target.value); setAddItemFocus(true) }}
-                  onFocus={() => setAddItemFocus(true)}
-                  onBlur={() => setTimeout(() => setAddItemFocus(false), 150)}
-                />
-                {addItemName && (
-                  <button
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                    onMouseDown={() => { setAddItemName(''); setAddSelectedItem(null); setAddUnit(''); setAddItemSearch('') }}
-                  ><X className="h-3.5 w-3.5" /></button>
-                )}
-                {addItemFocus && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-popover border rounded-lg shadow-lg z-50 max-h-56 overflow-y-auto">
-                    {(() => {
-                      const q = addItemSearch.toLowerCase()
-                      const matches = q
-                        ? itemOptions.filter(o => o.item_name.toLowerCase().includes(q) || (o.item_code ?? '').toLowerCase().includes(q) || (o.brand ?? '').toLowerCase().includes(q))
-                        : itemOptions
-                      if (matches.length === 0) return <div className="px-3 py-3 text-sm text-muted-foreground">No items found</div>
-                      return matches.map(o => (
-                        <button
-                          key={o.item_name}
-                          className="w-full text-left px-3 py-2.5 text-sm hover:bg-muted border-b last:border-0 flex flex-col gap-0.5"
-                          onMouseDown={() => handleAddItemSelect(o)}
-                        >
-                          <span className="font-medium">{o.item_name}</span>
-                          <span className="text-xs text-muted-foreground flex gap-2">
-                            {o.item_code && <span>{o.item_code}</span>}
-                            {o.brand && <span>· {o.brand}</span>}
-                            {o.attribute && <span>· {o.attribute}</span>}
-                            <span>· {o.unit_of_measure}</span>
-                          </span>
-                        </button>
-                      ))
-                    })()}
-                  </div>
-                )}
+              <Label>Items <span className="text-red-500">*</span></Label>
+              <div className="border rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/40">
+                      <TableHead>Item Name</TableHead>
+                      <TableHead className="w-24">Qty</TableHead>
+                      <TableHead className="w-24">Unit</TableHead>
+                      <TableHead className="w-10"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {addItems.map((row, idx) => (
+                      <TableRow key={idx}>
+                        <TableCell className="py-1.5">
+                          <div className="relative">
+                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                            <input
+                              value={addItemSearches[idx] ?? row.item_name}
+                              onChange={e => {
+                                setAddItemSearches(s => ({ ...s, [idx]: e.target.value }))
+                                setAddItemDropdowns(d => ({ ...d, [idx]: true }))
+                              }}
+                              onFocus={() => setAddItemDropdowns(d => ({ ...d, [idx]: true }))}
+                              onBlur={() => setTimeout(() => setAddItemDropdowns(d => ({ ...d, [idx]: false })), 150)}
+                              placeholder="Search item…"
+                              className="w-full h-8 pl-8 pr-3 rounded-md border border-input bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            />
+                            {addItemDropdowns[idx] && (
+                              <div className="absolute z-20 w-full mt-1 bg-popover border rounded-lg shadow-lg max-h-52 overflow-y-auto min-w-[240px]">
+                                {(() => {
+                                  const q = (addItemSearches[idx] ?? '').toLowerCase()
+                                  const matches = q
+                                    ? itemOptions.filter(o => o.item_name.toLowerCase().includes(q) || (o.item_code ?? '').toLowerCase().includes(q) || (o.brand ?? '').toLowerCase().includes(q))
+                                    : itemOptions
+                                  if (matches.length === 0) return <div className="px-3 py-2.5 text-sm text-muted-foreground">No items found</div>
+                                  return matches.slice(0, 50).map(o => (
+                                    <button
+                                      key={o.item_name} type="button"
+                                      className="w-full text-left px-3 py-2 text-sm hover:bg-muted border-b last:border-0"
+                                      onMouseDown={() => selectAddItemForRow(idx, o)}
+                                    >
+                                      <span className="font-medium">{o.item_name}</span>
+                                      <span className="text-xs text-muted-foreground ml-2">{o.unit_of_measure}</span>
+                                    </button>
+                                  ))
+                                })()}
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell className="py-1.5">
+                          <Input type="number" min="0" className="h-8 text-sm" value={row.quantity} onChange={e => updateAddItem(idx, 'quantity', e.target.value)} placeholder="0" />
+                        </TableCell>
+                        <TableCell className="py-1.5">
+                          <Input className="h-8 text-sm bg-muted/30" value={row.unit} readOnly />
+                        </TableCell>
+                        <TableCell className="py-1.5">
+                          {addItems.length > 1 && (
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => removeAddItemRow(idx)}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
+              <Button type="button" variant="outline" size="sm" onClick={addAddItemRow}><Plus className="h-3.5 w-3.5 mr-1.5" />Add Item</Button>
             </div>
 
-            {/* Selected item detail card */}
-            {addSelectedItem && (
-              <div className="rounded-lg border bg-muted/30 px-4 py-3 grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
-                <div><span className="text-muted-foreground text-xs">Item Code</span><div className="font-mono font-medium">{addSelectedItem.item_code || '—'}</div></div>
-                <div><span className="text-muted-foreground text-xs">Unit</span><div>{addSelectedItem.unit_of_measure || '—'}</div></div>
-                <div><span className="text-muted-foreground text-xs">Brand</span><div>{addSelectedItem.brand || '—'}</div></div>
-                <div><span className="text-muted-foreground text-xs">Attribute</span><div>{addSelectedItem.attribute || '—'}</div></div>
-                <div><span className="text-muted-foreground text-xs">Unit Cost</span><div className="font-medium">₱{(addSelectedItem.cost ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</div></div>
-                <div><span className="text-muted-foreground text-xs">Selling Price</span><div className="font-medium">{addSelectedItem.selling_price != null ? `₱${addSelectedItem.selling_price.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}</div></div>
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Quantity <span className="text-red-500">*</span></Label>
-                <Input type="number" min="0" value={addQty} onChange={e => setAddQty(e.target.value)} placeholder="0" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Unit</Label>
-                <div className="h-9 flex items-center px-3 text-sm bg-muted/30 rounded border text-muted-foreground">
-                  {addUnit || '— auto-filled —'}
-                </div>
-              </div>
-            </div>
             <div className="space-y-1.5">
               <Label>Notes <span className="text-muted-foreground text-xs">(optional)</span></Label>
               <Input value={addNotes} onChange={e => setAddNotes(e.target.value)} placeholder="Optional notes" />
@@ -1835,7 +1848,7 @@ export default function InventoryPage() {
             <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
             <Button
               onClick={saveAddStock}
-              disabled={addSaving || !addItemName.trim() || !addQty.trim()}
+              disabled={addSaving || !addItems.some(it => it.item_name.trim() && it.quantity.trim())}
               className="bg-red-600 hover:bg-red-700 text-white gap-1.5"
             >
               {addSaving

@@ -14,7 +14,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import {
   Plus, MoreHorizontal, CheckCircle2, Package, Loader2, Trash2, X,
-  ShoppingBag, ArrowLeftRight, ChevronDown, ChevronRight, Pencil, Printer,
+  ShoppingBag, ArrowLeftRight, ChevronDown, ChevronRight, Pencil, Printer, Search,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSearchContext } from '@/context/search-context'
@@ -74,6 +74,8 @@ export default function ReceivingPage() {
   const [returnSaving, setReturnSaving] = useState(false)
   const [returns, setReturns] = useState<ItemReturn[]>([])
   const [returnsLoading, setReturnsLoading] = useState(true)
+  const [returnItemSearches, setReturnItemSearches] = useState<Record<number, string>>({})
+  const [returnItemDropdowns, setReturnItemDropdowns] = useState<Record<number, boolean>>({})
 
   // Shared refs
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
@@ -243,7 +245,7 @@ export default function ReceivingPage() {
   function toggleExpandRR(id: string) {
     setExpandedRRId(prev => prev === id ? null : id)
   }
-  function resetReturnForm() { setReturnType('warehouse'); setReturnDate(new Date().toISOString().split('T')[0]); setReturnSupplierId(''); setReturnClientId(''); setReturnItems([emptyReturnItem()]); setReturnNotes('') }
+  function resetReturnForm() { setReturnType('warehouse'); setReturnDate(new Date().toISOString().split('T')[0]); setReturnSupplierId(''); setReturnClientId(''); setReturnItems([emptyReturnItem()]); setReturnNotes(''); setReturnItemSearches({}); setReturnItemDropdowns({}) }
   function resetSalesdForm() { setSalesdClientId(''); setSalesdQuote(''); setSalesdDate(new Date().toISOString().split('T')[0]); setSalesdBy(''); setSalesdNotes(''); setSalesdStatus('pending'); setSalesdItems([emptySalesItem()]) }
 
   async function handleSaveRR() {
@@ -813,12 +815,40 @@ export default function ReceivingPage() {
                         {returnItems.map((row, idx) => (
                           <TableRow key={idx}>
                             <TableCell className="py-1.5">
-                              <Select value={row.item_name} onValueChange={v => updateReturnItem(idx, 'item_name', v ?? '')}>
-                                <SelectTrigger className="w-full h-8 text-sm"><SelectValue placeholder="Select item" /></SelectTrigger>
-                                <SelectContent className="min-w-[240px]">
-                                  {items.map(it => <SelectItem key={it.item_name} value={it.item_name}>{it.item_name}</SelectItem>)}
-                                </SelectContent>
-                              </Select>
+                              <div className="relative">
+                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                                <input
+                                  value={returnItemSearches[idx] ?? row.item_name}
+                                  onChange={e => {
+                                    setReturnItemSearches(s => ({ ...s, [idx]: e.target.value }))
+                                    setReturnItemDropdowns(d => ({ ...d, [idx]: true }))
+                                  }}
+                                  onFocus={() => setReturnItemDropdowns(d => ({ ...d, [idx]: true }))}
+                                  onBlur={() => setTimeout(() => setReturnItemDropdowns(d => ({ ...d, [idx]: false })), 150)}
+                                  placeholder="Search item…"
+                                  className="w-full h-8 pl-8 pr-3 rounded-md border border-input bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                />
+                                {returnItemDropdowns[idx] && (
+                                  <div className="absolute z-20 w-full mt-1 bg-popover border rounded-lg shadow-lg max-h-52 overflow-y-auto min-w-[240px]">
+                                    {(() => {
+                                      const q = (returnItemSearches[idx] ?? '').toLowerCase()
+                                      const matches = q ? items.filter(it => it.item_name.toLowerCase().includes(q)) : items
+                                      if (matches.length === 0) return <div className="px-3 py-2.5 text-sm text-muted-foreground">No items found</div>
+                                      return matches.slice(0, 50).map(it => (
+                                        <button
+                                          key={it.item_name} type="button"
+                                          className="w-full text-left px-3 py-2 text-sm hover:bg-muted border-b last:border-0"
+                                          onMouseDown={() => {
+                                            updateReturnItem(idx, 'item_name', it.item_name)
+                                            setReturnItemSearches(s => ({ ...s, [idx]: it.item_name }))
+                                            setReturnItemDropdowns(d => ({ ...d, [idx]: false }))
+                                          }}
+                                        >{it.item_name}</button>
+                                      ))
+                                    })()}
+                                  </div>
+                                )}
+                              </div>
                             </TableCell>
                             <TableCell className="py-1.5"><Input type="number" min="0" className="h-8 text-sm" value={row.quantity} onChange={e => updateReturnItem(idx, 'quantity', e.target.value)} /></TableCell>
                             <TableCell className="py-1.5"><Input className="h-8 text-sm bg-muted/30" value={row.unit} readOnly /></TableCell>

@@ -641,7 +641,7 @@ export default function CSIMonitoringPage() {
                     <div className="space-y-1.5">
                       <Label>SI Number <span className="text-destructive">*</span></Label>
                       <Select value={header.si_number} onValueChange={v => setHeader(h => ({ ...h, si_number: v ?? '' }))}>
-                        <SelectTrigger><SelectValue placeholder="Select SI number…" /></SelectTrigger>
+                        <SelectTrigger className="w-full"><SelectValue placeholder="Select SI number…" /></SelectTrigger>
                         <SelectContent>
                           {siNumberOptions.map(opt => (
                             <SelectItem key={opt.value} value={opt.value}>
@@ -658,7 +658,7 @@ export default function CSIMonitoringPage() {
                   <div className="space-y-1.5">
                     <Label>Client</Label>
                     <Select value={header.client_name} onValueChange={v => setHeader(h => ({ ...h, client_name: v ?? '' }))}>
-                      <SelectTrigger><SelectValue placeholder="Select client…" /></SelectTrigger>
+                      <SelectTrigger className="w-full"><SelectValue placeholder="Select client…" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="">— None —</SelectItem>
                         {clientOptions.map(c => <SelectItem key={c.id} value={c.company_name}>{c.company_name}</SelectItem>)}
@@ -669,7 +669,7 @@ export default function CSIMonitoringPage() {
                     <div className="space-y-1.5">
                       <Label>SO Number</Label>
                       <Select value={header.po_number} onValueChange={v => { setHeader(h => ({ ...h, po_number: v ?? '' })); setDrNumberLockedFromSo(false) }}>
-                        <SelectTrigger><SelectValue placeholder="Select SO…" /></SelectTrigger>
+                        <SelectTrigger className="w-full"><SelectValue placeholder="Select SO…" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="">— None —</SelectItem>
                           {soNumbers.map(s => <SelectItem key={s.id} value={s.so_number}>{s.so_number}</SelectItem>)}
@@ -699,7 +699,7 @@ export default function CSIMonitoringPage() {
                     <div className="space-y-1.5">
                       <Label>DR Number</Label>
                       <Select value={header.dr_number} onValueChange={v => setHeader(h => ({ ...h, dr_number: v ?? '' }))} disabled={drNumberLockedFromSo}>
-                        <SelectTrigger><SelectValue placeholder="Select DR…" /></SelectTrigger>
+                        <SelectTrigger className="w-full"><SelectValue placeholder="Select DR…" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="">— None —</SelectItem>
                           {drNumbers.map(d => <SelectItem key={d.id} value={d.dr_number}>{d.dr_number}</SelectItem>)}

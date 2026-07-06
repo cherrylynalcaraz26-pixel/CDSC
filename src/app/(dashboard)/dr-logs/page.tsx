@@ -165,6 +165,8 @@ export default function DRLogsPage() {
   const [companyInfo, setCompanyInfo] = useState<{ company_name: string; address: string; phone: string; email: string; tin: string } | null>(null)
   const [itemSearches, setItemSearches] = useState<Record<number, string>>({})
   const [itemDropdowns, setItemDropdowns] = useState<Record<number, boolean>>({})
+  const [drNumberOptions, setDrNumberOptions] = useState<{ value: string; tag: 'current' | 'next' | 'missing' }[]>([])
+  const [drNumberDropdownOpen, setDrNumberDropdownOpen] = useState(false)
   const [blankCalib, setBlankCalib] = useState<BlankFormCalib>(() => loadBlankCalib())
   const [calibOpen, setCalibOpen] = useState(false)
   const [calibDraft, setCalibDraft] = useState<BlankFormCalib>(DEFAULT_BLANK_CALIB)
@@ -427,6 +429,31 @@ export default function DRLogsPage() {
     setExpandedId(prev => prev === id ? null : id)
   }
 
+  // Suggests the next sequential DR number after the highest one used so far (within its
+  // own prefix/format, e.g. "DR-2025-00001"), plus any gaps in the existing sequence.
+  function getDrNumberSuggestions(excludeId?: string): { next: string; missing: string[] } {
+    const parsed = logs
+      .filter(l => l.id !== excludeId)
+      .map(l => {
+        const m = l.dr_number.match(/^(.*?)(\d+)$/)
+        return m ? { prefix: m[1], num: parseInt(m[2], 10), width: m[2].length } : null
+      })
+      .filter((x): x is { prefix: string; num: number; width: number } => x !== null)
+    if (parsed.length === 0) return { next: '', missing: [] }
+    const prefixCounts = new Map<string, number>()
+    parsed.forEach(p => prefixCounts.set(p.prefix, (prefixCounts.get(p.prefix) ?? 0) + 1))
+    const topPrefix = [...prefixCounts.entries()].sort((a, b) => b[1] - a[1])[0][0]
+    const group = parsed.filter(p => p.prefix === topPrefix)
+    const max = Math.max(...group.map(p => p.num))
+    const width = Math.max(...group.map(p => p.width))
+    const existing = new Set(group.map(p => p.num))
+    const missing: string[] = []
+    for (let n = 1; n < max; n++) {
+      if (!existing.has(n)) missing.push(topPrefix + String(n).padStart(width, '0'))
+    }
+    return { next: topPrefix + String(max + 1).padStart(width, '0'), missing }
+  }
+
   function openAdd() {
     setEditing(null)
     setForm(emptyForm())
@@ -434,6 +461,11 @@ export default function DRLogsPage() {
     setItems([emptyItem()])
     setItemSearches({})
     setItemDropdowns({})
+    const { next, missing } = getDrNumberSuggestions()
+    setDrNumberOptions([
+      ...missing.map(value => ({ value, tag: 'missing' as const })),
+      ...(next ? [{ value: next, tag: 'next' as const }] : []),
+    ])
     setDrActiveTab('form')
     setOpen(true)
   }
@@ -458,6 +490,12 @@ export default function DRLogsPage() {
     setItems(loaded)
     setItemSearches(Object.fromEntries(loaded.map((it, i) => [i, it.item_name])))
     setItemDropdowns({})
+    const { next, missing } = getDrNumberSuggestions(log.id)
+    setDrNumberOptions([
+      { value: log.dr_number, tag: 'current' },
+      ...missing.map(value => ({ value, tag: 'missing' as const })),
+      ...(next ? [{ value: next, tag: 'next' as const }] : []),
+    ])
     setDrActiveTab('form')
     setOpen(true)
   }
@@ -1159,8 +1197,32 @@ export default function DRLogsPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <Label>DR Number <span className="text-destructive">*</span></Label>
-                      <Input placeholder="e.g. DR-2025-00001" value={form.dr_number}
-                        onChange={e => setForm(f => ({ ...f, dr_number: e.target.value }))} />
+                      <div className="relative">
+                        <Input
+                          placeholder="e.g. DR-2025-00001"
+                          value={form.dr_number}
+                          onChange={e => setForm(f => ({ ...f, dr_number: e.target.value }))}
+                          onFocus={() => setDrNumberDropdownOpen(true)}
+                          onBlur={() => setTimeout(() => setDrNumberDropdownOpen(false), 150)}
+                        />
+                        {drNumberDropdownOpen && drNumberOptions.length > 0 && (
+                          <div className="absolute z-20 w-full mt-1 bg-popover border rounded-lg shadow-lg max-h-44 overflow-y-auto min-w-[220px]">
+                            {drNumberOptions.map(opt => (
+                              <button
+                                key={opt.value}
+                                type="button"
+                                onMouseDown={() => { setForm(f => ({ ...f, dr_number: opt.value })); setDrNumberDropdownOpen(false) }}
+                                className="w-full text-left px-3 py-2 text-sm hover:bg-muted border-b last:border-0 flex items-center justify-between"
+                              >
+                                <span className="font-mono">{opt.value}</span>
+                                {opt.tag === 'current' && <span className="text-xs text-muted-foreground ml-1.5">(Current)</span>}
+                                {opt.tag === 'next' && <span className="text-xs text-muted-foreground ml-1.5">(Next)</span>}
+                                {opt.tag === 'missing' && <span className="text-xs text-amber-600 ml-1.5">(Missing)</span>}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <div className="space-y-1.5">
                       <Label>DR Date <span className="text-destructive">*</span></Label>
@@ -1171,7 +1233,7 @@ export default function DRLogsPage() {
                   <div className="space-y-1.5">
                     <Label>Delivered To</Label>
                     <Select value={deliveredToId} onValueChange={handleClientChange}>
-                      <SelectTrigger><SelectValue placeholder="Select client / delivered to" /></SelectTrigger>
+                      <SelectTrigger className="w-full"><SelectValue placeholder="Select client / delivered to" /></SelectTrigger>
                       <SelectContent className="min-w-[320px]">
                         <SelectItem value="">— None —</SelectItem>
                         {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
@@ -1182,7 +1244,7 @@ export default function DRLogsPage() {
                     <div className="space-y-1.5">
                       <Label>SO Reference</Label>
                       <Select value={form.po_number} onValueChange={v => setForm(f => ({ ...f, po_number: v ?? '' }))}>
-                        <SelectTrigger><SelectValue placeholder="Select SO…" /></SelectTrigger>
+                        <SelectTrigger className="w-full"><SelectValue placeholder="Select SO…" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="">— None —</SelectItem>
                           {availableSoNumbers.map(s => <SelectItem key={s.id} value={s.so_number}>{s.so_number}</SelectItem>)}
@@ -1203,7 +1265,7 @@ export default function DRLogsPage() {
                     <div className="space-y-1.5">
                       <Label>Status</Label>
                       <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v ?? 'received' }))}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="received">Received</SelectItem>
                           <SelectItem value="partial">Partial</SelectItem>
