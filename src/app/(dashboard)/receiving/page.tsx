@@ -699,7 +699,6 @@ export default function ReceivingPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Delivery #</TableHead>
                     <TableHead>DR Number</TableHead>
                     <TableHead>SO Reference</TableHead>
                     <TableHead>Client</TableHead>
@@ -710,17 +709,16 @@ export default function ReceivingPage() {
                 </TableHeader>
                 <TableBody>
                   {salesdLoading ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
+                    <TableRow><TableCell colSpan={6} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
                   ) : filteredSalesDeliveries.length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground text-sm">
+                    <TableRow><TableCell colSpan={6} className="text-center py-10 text-muted-foreground text-sm">
                       {salesdDateFrom || salesdDateTo ? 'No sales deliveries in this date range.' : 'No sales deliveries yet. Create a DR Log to populate this list.'}
                     </TableCell></TableRow>
                   ) : filteredSalesDeliveries.map(d => {
                     const statusCls = d.status === 'delivered' ? 'bg-green-100 text-green-700' : d.status === 'partial' ? 'bg-yellow-100 text-yellow-700' : 'bg-orange-100 text-orange-700'
                     return (
                       <TableRow key={d.id} className="cursor-pointer hover:bg-muted/40" onClick={() => openSalesDetail(d)}>
-                        <TableCell className="font-mono text-xs font-semibold text-red-600">{d.delivery_number}</TableCell>
-                        <TableCell className="text-xs font-mono text-muted-foreground">{d.dr_number ?? '—'}</TableCell>
+                        <TableCell className="font-mono text-xs font-semibold text-red-600">{d.dr_number ?? '—'}</TableCell>
                         <TableCell className="text-xs font-mono text-blue-600">{d.so_number ?? '—'}</TableCell>
                         <TableCell className="text-sm font-medium">{d.client_name ?? '—'}</TableCell>
                         <TableCell className="text-sm">{d.delivery_date}</TableCell>
