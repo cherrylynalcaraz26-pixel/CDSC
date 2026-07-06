@@ -279,7 +279,7 @@ function OverviewTab() {
       })
       const { data: recent } = await supabase
         .from('purchase_orders')
-        .select('po_number, supplier:suppliers(company_name), total_amount, vat_amount, ewt_amount, status, created_at')
+        .select('po_number, supplier:suppliers(company_name), total_amount, vat_amount, ewt_amount, net_payable, status, created_at')
         .order('created_at', { ascending: false })
         .limit(10)
       setRecentPOs(recent ?? [])
@@ -343,7 +343,7 @@ function OverviewTab() {
                 const gross = po.total_amount ?? 0
                 const vat = po.vat_amount ?? 0
                 const ewt = po.ewt_amount ?? 0
-                const net = gross - ewt
+                const net = po.net_payable ?? 0
                 return (
                   <TableRow key={po.id ?? i}>
                     <TableCell className="font-mono text-sm">{po.po_number}</TableCell>

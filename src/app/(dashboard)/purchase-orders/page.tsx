@@ -222,7 +222,7 @@ export default function PurchaseOrdersPage() {
   // unless vatInclusive is on, in which case the 12% baked into it must be stripped first.
   const taxAmount = (vatInclusive ? netSubtotal / 1.12 : netSubtotal) * taxRate
   const totalAmount = vatInclusive ? netSubtotal : netSubtotal + vatAmount
-  const netPayable = totalAmount - taxAmount
+  const netPayable = subtotal - vatAmount
 
   function resetForm() {
     setEditingId(null)

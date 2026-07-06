@@ -222,7 +222,9 @@ export default function DashboardPage() {
       setReceivedPONumbers(new Set((rrData.data ?? []).map((r: any) => r.po_number).filter(Boolean)))
 
       // --- SO Pipeline ---
-      const openSOsData = await supabase.from('sales_orders').select('id, so_number, client_po_number, status, client_name').not('status', 'in', '("cancelled","delivered")').order('created_at', { ascending: false }).limit(10)
+      // Delivered orders still belong here — CSI billing and collection (the pipeline's
+      // later stages) happen *after* delivery, so only cancelled orders are done-and-hidden.
+      const openSOsData = await supabase.from('sales_orders').select('id, so_number, client_po_number, status, client_name').not('status', 'eq', 'cancelled').order('created_at', { ascending: false }).limit(10)
       const colClientsData = await supabase.from('collections').select('client_name')
       const drSOData = await supabase.from('dr_logs').select('po_number')
       setPipelineSOs(openSOsData.data ?? [])
@@ -869,7 +871,7 @@ export default function DashboardPage() {
                     <th className="px-3 py-2 text-left">OR Number</th>
                     <th className="px-3 py-2 text-left">Date</th>
                     <th className="px-3 py-2 text-right">Amount</th>
-                    <th className="px-3 py-2 text-right">EWT (2307)</th>
+                    <th className="px-3 py-2 text-right">CWT (2307)</th>
                     <th className="px-3 py-2 text-left">Status</th>
                   </tr>
                 </thead>
@@ -925,7 +927,7 @@ export default function DashboardPage() {
                       <th className="px-3 py-2 text-left">OR Number</th>
                       <th className="px-3 py-2 text-left">Date</th>
                       <th className="px-3 py-2 text-right">Amount</th>
-                      <th className="px-3 py-2 text-right">EWT</th>
+                      <th className="px-3 py-2 text-right">CWT</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1030,7 +1032,6 @@ export default function DashboardPage() {
               { label: 'Add DR Log', href: '/dr-logs', icon: Truck, color: 'text-red-600' },
               { label: 'CSI Monitoring', href: '/csi-monitoring', icon: TrendingUp, color: 'text-purple-600' },
               { label: 'View Inventory', href: '/inventory', icon: Package, color: 'text-orange-600' },
-              { label: 'Issue Asset', href: '/assets', icon: Cpu, color: 'text-teal-600' },
             ].map(item => (
               <Link key={item.href} href={item.href} className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors">
                 <item.icon className={`h-4 w-4 shrink-0 ${item.color}`} />
