@@ -75,19 +75,11 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
     : []
 
   useEffect(() => {
-    async function loadUser() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      setUserEmail(user.email ?? '')
-      const [{ data: profile }, { data: msgs }, { data: orders }] = await Promise.all([
-        supabase.from('profiles').select('full_name, role, avatar_url').eq('id', user.id).single(),
+    async function loadNotifs() {
+      const [{ data: msgs }, { data: orders }] = await Promise.all([
         supabase.from('client_messages').select('id,client_name,message,sent_at').eq('status', 'unread').order('sent_at', { ascending: false }).limit(20),
         supabase.from('sales_orders').select('id,so_number,client_name,created_at').eq('status', 'draft').like('so_number', 'SO-P-%').order('created_at', { ascending: false }).limit(20),
       ])
-      const name = profile?.full_name ?? user.email?.split('@')[0] ?? 'User'
-      setUserName(name)
-      setUserAvatarUrl((profile as any)?.avatar_url ?? null)
-
       const built: Notif[] = []
       for (const m of (msgs ?? [])) {
         built.push({ id: `msg-${m.id}`, type: 'message', message: `New message from ${m.client_name || 'client'}: "${(m.message ?? '').slice(0, 60)}${(m.message?.length ?? 0) > 60 ? '…' : ''}"`, read: false, time: m.sent_at, href: '/messages' })
@@ -97,7 +89,19 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
       }
       setNotifs(built)
     }
+    async function loadUser() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+      setUserEmail(user.email ?? '')
+      const { data: profile } = await supabase.from('profiles').select('full_name, role, avatar_url').eq('id', user.id).single()
+      const name = profile?.full_name ?? user.email?.split('@')[0] ?? 'User'
+      setUserName(name)
+      setUserAvatarUrl((profile as any)?.avatar_url ?? null)
+      await loadNotifs()
+    }
     loadUser()
+    const interval = setInterval(loadNotifs, 30000)
+    return () => clearInterval(interval)
   }, [])
 
   useEffect(() => {

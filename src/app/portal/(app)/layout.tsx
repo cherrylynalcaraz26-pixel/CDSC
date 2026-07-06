@@ -7,6 +7,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 import { cacheBustImageUrl } from '@/lib/upload-image'
+import { toast } from 'sonner'
 import {
   LayoutDashboard, FileText, Package, User, LogOut, Menu, X, Boxes,
   ClipboardList, Search, Bell, PanelLeftClose, PanelLeftOpen, MessageSquare, Send, ChevronRight, Globe,
@@ -96,12 +97,22 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
     async function check() {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) { router.replace('/login'); return }
-      const { data: profile } = await supabase.from('profiles').select('full_name, role, avatar_url').eq('id', session.user.id).single()
+      const { data: profile } = await supabase.from('profiles').select('full_name, role, avatar_url, company').eq('id', session.user.id).single()
       if (profile?.role !== 'client') { await supabase.auth.signOut(); router.replace('/login'); return }
       setUserName(profile?.full_name ?? session.user.email?.split('@')[0] ?? 'Client')
       setUserEmail(session.user.email ?? '')
       setUserAvatarUrl((profile as any)?.avatar_url ?? null)
-      const { data: clientRow } = await supabase.from('clients').select('id, company_name, logo_url, avatar_url').eq('auth_user_id', session.user.id).single()
+      let { data: clientRow } = await supabase.from('clients').select('id, company_name, logo_url, avatar_url').eq('auth_user_id', session.user.id).single()
+      // Some portal accounts were created before the client row got linked to their auth
+      // user — fall back to matching by company name and repair the link for next time,
+      // so messages/notifications/inventory don't silently fail for those accounts.
+      if (!clientRow && profile?.company) {
+        const { data: byName } = await supabase.from('clients').select('id, company_name, logo_url, avatar_url').eq('company_name', profile.company).single()
+        if (byName) {
+          clientRow = byName
+          await supabase.from('clients').update({ auth_user_id: session.user.id, portal_access: true }).eq('id', byName.id)
+        }
+      }
       setClientName(clientRow?.company_name ?? '')
       const rawLogo = (clientRow as any)?.logo_url ?? (clientRow as any)?.avatar_url ?? null
       setClientLogoUrl(rawLogo ? cacheBustImageUrl(rawLogo) : null)
@@ -155,16 +166,20 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
   async function sendMessage() {
     if (!msgText.trim()) return
     setMsgSending(true)
-    const { data } = await supabase.from('client_messages').insert({
-      client_id: clientId,
+    const { data, error } = await supabase.from('client_messages').insert({
+      client_id: clientId || null,
       client_name: clientName || userName,
       message: msgText.trim(),
       sent_at: new Date().toISOString(),
       status: 'unread',
     }).select('id,message,sent_at,reply,replied_at').single()
-    if (data) setChatHistory(h => [...h, data])
+    if (error) {
+      toast.error('Failed to send message. Please try again.')
+    } else if (data) {
+      setChatHistory(h => [...h, data])
+      setMsgText('')
+    }
     setMsgSending(false)
-    setMsgText('')
   }
 
   if (loading) return (

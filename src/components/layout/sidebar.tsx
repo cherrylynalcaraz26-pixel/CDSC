@@ -109,11 +109,12 @@ function hasActiveChild(pathname: string, search: URLSearchParams, children: Nav
 }
 
 function NavLink({
-  item, collapsed, onNavigate,
+  item, collapsed, onNavigate, badge,
 }: {
   item: NavItem
   collapsed: boolean
   onNavigate?: () => void
+  badge?: number
 }) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -213,15 +214,16 @@ function NavLink({
       <Link
         href={item.href!}
         onClick={onNavigate}
-        title={item.label}
+        title={badge ? `${item.label} (${badge} unread)` : item.label}
         className={cn(
-          'flex items-center justify-center h-9 rounded-md transition-colors',
+          'relative flex items-center justify-center h-9 rounded-md transition-colors',
           active
             ? 'bg-red-600/20 text-red-400 border-l-2 border-red-500'
             : 'text-white/40 hover:text-white/80 hover:bg-white/10',
         )}
       >
         <item.icon className={cn('h-[16px] w-[16px] shrink-0', active ? 'text-red-400' : '')} />
+        {!!badge && <span className="absolute top-1 right-1.5 h-1.5 w-1.5 rounded-full bg-red-500" />}
       </Link>
     )
   }
@@ -238,7 +240,12 @@ function NavLink({
       )}
     >
       <item.icon className={cn('h-[15px] w-[15px] shrink-0', active ? 'text-red-400' : '')} />
-      <span>{item.label}</span>
+      <span className="flex-1">{item.label}</span>
+      {!!badge && (
+        <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[10px] font-bold flex items-center justify-center">
+          {badge > 99 ? '99+' : badge}
+        </span>
+      )}
     </Link>
   )
 }
@@ -254,6 +261,18 @@ function SidebarContent({
   const { company } = useCompany()
   const logoSrc = company.logo_url || '/cdsc-logo.jpg'
   const displayName = company.company_name || 'CDSC Industrial Supply'
+  const [unreadMessages, setUnreadMessages] = useState(0)
+
+  useEffect(() => {
+    const supabase = createClient()
+    async function loadUnread() {
+      const { count } = await supabase.from('client_messages').select('id', { count: 'exact', head: true }).eq('status', 'unread')
+      setUnreadMessages(count ?? 0)
+    }
+    loadUnread()
+    const interval = setInterval(loadUnread, 30000)
+    return () => clearInterval(interval)
+  }, [])
 
   async function handleSignOut() {
     const supabase = createClient()
@@ -292,7 +311,7 @@ function SidebarContent({
 
       <nav className={cn('flex-1 overflow-y-auto pb-2 space-y-0.5 scrollbar-thin', collapsed ? 'px-1.5' : 'px-2')}>
         {navigation.map(item => (
-          <NavLink key={item.label} item={item} collapsed={collapsed} onNavigate={onNavigate} />
+          <NavLink key={item.label} item={item} collapsed={collapsed} onNavigate={onNavigate} badge={item.href === '/messages' ? unreadMessages : undefined} />
         ))}
       </nav>
 
