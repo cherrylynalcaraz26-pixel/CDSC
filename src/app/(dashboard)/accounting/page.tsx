@@ -379,20 +379,37 @@ interface OrBlankCalib {
   receivedFromTop: number; receivedFromLeft: number
   tinTop: number; tinLeft: number
   addressTop: number; addressLeft: number
+  businessStyleTop: number; businessStyleLeft: number
   amountWordsTop: number; amountWordsLeft: number
   amountTop: number; amountLeft: number
+  paymentForTop: number; paymentForLeft: number
+  // "In settlement of the following" invoice table, top-left of the form
+  invoiceTableTop: number
+  invoiceRowHeight: number
+  invoiceNoLeft: number
+  invoiceAmountLeft: number
+  invoiceMaxRows: number
+  totalSalesTop: number; totalSalesLeft: number
 }
 
 const DEFAULT_OR_BLANK_CALIB: OrBlankCalib = {
   pageWidthMm: 210,
-  pageHeightMm: 297,
-  fontSizePt: 10,
-  dateTop: 25, dateLeft: 150,
-  receivedFromTop: 33, receivedFromLeft: 45,
-  tinTop: 41, tinLeft: 45,
-  addressTop: 49, addressLeft: 45,
-  amountWordsTop: 57, amountWordsLeft: 45,
-  amountTop: 65, amountLeft: 150,
+  pageHeightMm: 99,
+  fontSizePt: 9,
+  invoiceTableTop: 12,
+  invoiceRowHeight: 5,
+  invoiceNoLeft: 8,
+  invoiceAmountLeft: 30,
+  invoiceMaxRows: 10,
+  totalSalesTop: 62, totalSalesLeft: 30,
+  dateTop: 12, dateLeft: 160,
+  receivedFromTop: 20, receivedFromLeft: 65,
+  tinTop: 26, tinLeft: 60,
+  addressTop: 26, addressLeft: 100,
+  businessStyleTop: 32, businessStyleLeft: 75,
+  amountWordsTop: 38, amountWordsLeft: 55,
+  amountTop: 44, amountLeft: 160,
+  paymentForTop: 50, paymentForLeft: 65,
 }
 
 const OR_BLANK_CALIB_KEY = 'cdsc_or_blank_form_calib'
@@ -429,10 +446,59 @@ function OrCalibPair({ label, top, left, onChange }: { label: string; top: numbe
   )
 }
 
+interface OrBlankPreviewData {
+  date: string
+  receivedFrom: string
+  tin: string | null
+  address: string | null
+  businessStyle: string | null
+  paymentFor: string | null
+  invoices: { si_number: string; amount: number }[]
+}
+
+// Scaled-down mirror of the calibrated print layout, so miscalibrated fields are obvious
+// before committing ink to a physical pre-printed form.
+function OrBlankPreviewField({ calib, top, left, value }: { calib: OrBlankCalib; top: number; left: number; value: string }) {
+  if (!value) return null
+  const pctW = (mm: number) => `${(mm / calib.pageWidthMm) * 100}%`
+  const pctH = (mm: number) => `${(mm / calib.pageHeightMm) * 100}%`
+  return (
+    <div className="absolute whitespace-nowrap text-[7px] leading-none text-black" style={{ top: pctH(top), left: pctW(left) }}>
+      {value}
+    </div>
+  )
+}
+
+function OrBlankPreview({ calib, data }: { calib: OrBlankCalib; data: OrBlankPreviewData }) {
+  const total = data.invoices.reduce((s, i) => s + i.amount, 0)
+  return (
+    <div
+      className="relative w-full border rounded bg-white shadow-sm overflow-hidden"
+      style={{ aspectRatio: `${calib.pageWidthMm} / ${calib.pageHeightMm}` }}
+    >
+      {data.invoices.slice(0, calib.invoiceMaxRows).map((inv, i) => (
+        <OrBlankPreviewField key={`no-${inv.si_number}`} calib={calib} top={calib.invoiceTableTop + i * calib.invoiceRowHeight} left={calib.invoiceNoLeft} value={inv.si_number} />
+      ))}
+      {data.invoices.slice(0, calib.invoiceMaxRows).map((inv, i) => (
+        <OrBlankPreviewField key={`amt-${inv.si_number}`} calib={calib} top={calib.invoiceTableTop + i * calib.invoiceRowHeight} left={calib.invoiceAmountLeft} value={fmt(inv.amount)} />
+      ))}
+      <OrBlankPreviewField calib={calib} top={calib.totalSalesTop} left={calib.totalSalesLeft} value={total > 0 ? fmt(total) : ''} />
+      <OrBlankPreviewField calib={calib} top={calib.dateTop} left={calib.dateLeft} value={data.date ? format(new Date(data.date), 'MM/dd/yyyy') : ''} />
+      <OrBlankPreviewField calib={calib} top={calib.receivedFromTop} left={calib.receivedFromLeft} value={data.receivedFrom} />
+      <OrBlankPreviewField calib={calib} top={calib.tinTop} left={calib.tinLeft} value={data.tin ?? ''} />
+      <OrBlankPreviewField calib={calib} top={calib.addressTop} left={calib.addressLeft} value={data.address ?? ''} />
+      <OrBlankPreviewField calib={calib} top={calib.businessStyleTop} left={calib.businessStyleLeft} value={data.businessStyle ?? ''} />
+      <OrBlankPreviewField calib={calib} top={calib.amountWordsTop} left={calib.amountWordsLeft} value={total > 0 ? amountToWords(total) : ''} />
+      <OrBlankPreviewField calib={calib} top={calib.amountTop} left={calib.amountLeft} value={total > 0 ? fmt(total) : ''} />
+      <OrBlankPreviewField calib={calib} top={calib.paymentForTop} left={calib.paymentForLeft} value={data.paymentFor ?? ''} />
+    </div>
+  )
+}
+
 function CollectionsTab() {
   const supabase = createClient()
   const [records, setRecords] = useState<Collection[]>([])
-  const [clients, setClients] = useState<{ id: string; company_name: string; tin: string | null; address: string | null; city: string | null; province: string | null }[]>([])
+  const [clients, setClients] = useState<{ id: string; company_name: string; tin: string | null; address: string | null; city: string | null; province: string | null; industry: string | null }[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -448,7 +514,8 @@ function CollectionsTab() {
   const [clientSearch, setClientSearch] = useState('')
   const [clientDropdownOpen, setClientDropdownOpen] = useState(false)
   const [csiOptions, setCsiOptions] = useState<{ si_number: string; si_date: string; total: number }[]>([])
-  const [readyToCollect, setReadyToCollect] = useState<{ so_number: string; client_name: string; csi_total: number; collected_total: number; outstanding: number }[]>([])
+  const [readyToCollect, setReadyToCollect] = useState<{ so_number: string; client_name: string; csi_total: number; collected_total: number; outstanding: number; si_numbers: string[] }[]>([])
+  const [expandedRTC, setExpandedRTC] = useState<string | null>(null)
   const [companyInfo, setCompanyInfo] = useState<{ company_name: string | null; address: string | null; phone: string | null; tin: string | null } | null>(null)
   const [viewRecord, setViewRecord] = useState<Collection | null>(null)
   const [blankFormOpen, setBlankFormOpen] = useState(false)
@@ -461,7 +528,7 @@ function CollectionsTab() {
     setLoading(true)
     const [{ data: colData }, { data: cliData }, { data: drRows }, { data: csiRows }] = await Promise.all([
       supabase.from('collections').select('*').order('created_at', { ascending: false }),
-      supabase.from('clients').select('id, company_name, tin, address, city, province').eq('status', 'active').order('company_name'),
+      supabase.from('clients').select('id, company_name, tin, address, city, province, industry').eq('status', 'active').order('company_name'),
       supabase.from('dr_logs').select('po_number, status').not('po_number', 'is', null).in('status', ['received', 'partial']),
       supabase.from('csi_records').select('po_number, si_number, amount, client_name').not('po_number', 'is', null),
     ])
@@ -490,7 +557,7 @@ function CollectionsTab() {
       const collected = [...info.siNumbers].reduce((s, si) => s + (collectedBySi[si] ?? 0), 0)
       const outstanding = info.total - collected
       if (outstanding <= 0.01) continue
-      list.push({ so_number: poNumber, client_name: info.clientName, csi_total: info.total, collected_total: collected, outstanding })
+      list.push({ so_number: poNumber, client_name: info.clientName, csi_total: info.total, collected_total: collected, outstanding, si_numbers: [...info.siNumbers] })
     }
     list.sort((a, b) => b.outstanding - a.outstanding)
     setReadyToCollect(list)
@@ -585,14 +652,16 @@ function CollectionsTab() {
     const client = clients.find(c => c.id === blankFormClientId)
     if (!client) { toast.error('Select a client'); return }
     if (blankFormSelectedSis.size === 0) { toast.error('Select at least one invoice'); return }
-    const total = blankFormInvoices.filter(i => blankFormSelectedSis.has(i.si_number)).reduce((s, i) => s + i.total, 0)
+    const selected = blankFormInvoices.filter(i => blankFormSelectedSis.has(i.si_number))
     const addressLine = [client.address, client.city, client.province].filter(Boolean).join(', ')
     printOrBlankForm({
       date: blankFormDate,
       receivedFrom: client.company_name,
       tin: client.tin,
       address: addressLine || null,
-      amount: total,
+      businessStyle: client.industry,
+      paymentFor: `SI No. ${selected.map(i => i.si_number).join(', ')}`,
+      invoices: selected.map(i => ({ si_number: i.si_number, amount: i.total })),
     })
     setBlankFormOpen(false)
   }
@@ -728,12 +797,17 @@ function CollectionsTab() {
   // Overlays real field values on a blank page at the calibrated coordinates, for
   // printing directly onto a pre-printed OR booklet page loaded into the printer —
   // same approach as DR Logs' "Print (Blank Form)".
-  function printOrBlankForm(data: { date: string; receivedFrom: string; tin: string | null; address: string | null; amount: number }) {
-    const c = orBlankCalib
+
+  function orBlankFormHtml(data: OrBlankPreviewData, c: OrBlankCalib) {
+    const total = data.invoices.reduce((s, i) => s + i.amount, 0)
     const dateStr = data.date ? format(new Date(data.date), 'MM/dd/yyyy') : ''
     const field = (top: number, left: number, value: string) =>
       value ? `<div style="position:absolute;top:${top}mm;left:${left}mm;">${value}</div>` : ''
-    const html = `<!DOCTYPE html><html><head><title>Official Receipt (Blank Form)</title>
+    const rows = data.invoices.slice(0, c.invoiceMaxRows).map((inv, i) => {
+      const top = c.invoiceTableTop + i * c.invoiceRowHeight
+      return field(top, c.invoiceNoLeft, inv.si_number) + field(top, c.invoiceAmountLeft, fmt(inv.amount))
+    }).join('')
+    return `<!DOCTYPE html><html><head><title>Official Receipt (Blank Form)</title>
     <style>
       @page { size: ${c.pageWidthMm}mm ${c.pageHeightMm}mm; margin: 0; }
       html, body { margin: 0; padding: 0; }
@@ -741,13 +815,21 @@ function CollectionsTab() {
       div { white-space: nowrap; }
     </style>
     </head><body>
+    ${rows}
+    ${field(c.totalSalesTop, c.totalSalesLeft, fmt(total))}
     ${field(c.dateTop, c.dateLeft, dateStr)}
     ${field(c.receivedFromTop, c.receivedFromLeft, data.receivedFrom)}
     ${field(c.tinTop, c.tinLeft, data.tin ?? '')}
     ${field(c.addressTop, c.addressLeft, data.address ?? '')}
-    ${field(c.amountWordsTop, c.amountWordsLeft, amountToWords(data.amount))}
-    ${field(c.amountTop, c.amountLeft, fmt(data.amount))}
+    ${field(c.businessStyleTop, c.businessStyleLeft, data.businessStyle ?? '')}
+    ${field(c.amountWordsTop, c.amountWordsLeft, amountToWords(total))}
+    ${field(c.amountTop, c.amountLeft, fmt(total))}
+    ${field(c.paymentForTop, c.paymentForLeft, data.paymentFor ?? '')}
     </body></html>`
+  }
+
+  function printOrBlankForm(data: OrBlankPreviewData) {
+    const html = orBlankFormHtml(data, orBlankCalib)
     const win = window.open('', '_blank', 'width=900,height=700')
     if (!win) return
     win.document.write(html)
@@ -763,7 +845,9 @@ function CollectionsTab() {
       receivedFrom: r.client_name ?? '',
       tin: client?.tin ?? null,
       address: addressLine || null,
-      amount: r.amount ?? 0,
+      businessStyle: client?.industry ?? null,
+      paymentFor: r.remarks ?? (r.si_number ? `SI No. ${r.si_number}` : null),
+      invoices: [{ si_number: r.si_number ?? '—', amount: r.amount ?? 0 }],
     })
   }
 
@@ -866,18 +950,73 @@ function CollectionsTab() {
                 <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                   No outstanding Sales Orders with both a DR and a CSI invoice.
                 </TableCell></TableRow>
-              ) : readyToCollect.map(row => (
-                <TableRow key={row.so_number}>
-                  <TableCell className="font-mono text-xs font-semibold text-blue-600">{row.so_number}</TableCell>
-                  <TableCell className="text-sm font-medium">{row.client_name || '—'}</TableCell>
-                  <TableCell className="text-right">{fmt(row.csi_total)}</TableCell>
-                  <TableCell className="text-right text-green-600">{fmt(row.collected_total)}</TableCell>
-                  <TableCell className="text-right font-semibold text-amber-600">{fmt(row.outstanding)}</TableCell>
-                  <TableCell>
-                    <Button size="sm" variant="outline" onClick={() => openCollectFor(row)}>Collect</Button>
-                  </TableCell>
-                </TableRow>
-              ))}
+              ) : readyToCollect.map(row => {
+                const isExpanded = expandedRTC === row.so_number
+                const appliedCollections = records.filter(r => r.status === 'posted' && r.si_number && row.si_numbers.includes(r.si_number))
+                return (
+                  <>
+                    <TableRow
+                      key={row.so_number}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => setExpandedRTC(prev => (prev === row.so_number ? null : row.so_number))}
+                    >
+                      <TableCell className="font-mono text-xs font-semibold text-blue-600">{row.so_number}</TableCell>
+                      <TableCell className="text-sm font-medium">{row.client_name || '—'}</TableCell>
+                      <TableCell className="text-right">{fmt(row.csi_total)}</TableCell>
+                      <TableCell className="text-right text-green-600">{fmt(row.collected_total)}</TableCell>
+                      <TableCell className="text-right font-semibold text-amber-600">{fmt(row.outstanding)}</TableCell>
+                      <TableCell onClick={e => e.stopPropagation()}>
+                        <Button size="sm" variant="outline" onClick={() => openCollectFor(row)}>Collect</Button>
+                      </TableCell>
+                    </TableRow>
+                    {isExpanded && (
+                      <TableRow key={`${row.so_number}-expanded`} className="bg-muted/30 hover:bg-muted/30">
+                        <TableCell colSpan={6} className="py-3 px-6">
+                          <div className="space-y-3 text-xs">
+                            <div>
+                              <p className="font-semibold text-muted-foreground uppercase tracking-wide mb-1">CSI Invoices Billed</p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {row.si_numbers.map(si => (
+                                  <span key={si} className="font-mono bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full">{si}</span>
+                                ))}
+                              </div>
+                            </div>
+                            <div>
+                              <p className="font-semibold text-muted-foreground uppercase tracking-wide mb-1">Collections Applied</p>
+                              {appliedCollections.length === 0 ? (
+                                <p className="text-muted-foreground italic">No collections posted yet.</p>
+                              ) : (
+                                <div className="border rounded-md overflow-hidden">
+                                  <table className="w-full">
+                                    <thead className="bg-muted/60">
+                                      <tr>
+                                        <th className="text-left px-3 py-1.5 font-medium">OR Number</th>
+                                        <th className="text-left px-3 py-1.5 font-medium">Date</th>
+                                        <th className="text-left px-3 py-1.5 font-medium">SI Number</th>
+                                        <th className="text-right px-3 py-1.5 font-medium">Amount</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {appliedCollections.map(c => (
+                                        <tr key={c.id} className="border-t">
+                                          <td className="px-3 py-1.5 font-mono">{c.or_number ?? '—'}</td>
+                                          <td className="px-3 py-1.5">{c.collection_date ? format(new Date(c.collection_date), 'MMM d, yyyy') : '—'}</td>
+                                          <td className="px-3 py-1.5 font-mono">{c.si_number ?? '—'}</td>
+                                          <td className="px-3 py-1.5 text-right font-medium">{fmt(c.amount ?? 0)}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </>
+                )
+              })}
             </TableBody>
           </Table>
         </CardContent>
@@ -935,7 +1074,7 @@ function CollectionsTab() {
                   {clientFilter ? `No collections found for "${clientFilter}".` : 'No collections yet. Click New Collection to record one.'}
                 </TableCell></TableRow>
               ) : filteredRecords.map(r => (
-                <TableRow key={r.id}>
+                <TableRow key={r.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setViewRecord(r)}>
                   <TableCell className="font-mono text-xs font-semibold text-red-600">{r.or_number ?? '—'}</TableCell>
                   <TableCell className="text-sm whitespace-nowrap">
                     {r.collection_date ? format(new Date(r.collection_date), 'MMM d, yyyy') : '—'}
@@ -954,7 +1093,7 @@ function CollectionsTab() {
                       {r.status}
                     </span>
                   </TableCell>
-                  <TableCell>
+                  <TableCell onClick={e => e.stopPropagation()}>
                     <DropdownMenu>
                       <DropdownMenuTrigger className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent">
                         <MoreHorizontal className="h-4 w-4" />
@@ -1128,56 +1267,80 @@ function CollectionsTab() {
       </Dialog>
 
       <Dialog open={blankFormOpen} onOpenChange={setBlankFormOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="w-[95vw] max-w-4xl sm:max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Printer className="h-4 w-4 text-red-600" />Print Blank Form</DialogTitle>
           </DialogHeader>
           <p className="text-xs text-muted-foreground -mt-2">
             Pick a client and the invoice(s) this OR covers — a client with multiple unpaid invoices can have more
-            than one included in a single receipt, and the amount is their combined total.
+            than one included in a single receipt, listed on the left with their combined total at the bottom.
           </p>
-          <div className="space-y-3 py-1">
-            <div className="space-y-1.5">
-              <Label>Date</Label>
-              <Input type="date" value={blankFormDate} onChange={e => setBlankFormDate(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Client</Label>
-              <Select value={blankFormClientId} onValueChange={v => selectBlankFormClient(v ?? '')}>
-                <SelectTrigger className="w-full"><SelectValue placeholder="Select client…" /></SelectTrigger>
-                <SelectContent>
-                  {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            {blankFormClientId && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="space-y-3 py-1">
               <div className="space-y-1.5">
-                <Label>Invoice(s) to include</Label>
-                <div className="border rounded-lg max-h-48 overflow-y-auto">
-                  {blankFormInvoices.length === 0 ? (
-                    <div className="px-3 py-3 text-sm text-muted-foreground">No unpaid invoices for this client.</div>
-                  ) : blankFormInvoices.map(inv => (
-                    <button
-                      key={inv.si_number} type="button"
-                      className={`w-full text-left px-3 py-2 text-sm hover:bg-muted border-b last:border-0 flex items-center justify-between gap-2 ${blankFormSelectedSis.has(inv.si_number) ? 'bg-red-50' : ''}`}
-                      onClick={() => toggleBlankFormSi(inv.si_number)}
-                    >
-                      <span className="flex items-center gap-2">
-                        {blankFormSelectedSis.has(inv.si_number) && <CheckCircle2 className="h-3.5 w-3.5 text-red-600 shrink-0" />}
-                        <span className="font-mono">{inv.si_number}</span>
-                        <span className="text-xs text-muted-foreground">{inv.si_date ? format(new Date(inv.si_date), 'MMM d, yyyy') : ''}</span>
-                      </span>
-                      <span className="font-medium shrink-0">{fmt(inv.total)}</span>
-                    </button>
-                  ))}
-                </div>
-                {blankFormSelectedSis.size > 0 && (
-                  <p className="text-sm font-semibold text-right">
-                    Total: {fmt(blankFormInvoices.filter(i => blankFormSelectedSis.has(i.si_number)).reduce((s, i) => s + i.total, 0))}
-                  </p>
-                )}
+                <Label>Date</Label>
+                <Input type="date" value={blankFormDate} onChange={e => setBlankFormDate(e.target.value)} />
               </div>
-            )}
+              <div className="space-y-1.5">
+                <Label>Client</Label>
+                <Select value={blankFormClientId} onValueChange={v => selectBlankFormClient(v ?? '')}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue>{() => clients.find(c => c.id === blankFormClientId)?.company_name ?? 'Select client…'}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              {blankFormClientId && (
+                <div className="space-y-1.5">
+                  <Label>Invoice(s) to include</Label>
+                  <div className="border rounded-lg max-h-48 overflow-y-auto">
+                    {blankFormInvoices.length === 0 ? (
+                      <div className="px-3 py-3 text-sm text-muted-foreground">No unpaid invoices for this client.</div>
+                    ) : blankFormInvoices.map(inv => (
+                      <button
+                        key={inv.si_number} type="button"
+                        className={`w-full text-left px-3 py-2 text-sm hover:bg-muted border-b last:border-0 flex items-center justify-between gap-2 ${blankFormSelectedSis.has(inv.si_number) ? 'bg-red-50' : ''}`}
+                        onClick={() => toggleBlankFormSi(inv.si_number)}
+                      >
+                        <span className="flex items-center gap-2">
+                          {blankFormSelectedSis.has(inv.si_number) && <CheckCircle2 className="h-3.5 w-3.5 text-red-600 shrink-0" />}
+                          <span className="font-mono">{inv.si_number}</span>
+                          <span className="text-xs text-muted-foreground">{inv.si_date ? format(new Date(inv.si_date), 'MMM d, yyyy') : ''}</span>
+                        </span>
+                        <span className="font-medium shrink-0">{fmt(inv.total)}</span>
+                      </button>
+                    ))}
+                  </div>
+                  {blankFormSelectedSis.size > 0 && (
+                    <p className="text-sm font-semibold text-right">
+                      Total: {fmt(blankFormInvoices.filter(i => blankFormSelectedSis.has(i.si_number)).reduce((s, i) => s + i.total, 0))}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Live preview — mirrors the calibrated print layout at scale */}
+            <div className="space-y-1.5">
+              <Label>Preview</Label>
+              <OrBlankPreview
+                calib={orBlankCalib}
+                data={{
+                  date: blankFormDate,
+                  receivedFrom: clients.find(c => c.id === blankFormClientId)?.company_name ?? '',
+                  tin: clients.find(c => c.id === blankFormClientId)?.tin ?? null,
+                  address: (() => {
+                    const c = clients.find(cl => cl.id === blankFormClientId)
+                    return c ? [c.address, c.city, c.province].filter(Boolean).join(', ') : null
+                  })(),
+                  businessStyle: clients.find(c => c.id === blankFormClientId)?.industry ?? null,
+                  paymentFor: blankFormSelectedSis.size > 0 ? `SI No. ${[...blankFormSelectedSis].join(', ')}` : null,
+                  invoices: blankFormInvoices.filter(i => blankFormSelectedSis.has(i.si_number)).map(i => ({ si_number: i.si_number, amount: i.total })),
+                }}
+              />
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setBlankFormOpen(false)}>Cancel</Button>
@@ -1189,7 +1352,7 @@ function CollectionsTab() {
       </Dialog>
 
       <Dialog open={orCalibOpen} onOpenChange={setOrCalibOpen}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-4xl sm:max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Calibrate Blank Form Print</DialogTitle>
           </DialogHeader>
@@ -1202,24 +1365,57 @@ function CollectionsTab() {
           <Button type="button" variant="outline" size="sm" onClick={printOrCalibGrid} className="w-fit gap-1.5">
             <Printer className="h-3.5 w-3.5" /> Print Test Grid
           </Button>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-3">
-            <div className="col-span-2 grid grid-cols-3 gap-3">
-              <OrCalibField label="Page Width" value={orCalibDraft.pageWidthMm} onChange={v => setOrCalibDraft(d => ({ ...d, pageWidthMm: v }))} />
-              <OrCalibField label="Page Height" value={orCalibDraft.pageHeightMm} onChange={v => setOrCalibDraft(d => ({ ...d, pageHeightMm: v }))} />
-              <OrCalibField label="Font Size (pt)" value={orCalibDraft.fontSizePt} onChange={v => setOrCalibDraft(d => ({ ...d, fontSizePt: v }))} />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="grid grid-cols-2 gap-x-4 gap-y-3 content-start">
+              <div className="col-span-2 grid grid-cols-3 gap-3">
+                <OrCalibField label="Page Width" value={orCalibDraft.pageWidthMm} onChange={v => setOrCalibDraft(d => ({ ...d, pageWidthMm: v }))} />
+                <OrCalibField label="Page Height" value={orCalibDraft.pageHeightMm} onChange={v => setOrCalibDraft(d => ({ ...d, pageHeightMm: v }))} />
+                <OrCalibField label="Font Size (pt)" value={orCalibDraft.fontSizePt} onChange={v => setOrCalibDraft(d => ({ ...d, fontSizePt: v }))} />
+              </div>
+              <div className="col-span-2 border-t pt-3">
+                <p className="text-xs font-semibold text-muted-foreground mb-2">In Settlement of the Following (Invoice Table)</p>
+              </div>
+              <OrCalibField label="Table Top" value={orCalibDraft.invoiceTableTop} onChange={v => setOrCalibDraft(d => ({ ...d, invoiceTableTop: v }))} />
+              <OrCalibField label="Row Height" value={orCalibDraft.invoiceRowHeight} onChange={v => setOrCalibDraft(d => ({ ...d, invoiceRowHeight: v }))} />
+              <OrCalibField label="Invoice No. Left" value={orCalibDraft.invoiceNoLeft} onChange={v => setOrCalibDraft(d => ({ ...d, invoiceNoLeft: v }))} />
+              <OrCalibField label="Amount Left" value={orCalibDraft.invoiceAmountLeft} onChange={v => setOrCalibDraft(d => ({ ...d, invoiceAmountLeft: v }))} />
+              <OrCalibField label="Max Rows" value={orCalibDraft.invoiceMaxRows} onChange={v => setOrCalibDraft(d => ({ ...d, invoiceMaxRows: v }))} />
+              <OrCalibPair label="Total Sales" top={orCalibDraft.totalSalesTop} left={orCalibDraft.totalSalesLeft}
+                onChange={(top, left) => setOrCalibDraft(d => ({ ...d, totalSalesTop: top, totalSalesLeft: left }))} />
+              <div className="col-span-2 border-t pt-3" />
+              <OrCalibPair label="Date" top={orCalibDraft.dateTop} left={orCalibDraft.dateLeft}
+                onChange={(top, left) => setOrCalibDraft(d => ({ ...d, dateTop: top, dateLeft: left }))} />
+              <OrCalibPair label="Received From" top={orCalibDraft.receivedFromTop} left={orCalibDraft.receivedFromLeft}
+                onChange={(top, left) => setOrCalibDraft(d => ({ ...d, receivedFromTop: top, receivedFromLeft: left }))} />
+              <OrCalibPair label="TIN" top={orCalibDraft.tinTop} left={orCalibDraft.tinLeft}
+                onChange={(top, left) => setOrCalibDraft(d => ({ ...d, tinTop: top, tinLeft: left }))} />
+              <OrCalibPair label="Address" top={orCalibDraft.addressTop} left={orCalibDraft.addressLeft}
+                onChange={(top, left) => setOrCalibDraft(d => ({ ...d, addressTop: top, addressLeft: left }))} />
+              <OrCalibPair label="Business Style" top={orCalibDraft.businessStyleTop} left={orCalibDraft.businessStyleLeft}
+                onChange={(top, left) => setOrCalibDraft(d => ({ ...d, businessStyleTop: top, businessStyleLeft: left }))} />
+              <OrCalibPair label="Amount in Words" top={orCalibDraft.amountWordsTop} left={orCalibDraft.amountWordsLeft}
+                onChange={(top, left) => setOrCalibDraft(d => ({ ...d, amountWordsTop: top, amountWordsLeft: left }))} />
+              <OrCalibPair label="Amount" top={orCalibDraft.amountTop} left={orCalibDraft.amountLeft}
+                onChange={(top, left) => setOrCalibDraft(d => ({ ...d, amountTop: top, amountLeft: left }))} />
+              <OrCalibPair label="In Payment For" top={orCalibDraft.paymentForTop} left={orCalibDraft.paymentForLeft}
+                onChange={(top, left) => setOrCalibDraft(d => ({ ...d, paymentForTop: top, paymentForLeft: left }))} />
             </div>
-            <OrCalibPair label="Date" top={orCalibDraft.dateTop} left={orCalibDraft.dateLeft}
-              onChange={(top, left) => setOrCalibDraft(d => ({ ...d, dateTop: top, dateLeft: left }))} />
-            <OrCalibPair label="Received From" top={orCalibDraft.receivedFromTop} left={orCalibDraft.receivedFromLeft}
-              onChange={(top, left) => setOrCalibDraft(d => ({ ...d, receivedFromTop: top, receivedFromLeft: left }))} />
-            <OrCalibPair label="TIN" top={orCalibDraft.tinTop} left={orCalibDraft.tinLeft}
-              onChange={(top, left) => setOrCalibDraft(d => ({ ...d, tinTop: top, tinLeft: left }))} />
-            <OrCalibPair label="Address" top={orCalibDraft.addressTop} left={orCalibDraft.addressLeft}
-              onChange={(top, left) => setOrCalibDraft(d => ({ ...d, addressTop: top, addressLeft: left }))} />
-            <OrCalibPair label="Amount in Words" top={orCalibDraft.amountWordsTop} left={orCalibDraft.amountWordsLeft}
-              onChange={(top, left) => setOrCalibDraft(d => ({ ...d, amountWordsTop: top, amountWordsLeft: left }))} />
-            <OrCalibPair label="Amount" top={orCalibDraft.amountTop} left={orCalibDraft.amountLeft}
-              onChange={(top, left) => setOrCalibDraft(d => ({ ...d, amountTop: top, amountLeft: left }))} />
+
+            <div className="space-y-1.5">
+              <Label>Preview (sample data)</Label>
+              <OrBlankPreview
+                calib={orCalibDraft}
+                data={{
+                  date: new Date().toISOString().split('T')[0],
+                  receivedFrom: 'Sample Client Corp.',
+                  tin: '000-000-000-000',
+                  address: 'Sample City, Sample Province',
+                  businessStyle: 'Trading',
+                  paymentFor: 'SI No. 00001, 00002',
+                  invoices: [{ si_number: '00001', amount: 5000 }, { si_number: '00002', amount: 2500 }],
+                }}
+              />
+            </div>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOrCalibDraft(DEFAULT_OR_BLANK_CALIB)}>Reset to Defaults</Button>
