@@ -168,6 +168,7 @@ export default function CSIMonitoringPage() {
   const [companyInfo, setCompanyInfo] = useState<{ company_name: string; address: string; phone: string; email: string; tin: string } | null>(null)
   const [blankCalib, setBlankCalib] = useState<BlankFormCalib>(() => loadBlankCalib())
   const [calibOpen, setCalibOpen] = useState(false)
+  const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false)
   const [calibDraft, setCalibDraft] = useState<BlankFormCalib>(DEFAULT_BLANK_CALIB)
   const printRef = useRef<HTMLDivElement>(null)
 
@@ -534,6 +535,24 @@ export default function CSIMonitoringPage() {
     setOpen(true)
   }
 
+  function closeForm() {
+    setOpen(false)
+    setHeader(emptyHeader())
+    setItems([emptyItem()])
+    setEditingSiNumber(null)
+  }
+
+  function handleCancelClick() {
+    const hasData = !!editingSiNumber || header.po_number || header.client_name || header.dr_number || items.some(it => it.item_name)
+    if (hasData) { setDiscardConfirmOpen(true); return }
+    closeForm()
+  }
+
+  function discardForm() {
+    setDiscardConfirmOpen(false)
+    closeForm()
+  }
+
   async function save() {
     if (!header.si_number.trim()) { toast.error('SI Number is required'); return }
     if (!header.si_date) { toast.error('Date is required'); return }
@@ -586,7 +605,7 @@ export default function CSIMonitoringPage() {
           <p className="text-muted-foreground text-sm">Charge Sales Invoice records</p>
         </div>
         {open ? (
-          <Button variant="outline" onClick={() => { setOpen(false); setHeader(emptyHeader()); setItems([emptyItem()]); setEditingSiNumber(null) }}>
+          <Button variant="outline" onClick={handleCancelClick}>
             <X className="h-4 w-4 mr-2" />Cancel
           </Button>
         ) : (
@@ -879,7 +898,7 @@ export default function CSIMonitoringPage() {
             </div>
 
             <div className="flex justify-end gap-2 pt-4 border-t mt-4">
-              <Button variant="outline" onClick={() => { setOpen(false); setHeader(emptyHeader()); setItems([emptyItem()]); setEditingSiNumber(null) }}>Cancel</Button>
+              <Button variant="outline" onClick={handleCancelClick}>Cancel</Button>
               <Button onClick={save} disabled={saving} className="bg-red-600 hover:bg-red-700">
                 {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : editingSiNumber ? 'Update' : 'Save'}
               </Button>
@@ -1504,6 +1523,20 @@ export default function CSIMonitoringPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setInventoryOpen(false)}>Close</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Discard Confirmation */}
+      <Dialog open={discardConfirmOpen} onOpenChange={setDiscardConfirmOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Unsaved Changes</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">You have unsaved changes. Do you want to keep editing or discard them?</p>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setDiscardConfirmOpen(false)}>Keep Editing</Button>
+            <Button variant="destructive" onClick={discardForm}>Discard</Button>
+          </div>
         </DialogContent>
       </Dialog>
 

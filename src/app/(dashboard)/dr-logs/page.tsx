@@ -168,6 +168,7 @@ export default function DRLogsPage() {
   const [blankCalib, setBlankCalib] = useState<BlankFormCalib>(() => loadBlankCalib())
   const [calibOpen, setCalibOpen] = useState(false)
   const [calibDraft, setCalibDraft] = useState<BlankFormCalib>(DEFAULT_BLANK_CALIB)
+  const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false)
   const printRef = useRef<HTMLDivElement>(null)
 
   function saveCalib(next: BlankFormCalib) {
@@ -461,6 +462,24 @@ export default function DRLogsPage() {
     setOpen(true)
   }
 
+  function closeForm() {
+    setOpen(false)
+    setEditing(null)
+    setForm(emptyForm())
+    setItems([emptyItem()])
+  }
+
+  function handleCancelClick() {
+    const hasData = form.dr_number || form.supplier_name || form.po_number || form.remarks || items.some(it => it.item_name)
+    if (hasData) { setDiscardConfirmOpen(true); return }
+    closeForm()
+  }
+
+  function discardForm() {
+    setDiscardConfirmOpen(false)
+    closeForm()
+  }
+
   function handleClientChange(clientId: string | null) {
     const client = clients.find(c => c.id === clientId)
     setDeliveredToId(clientId ?? '')
@@ -743,7 +762,7 @@ export default function DRLogsPage() {
           <p className="text-muted-foreground text-sm">Delivery Receipt log — track all incoming supplier DRs</p>
         </div>
         {open ? (
-          <Button variant="outline" onClick={() => { setOpen(false); setEditing(null); setForm(emptyForm()); setItems([emptyItem()]) }}>
+          <Button variant="outline" onClick={handleCancelClick}>
             <X className="h-4 w-4 mr-2" />Cancel
           </Button>
         ) : (
@@ -1398,7 +1417,7 @@ export default function DRLogsPage() {
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-4 border-t mt-4">
-              <Button variant="outline" onClick={() => { setOpen(false); setEditing(null) }}>Cancel</Button>
+              <Button variant="outline" onClick={handleCancelClick}>Cancel</Button>
               <Button onClick={save} disabled={saving} className="bg-red-600 hover:bg-red-700">
                 {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : editing ? 'Update DR Log' : 'Save DR Log'}
               </Button>
@@ -1406,6 +1425,19 @@ export default function DRLogsPage() {
           </CardContent>
         </Card>
       )}
+
+      <Dialog open={discardConfirmOpen} onOpenChange={setDiscardConfirmOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Unsaved Changes</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">You have unsaved changes. Do you want to keep editing or discard them?</p>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setDiscardConfirmOpen(false)}>Keep Editing</Button>
+            <Button variant="destructive" onClick={discardForm}>Discard</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
         <DialogContent>

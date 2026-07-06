@@ -35,6 +35,7 @@ interface InventoryRow {
   unit: string
   dr_qty: number
   ws_qty: number
+  client_on_hand: number
   csi_qty: number
   balance: number
   dr_details: DrDetail[]
@@ -312,6 +313,7 @@ export default function InventoryPage() {
           ...(wsClientEntry?.details ?? []),
           ...(wsGeneralEntry?.details ?? []),
         ].sort((a, b) => a.created_at.localeCompare(b.created_at))
+        const clientOnHand = onHandByClient[client]?.[itemName] ?? 0
 
         result.push({
           client,
@@ -319,6 +321,7 @@ export default function InventoryPage() {
           unit,
           dr_qty: drQty,
           ws_qty: wsQty,
+          client_on_hand: clientOnHand,
           csi_qty: csiQty,
           balance: drQty + wsQty - csiQty,
           dr_details,
@@ -522,6 +525,27 @@ export default function InventoryPage() {
     setAddUnit(opt.unit_of_measure ?? '')
   }
 
+  async function receiveAllPoItems() {
+    if (addPoItems.length === 0) return
+    setAddSaving(true)
+    const rows = addPoItems.map(it => ({
+      client_name: null,
+      item_name: it.item_name,
+      unit: it.unit_of_measure ?? '',
+      quantity: Number(it.quantity) || 0,
+      notes: addNotes.trim() || null,
+    }))
+    const { error } = await supabase.from('warehouse_stock').insert(rows)
+    if (error) {
+      toast.error(error.message)
+    } else {
+      toast.success(`${rows.length} item${rows.length !== 1 ? 's' : ''} received`)
+      setAddOpen(false)
+      load()
+    }
+    setAddSaving(false)
+  }
+
   async function saveAddStock() {
     if (!addItemName.trim() || !addQty.trim()) return
     setAddSaving(true)
@@ -576,7 +600,7 @@ export default function InventoryPage() {
       }
       const g = map.get(r.item_name)!
       g.total_dr += Number(r.dr_qty)
-      g.total_ws += Number(r.ws_qty)
+      g.total_ws += Number(r.client_on_hand)
       g.total_csi += Number(r.csi_qty)
       g.total_balance += Number(r.balance)
       g.rows.push(r)
@@ -826,7 +850,7 @@ export default function InventoryPage() {
               </div>
               <div className="bg-white rounded-lg border border-blue-100 px-3 py-2">
                 <div className="text-xs text-muted-foreground">WH Stock</div>
-                <div className="text-lg font-bold text-green-600">{filtered.reduce((s, r) => s + r.ws_qty, 0)}</div>
+                <div className="text-lg font-bold text-green-600">{filtered.reduce((s, r) => s + r.client_on_hand, 0)}</div>
               </div>
               <div className="bg-white rounded-lg border border-blue-100 px-3 py-2">
                 <div className="text-xs text-muted-foreground">CSI Charged</div>
@@ -987,7 +1011,7 @@ export default function InventoryPage() {
                             <TableCell className="font-medium">{r.client}</TableCell>
                             <TableCell className="text-muted-foreground">{uomName(r.unit)}</TableCell>
                             <TableCell className="text-right">{Number(r.dr_qty)}</TableCell>
-                            <TableCell className="text-right">{r.ws_qty > 0 ? <span className="text-green-600">{Number(r.ws_qty)}</span> : '—'}</TableCell>
+                            <TableCell className="text-right">{r.client_on_hand > 0 ? <span className="text-green-600">{Number(r.client_on_hand)}</span> : '—'}</TableCell>
                             <TableCell className="text-right">{Number(r.csi_qty)}</TableCell>
                             <TableCell className={`text-right font-semibold ${r.balance > 0 ? 'text-green-600' : r.balance < 0 ? 'text-red-600' : 'text-gray-500'}`}>{Number(r.balance)}</TableCell>
                             <TableCell>{balanceBadge(r.balance)}</TableCell>
@@ -1027,8 +1051,8 @@ export default function InventoryPage() {
                         <TableCell className="text-sm text-muted-foreground">{uomName(row.unit)}</TableCell>
                         <TableCell className="text-right text-sm">{Number(row.dr_qty)}</TableCell>
                         <TableCell className="text-right text-sm">
-                          {row.ws_qty > 0
-                            ? <span className="text-green-600 font-medium">{Number(row.ws_qty)}</span>
+                          {row.client_on_hand > 0
+                            ? <span className="text-green-600 font-medium">{Number(row.client_on_hand)}</span>
                             : <span className="text-muted-foreground">—</span>
                           }
                         </TableCell>
@@ -1696,7 +1720,21 @@ export default function InventoryPage() {
 
             {addPoId && (
               <div className="space-y-1.5">
-                <Label>Items on this PO</Label>
+                <div className="flex items-center justify-between">
+                  <Label>Items on this PO</Label>
+                  {addPoItems.length > 0 && (
+                    <Button
+                      type="button" size="sm" variant="outline"
+                      className="h-7 text-xs gap-1.5"
+                      disabled={addSaving}
+                      onClick={receiveAllPoItems}
+                    >
+                      {addSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Truck className="h-3.5 w-3.5" />}
+                      Receive All ({addPoItems.length})
+                    </Button>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground">Pick a single item below, or receive every item on this PO at once.</p>
                 <div className="border rounded-lg max-h-40 overflow-y-auto">
                   {addPoItemsLoading ? (
                     <div className="flex items-center justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>

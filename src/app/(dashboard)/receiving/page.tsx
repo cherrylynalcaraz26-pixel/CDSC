@@ -74,8 +74,6 @@ export default function ReceivingPage() {
   const [returnSaving, setReturnSaving] = useState(false)
   const [returns, setReturns] = useState<ItemReturn[]>([])
   const [returnsLoading, setReturnsLoading] = useState(true)
-  const [returnItemSearchIdx, setReturnItemSearchIdx] = useState<number | null>(null)
-  const [returnItemSearchQuery, setReturnItemSearchQuery] = useState('')
 
   // Shared refs
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
@@ -245,7 +243,7 @@ export default function ReceivingPage() {
   function toggleExpandRR(id: string) {
     setExpandedRRId(prev => prev === id ? null : id)
   }
-  function resetReturnForm() { setReturnType('warehouse'); setReturnDate(new Date().toISOString().split('T')[0]); setReturnSupplierId(''); setReturnClientId(''); setReturnItems([emptyReturnItem()]); setReturnNotes(''); setReturnItemSearchIdx(null); setReturnItemSearchQuery('') }
+  function resetReturnForm() { setReturnType('warehouse'); setReturnDate(new Date().toISOString().split('T')[0]); setReturnSupplierId(''); setReturnClientId(''); setReturnItems([emptyReturnItem()]); setReturnNotes('') }
   function resetSalesdForm() { setSalesdClientId(''); setSalesdQuote(''); setSalesdDate(new Date().toISOString().split('T')[0]); setSalesdBy(''); setSalesdNotes(''); setSalesdStatus('pending'); setSalesdItems([emptySalesItem()]) }
 
   async function handleSaveRR() {
@@ -814,31 +812,13 @@ export default function ReceivingPage() {
                       <TableBody>
                         {returnItems.map((row, idx) => (
                           <TableRow key={idx}>
-                            <TableCell className="py-1.5 relative">
-                              <input
-                                className="w-full h-8 rounded-md border border-input bg-background px-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring placeholder:text-muted-foreground"
-                                placeholder="Search item…"
-                                value={returnItemSearchIdx === idx ? returnItemSearchQuery : row.item_name}
-                                onChange={e => { setReturnItemSearchIdx(idx); setReturnItemSearchQuery(e.target.value) }}
-                                onFocus={() => { setReturnItemSearchIdx(idx); setReturnItemSearchQuery('') }}
-                                onBlur={() => setTimeout(() => setReturnItemSearchIdx(i => (i === idx ? null : i)), 150)}
-                              />
-                              {returnItemSearchIdx === idx && (
-                                <div className="absolute top-full left-0 right-0 mt-1 bg-popover border rounded-lg shadow-lg z-50 max-h-52 overflow-y-auto min-w-[240px]">
-                                  {(() => {
-                                    const q = returnItemSearchQuery.toLowerCase()
-                                    const matches = q ? items.filter(it => it.item_name.toLowerCase().includes(q)) : items
-                                    if (matches.length === 0) return <div className="px-3 py-2.5 text-sm text-muted-foreground">No items found</div>
-                                    return matches.slice(0, 50).map(it => (
-                                      <button
-                                        key={it.item_name} type="button"
-                                        className="w-full text-left px-3 py-2 text-sm hover:bg-muted border-b last:border-0"
-                                        onMouseDown={() => { updateReturnItem(idx, 'item_name', it.item_name); setReturnItemSearchIdx(null) }}
-                                      >{it.item_name}</button>
-                                    ))
-                                  })()}
-                                </div>
-                              )}
+                            <TableCell className="py-1.5">
+                              <Select value={row.item_name} onValueChange={v => updateReturnItem(idx, 'item_name', v ?? '')}>
+                                <SelectTrigger className="w-full h-8 text-sm"><SelectValue placeholder="Select item" /></SelectTrigger>
+                                <SelectContent className="min-w-[240px]">
+                                  {items.map(it => <SelectItem key={it.item_name} value={it.item_name}>{it.item_name}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
                             </TableCell>
                             <TableCell className="py-1.5"><Input type="number" min="0" className="h-8 text-sm" value={row.quantity} onChange={e => updateReturnItem(idx, 'quantity', e.target.value)} /></TableCell>
                             <TableCell className="py-1.5"><Input className="h-8 text-sm bg-muted/30" value={row.unit} readOnly /></TableCell>
