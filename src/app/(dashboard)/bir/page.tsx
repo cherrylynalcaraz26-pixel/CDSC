@@ -9,15 +9,19 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Progress } from '@/components/ui/progress'
 import { Separator } from '@/components/ui/separator'
-import { CheckCircle2, XCircle, AlertTriangle, Download, FileBarChart, Zap, FileText, Loader2 } from 'lucide-react'
+import { CheckCircle2, XCircle, AlertTriangle, Download, FileBarChart, Zap, FileText, Loader2, Printer } from 'lucide-react'
 import { toast } from 'sonner'
+import { htmlToPdfBase64 } from '@/lib/send-email'
 
 interface BirFormDef { key: string; form: string; description: string; period: string; due: string; amount: number }
 interface BirForm extends BirFormDef { status: 'filed' | 'overdue' | 'due_soon' | 'pending' }
 
 // Generates this cycle's BIR filings relative to "today" instead of hardcoded dates,
-// so the Filing Calendar and readiness check stay meaningful as time passes.
-function buildBirForms(today: Date): BirFormDef[] {
+// so the Filing Calendar and readiness check stay meaningful as time passes. The
+// percentage/VAT and income tax forms switch automatically based on the company's
+// actual registration (system_settings.vat_registered, business_type) so this stays
+// correct if CDSC ever changes from non-VAT to VAT-registered, or vice versa.
+function buildBirForms(today: Date, vatRegistered: boolean, isCorporate: boolean): BirFormDef[] {
   const y = today.getFullYear(), m = today.getMonth()
   const iso = (d: Date) => d.toISOString().split('T')[0]
 
@@ -32,16 +36,23 @@ function buildBirForms(today: Date): BirFormDef[] {
   const quarterEnd = new Date(qYear, qEndMonth + 1, 0)
   const quarterLabel = `Q${Math.floor(qEndMonth / 3) + 1} ${qYear}`
   const eqDue = new Date(qYear, qEndMonth + 2, 0)
-  const vatDue = new Date(qYear, qEndMonth, quarterEnd.getDate() + 25)
+  const salesTaxDue = new Date(qYear, qEndMonth, quarterEnd.getDate() + 25)
   const itDue = new Date(qYear, qEndMonth, quarterEnd.getDate() + 60)
+
+  const salesTaxForm = vatRegistered
+    ? { form: '2550Q', description: 'Value Added Tax (Quarterly)' }
+    : { form: '2551Q', description: 'Percentage Tax (Quarterly)' }
+  const incomeTaxForm = isCorporate
+    ? { form: '1702Q', description: 'Income Tax (Quarterly) — Corporation' }
+    : { form: '1701Q', description: 'Income Tax (Quarterly) — Individual/Sole Prop' }
 
   return [
     { key: `0619-E_${iso(monthlyDue)}`, form: '0619-E', description: 'Expanded Withholding Tax (Monthly)', period: prevMonthLabel, due: iso(monthlyDue), amount: 12450 },
     { key: `0619-F_${iso(monthlyDue)}`, form: '0619-F', description: 'Final Withholding Tax (Monthly)', period: prevMonthLabel, due: iso(monthlyDue), amount: 3200 },
     { key: `1601-EQ_${quarterLabel}`, form: '1601-EQ', description: 'Expanded Withholding Tax (Quarterly)', period: quarterLabel, due: iso(eqDue), amount: 38750 },
     { key: `1601-FQ_${quarterLabel}`, form: '1601-FQ', description: 'Final Withholding Tax (Quarterly)', period: quarterLabel, due: iso(eqDue), amount: 9600 },
-    { key: `2550Q_${quarterLabel}`, form: '2550Q', description: 'Value Added Tax (Quarterly)', period: quarterLabel, due: iso(vatDue), amount: 0 },
-    { key: `1702Q_${quarterLabel}`, form: '1702Q', description: 'Income Tax (Quarterly)', period: quarterLabel, due: iso(itDue), amount: 145000 },
+    { key: `${salesTaxForm.form}_${quarterLabel}`, form: salesTaxForm.form, description: salesTaxForm.description, period: quarterLabel, due: iso(salesTaxDue), amount: 0 },
+    { key: `${incomeTaxForm.form}_${quarterLabel}`, form: incomeTaxForm.form, description: incomeTaxForm.description, period: quarterLabel, due: iso(itDue), amount: 145000 },
   ]
 }
 
@@ -119,18 +130,23 @@ export default function BIRPage() {
   const [slspRows, setSlspRows] = useState<SlspRow[]>([])
   const [suppliers, setSuppliers] = useState<{ id: string; tin: string | null; atc_code: string | null }[]>([])
   const [filedKeys, setFiledKeys] = useState<Set<string>>(new Set())
+  const [vatRegistered, setVatRegistered] = useState(false)
+  const [isCorporate, setIsCorporate] = useState(false)
 
   useEffect(() => {
     async function loadTaxData() {
       setLoadingTax(true)
-      const [{ data: poData }, { data: supData }, { data: rrData }] = await Promise.all([
+      const [{ data: poData }, { data: supData }, { data: rrData }, { data: sysData }] = await Promise.all([
         supabase.from('purchase_orders')
           .select('po_number, supplier_id, po_date, vat_amount, ewt_amount, total_amount')
           .neq('status', 'cancelled'),
         supabase.from('suppliers').select('id, company_name, tin, atc_code, ewt_rate, address, bir_registered_address'),
         supabase.from('receiving_reports').select('po_number, si_number, dr_number'),
+        supabase.from('system_settings').select('vat_registered, business_type').single(),
       ])
       setSuppliers(supData ?? [])
+      setVatRegistered(!!sysData?.vat_registered)
+      setIsCorporate((sysData?.business_type ?? '').toLowerCase().includes('corp'))
       const supplierById = new Map((supData ?? []).map(s => [s.id, s]))
       const refByPoNumber = new Map((rrData ?? []).map(r => [r.po_number, r.si_number || r.dr_number || null]))
 
@@ -182,7 +198,7 @@ export default function BIRPage() {
     loadTaxData()
   }, [])
 
-  const baseForms = useMemo(() => buildBirForms(new Date()), [])
+  const baseForms = useMemo(() => buildBirForms(new Date(), vatRegistered, isCorporate), [vatRegistered, isCorporate])
   const forms: BirForm[] = useMemo(() => {
     const now = new Date().getTime()
     return baseForms.map(f => {
@@ -226,6 +242,72 @@ export default function BIRPage() {
 
   function exportAlphalist() { toast.success('Alphalist exported to Excel') }
   function exportSLSP() { toast.success('SLSP exported to Excel/CSV') }
+
+  function buildAlphalistHtml() {
+    const rows = ewtRows.map((r, i) => `<tr>
+      <td>${i + 1}</td><td>${r.supplier}</td><td>${r.tin ?? '—'}</td><td>${r.address ?? '—'}</td>
+      <td>${r.atc ?? '—'}</td><td style="text-align:right">₱${r.gross.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+      <td style="text-align:right">₱${r.ewt.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+    </tr>`).join('')
+    return `<!DOCTYPE html><html><head><title>Supplier Alphalist</title><style>
+      body{font-family:Arial,sans-serif;padding:24px;color:#111}
+      table{width:100%;border-collapse:collapse;font-size:11px}
+      th{background:#1f2937;color:#fff;text-align:left;padding:6px 8px}
+      td{padding:6px 8px;border-bottom:1px solid #e5e7eb}
+      h1{font-size:16px;margin-bottom:4px} p{color:#6b7280;font-size:11px;margin-top:0}
+      @media print { @page { margin: 12mm; size: A4 landscape; } }
+    </style></head><body>
+      <h1>Supplier Alphalist</h1>
+      <p>Annual list of suppliers with withholding tax — CDSC Industrial Supply</p>
+      <table><thead><tr><th>#</th><th>Supplier Name</th><th>TIN</th><th>Address</th><th>ATC</th><th style="text-align:right">Total Payments</th><th style="text-align:right">Total EWT</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="7" style="text-align:center;color:#9ca3af">No data</td></tr>'}</tbody></table>
+    </body></html>`
+  }
+
+  function printAlphalist() {
+    const win = window.open('', '_blank', 'width=1000,height=800')
+    if (!win) return
+    win.document.write(buildAlphalistHtml())
+    win.document.close()
+    win.focus()
+    setTimeout(() => win.print(), 400)
+  }
+
+  async function downloadAlphalistPdf() {
+    try {
+      const base64 = await htmlToPdfBase64(buildAlphalistHtml())
+      const bytes = atob(base64)
+      const arr = new Uint8Array(bytes.length)
+      for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i)
+      const blob = new Blob([arr], { type: 'application/pdf' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url; a.download = 'Supplier_Alphalist.pdf'; a.click()
+      URL.revokeObjectURL(url)
+      toast.success('Alphalist PDF downloaded')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to generate PDF')
+    }
+  }
+
+  // Simplified pipe-delimited layout modeled on BIR's Alphalist Data Entry (.dat)
+  // export — verify column order against the current eSubmission spec before filing.
+  function downloadAlphalistDat() {
+    const lines = ewtRows.map(r => [
+      (r.tin ?? '').replace(/-/g, ''),
+      r.supplier,
+      r.address ?? '',
+      r.atc ?? '',
+      r.gross.toFixed(2),
+      r.ewt.toFixed(2),
+    ].join('|'))
+    const blob = new Blob([lines.join('\r\n')], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = 'Alphalist.dat'; a.click()
+    URL.revokeObjectURL(url)
+    toast.success('Alphalist .dat file downloaded')
+  }
 
   return (
     <div className="space-y-6">
@@ -462,6 +544,9 @@ export default function BIRPage() {
                   <CardDescription>Annual list of suppliers with withholding tax — required for BIR submission</CardDescription>
                 </div>
                 <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={printAlphalist}><Printer className="h-4 w-4 mr-1" />Print</Button>
+                  <Button size="sm" variant="outline" onClick={downloadAlphalistPdf}><Download className="h-4 w-4 mr-1" />Download PDF</Button>
+                  <Button size="sm" variant="outline" onClick={downloadAlphalistDat}><Download className="h-4 w-4 mr-1" />Download .DAT</Button>
                   <Button size="sm" variant="outline" onClick={exportAlphalist}><Download className="h-4 w-4 mr-1" />Export Excel</Button>
                   <Button size="sm" variant="outline" onClick={() => toast.success('Alphalist exported to CSV')}><Download className="h-4 w-4 mr-1" />Export CSV</Button>
                 </div>

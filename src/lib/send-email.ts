@@ -756,7 +756,7 @@ async function buildSOPdf(data: SOPdfData): Promise<string> {
   return pdf.output('datauristring').split(',')[1]
 }
 
-async function htmlToPdfBase64(html: string): Promise<string> {
+export async function htmlToPdfBase64(html: string): Promise<string> {
   const { default: html2canvas } = await import('html2canvas')
   const stripped = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
   const iframe = document.createElement('iframe')

@@ -13,18 +13,18 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { Progress } from '@/components/ui/progress'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
   Plus, Download, Loader2, BookOpen, Banknote, TrendingUp,
   Scale, FileSpreadsheet, Trash2, Calculator, Receipt, FileText, DollarSign,
-  Zap, MoreHorizontal, Printer, Eye, CheckCircle2, XCircle, AlertTriangle,
+  MoreHorizontal, Printer, Eye, CheckCircle2, AlertTriangle,
   ChevronDown, ChevronRight, SlidersHorizontal, Pencil,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
+import BIRPage from '../bir/page'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -137,37 +137,6 @@ const STATUS_CLS: Record<string, string> = {
   voided:  'bg-red-100 text-red-700',
   pending: 'bg-yellow-100 text-yellow-700',
 }
-
-// ── BIR static data ───────────────────────────────────────────────────────────
-
-const birForms = [
-  { form: '0619-E', description: 'Expanded Withholding Tax (Monthly)', period: 'May 2025', due: '2025-06-10', status: 'due_soon', amount: 12450 },
-  { form: '0619-F', description: 'Final Withholding Tax (Monthly)', period: 'May 2025', due: '2025-06-10', status: 'due_soon', amount: 3200 },
-  { form: '1601-EQ', description: 'Expanded Withholding Tax (Quarterly)', period: 'Q1 2025', due: '2025-04-30', status: 'filed', amount: 38750 },
-  { form: '1601-FQ', description: 'Final Withholding Tax (Quarterly)', period: 'Q1 2025', due: '2025-04-30', status: 'filed', amount: 9600 },
-  { form: '2550Q', description: 'Value Added Tax (Quarterly)', period: 'Q2 2025', due: '2025-07-25', status: 'pending', amount: 0 },
-  { form: '1702Q', description: 'Income Tax (Quarterly)', period: 'Q1 2025', due: '2025-05-29', status: 'filed', amount: 145000 },
-]
-
-const readinessChecks = [
-  { check: 'All suppliers have TIN on file', status: 'pass', detail: '24/24 suppliers' },
-  { check: 'All VAT transactions have proper classification', status: 'pass', detail: '156 transactions' },
-  { check: 'EWT rates assigned to suppliers', status: 'warning', detail: '2 suppliers missing ATC code' },
-  { check: 'Input VAT supported by ORs/invoices', status: 'pass', detail: '98% compliance' },
-  { check: 'Alphalist data complete', status: 'warning', detail: '2 payees missing TIN' },
-  { check: 'SLSP purchases data complete', status: 'pass', detail: 'Q1 2025 complete' },
-]
-
-interface EwtRow { supplier: string; tin: string | null; atc: string | null; address: string | null; gross: number; vat_excl: number; ewt_rate: number; ewt: number }
-interface SlspRow { month: string; supplier: string; tin: string | null; refNo: string; gross: number; vat: number; net: number }
-
-const vatSummary = [
-  { month: 'Jan 2025', gross_purchases: 820000, input_vat: 88071.43, output_vat: 0, net_vat: 88071.43 },
-  { month: 'Feb 2025', gross_purchases: 640000, input_vat: 68571.43, output_vat: 0, net_vat: 68571.43 },
-  { month: 'Mar 2025', gross_purchases: 950000, input_vat: 101785.71, output_vat: 0, net_vat: 101785.71 },
-]
-
-const readinessScore = Math.round((readinessChecks.filter(c => c.status === 'pass').length / readinessChecks.length) * 100)
 
 // ── Date range filter (Preset year/quarter or Custom from/to) ─────────────────
 // Shared across Overview, Collections, and Bookkeeping so each tab can filter
@@ -1526,9 +1495,7 @@ function CollectionsTab() {
 
 // ── Sales Journal (CRJ) sub-tab ───────────────────────────────────────────────
 
-interface SOJournalRow { id: string; so_number: string | null; so_date: string | null; client_name: string | null; total_amount: number | null; status: string }
-
-function SalesJournalTab({ collections, csiRecords, salesOrders }: { collections: Collection[]; csiRecords: any[]; salesOrders: SOJournalRow[] }) {
+function SalesJournalTab({ collections, csiRecords }: { collections: Collection[]; csiRecords: any[] }) {
   // Group CSI records by SI number
   const siMap: Record<string, { date: string; client: string; items: any[]; total: number }> = {}
   csiRecords.forEach(r => {
@@ -1539,20 +1506,10 @@ function SalesJournalTab({ collections, csiRecords, salesOrders }: { collections
   const siRows = Object.entries(siMap).sort((a, b) => (a[1].date > b[1].date ? 1 : -1))
   const totalSales = siRows.reduce((s, [, v]) => s + v.total, 0)
 
-  const soRows = [...salesOrders].sort((a, b) => ((a.so_date ?? '') > (b.so_date ?? '') ? 1 : -1))
-  const totalBooked = soRows.reduce((s, so) => s + (Number(so.total_amount) || 0), 0)
-
   function exportSJ() {
     exportCSV('SalesJournal_CSI.csv',
       ['Date', 'SI Number', 'Client', 'Item', 'Qty', 'Unit', 'Unit Price', 'Amount'],
       csiRecords.map(r => [r.si_date ?? '', r.si_number ?? '', r.client_name ?? '', r.item_name ?? '', r.quantity ?? 0, r.unit ?? '', r.unit_price ?? 0, r.amount ?? 0])
-    )
-  }
-
-  function exportSO() {
-    exportCSV('SalesJournal_SalesOrders.csv',
-      ['Date', 'SO Number', 'Client', 'Status', 'Total Amount'],
-      soRows.map(so => [so.so_date ?? '', so.so_number ?? '', so.client_name ?? '', so.status ?? '', so.total_amount ?? 0])
     )
   }
 
@@ -1597,47 +1554,6 @@ function SalesJournalTab({ collections, csiRecords, salesOrders }: { collections
         {siRows.length > 0 && (
           <div className="flex justify-end gap-8 px-4 py-2 bg-muted/40 border-t text-sm font-semibold">
             <span>Total Sales: {fmt(totalSales)}</span>
-          </div>
-        )}
-      </CardContent></Card>
-
-      <div className="flex items-center justify-between pt-2">
-        <div>
-          <p className="text-sm font-semibold">Sales Orders — Booked</p>
-          <p className="text-xs text-muted-foreground">All Sales Orders in this date range, invoiced or not</p>
-        </div>
-        <Button variant="outline" size="sm" onClick={exportSO}><Download className="h-3.5 w-3.5 mr-1.5" />Export CSV</Button>
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <Card><CardContent className="pt-4 pb-3"><div className="text-xl font-bold text-blue-600">{fmt(totalBooked)}</div><div className="text-xs text-muted-foreground">Total Booked (SO)</div></CardContent></Card>
-        <Card><CardContent className="pt-4 pb-3"><div className="text-xl font-bold">{soRows.length}</div><div className="text-xs text-muted-foreground">Sales Orders</div></CardContent></Card>
-      </div>
-      <Card><CardContent className="p-0">
-        <Table>
-          <TableHeader><TableRow>
-            <TableHead>Date</TableHead>
-            <TableHead>SO Number</TableHead>
-            <TableHead>Client</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead className="text-right">Total Amount</TableHead>
-          </TableRow></TableHeader>
-          <TableBody>
-            {soRows.length === 0 ? (
-              <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No Sales Orders in this date range.</TableCell></TableRow>
-            ) : soRows.map(so => (
-              <TableRow key={so.id}>
-                <TableCell className="text-sm whitespace-nowrap">{so.so_date ? format(new Date(so.so_date), 'MMM d, yyyy') : '—'}</TableCell>
-                <TableCell className="font-mono text-xs font-semibold text-blue-600">{so.so_number ?? '—'}</TableCell>
-                <TableCell className="text-sm">{so.client_name ?? '—'}</TableCell>
-                <TableCell><span className="text-xs bg-muted px-2 py-0.5 rounded-full capitalize">{so.status}</span></TableCell>
-                <TableCell className="text-right font-semibold">{fmt(Number(so.total_amount) || 0)}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-        {soRows.length > 0 && (
-          <div className="flex justify-end gap-8 px-4 py-2 bg-muted/40 border-t text-sm font-semibold">
-            <span>Total Booked: {fmt(totalBooked)}</span>
           </div>
         )}
       </CardContent></Card>
@@ -1703,6 +1619,15 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
   }
 
   const filteredPayees = payees.filter(p => !form.payee || p.name.toLowerCase().includes(form.payee.toLowerCase()))
+
+  async function addPayeeName(name: string) {
+    const { data, error } = await supabase.from('payees').insert({ name }).select('id, name').single()
+    if (error) { toast.error(error.message); return }
+    setPayees(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
+    setForm(f => ({ ...f, payee: name }))
+    setPayeeDropdownOpen(false)
+    toast.success('Payee added')
+  }
 
   async function save() {
     if (!form.payee.trim()) { toast.error('Payee is required'); return }
@@ -1870,7 +1795,7 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
                 onFocus={() => setPayeeDropdownOpen(true)}
                 onBlur={() => setTimeout(() => setPayeeDropdownOpen(false), 150)}
               />
-              {payeeDropdownOpen && filteredPayees.length > 0 && (
+              {payeeDropdownOpen && (filteredPayees.length > 0 || form.payee.trim()) && (
                 <div className="absolute z-20 w-full mt-1 bg-popover border rounded-md shadow-lg max-h-48 overflow-y-auto">
                   {filteredPayees.map(p => (
                     <button
@@ -1882,6 +1807,15 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
                       {p.name}
                     </button>
                   ))}
+                  {form.payee.trim() && !payees.some(p => p.name.toLowerCase() === form.payee.trim().toLowerCase()) && (
+                    <button
+                      type="button"
+                      onMouseDown={() => addPayeeName(form.payee.trim())}
+                      className="w-full text-left px-3 py-2 text-sm hover:bg-accent flex items-center gap-1.5 text-red-600 font-medium"
+                    >
+                      <Plus className="h-3.5 w-3.5" />Add &ldquo;{form.payee.trim()}&rdquo; as new payee
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -1919,6 +1853,64 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
+  )
+}
+
+// ── Chart of Accounts sub-tab ─────────────────────────────────────────────────
+
+const ACCOUNT_TYPE_CLS: Record<string, string> = {
+  asset: 'bg-blue-100 text-blue-700',
+  liability: 'bg-orange-100 text-orange-700',
+  equity: 'bg-purple-100 text-purple-700',
+  revenue: 'bg-green-100 text-green-700',
+  expense: 'bg-red-100 text-red-700',
+}
+
+function ChartOfAccountsTab({ coa }: { coa: COA[] }) {
+  const [search, setSearch] = useState('')
+  const filtered = coa.filter(a =>
+    !search ||
+    a.account_code.toLowerCase().includes(search.toLowerCase()) ||
+    a.account_name.toLowerCase().includes(search.toLowerCase())
+  )
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-semibold">Chart of Accounts</p>
+          <p className="text-xs text-muted-foreground">Full list of accounts used across the General Ledger and financial statements</p>
+        </div>
+        <Input placeholder="Search accounts…" value={search} onChange={e => setSearch(e.target.value)} className="max-w-xs" />
+      </div>
+      <Card><CardContent className="p-0">
+        <Table>
+          <TableHeader><TableRow>
+            <TableHead>Code</TableHead>
+            <TableHead>Account Name</TableHead>
+            <TableHead>Type</TableHead>
+            <TableHead>Normal Balance</TableHead>
+            <TableHead>Header</TableHead>
+          </TableRow></TableHeader>
+          <TableBody>
+            {filtered.length === 0 ? (
+              <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No accounts found.</TableCell></TableRow>
+            ) : filtered.map(a => (
+              <TableRow key={a.account_code} className={a.is_header ? 'bg-muted/40 font-semibold' : ''}>
+                <TableCell className="font-mono text-xs">{a.account_code}</TableCell>
+                <TableCell className="text-sm">{a.account_name}</TableCell>
+                <TableCell>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${ACCOUNT_TYPE_CLS[a.account_type] ?? 'bg-gray-100 text-gray-600'}`}>
+                    {a.account_type}
+                  </span>
+                </TableCell>
+                <TableCell className="text-sm capitalize">{a.normal_balance}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{a.is_header ? 'Yes' : '—'}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </CardContent></Card>
     </div>
   )
 }
@@ -2261,7 +2253,6 @@ function BookkeepingTab({ activeSub, onSubChange }: { activeSub: string; onSubCh
   const [coa, setCoa] = useState<COA[]>([])
   const [jLines, setJLines] = useState<JournalLine[]>([])
   const [csiRecords, setCsiRecords] = useState<any[]>([])
-  const [salesOrders, setSalesOrders] = useState<SOJournalRow[]>([])
   const [loading, setLoading] = useState(true)
   const df = useDateRangeFilter()
   const { filterFrom, filterTo } = df
@@ -2270,24 +2261,21 @@ function BookkeepingTab({ activeSub, onSubChange }: { activeSub: string; onSubCh
   const filteredDisbursements = applyDateFilter(df, disbursements, d => (d as Disbursement).disb_date)
   const filteredCsi = applyDateFilter(df, csiRecords, r => r.si_date)
   const filteredJLines = applyDateFilter(df, jLines, l => (l as JournalLine).journal_entries?.entry_date)
-  const filteredSalesOrders = applyDateFilter(df, salesOrders, so => so.so_date)
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [{ data: colData }, { data: disbData }, { data: coaData }, { data: jlData }, { data: csiData }, { data: soData }] = await Promise.all([
+    const [{ data: colData }, { data: disbData }, { data: coaData }, { data: jlData }, { data: csiData }] = await Promise.all([
       supabase.from('collections').select('id,or_number,collection_date,client_name,amount,form_2307,status').order('collection_date'),
       supabase.from('disbursements').select('*').order('disb_date', { ascending: false }),
       supabase.from('chart_of_accounts').select('account_code,account_name,account_type,normal_balance,is_header').eq('is_active', true).order('account_code'),
       supabase.from('journal_lines').select('*, journal_entries(entry_date,entry_number,memo,entry_type)').order('created_at'),
       supabase.from('csi_records').select('id,si_number,si_date,client_name,item_name,unit,quantity,unit_price,amount').order('si_date'),
-      supabase.from('sales_orders').select('id,so_number,so_date,client_name,total_amount,status').not('status', 'eq', 'cancelled').order('so_date'),
     ])
     setCollections((colData ?? []) as Collection[])
     setDisbursements((disbData ?? []) as Disbursement[])
     setCoa((coaData ?? []) as COA[])
     setJLines((jlData ?? []) as unknown as JournalLine[])
     setCsiRecords(csiData ?? [])
-    setSalesOrders(soData ?? [])
     setLoading(false)
   }, [supabase])
 
@@ -2301,9 +2289,20 @@ function BookkeepingTab({ activeSub, onSubChange }: { activeSub: string; onSubCh
     <div className="space-y-4">
       <DateFilterBar df={df} />
       <Tabs value={activeSub} onValueChange={v => onSubChange(v ?? 'crj')}>
+        <TabsList>
+          <TabsTrigger value="crj">Sales Journal</TabsTrigger>
+          <TabsTrigger value="cdj">Disbursements</TabsTrigger>
+          <TabsTrigger value="coa">Chart of Accounts</TabsTrigger>
+          <TabsTrigger value="gl">General Ledger</TabsTrigger>
+          <TabsTrigger value="tb">Trial Balance</TabsTrigger>
+          <TabsTrigger value="is">Income Statement</TabsTrigger>
+          <TabsTrigger value="bs">Balance Sheet</TabsTrigger>
+          <TabsTrigger value="bir">BIR Export</TabsTrigger>
+        </TabsList>
         <div>
-          <TabsContent value="crj"><SalesJournalTab collections={filteredCollections} csiRecords={filteredCsi} salesOrders={filteredSalesOrders} /></TabsContent>
+          <TabsContent value="crj"><SalesJournalTab collections={filteredCollections} csiRecords={filteredCsi} /></TabsContent>
           <TabsContent value="cdj"><DisbursementsTab filterFrom={filterFrom} filterTo={filterTo} /></TabsContent>
+          <TabsContent value="coa"><ChartOfAccountsTab coa={coa} /></TabsContent>
           <TabsContent value="gl"><GeneralLedgerTab lines={filteredJLines} /></TabsContent>
           <TabsContent value="tb"><TrialBalanceTab lines={filteredJLines} coa={coa} /></TabsContent>
           <TabsContent value="is"><IncomeStatementTab lines={filteredJLines} coa={coa} /></TabsContent>
@@ -2316,332 +2315,10 @@ function BookkeepingTab({ activeSub, onSubChange }: { activeSub: string; onSubCh
 }
 
 // ── BIR Compliance Tab ────────────────────────────────────────────────────────
-
+// Reuses the standalone BIR Compliance page component so this tab and the
+// dedicated /bir route share one implementation instead of drifting apart.
 function BIRComplianceTab() {
-  const supabase = createClient()
-  const [activeTab, setActiveTab] = useState('overview')
-  const [loadingTax, setLoadingTax] = useState(true)
-  const [ewtRows, setEwtRows] = useState<EwtRow[]>([])
-  const [slspRows, setSlspRows] = useState<SlspRow[]>([])
-
-  const loadTaxData = useCallback(async () => {
-    setLoadingTax(true)
-    const [{ data: poData }, { data: supData }, { data: rrData }] = await Promise.all([
-      supabase.from('purchase_orders')
-        .select('po_number, supplier_id, po_date, vat_amount, ewt_amount, total_amount')
-        .neq('status', 'cancelled'),
-      supabase.from('suppliers').select('id, company_name, tin, atc_code, ewt_rate, address, bir_registered_address'),
-      supabase.from('receiving_reports').select('po_number, si_number, dr_number'),
-    ])
-    const supplierById = new Map((supData ?? []).map(s => [s.id, s]))
-    const refByPoNumber = new Map((rrData ?? []).map(r => [r.po_number, r.si_number || r.dr_number || null]))
-
-    // EWT Summary / Alphalist: purchases that actually had withholding tax applied,
-    // aggregated per supplier (Alphalist is an annual roll-up of the same data).
-    const ewtBySupplier = new Map<string, { gross: number; vat_excl: number; ewt: number }>()
-    for (const po of poData ?? []) {
-      const ewt = Number(po.ewt_amount) || 0
-      if (ewt <= 0 || !po.supplier_id) continue
-      const gross = Number(po.total_amount) || 0
-      const vatExcl = gross - (Number(po.vat_amount) || 0)
-      const acc = ewtBySupplier.get(po.supplier_id) ?? { gross: 0, vat_excl: 0, ewt: 0 }
-      acc.gross += gross; acc.vat_excl += vatExcl; acc.ewt += ewt
-      ewtBySupplier.set(po.supplier_id, acc)
-    }
-    const ewtList: EwtRow[] = [...ewtBySupplier.entries()].map(([supplierId, acc]) => {
-      const sup = supplierById.get(supplierId)
-      return {
-        supplier: sup?.company_name ?? 'Unknown Supplier',
-        tin: sup?.tin ?? null,
-        atc: sup?.atc_code ?? null,
-        address: sup?.bir_registered_address ?? sup?.address ?? null,
-        gross: acc.gross, vat_excl: acc.vat_excl,
-        ewt_rate: sup?.ewt_rate != null ? Number(sup.ewt_rate) : (acc.vat_excl > 0 ? (acc.ewt / acc.vat_excl) * 100 : 0),
-        ewt: acc.ewt,
-      }
-    }).sort((a, b) => b.ewt - a.ewt)
-    setEwtRows(ewtList)
-
-    // SLSP: every VAT-bearing purchase, one row per PO.
-    const slspList: SlspRow[] = (poData ?? [])
-      .filter(po => (Number(po.vat_amount) || 0) > 0)
-      .map(po => {
-        const sup = po.supplier_id ? supplierById.get(po.supplier_id) : null
-        const gross = Number(po.total_amount) || 0
-        const vat = Number(po.vat_amount) || 0
-        return {
-          month: po.po_date ? new Date(po.po_date).toLocaleDateString('en-PH', { month: 'short', year: 'numeric' }) : '—',
-          supplier: sup?.company_name ?? 'Unknown Supplier',
-          tin: sup?.tin ?? null,
-          refNo: refByPoNumber.get(po.po_number ?? '') || po.po_number || '—',
-          gross, vat, net: gross - vat,
-        }
-      })
-      .sort((a, b) => (a.month > b.month ? 1 : -1))
-    setSlspRows(slspList)
-    setLoadingTax(false)
-  }, [supabase])
-
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { loadTaxData() }, [loadTaxData])
-
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">Philippine BIR filing management, tax computation, and alphalist generation</p>
-        <Button className="gap-2" onClick={() => toast.success('Filing readiness check completed!')}>
-          <Zap className="h-4 w-4" /> BIR Filing Ready Check
-        </Button>
-      </div>
-
-      <Card className="border-primary/30 bg-primary/5">
-        <CardContent className="pt-5">
-          <div className="flex items-center gap-6">
-            <div className="text-center">
-              <div className="text-4xl font-bold text-primary">{readinessScore}%</div>
-              <div className="text-sm text-muted-foreground">Filing Ready</div>
-            </div>
-            <div className="flex-1">
-              <Progress value={readinessScore} className="h-3 mb-3" />
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                {readinessChecks.map(check => (
-                  <div key={check.check} className="flex items-start gap-2 text-xs">
-                    {check.status === 'pass'
-                      ? <CheckCircle2 className="h-3.5 w-3.5 text-green-500 shrink-0 mt-0.5" />
-                      : check.status === 'warning'
-                      ? <AlertTriangle className="h-3.5 w-3.5 text-yellow-500 shrink-0 mt-0.5" />
-                      : <XCircle className="h-3.5 w-3.5 text-red-500 shrink-0 mt-0.5" />}
-                    <div>
-                      <div className="font-medium">{check.check}</div>
-                      <div className="text-muted-foreground">{check.detail}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="overview">Filing Calendar</TabsTrigger>
-          <TabsTrigger value="ewt">EWT Summary</TabsTrigger>
-          <TabsTrigger value="vat">VAT Summary</TabsTrigger>
-          <TabsTrigger value="alphalist">Alphalist</TabsTrigger>
-          <TabsTrigger value="slsp">SLSP</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="overview">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">BIR Filing Calendar 2025</CardTitle>
-              <CardDescription>Track all BIR form due dates and filing status</CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader><TableRow>
-                  <TableHead>Form</TableHead><TableHead>Description</TableHead><TableHead>Period</TableHead>
-                  <TableHead>Due Date</TableHead><TableHead className="text-right">Amount</TableHead>
-                  <TableHead>Status</TableHead><TableHead className="w-24">Actions</TableHead>
-                </TableRow></TableHeader>
-                <TableBody>
-                  {birForms.map(form => (
-                    <TableRow key={`${form.form}-${form.period}`}>
-                      <TableCell className="font-mono font-bold text-primary">{form.form}</TableCell>
-                      <TableCell className="text-sm">{form.description}</TableCell>
-                      <TableCell className="text-sm">{form.period}</TableCell>
-                      <TableCell className="text-sm font-medium">{form.due}</TableCell>
-                      <TableCell className="text-right font-medium">{form.amount ? `₱${form.amount.toLocaleString()}` : '—'}</TableCell>
-                      <TableCell>
-                        <Badge variant={form.status === 'filed' ? 'outline' : form.status === 'due_soon' ? 'destructive' : 'secondary'} className="text-xs">
-                          {form.status === 'filed' ? '✓ Filed' : form.status === 'due_soon' ? '⚠ Due Soon' : 'Pending'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {form.status !== 'filed' && (
-                          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => toast.success(`Form ${form.form} marked as filed`)}>Mark Filed</Button>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="ewt">
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div><CardTitle className="text-base">Expanded Withholding Tax (EWT) Summary</CardTitle><CardDescription>BIR Form 0619-E / 1601-EQ computation</CardDescription></div>
-                <Button size="sm" variant="outline" onClick={() => toast.success('EWT summary exported')}><Download className="h-4 w-4 mr-1" />Export</Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader><TableRow>
-                  <TableHead>Supplier</TableHead><TableHead>TIN</TableHead><TableHead>ATC</TableHead>
-                  <TableHead className="text-right">Gross Amount</TableHead><TableHead className="text-right">VAT Excl. Amount</TableHead>
-                  <TableHead className="text-right">EWT Rate</TableHead><TableHead className="text-right">EWT Amount</TableHead>
-                </TableRow></TableHeader>
-                <TableBody>
-                  {loadingTax ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
-                  ) : ewtRows.length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground">No purchases with withholding tax recorded yet.</TableCell></TableRow>
-                  ) : (<>
-                    {ewtRows.map(row => (
-                      <TableRow key={row.supplier}>
-                        <TableCell className="font-medium text-sm">{row.supplier}</TableCell>
-                        <TableCell className="font-mono text-xs">{row.tin ?? '—'}</TableCell>
-                        <TableCell className="font-mono text-xs">{row.atc ?? '—'}</TableCell>
-                        <TableCell className="text-right">₱{row.gross.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                        <TableCell className="text-right">₱{row.vat_excl.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                        <TableCell className="text-right">{row.ewt_rate.toFixed(2)}%</TableCell>
-                        <TableCell className="text-right font-semibold text-red-700">₱{row.ewt.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                      </TableRow>
-                    ))}
-                    <TableRow className="bg-muted/50 font-bold">
-                      <TableCell colSpan={3}>TOTAL</TableCell>
-                      <TableCell className="text-right">₱{ewtRows.reduce((s, r) => s + r.gross, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                      <TableCell className="text-right">₱{ewtRows.reduce((s, r) => s + r.vat_excl, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                      <TableCell />
-                      <TableCell className="text-right text-red-700">₱{ewtRows.reduce((s, r) => s + r.ewt, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                    </TableRow>
-                  </>)}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="vat">
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div><CardTitle className="text-base">VAT Summary — BIR Form 2550Q</CardTitle><CardDescription>Input VAT from purchases by month</CardDescription></div>
-                <Button size="sm" variant="outline" onClick={() => toast.success('VAT summary exported')}><Download className="h-4 w-4 mr-1" />Export</Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader><TableRow>
-                  <TableHead>Month</TableHead><TableHead className="text-right">Gross Purchases</TableHead>
-                  <TableHead className="text-right">Input VAT (12%)</TableHead><TableHead className="text-right">Output VAT</TableHead>
-                  <TableHead className="text-right">Net VAT Payable</TableHead>
-                </TableRow></TableHeader>
-                <TableBody>
-                  {vatSummary.map(row => (
-                    <TableRow key={row.month}>
-                      <TableCell className="font-medium">{row.month}</TableCell>
-                      <TableCell className="text-right">₱{row.gross_purchases.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                      <TableCell className="text-right text-blue-600">₱{row.input_vat.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                      <TableCell className="text-right">₱{row.output_vat.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                      <TableCell className="text-right font-semibold">₱{row.net_vat.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                    </TableRow>
-                  ))}
-                  <TableRow className="bg-muted/50 font-bold">
-                    <TableCell>Q1 TOTAL</TableCell>
-                    <TableCell className="text-right">₱{vatSummary.reduce((s, r) => s + r.gross_purchases, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                    <TableCell className="text-right text-blue-600">₱{vatSummary.reduce((s, r) => s + r.input_vat, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                    <TableCell className="text-right">₱0.00</TableCell>
-                    <TableCell className="text-right">₱{vatSummary.reduce((s, r) => s + r.net_vat, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="alphalist">
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div><CardTitle className="text-base">Supplier Alphalist</CardTitle><CardDescription>Annual list of suppliers with withholding tax — required for BIR submission</CardDescription></div>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => toast.success('Alphalist exported to Excel')}><Download className="h-4 w-4 mr-1" />Export Excel</Button>
-                  <Button size="sm" variant="outline" onClick={() => toast.success('Alphalist exported to CSV')}><Download className="h-4 w-4 mr-1" />Export CSV</Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader><TableRow>
-                  <TableHead>#</TableHead><TableHead>Supplier Name</TableHead><TableHead>TIN</TableHead>
-                  <TableHead>Address</TableHead><TableHead>ATC</TableHead>
-                  <TableHead className="text-right">Total Payments</TableHead><TableHead className="text-right">Total EWT</TableHead>
-                </TableRow></TableHeader>
-                <TableBody>
-                  {loadingTax ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
-                  ) : ewtRows.length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground">No payees with withholding tax recorded yet.</TableCell></TableRow>
-                  ) : ewtRows.map((row, i) => (
-                    <TableRow key={row.supplier}>
-                      <TableCell className="text-sm text-muted-foreground">{i + 1}</TableCell>
-                      <TableCell className="font-medium text-sm">{row.supplier}</TableCell>
-                      <TableCell className="font-mono text-xs">{row.tin ?? '—'}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{row.address ?? '—'}</TableCell>
-                      <TableCell className="font-mono text-xs">{row.atc ?? '—'}</TableCell>
-                      <TableCell className="text-right">₱{row.gross.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                      <TableCell className="text-right font-semibold text-red-700">₱{row.ewt.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="slsp">
-          <Card>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div><CardTitle className="text-base">Summary List of Purchases (SLSP)</CardTitle><CardDescription>Required quarterly submission — all VAT purchases from suppliers</CardDescription></div>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={() => toast.success('SLSP exported to Excel')}><Download className="h-4 w-4 mr-1" />Export Excel</Button>
-                  <Button size="sm" variant="outline" onClick={() => toast.success('SLSP exported to CSV')}><Download className="h-4 w-4 mr-1" />Export CSV</Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="p-4 bg-muted/50 rounded-lg text-sm text-muted-foreground mb-4">
-                <strong className="text-foreground">Period:</strong> {slspRows.length > 0 ? `${slspRows[0].month} — ${slspRows[slspRows.length - 1].month}` : 'No purchases recorded'} &nbsp;|&nbsp;
-                <strong className="text-foreground">Total VAT Purchases:</strong> ₱{slspRows.reduce((s, r) => s + r.gross, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} &nbsp;|&nbsp;
-                <strong className="text-foreground">Total Input VAT:</strong> ₱{slspRows.reduce((s, r) => s + r.vat, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-              </div>
-              <Table>
-                <TableHeader><TableRow>
-                  <TableHead>Month</TableHead><TableHead>Supplier</TableHead><TableHead>TIN</TableHead>
-                  <TableHead>OR/Invoice No.</TableHead><TableHead className="text-right">Gross Amount</TableHead>
-                  <TableHead className="text-right">VAT Amount</TableHead><TableHead className="text-right">Net of VAT</TableHead>
-                </TableRow></TableHeader>
-                <TableBody>
-                  {loadingTax ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
-                  ) : slspRows.length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground">No VAT purchases recorded yet.</TableCell></TableRow>
-                  ) : slspRows.map((row, i) => (
-                    <TableRow key={i}>
-                      <TableCell className="text-sm">{row.month}</TableCell>
-                      <TableCell className="text-sm">{row.supplier}</TableCell>
-                      <TableCell className="font-mono text-xs">{row.tin ?? '—'}</TableCell>
-                      <TableCell className="font-mono text-xs">{row.refNo}</TableCell>
-                      <TableCell className="text-right">₱{row.gross.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                      <TableCell className="text-right text-blue-600">₱{row.vat.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                      <TableCell className="text-right">₱{row.net.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
-    </div>
-  )
+  return <BIRPage />
 }
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
@@ -2967,6 +2644,13 @@ function AccountingPageContent() {
       </div>
 
       <Tabs value={activeTab} onValueChange={v => setTab(v ?? 'overview')}>
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="collections">Collections</TabsTrigger>
+          <TabsTrigger value="csi">CSI</TabsTrigger>
+          <TabsTrigger value="bookkeeping">Bookkeeping</TabsTrigger>
+          <TabsTrigger value="bir">BIR Compliance</TabsTrigger>
+        </TabsList>
         <div>
           <TabsContent value="overview"><OverviewTab /></TabsContent>
           <TabsContent value="collections"><CollectionsTab /></TabsContent>
