@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { format } from 'date-fns'
 import { Loader2, FileText, ChevronDown, ChevronUp, Package, CheckCircle, Clock, XCircle, Send } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { toast } from 'sonner'
 import { useSearchContext } from '@/context/search-context'
 
 interface QuoteItem {
@@ -56,6 +57,7 @@ export default function PortalQuotations() {
   const { query: search } = useSearchContext()
   const [filter, setFilter] = useState('')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [updatingId, setUpdatingId] = useState<string | null>(null)
 
   useEffect(() => {
     async function init() {
@@ -83,6 +85,17 @@ export default function PortalQuotations() {
       next.has(id) ? next.delete(id) : next.add(id)
       return next
     })
+  }
+
+  async function updateStatus(id: string, status: 'accepted' | 'declined') {
+    setUpdatingId(id)
+    const { error } = await supabase.from('quotations').update({ status }).eq('id', id)
+    if (error) toast.error(error.message)
+    else {
+      setQuotations(prev => prev.map(q => q.id === id ? { ...q, status } : q))
+      toast.success(status === 'accepted' ? 'Quotation accepted' : 'Quotation declined')
+    }
+    setUpdatingId(null)
   }
 
   const filtered = quotations.filter(q => {
@@ -191,6 +204,24 @@ export default function PortalQuotations() {
                       </button>
                     )}
                   </div>
+                  {q.status === 'sent' && (
+                    <div className="flex gap-2 justify-end mt-3 pt-3 border-t border-gray-100">
+                      <button
+                        onClick={() => updateStatus(q.id, 'declined')}
+                        disabled={updatingId === q.id}
+                        className="inline-flex items-center gap-1.5 border border-gray-300 hover:bg-gray-50 disabled:opacity-60 text-gray-700 text-sm font-semibold px-4 py-1.5 rounded-lg transition-colors">
+                        {updatingId === q.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5" />}
+                        Mark as Declined
+                      </button>
+                      <button
+                        onClick={() => updateStatus(q.id, 'accepted')}
+                        disabled={updatingId === q.id}
+                        className="inline-flex items-center gap-1.5 bg-green-600 hover:bg-green-700 disabled:opacity-60 text-white text-sm font-semibold px-4 py-1.5 rounded-lg transition-colors">
+                        {updatingId === q.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle className="h-3.5 w-3.5" />}
+                        Mark as Accepted
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {isOpen && hasItems && (

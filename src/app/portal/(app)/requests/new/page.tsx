@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import { Plus, Trash2, Loader2, ChevronLeft, Send, AlertTriangle } from 'lucide-react'
+import { Plus, Trash2, Loader2, ChevronLeft, Send, AlertTriangle, X } from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
 
@@ -50,6 +50,7 @@ export default function NewRequestPage() {
   const [notes, setNotes] = useState('')
   const [items, setItems] = useState<Item[]>([blankItem()])
   const [submitting, setSubmitting] = useState(false)
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [catalog, setCatalog] = useState<CatalogItem[]>([])
   const [sysInfo, setSysInfo] = useState<SysInfo | null>(null)
 
@@ -392,7 +393,7 @@ export default function NewRequestPage() {
           {/* Actions */}
           <div className="flex gap-3 justify-end">
             <button type="button"
-              onClick={() => router.push('/portal/requests')}
+              onClick={() => setShowCancelConfirm(true)}
               className="px-4 py-2 text-sm font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
               Cancel
             </button>
@@ -415,6 +416,33 @@ export default function NewRequestPage() {
           </div>
         </div>
       </div>
+
+      {/* Discard confirmation modal */}
+      {showCancelConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={e => { if (e.target === e.currentTarget) setShowCancelConfirm(false) }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+            <div className="flex items-center justify-between px-6 py-4 border-b">
+              <h3 className="font-bold text-gray-900">Discard this order?</h3>
+              <button onClick={() => setShowCancelConfirm(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="px-6 py-4">
+              <p className="text-sm text-gray-700">You have unsaved changes. If you leave now, this order will not be submitted.</p>
+            </div>
+            <div className="px-6 pb-5 flex gap-3 justify-end border-t pt-3">
+              <button onClick={() => setShowCancelConfirm(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+                Keep Editing
+              </button>
+              <button onClick={() => router.push('/portal/requests')}
+                className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors">
+                Discard
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -486,16 +486,25 @@ export default function PortalSettingsPage() {
 
       {/* Change Password tab */}
       {tab === 'password' && (
-        <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+        <form
+          onSubmit={e => { e.preventDefault(); changePassword() }}
+          className="bg-white rounded-xl border border-gray-200 p-6 space-y-4"
+        >
           <div className="flex items-center gap-2 mb-2">
             <Lock className="h-4 w-4 text-gray-400" />
             <span className="text-sm font-semibold text-gray-700">Change Password</span>
           </div>
+          {/* Hidden username field so browsers correctly associate this form's password
+              fields with this account instead of guessing at an unrelated input (like the
+              header search box) as the username field. */}
+          <input type="text" name="username" autoComplete="username" value={email} readOnly hidden />
           <div className="space-y-1.5">
             <label className="text-sm font-medium text-gray-700">Current Password</label>
             <div className="relative">
               <input
                 type={showPw ? 'text' : 'password'}
+                name="current-password"
+                autoComplete="current-password"
                 value={currentPw}
                 onChange={e => setCurrentPw(e.target.value)}
                 placeholder="••••••••"
@@ -511,6 +520,8 @@ export default function PortalSettingsPage() {
             <label className="text-sm font-medium text-gray-700">New Password</label>
             <input
               type={showPw ? 'text' : 'password'}
+              name="new-password"
+              autoComplete="new-password"
               value={newPw}
               onChange={e => setNewPw(e.target.value)}
               placeholder="Minimum 8 characters"
@@ -521,6 +532,8 @@ export default function PortalSettingsPage() {
             <label className="text-sm font-medium text-gray-700">Confirm New Password</label>
             <input
               type={showPw ? 'text' : 'password'}
+              name="confirm-password"
+              autoComplete="new-password"
               value={confirmPw}
               onChange={e => setConfirmPw(e.target.value)}
               placeholder="Re-enter new password"
@@ -528,13 +541,13 @@ export default function PortalSettingsPage() {
             />
           </div>
           <button
-            onClick={changePassword}
+            type="submit"
             disabled={changingPw}
             className="inline-flex items-center gap-2 border border-gray-300 hover:bg-gray-50 disabled:opacity-60 text-gray-700 text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
             {changingPw ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
             Change Password
           </button>
-        </div>
+        </form>
       )}
     </div>
   )

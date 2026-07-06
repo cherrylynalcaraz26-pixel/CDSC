@@ -6,12 +6,13 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Package, Loader2, Search, AlertTriangle, ArrowDownCircle, ArrowUpCircle,
   SlidersHorizontal, History, ChevronDown, ChevronUp, X, Check, Plus, Truck, CheckCircle2,
-  MoreHorizontal, Undo2, Printer, FileText,
+  MoreHorizontal, Undo2, Printer, FileText, Mail,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
+import { sendEmail } from '@/lib/send-email'
 
 interface StockRow {
   id: string
@@ -101,6 +102,10 @@ function PortalStockPageContent() {
   // Report
   const [reportOpen, setReportOpen] = useState(false)
   const [csiRecords, setCsiRecords] = useState<{ si_number: string; si_date: string; item_name: string; unit: string | null; quantity: number; unit_price: number; amount: number; dr_number: string | null }[]>([])
+  const [userEmail, setUserEmail] = useState('')
+  const [emailDialogOpen, setEmailDialogOpen] = useState(false)
+  const [emailTo, setEmailTo] = useState('')
+  const [sendingEmail, setSendingEmail] = useState(false)
 
   // Issue slip (shown after issue submit)
   const [issuedSlip, setIssuedSlip] = useState<{ item_name: string; unit: string | null; quantity: number; issued_to: string; department: string; notes: string; reference_no: string; date: string } | null>(null)
@@ -114,6 +119,7 @@ function PortalStockPageContent() {
     async function init() {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) { router.push('/login'); return }
+      setUserEmail(session.user.email ?? '')
       const { data: clientRow } = await supabase.from('clients').select('id, company_name, show_csi_in_portal').eq('auth_user_id', session.user.id).single()
       if (!clientRow) { router.push('/login'); return }
       setClientId(clientRow.id)
@@ -629,7 +635,13 @@ function PortalStockPageContent() {
               <FileText className="h-4 w-4 text-red-600 shrink-0" />
               <span className="font-semibold text-sm text-gray-800 shrink-0">Stock Report</span>
               <button
-                className="ml-auto inline-flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-4 py-1.5 rounded-lg transition-colors shrink-0"
+                className="ml-auto inline-flex items-center gap-1.5 border border-gray-300 hover:bg-gray-100 text-gray-700 text-sm font-semibold px-4 py-1.5 rounded-lg transition-colors shrink-0"
+                onClick={() => { setEmailTo(userEmail); setEmailDialogOpen(true) }}
+              >
+                <Mail className="h-4 w-4" /> Email Report
+              </button>
+              <button
+                className="inline-flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-4 py-1.5 rounded-lg transition-colors shrink-0"
                 onClick={() => {
                   const win = window.open('', '_blank', 'width=1000,height=800')
                   if (!win) return
@@ -641,6 +653,57 @@ function PortalStockPageContent() {
               >
                 <Printer className="h-4 w-4" /> Print / Save PDF
               </button>
+              {emailDialogOpen && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={e => { if (e.target === e.currentTarget && !sendingEmail) setEmailDialogOpen(false) }}>
+                  <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+                    <div className="flex items-center justify-between px-6 py-4 border-b">
+                      <h3 className="font-bold text-gray-900">Email Stock Report</h3>
+                      <button onClick={() => setEmailDialogOpen(false)} disabled={sendingEmail} className="text-gray-400 hover:text-gray-600 disabled:opacity-40">
+                        <X className="h-5 w-5" />
+                      </button>
+                    </div>
+                    <div className="px-6 py-4 space-y-1.5">
+                      <label className="text-sm font-medium text-gray-700">Send to</label>
+                      <input
+                        type="email"
+                        value={emailTo}
+                        onChange={e => setEmailTo(e.target.value)}
+                        placeholder="you@company.com"
+                        className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                      />
+                    </div>
+                    <div className="px-6 pb-5 flex gap-3 justify-end border-t pt-3">
+                      <button onClick={() => setEmailDialogOpen(false)} disabled={sendingEmail}
+                        className="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40">
+                        Cancel
+                      </button>
+                      <button
+                        disabled={sendingEmail || !emailTo.trim()}
+                        onClick={async () => {
+                          setSendingEmail(true)
+                          try {
+                            await sendEmail({
+                              to: emailTo.trim(),
+                              subject: `Stock Report - ${clientName}`,
+                              body: `Please find attached the stock report for ${clientName} as of ${today}.`,
+                              printHtml: buildStockReportHtml(),
+                              pdfFilename: `Stock_Report_${clientName.replace(/\s+/g, '_')}.pdf`,
+                            })
+                            toast.success('Stock report emailed')
+                            setEmailDialogOpen(false)
+                          } catch (err) {
+                            toast.error(err instanceof Error ? err.message : 'Failed to send email')
+                          }
+                          setSendingEmail(false)
+                        }}
+                        className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors">
+                        {sendingEmail && <Loader2 className="h-4 w-4 animate-spin" />}
+                        Send
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Report body */}

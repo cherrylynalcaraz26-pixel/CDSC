@@ -394,6 +394,8 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <input
                   type="search"
+                  name="portal-search"
+                  autoComplete="off"
                   value={query}
                   onChange={e => setQuery(e.target.value)}
                   placeholder="Search orders, items…"
