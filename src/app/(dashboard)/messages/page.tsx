@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -22,11 +22,28 @@ interface ClientMessage {
   clients: { company_name: string | null; contact_person: string | null } | null
 }
 
+interface Conversation {
+  key: string
+  company: string
+  contact: string | null
+  messages: ClientMessage[]
+  lastMessage: ClientMessage
+  unreadCount: number
+}
+
+function companyOf(msg: ClientMessage) {
+  return msg.clients?.company_name || msg.client_name || 'Unknown Client'
+}
+
+function nameOf(msg: ClientMessage) {
+  return msg.clients?.contact_person || null
+}
+
 export default function MessagesPage() {
   const supabase = createClient()
   const [messages, setMessages] = useState<ClientMessage[]>([])
   const [loading, setLoading] = useState(true)
-  const [selected, setSelected] = useState<ClientMessage | null>(null)
+  const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const [replyText, setReplyText] = useState('')
   const [replying, setReplying] = useState(false)
   const [filter, setFilter] = useState<'all' | 'unread' | 'replied'>('all')
@@ -43,50 +60,70 @@ export default function MessagesPage() {
 
   useEffect(() => { load() }, [])
 
-  async function markRead(id: string) {
-    await supabase.from('client_messages').update({ status: 'read' }).eq('id', id)
-    setMessages(ms => ms.map(m => m.id === id ? { ...m, status: 'read' } : m))
-    if (selected?.id === id) setSelected(s => s ? { ...s, status: 'read' } : s)
+  function conversationKey(msg: ClientMessage): string {
+    return msg.client_id ?? `name:${companyOf(msg)}`
+  }
+
+  const conversations = useMemo(() => {
+    const map = new Map<string, ClientMessage[]>()
+    for (const m of messages) {
+      const key = conversationKey(m)
+      if (!map.has(key)) map.set(key, [])
+      map.get(key)!.push(m)
+    }
+    const list: Conversation[] = Array.from(map.entries()).map(([key, msgs]) => {
+      const sorted = [...msgs].sort((a, b) => (a.sent_at ?? '').localeCompare(b.sent_at ?? ''))
+      const lastMessage = sorted[sorted.length - 1]
+      return {
+        key,
+        company: companyOf(lastMessage),
+        contact: nameOf(lastMessage),
+        messages: sorted,
+        lastMessage,
+        unreadCount: sorted.filter(m => m.status === 'unread').length,
+      }
+    })
+    return list.sort((a, b) => (b.lastMessage.sent_at ?? '').localeCompare(a.lastMessage.sent_at ?? ''))
+  }, [messages])
+
+  const selected = conversations.find(c => c.key === selectedKey) ?? null
+
+  async function markConversationRead(conv: Conversation) {
+    const unreadIds = conv.messages.filter(m => m.status === 'unread').map(m => m.id)
+    if (unreadIds.length === 0) return
+    await supabase.from('client_messages').update({ status: 'read' }).in('id', unreadIds)
+    setMessages(ms => ms.map(m => unreadIds.includes(m.id) ? { ...m, status: 'read' } : m))
   }
 
   async function sendReply() {
     if (!selected || !replyText.trim()) return
+    const target = selected.lastMessage
     setReplying(true)
     const now = new Date().toISOString()
     const { error } = await supabase
       .from('client_messages')
       .update({ reply: replyText.trim(), replied_at: now, status: 'replied' })
-      .eq('id', selected.id)
+      .eq('id', target.id)
     if (error) { toast.error(error.message); setReplying(false); return }
-    const updated = { ...selected, reply: replyText.trim(), replied_at: now, status: 'replied' }
-    setMessages(ms => ms.map(m => m.id === selected.id ? updated : m))
-    setSelected(updated)
+    setMessages(ms => ms.map(m => m.id === target.id ? { ...m, reply: replyText.trim(), replied_at: now, status: 'replied' } : m))
     setReplyText('')
     toast.success('Reply saved.')
     setReplying(false)
   }
 
-  function openMessage(msg: ClientMessage) {
-    setSelected(msg)
-    setReplyText(msg.reply ?? '')
-    if (msg.status === 'unread') markRead(msg.id)
+  function openConversation(conv: Conversation) {
+    setSelectedKey(conv.key)
+    setReplyText('')
+    markConversationRead(conv)
   }
 
   const unreadCount = messages.filter(m => m.status === 'unread').length
 
-  const filtered = messages.filter(m => {
-    if (filter === 'unread') return m.status === 'unread'
-    if (filter === 'replied') return m.status === 'replied'
+  const filteredConversations = conversations.filter(c => {
+    if (filter === 'unread') return c.unreadCount > 0
+    if (filter === 'replied') return !!c.lastMessage.reply
     return true
   })
-
-  function companyOf(msg: ClientMessage) {
-    return msg.clients?.company_name || msg.client_name || 'Unknown Client'
-  }
-
-  function nameOf(msg: ClientMessage) {
-    return msg.clients?.contact_person || null
-  }
 
   const statusBadge = (s: string) => {
     if (s === 'unread') return <Badge className="bg-red-100 text-red-700 text-[10px]">Unread</Badge>
@@ -113,7 +150,7 @@ export default function MessagesPage() {
       {/* KPI */}
       <div className="grid grid-cols-3 gap-4">
         {[
-          { label: 'Total Messages', value: messages.length, icon: MessageSquare, color: 'text-blue-600' },
+          { label: 'Conversations', value: conversations.length, icon: MessageSquare, color: 'text-blue-600' },
           { label: 'Unread', value: unreadCount, icon: Clock, color: 'text-red-600' },
           { label: 'Replied', value: messages.filter(m => m.status === 'replied').length, icon: CheckCheck, color: 'text-green-600' },
         ].map(c => (
@@ -131,7 +168,7 @@ export default function MessagesPage() {
 
       {/* Main panel */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 min-h-[500px]">
-        {/* Message list */}
+        {/* Conversation list */}
         <Card className="lg:col-span-1 flex flex-col">
           <CardHeader className="pb-2 border-b">
             <div className="flex items-center gap-2">
@@ -146,24 +183,28 @@ export default function MessagesPage() {
           <div className="flex-1 overflow-y-auto divide-y">
             {loading ? (
               <div className="p-6 text-center text-sm text-muted-foreground">Loading…</div>
-            ) : filtered.length === 0 ? (
-              <div className="p-6 text-center text-sm text-muted-foreground">No messages</div>
-            ) : filtered.map(msg => (
-              <button key={msg.id} onClick={() => openMessage(msg)}
-                className={`w-full text-left p-4 hover:bg-muted/50 transition-colors ${selected?.id === msg.id ? 'bg-muted' : ''}`}>
+            ) : filteredConversations.length === 0 ? (
+              <div className="p-6 text-center text-sm text-muted-foreground">No conversations</div>
+            ) : filteredConversations.map(conv => (
+              <button key={conv.key} onClick={() => openConversation(conv)}
+                className={`w-full text-left p-4 hover:bg-muted/50 transition-colors ${selectedKey === conv.key ? 'bg-muted' : ''}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
-                    <div className={`h-2 w-2 rounded-full shrink-0 mt-1 ${msg.status === 'unread' ? 'bg-red-500' : 'bg-transparent'}`} />
+                    <div className={`h-2 w-2 rounded-full shrink-0 mt-1 ${conv.unreadCount > 0 ? 'bg-red-500' : 'bg-transparent'}`} />
                     <div className="min-w-0">
-                      <div className="text-sm font-medium truncate">{companyOf(msg)}</div>
-                      {nameOf(msg) && <div className="text-xs text-muted-foreground truncate">{nameOf(msg)}</div>}
-                      <div className="text-xs text-muted-foreground truncate mt-0.5">{msg.message}</div>
+                      <div className="text-sm font-medium truncate">{conv.company}</div>
+                      {conv.contact && <div className="text-xs text-muted-foreground truncate">{conv.contact}</div>}
+                      <div className="text-xs text-muted-foreground truncate mt-0.5">{conv.lastMessage.message}</div>
                     </div>
                   </div>
                   <div className="shrink-0 text-right">
-                    {statusBadge(msg.status)}
+                    {conv.unreadCount > 0 ? (
+                      <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[10px] font-bold">
+                        {conv.unreadCount}
+                      </span>
+                    ) : statusBadge(conv.lastMessage.status)}
                     <div className="text-[10px] text-muted-foreground mt-1">
-                      {msg.sent_at ? format(new Date(msg.sent_at), 'MMM d') : '—'}
+                      {conv.lastMessage.sent_at ? format(new Date(conv.lastMessage.sent_at), 'MMM d') : '—'}
                     </div>
                   </div>
                 </div>
@@ -172,13 +213,13 @@ export default function MessagesPage() {
           </div>
         </Card>
 
-        {/* Message detail & reply */}
+        {/* Conversation thread & reply */}
         <Card className="lg:col-span-2 flex flex-col">
           {!selected ? (
             <div className="flex-1 flex items-center justify-center text-muted-foreground">
               <div className="text-center">
                 <MessageSquare className="h-10 w-10 mx-auto mb-3 opacity-20" />
-                <p className="text-sm">Select a message to view</p>
+                <p className="text-sm">Select a conversation to view</p>
               </div>
             </div>
           ) : (
@@ -190,41 +231,49 @@ export default function MessagesPage() {
                       <User className="h-4 w-4 text-red-600" />
                     </div>
                     <div>
-                      <div className="font-semibold text-sm">{companyOf(selected)}</div>
-                      {nameOf(selected) && <div className="text-xs text-muted-foreground">{nameOf(selected)}</div>}
-                      <div className="text-xs text-muted-foreground">
-                        {selected.sent_at ? format(new Date(selected.sent_at), 'MMM d, yyyy · h:mm a') : '—'}
-                      </div>
+                      <div className="font-semibold text-sm">{selected.company}</div>
+                      {selected.contact && <div className="text-xs text-muted-foreground">{selected.contact}</div>}
                     </div>
                   </div>
-                  {statusBadge(selected.status)}
+                  {statusBadge(selected.lastMessage.status)}
                 </div>
               </CardHeader>
 
               <CardContent className="flex-1 flex flex-col gap-4 py-4">
-                {/* Client message */}
-                <div>
-                  <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Message</p>
-                  <div className="bg-muted rounded-lg p-4 text-sm whitespace-pre-wrap">{selected.message}</div>
+                {/* Chat thread */}
+                <div className="flex-1 overflow-y-auto space-y-3 max-h-[420px] pr-1">
+                  {selected.messages.map(m => (
+                    <div key={m.id} className="space-y-2">
+                      <div className="flex justify-start">
+                        <div className="max-w-[80%] bg-muted rounded-2xl rounded-bl-sm px-4 py-2.5">
+                          <p className="text-sm whitespace-pre-wrap">{m.message}</p>
+                          <p className="text-[10px] text-muted-foreground mt-1">
+                            {m.sent_at ? format(new Date(m.sent_at), 'MMM d, yyyy · h:mm a') : '—'}
+                          </p>
+                        </div>
+                      </div>
+                      {m.reply && (
+                        <div className="flex justify-end">
+                          <div className="max-w-[80%] bg-red-600 text-white rounded-2xl rounded-br-sm px-4 py-2.5">
+                            <p className="text-sm whitespace-pre-wrap">{m.reply}</p>
+                            <p className="text-[10px] text-white/70 mt-1 flex items-center gap-1 justify-end">
+                              <CheckCheck className="h-3 w-3" />
+                              {m.replied_at ? format(new Date(m.replied_at), 'MMM d, yyyy · h:mm a') : ''}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
 
-                {/* Existing reply */}
-                {selected.reply && (
-                  <div>
-                    <p className="text-xs font-semibold text-green-600 mb-2 uppercase tracking-wide flex items-center gap-1">
-                      <CheckCheck className="h-3 w-3" /> Reply sent {selected.replied_at ? format(new Date(selected.replied_at), 'MMM d, yyyy') : ''}
-                    </p>
-                    <div className="bg-green-50 border border-green-100 rounded-lg p-4 text-sm whitespace-pre-wrap">{selected.reply}</div>
-                  </div>
-                )}
-
                 {/* Reply input */}
-                <div className="mt-auto">
+                <div className="mt-auto shrink-0">
                   <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">
-                    {selected.reply ? 'Update Reply' : 'Write a Reply'}
+                    {selected.lastMessage.reply ? 'Update Reply' : 'Write a Reply'}
                   </p>
                   <Textarea
-                    rows={4}
+                    rows={3}
                     placeholder="Type your reply here…"
                     value={replyText}
                     onChange={e => setReplyText(e.target.value)}
@@ -233,7 +282,7 @@ export default function MessagesPage() {
                   <div className="flex justify-end mt-3">
                     <Button onClick={sendReply} disabled={!replyText.trim() || replying} className="gap-2">
                       <Send className="h-4 w-4" />
-                      {replying ? 'Saving…' : selected.reply ? 'Update Reply' : 'Send Reply'}
+                      {replying ? 'Saving…' : selected.lastMessage.reply ? 'Update Reply' : 'Send Reply'}
                     </Button>
                   </div>
                 </div>
