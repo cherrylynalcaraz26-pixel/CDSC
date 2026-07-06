@@ -635,7 +635,7 @@ export default function PullOutBillingPage() {
               <Card>
                 <CardHeader className="pb-2 flex flex-row items-center justify-between">
                   <CardTitle className="text-sm font-medium">{selectedClientStock} — Item Breakdown</CardTitle>
-                  <span className="text-xs text-muted-foreground">{clientRows.length} items</span>
+                  <span className="text-xs text-muted-foreground">{clientRows.length} items &middot; click a row for product details</span>
                 </CardHeader>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm border-collapse">
@@ -654,7 +654,8 @@ export default function PullOutBillingPage() {
                     </thead>
                     <tbody>
                       {clientRows.map((row, i) => (
-                        <tr key={row.product} className="border-b border-gray-100 hover:bg-muted/30">
+                        <tr key={row.product} onClick={() => { setClientFilter(selectedClientStock.toLowerCase()); setDetailProduct(row) }}
+                          className="border-b border-gray-100 hover:bg-red-50/40 cursor-pointer active:bg-red-50">
                           <td className="px-3 py-2 text-muted-foreground text-xs">{i + 1}</td>
                           <td className="px-3 py-2 font-medium">{row.product}</td>
                           <td className="px-3 py-2 text-muted-foreground">{row.unit || '—'}</td>

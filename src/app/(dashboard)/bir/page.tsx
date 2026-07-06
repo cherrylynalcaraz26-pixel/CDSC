@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -12,23 +12,38 @@ import { Separator } from '@/components/ui/separator'
 import { CheckCircle2, XCircle, AlertTriangle, Download, FileBarChart, Zap, FileText, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 
-const birForms = [
-  { form: '0619-E', description: 'Expanded Withholding Tax (Monthly)', period: 'May 2025', due: '2025-06-10', status: 'due_soon', amount: 12450 },
-  { form: '0619-F', description: 'Final Withholding Tax (Monthly)', period: 'May 2025', due: '2025-06-10', status: 'due_soon', amount: 3200 },
-  { form: '1601-EQ', description: 'Expanded Withholding Tax (Quarterly)', period: 'Q1 2025', due: '2025-04-30', status: 'filed', amount: 38750 },
-  { form: '1601-FQ', description: 'Final Withholding Tax (Quarterly)', period: 'Q1 2025', due: '2025-04-30', status: 'filed', amount: 9600 },
-  { form: '2550Q', description: 'Value Added Tax (Quarterly)', period: 'Q2 2025', due: '2025-07-25', status: 'pending', amount: 0 },
-  { form: '1702Q', description: 'Income Tax (Quarterly)', period: 'Q1 2025', due: '2025-05-29', status: 'filed', amount: 145000 },
-]
+interface BirFormDef { key: string; form: string; description: string; period: string; due: string; amount: number }
+interface BirForm extends BirFormDef { status: 'filed' | 'overdue' | 'due_soon' | 'pending' }
 
-const readinessChecks = [
-  { check: 'All suppliers have TIN on file', status: 'pass', detail: '24/24 suppliers' },
-  { check: 'All VAT transactions have proper classification', status: 'pass', detail: '156 transactions' },
-  { check: 'EWT rates assigned to suppliers', status: 'warning', detail: '2 suppliers missing ATC code' },
-  { check: 'Input VAT supported by ORs/invoices', status: 'pass', detail: '98% compliance' },
-  { check: 'Alphalist data complete', status: 'warning', detail: '2 payees missing TIN' },
-  { check: 'SLSP purchases data complete', status: 'pass', detail: 'Q1 2025 complete' },
-]
+// Generates this cycle's BIR filings relative to "today" instead of hardcoded dates,
+// so the Filing Calendar and readiness check stay meaningful as time passes.
+function buildBirForms(today: Date): BirFormDef[] {
+  const y = today.getFullYear(), m = today.getMonth()
+  const iso = (d: Date) => d.toISOString().split('T')[0]
+
+  const prevMonthLabel = new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  const monthlyDue = new Date(y, m, 10)
+
+  // Most recently closed quarter relative to today (e.g. in Jul, that's Apr–Jun).
+  const currentQuarterEndMonth = Math.floor(m / 3) * 3 + 2
+  let qEndMonth = currentQuarterEndMonth - 3
+  let qYear = y
+  if (qEndMonth < 0) { qEndMonth += 12; qYear -= 1 }
+  const quarterEnd = new Date(qYear, qEndMonth + 1, 0)
+  const quarterLabel = `Q${Math.floor(qEndMonth / 3) + 1} ${qYear}`
+  const eqDue = new Date(qYear, qEndMonth + 2, 0)
+  const vatDue = new Date(qYear, qEndMonth, quarterEnd.getDate() + 25)
+  const itDue = new Date(qYear, qEndMonth, quarterEnd.getDate() + 60)
+
+  return [
+    { key: `0619-E_${iso(monthlyDue)}`, form: '0619-E', description: 'Expanded Withholding Tax (Monthly)', period: prevMonthLabel, due: iso(monthlyDue), amount: 12450 },
+    { key: `0619-F_${iso(monthlyDue)}`, form: '0619-F', description: 'Final Withholding Tax (Monthly)', period: prevMonthLabel, due: iso(monthlyDue), amount: 3200 },
+    { key: `1601-EQ_${quarterLabel}`, form: '1601-EQ', description: 'Expanded Withholding Tax (Quarterly)', period: quarterLabel, due: iso(eqDue), amount: 38750 },
+    { key: `1601-FQ_${quarterLabel}`, form: '1601-FQ', description: 'Final Withholding Tax (Quarterly)', period: quarterLabel, due: iso(eqDue), amount: 9600 },
+    { key: `2550Q_${quarterLabel}`, form: '2550Q', description: 'Value Added Tax (Quarterly)', period: quarterLabel, due: iso(vatDue), amount: 0 },
+    { key: `1702Q_${quarterLabel}`, form: '1702Q', description: 'Income Tax (Quarterly)', period: quarterLabel, due: iso(itDue), amount: 145000 },
+  ]
+}
 
 const vatSummary = [
   { month: 'Jan 2025', gross_purchases: 820000, input_vat: 88071.43, output_vat: 0, net_vat: 88071.43 },
@@ -36,18 +51,17 @@ const vatSummary = [
   { month: 'Mar 2025', gross_purchases: 950000, input_vat: 101785.71, output_vat: 0, net_vat: 101785.71 },
 ]
 
-const readinessScore = Math.round((readinessChecks.filter(c => c.status === 'pass').length / readinessChecks.length) * 100)
-
 const FILING_STATUS_CLS: Record<string, string> = {
   filed: 'bg-green-100 text-green-700 border-green-300',
+  overdue: 'bg-red-200 text-red-800 border-red-400',
   due_soon: 'bg-red-100 text-red-700 border-red-300',
   pending: 'bg-yellow-100 text-yellow-700 border-yellow-300',
 }
 
 // Groups BIR forms by the year/month of their due date, so each month can render
 // as its own mini calendar grid with due dates marked on the right day.
-function groupFormsByMonth(forms: typeof birForms) {
-  const map = new Map<string, { year: number; month: number; forms: typeof birForms }>()
+function groupFormsByMonth(forms: BirForm[]) {
+  const map = new Map<string, { year: number; month: number; forms: BirForm[] }>()
   for (const f of forms) {
     const d = new Date(f.due)
     const key = `${d.getFullYear()}-${d.getMonth()}`
@@ -57,11 +71,11 @@ function groupFormsByMonth(forms: typeof birForms) {
   return [...map.values()].sort((a, b) => a.year - b.year || a.month - b.month)
 }
 
-function FilingMonthCalendar({ year, month, forms }: { year: number; month: number; forms: typeof birForms }) {
+function FilingMonthCalendar({ year, month, forms }: { year: number; month: number; forms: BirForm[] }) {
   const firstDow = new Date(year, month, 1).getDay()
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   const cells: (number | null)[] = [...Array(firstDow).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)]
-  const byDay = new Map<number, typeof birForms>()
+  const byDay = new Map<number, BirForm[]>()
   for (const f of forms) {
     const day = new Date(f.due).getDate()
     if (!byDay.has(day)) byDay.set(day, [])
@@ -103,6 +117,8 @@ export default function BIRPage() {
   const [loadingTax, setLoadingTax] = useState(true)
   const [ewtRows, setEwtRows] = useState<EwtRow[]>([])
   const [slspRows, setSlspRows] = useState<SlspRow[]>([])
+  const [suppliers, setSuppliers] = useState<{ id: string; tin: string | null; atc_code: string | null }[]>([])
+  const [filedKeys, setFiledKeys] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     async function loadTaxData() {
@@ -114,6 +130,7 @@ export default function BIRPage() {
         supabase.from('suppliers').select('id, company_name, tin, atc_code, ewt_rate, address, bir_registered_address'),
         supabase.from('receiving_reports').select('po_number, si_number, dr_number'),
       ])
+      setSuppliers(supData ?? [])
       const supplierById = new Map((supData ?? []).map(s => [s.id, s]))
       const refByPoNumber = new Map((rrData ?? []).map(r => [r.po_number, r.si_number || r.dr_number || null]))
 
@@ -165,6 +182,48 @@ export default function BIRPage() {
     loadTaxData()
   }, [])
 
+  const baseForms = useMemo(() => buildBirForms(new Date()), [])
+  const forms: BirForm[] = useMemo(() => {
+    const now = new Date().getTime()
+    return baseForms.map(f => {
+      if (filedKeys.has(f.key)) return { ...f, status: 'filed' as const }
+      const daysUntil = Math.ceil((new Date(f.due).getTime() - now) / 86400000)
+      const status = daysUntil < 0 ? 'overdue' as const : daysUntil <= 10 ? 'due_soon' as const : 'pending' as const
+      return { ...f, status }
+    })
+  }, [baseForms, filedKeys])
+
+  const readinessChecks = useMemo(() => {
+    const totalSup = suppliers.length
+    const tinOk = suppliers.filter(s => s.tin).length
+    const atcOk = suppliers.filter(s => s.atc_code).length
+    const overdue = forms.filter(f => f.status === 'overdue').length
+    const dueSoon = forms.filter(f => f.status === 'due_soon').length
+    return [
+      { check: 'All suppliers have TIN on file', status: totalSup > 0 && tinOk === totalSup ? 'pass' : 'warning', detail: `${tinOk}/${totalSup} suppliers` },
+      { check: 'EWT ATC codes assigned to suppliers', status: totalSup > 0 && atcOk === totalSup ? 'pass' : 'warning', detail: totalSup - atcOk > 0 ? `${totalSup - atcOk} supplier(s) missing ATC code` : 'All suppliers have ATC codes' },
+      { check: 'BIR forms filed on time', status: overdue > 0 ? 'fail' : dueSoon > 0 ? 'warning' : 'pass', detail: overdue > 0 ? `${overdue} form(s) overdue` : dueSoon > 0 ? `${dueSoon} form(s) due within 10 days` : 'No forms currently due' },
+      { check: 'SLSP purchases data complete', status: 'pass', detail: `${slspRows.length} VAT purchase(s) recorded` },
+    ]
+  }, [suppliers, forms, slspRows])
+
+  const readinessScore = readinessChecks.length > 0 ? Math.round((readinessChecks.filter(c => c.status === 'pass').length / readinessChecks.length) * 100) : 0
+
+  function markFiled(key: string, formName: string) {
+    setFiledKeys(prev => new Set(prev).add(key))
+    toast.success(`Form ${formName} marked as filed`)
+  }
+
+  function runFilingReadyCheck() {
+    const overdue = forms.filter(f => f.status === 'overdue').length
+    const dueSoon = forms.filter(f => f.status === 'due_soon').length
+    const passCount = readinessChecks.filter(c => c.status === 'pass').length
+    const summary = `Filing readiness: ${readinessScore}% (${passCount}/${readinessChecks.length} checks passed)`
+    if (overdue > 0) toast.error(`${summary}. ${overdue} form(s) overdue!`)
+    else if (dueSoon > 0) toast.warning(`${summary}. ${dueSoon} form(s) due within 10 days.`)
+    else toast.success(`${summary}. No forms currently due.`)
+  }
+
   function exportAlphalist() { toast.success('Alphalist exported to Excel') }
   function exportSLSP() { toast.success('SLSP exported to Excel/CSV') }
 
@@ -175,7 +234,7 @@ export default function BIRPage() {
           <h2 className="text-2xl font-bold">BIR Compliance Module</h2>
           <p className="text-muted-foreground text-sm">Philippine BIR filing management, tax computation, and alphalist generation</p>
         </div>
-        <Button className="gap-2" onClick={() => toast.success('Filing readiness check completed!')}>
+        <Button className="gap-2" onClick={runFilingReadyCheck}>
           <Zap className="h-4 w-4" /> BIR Filing Ready Check
         </Button>
       </div>
@@ -228,12 +287,13 @@ export default function BIRPage() {
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap gap-4 mb-4">
-                {groupFormsByMonth(birForms).map(g => (
+                {groupFormsByMonth(forms).map(g => (
                   <FilingMonthCalendar key={`${g.year}-${g.month}`} year={g.year} month={g.month} forms={g.forms} />
                 ))}
               </div>
               <div className="flex flex-wrap gap-4 text-xs">
                 <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded border bg-green-100 border-green-300" />Filed</span>
+                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded border bg-red-200 border-red-400" />Overdue</span>
                 <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded border bg-red-100 border-red-300" />Due Soon</span>
                 <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded border bg-yellow-100 border-yellow-300" />Pending</span>
               </div>
@@ -241,7 +301,7 @@ export default function BIRPage() {
           </Card>
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">BIR Filing Calendar 2025</CardTitle>
+              <CardTitle className="text-base">BIR Filing Calendar {new Date().getFullYear()}</CardTitle>
               <CardDescription>Track all BIR form due dates and filing status</CardDescription>
             </CardHeader>
             <CardContent className="p-0">
@@ -258,8 +318,8 @@ export default function BIRPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {birForms.map(form => (
-                    <TableRow key={`${form.form}-${form.period}`}>
+                  {forms.map(form => (
+                    <TableRow key={form.key}>
                       <TableCell className="font-mono font-bold text-primary">{form.form}</TableCell>
                       <TableCell className="text-sm">{form.description}</TableCell>
                       <TableCell className="text-sm">{form.period}</TableCell>
@@ -268,15 +328,15 @@ export default function BIRPage() {
                       <TableCell>
                         <Badge variant={
                           form.status === 'filed' ? 'outline' :
-                          form.status === 'due_soon' ? 'destructive' : 'secondary'
+                          form.status === 'overdue' || form.status === 'due_soon' ? 'destructive' : 'secondary'
                         } className="text-xs">
-                          {form.status === 'filed' ? '✓ Filed' : form.status === 'due_soon' ? '⚠ Due Soon' : 'Pending'}
+                          {form.status === 'filed' ? '✓ Filed' : form.status === 'overdue' ? '⚠ Overdue' : form.status === 'due_soon' ? '⚠ Due Soon' : 'Pending'}
                         </Badge>
                       </TableCell>
                       <TableCell>
                         {form.status !== 'filed' && (
                           <Button size="sm" variant="outline" className="h-7 text-xs"
-                            onClick={() => toast.success(`Form ${form.form} marked as filed`)}>
+                            onClick={() => markFiled(form.key, form.form)}>
                             Mark Filed
                           </Button>
                         )}

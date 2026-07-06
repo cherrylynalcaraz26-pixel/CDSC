@@ -39,6 +39,7 @@ interface Disbursement {
   id: string; disb_number: string; disb_date: string; payee: string
   description: string | null; amount: number; expense_account: string
   payment_mode: string; check_number: string | null; remarks: string | null; status: string
+  po_number?: string | null
 }
 
 interface COA {
@@ -1525,7 +1526,9 @@ function CollectionsTab() {
 
 // ── Sales Journal (CRJ) sub-tab ───────────────────────────────────────────────
 
-function SalesJournalTab({ collections, csiRecords }: { collections: Collection[]; csiRecords: any[] }) {
+interface SOJournalRow { id: string; so_number: string | null; so_date: string | null; client_name: string | null; total_amount: number | null; status: string }
+
+function SalesJournalTab({ collections, csiRecords, salesOrders }: { collections: Collection[]; csiRecords: any[]; salesOrders: SOJournalRow[] }) {
   // Group CSI records by SI number
   const siMap: Record<string, { date: string; client: string; items: any[]; total: number }> = {}
   csiRecords.forEach(r => {
@@ -1536,10 +1539,20 @@ function SalesJournalTab({ collections, csiRecords }: { collections: Collection[
   const siRows = Object.entries(siMap).sort((a, b) => (a[1].date > b[1].date ? 1 : -1))
   const totalSales = siRows.reduce((s, [, v]) => s + v.total, 0)
 
+  const soRows = [...salesOrders].sort((a, b) => ((a.so_date ?? '') > (b.so_date ?? '') ? 1 : -1))
+  const totalBooked = soRows.reduce((s, so) => s + (Number(so.total_amount) || 0), 0)
+
   function exportSJ() {
     exportCSV('SalesJournal_CSI.csv',
       ['Date', 'SI Number', 'Client', 'Item', 'Qty', 'Unit', 'Unit Price', 'Amount'],
       csiRecords.map(r => [r.si_date ?? '', r.si_number ?? '', r.client_name ?? '', r.item_name ?? '', r.quantity ?? 0, r.unit ?? '', r.unit_price ?? 0, r.amount ?? 0])
+    )
+  }
+
+  function exportSO() {
+    exportCSV('SalesJournal_SalesOrders.csv',
+      ['Date', 'SO Number', 'Client', 'Status', 'Total Amount'],
+      soRows.map(so => [so.so_date ?? '', so.so_number ?? '', so.client_name ?? '', so.status ?? '', so.total_amount ?? 0])
     )
   }
 
@@ -1587,6 +1600,47 @@ function SalesJournalTab({ collections, csiRecords }: { collections: Collection[
           </div>
         )}
       </CardContent></Card>
+
+      <div className="flex items-center justify-between pt-2">
+        <div>
+          <p className="text-sm font-semibold">Sales Orders — Booked</p>
+          <p className="text-xs text-muted-foreground">All Sales Orders in this date range, invoiced or not</p>
+        </div>
+        <Button variant="outline" size="sm" onClick={exportSO}><Download className="h-3.5 w-3.5 mr-1.5" />Export CSV</Button>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Card><CardContent className="pt-4 pb-3"><div className="text-xl font-bold text-blue-600">{fmt(totalBooked)}</div><div className="text-xs text-muted-foreground">Total Booked (SO)</div></CardContent></Card>
+        <Card><CardContent className="pt-4 pb-3"><div className="text-xl font-bold">{soRows.length}</div><div className="text-xs text-muted-foreground">Sales Orders</div></CardContent></Card>
+      </div>
+      <Card><CardContent className="p-0">
+        <Table>
+          <TableHeader><TableRow>
+            <TableHead>Date</TableHead>
+            <TableHead>SO Number</TableHead>
+            <TableHead>Client</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead className="text-right">Total Amount</TableHead>
+          </TableRow></TableHeader>
+          <TableBody>
+            {soRows.length === 0 ? (
+              <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No Sales Orders in this date range.</TableCell></TableRow>
+            ) : soRows.map(so => (
+              <TableRow key={so.id}>
+                <TableCell className="text-sm whitespace-nowrap">{so.so_date ? format(new Date(so.so_date), 'MMM d, yyyy') : '—'}</TableCell>
+                <TableCell className="font-mono text-xs font-semibold text-blue-600">{so.so_number ?? '—'}</TableCell>
+                <TableCell className="text-sm">{so.client_name ?? '—'}</TableCell>
+                <TableCell><span className="text-xs bg-muted px-2 py-0.5 rounded-full capitalize">{so.status}</span></TableCell>
+                <TableCell className="text-right font-semibold">{fmt(Number(so.total_amount) || 0)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+        {soRows.length > 0 && (
+          <div className="flex justify-end gap-8 px-4 py-2 bg-muted/40 border-t text-sm font-semibold">
+            <span>Total Booked: {fmt(totalBooked)}</span>
+          </div>
+        )}
+      </CardContent></Card>
     </div>
   )
 }
@@ -1597,28 +1651,55 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
   const supabase = createClient()
   const [disbs, setDisbs] = useState<Disbursement[]>([])
   const [payees, setPayees] = useState<{ id: string; name: string }[]>([])
+  const [pendingPOs, setPendingPOs] = useState<{ po_number: string; po_date: string; supplier: string; net_payable: number }[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({ disb_date: '', payee: '', description: '', amount: '', expense_account: '5950', payment_mode: 'cash', check_number: '', remarks: '' })
+  const [form, setForm] = useState({ disb_date: '', payee: '', description: '', amount: '', expense_account: '5950', payment_mode: 'cash', check_number: '', remarks: '', po_number: '' })
   const [payeeDropdownOpen, setPayeeDropdownOpen] = useState(false)
 
   async function load() {
     setLoading(true)
-    const [{ data }, { data: payeeData }] = await Promise.all([
+    const [{ data }, { data: payeeData }, { data: poData }] = await Promise.all([
       supabase.from('disbursements').select('*').order('disb_date', { ascending: false }),
       supabase.from('payees').select('id, name').order('name'),
+      supabase.from('purchase_orders').select('po_number, po_date, net_payable, status, supplier:suppliers(company_name)').neq('status', 'cancelled'),
     ])
     setDisbs((data ?? []) as Disbursement[])
     setPayees(payeeData ?? [])
+    const linkedPOs = new Set(((data ?? []) as Disbursement[]).map(d => d.po_number).filter(Boolean))
+    const poRows = (poData ?? []) as unknown as { po_number: string | null; po_date: string; net_payable: number | null; supplier: { company_name: string | null } | null }[]
+    setPendingPOs(
+      poRows
+        .filter(po => po.po_number && !linkedPOs.has(po.po_number))
+        .map(po => ({
+          po_number: po.po_number as string,
+          po_date: po.po_date,
+          supplier: po.supplier?.company_name ?? 'Unknown Supplier',
+          net_payable: Number(po.net_payable) || 0,
+        }))
+    )
     setLoading(false)
   }
 
   useEffect(() => { load() }, [])
 
   function resetForm() {
-    setForm({ disb_date: '', payee: '', description: '', amount: '', expense_account: '5950', payment_mode: 'cash', check_number: '', remarks: '' })
+    setForm({ disb_date: '', payee: '', description: '', amount: '', expense_account: '5950', payment_mode: 'cash', check_number: '', remarks: '', po_number: '' })
     setPayeeDropdownOpen(false)
+  }
+
+  function acceptPO(po: { po_number: string; po_date: string; supplier: string; net_payable: number }) {
+    resetForm()
+    setForm(p => ({
+      ...p,
+      disb_date: new Date().toISOString().split('T')[0],
+      payee: po.supplier,
+      description: `Payment for PO ${po.po_number}`,
+      amount: String(po.net_payable),
+      po_number: po.po_number,
+    }))
+    setOpen(true)
   }
 
   const filteredPayees = payees.filter(p => !form.payee || p.name.toLowerCase().includes(form.payee.toLowerCase()))
@@ -1634,6 +1715,7 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
       description: form.description.trim() || null, amount: Number(form.amount),
       expense_account: form.expense_account, payment_mode: form.payment_mode,
       check_number: form.check_number.trim() || null, remarks: form.remarks.trim() || null, status: 'posted',
+      po_number: form.po_number || null,
     }).select().single()
     if (disbErr) { toast.error(disbErr.message); setSaving(false); return }
     const memo = `${form.payee} – ${form.description || expAcc?.name || 'Disbursement'}`
@@ -1701,6 +1783,35 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
         <div className="text-xl font-bold text-red-600">{fmt(total)}</div>
         <div className="text-xs text-muted-foreground">Total Disbursements</div>
       </CardContent></Card>
+      {pendingPOs.length > 0 && (
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-amber-600" />Pending Disbursements ({pendingPOs.length})</CardTitle>
+            <CardDescription>Purchase Orders not yet paid — accept one to prefill a Disbursement</CardDescription>
+          </CardHeader>
+          <CardContent className="p-0">
+            <Table>
+              <TableHeader><TableRow>
+                <TableHead>PO Number</TableHead><TableHead>Date</TableHead><TableHead>Supplier</TableHead>
+                <TableHead className="text-right">Net Payable</TableHead><TableHead className="w-24" />
+              </TableRow></TableHeader>
+              <TableBody>
+                {pendingPOs.map(po => (
+                  <TableRow key={po.po_number}>
+                    <TableCell className="font-mono text-xs font-semibold text-red-600">{po.po_number}</TableCell>
+                    <TableCell className="text-sm">{po.po_date ? format(new Date(po.po_date), 'MMM d, yyyy') : '—'}</TableCell>
+                    <TableCell className="text-sm">{po.supplier}</TableCell>
+                    <TableCell className="text-right font-semibold">{fmt(po.net_payable)}</TableCell>
+                    <TableCell>
+                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => acceptPO(po)}>Accept</Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
       <Card><CardContent className="p-0">
         <Table>
           <TableHeader><TableRow>
@@ -1720,7 +1831,7 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
                 <TableCell className="font-medium text-sm">{d.payee}</TableCell>
                 <TableCell className="text-sm text-muted-foreground">{d.description ?? '—'}</TableCell>
                 <TableCell className="text-xs">{EXPENSE_ACCOUNTS.find(a => a.code === d.expense_account)?.name ?? d.expense_account}</TableCell>
-                <TableCell><span className="text-xs bg-muted px-2 py-0.5 rounded-full capitalize">{d.payment_mode.replace('_',' ')}</span></TableCell>
+                <TableCell><span className="text-xs bg-muted px-2 py-0.5 rounded-full">{cap(d.payment_mode.replace('_',' '))}</span></TableCell>
                 <TableCell className="text-right font-semibold">{fmt(d.amount)}</TableCell>
                 <TableCell>
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteDisbursement(d.id)}>
@@ -1745,7 +1856,7 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
               <div className="space-y-1.5">
                 <Label>Payment Mode</Label>
                 <Select value={form.payment_mode} onValueChange={v => setForm(p => ({ ...p, payment_mode: v ?? 'cash' }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectTrigger><SelectValue>{(v: string) => cap((v ?? 'cash').replace('_', ' '))}</SelectValue></SelectTrigger>
                   <SelectContent>{PAYMENT_MODES_DISB.map(m => <SelectItem key={m} value={m}>{cap(m.replace('_',' '))}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
@@ -2150,6 +2261,7 @@ function BookkeepingTab({ activeSub, onSubChange }: { activeSub: string; onSubCh
   const [coa, setCoa] = useState<COA[]>([])
   const [jLines, setJLines] = useState<JournalLine[]>([])
   const [csiRecords, setCsiRecords] = useState<any[]>([])
+  const [salesOrders, setSalesOrders] = useState<SOJournalRow[]>([])
   const [loading, setLoading] = useState(true)
   const df = useDateRangeFilter()
   const { filterFrom, filterTo } = df
@@ -2158,21 +2270,24 @@ function BookkeepingTab({ activeSub, onSubChange }: { activeSub: string; onSubCh
   const filteredDisbursements = applyDateFilter(df, disbursements, d => (d as Disbursement).disb_date)
   const filteredCsi = applyDateFilter(df, csiRecords, r => r.si_date)
   const filteredJLines = applyDateFilter(df, jLines, l => (l as JournalLine).journal_entries?.entry_date)
+  const filteredSalesOrders = applyDateFilter(df, salesOrders, so => so.so_date)
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [{ data: colData }, { data: disbData }, { data: coaData }, { data: jlData }, { data: csiData }] = await Promise.all([
+    const [{ data: colData }, { data: disbData }, { data: coaData }, { data: jlData }, { data: csiData }, { data: soData }] = await Promise.all([
       supabase.from('collections').select('id,or_number,collection_date,client_name,amount,form_2307,status').order('collection_date'),
       supabase.from('disbursements').select('*').order('disb_date', { ascending: false }),
       supabase.from('chart_of_accounts').select('account_code,account_name,account_type,normal_balance,is_header').eq('is_active', true).order('account_code'),
       supabase.from('journal_lines').select('*, journal_entries(entry_date,entry_number,memo,entry_type)').order('created_at'),
       supabase.from('csi_records').select('id,si_number,si_date,client_name,item_name,unit,quantity,unit_price,amount').order('si_date'),
+      supabase.from('sales_orders').select('id,so_number,so_date,client_name,total_amount,status').not('status', 'eq', 'cancelled').order('so_date'),
     ])
     setCollections((colData ?? []) as Collection[])
     setDisbursements((disbData ?? []) as Disbursement[])
     setCoa((coaData ?? []) as COA[])
     setJLines((jlData ?? []) as unknown as JournalLine[])
     setCsiRecords(csiData ?? [])
+    setSalesOrders(soData ?? [])
     setLoading(false)
   }, [supabase])
 
@@ -2187,7 +2302,7 @@ function BookkeepingTab({ activeSub, onSubChange }: { activeSub: string; onSubCh
       <DateFilterBar df={df} />
       <Tabs value={activeSub} onValueChange={v => onSubChange(v ?? 'crj')}>
         <div>
-          <TabsContent value="crj"><SalesJournalTab collections={filteredCollections} csiRecords={filteredCsi} /></TabsContent>
+          <TabsContent value="crj"><SalesJournalTab collections={filteredCollections} csiRecords={filteredCsi} salesOrders={filteredSalesOrders} /></TabsContent>
           <TabsContent value="cdj"><DisbursementsTab filterFrom={filterFrom} filterTo={filterTo} /></TabsContent>
           <TabsContent value="gl"><GeneralLedgerTab lines={filteredJLines} /></TabsContent>
           <TabsContent value="tb"><TrialBalanceTab lines={filteredJLines} coa={coa} /></TabsContent>
