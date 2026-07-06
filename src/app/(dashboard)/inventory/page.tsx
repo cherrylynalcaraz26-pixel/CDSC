@@ -757,10 +757,10 @@ export default function InventoryPage() {
 
         {viewMode !== 'by_warehouse' && (
           <Select value={clientFilter} onValueChange={v => setClientFilter(v ?? 'all')}>
-            <SelectTrigger className="w-56">
-              <SelectValue placeholder="Filter by client" />
+            <SelectTrigger className="w-72">
+              <SelectValue className="truncate">{(v: string) => v === 'all' ? 'Client' : v}</SelectValue>
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="min-w-[320px]">
               <SelectItem value="all">All Clients</SelectItem>
               {clients.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
             </SelectContent>
@@ -768,7 +768,7 @@ export default function InventoryPage() {
         )}
         <Select value={statusFilter} onValueChange={v => setStatusFilter(v ?? 'all')}>
           <SelectTrigger className="w-40">
-            <SelectValue placeholder="Filter by status" />
+            <SelectValue>{(v: string) => v === 'all' ? 'Status' : v === 'in_stock' ? 'In Stock' : v === 'balanced' ? 'Balanced' : v === 'deficit' ? 'Deficit' : v}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Statuses</SelectItem>

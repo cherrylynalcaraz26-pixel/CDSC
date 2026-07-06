@@ -27,7 +27,7 @@ interface Client { id: string; company_name: string }
 interface ItemOption { item_name: string; unit_of_measure: string }
 
 interface ReturnItem { item_name: string; unit: string; quantity: string; reason: string }
-interface ItemReturn { id: string; return_number: string; return_type: string; return_date: string; supplier_name: string | null; notes: string | null; status: string }
+interface ItemReturn { id: string; return_number: string; return_type: string; return_date: string; supplier_name: string | null; client_name: string | null; notes: string | null; status: string }
 
 interface SalesDeliveryItem { item_name: string; unit: string; quantity: string }
 interface SalesDelivery { id: string; delivery_number: string; quote_number: string | null; client_name: string | null; delivery_date: string; delivered_by: string | null; status: string; notes: string | null; created_at: string; dr_number?: string | null; so_number?: string | null; hasCsi?: boolean }
@@ -68,11 +68,14 @@ export default function ReceivingPage() {
   const [returnType, setReturnType] = useState<'warehouse' | 'supplier'>('warehouse')
   const [returnDate, setReturnDate] = useState(new Date().toISOString().split('T')[0])
   const [returnSupplierId, setReturnSupplierId] = useState('')
+  const [returnClientId, setReturnClientId] = useState('')
   const [returnItems, setReturnItems] = useState<ReturnItem[]>([emptyReturnItem()])
   const [returnNotes, setReturnNotes] = useState('')
   const [returnSaving, setReturnSaving] = useState(false)
   const [returns, setReturns] = useState<ItemReturn[]>([])
   const [returnsLoading, setReturnsLoading] = useState(true)
+  const [returnItemSearchIdx, setReturnItemSearchIdx] = useState<number | null>(null)
+  const [returnItemSearchQuery, setReturnItemSearchQuery] = useState('')
 
   // Shared refs
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
@@ -100,6 +103,7 @@ export default function ReceivingPage() {
 
   const selectedPOData = pos.find(p => p.po_number === selectedPO)
   const selectedSupplier = suppliers.find(s => s.id === returnSupplierId)
+  const selectedReturnClient = clients.find(c => c.id === returnClientId)
   const salesdClient = clients.find(c => c.id === salesdClientId)
 
   async function loadRR() {
@@ -241,7 +245,7 @@ export default function ReceivingPage() {
   function toggleExpandRR(id: string) {
     setExpandedRRId(prev => prev === id ? null : id)
   }
-  function resetReturnForm() { setReturnType('warehouse'); setReturnDate(new Date().toISOString().split('T')[0]); setReturnSupplierId(''); setReturnItems([emptyReturnItem()]); setReturnNotes('') }
+  function resetReturnForm() { setReturnType('warehouse'); setReturnDate(new Date().toISOString().split('T')[0]); setReturnSupplierId(''); setReturnClientId(''); setReturnItems([emptyReturnItem()]); setReturnNotes(''); setReturnItemSearchIdx(null); setReturnItemSearchQuery('') }
   function resetSalesdForm() { setSalesdClientId(''); setSalesdQuote(''); setSalesdDate(new Date().toISOString().split('T')[0]); setSalesdBy(''); setSalesdNotes(''); setSalesdStatus('pending'); setSalesdItems([emptySalesItem()]) }
 
   async function handleSaveRR() {
@@ -401,6 +405,8 @@ export default function ReceivingPage() {
       return_date: returnDate,
       supplier_id: returnType === 'supplier' && returnSupplierId ? returnSupplierId : null,
       supplier_name: returnType === 'supplier' ? (selectedSupplier?.company_name ?? null) : null,
+      client_id: returnType === 'warehouse' && returnClientId ? returnClientId : null,
+      client_name: returnType === 'warehouse' ? (selectedReturnClient?.company_name ?? null) : null,
       notes: returnNotes || null,
       status: 'completed',
     }).select('return_number').single()
@@ -408,7 +414,36 @@ export default function ReceivingPage() {
     const itemRows = validItems.map(i => ({ return_number: data.return_number, item_name: i.item_name, unit: i.unit || null, quantity: parseFloat(i.quantity), reason: i.reason || null }))
     const { error: ie } = await supabase.from('item_return_items').insert(itemRows)
     if (ie) { toast.error(ie.message); setReturnSaving(false); return }
-    toast.success(`Return ${data.return_number} saved.`)
+
+    // Returning stock to CDSC's own warehouse puts it back into the general pool — and if
+    // a client is named, that quantity leaves their own On Hand ledger the same way an
+    // "Issue Item" in the portal would.
+    if (returnType === 'warehouse') {
+      for (const it of validItems) {
+        const qty = parseFloat(it.quantity) || 0
+        if (qty <= 0) continue
+        const itemName = it.item_name.trim()
+        const { data: wsRow } = await supabase.from('warehouse_stock').select('id, quantity').eq('item_name', itemName).is('client_name', null).maybeSingle()
+        if (wsRow) {
+          await supabase.from('warehouse_stock').update({ quantity: Number(wsRow.quantity) + qty, updated_at: new Date().toISOString() }).eq('id', wsRow.id)
+        } else {
+          await supabase.from('warehouse_stock').insert({ client_name: null, item_name: itemName, unit: it.unit || null, quantity: qty })
+        }
+        if (returnClientId) {
+          const { data: ciRow } = await supabase.from('client_inventory').select('id, quantity_on_hand').eq('client_id', returnClientId).eq('item_name', itemName).maybeSingle()
+          if (ciRow) {
+            await supabase.from('client_inventory').update({ quantity_on_hand: Math.max(0, Number(ciRow.quantity_on_hand) - qty), updated_at: new Date().toISOString() }).eq('id', ciRow.id)
+          }
+          await supabase.from('client_inventory_transactions').insert({
+            client_id: returnClientId, item_name: itemName, unit: it.unit || null,
+            transaction_type: 'issued', quantity: qty,
+            reference_no: data.return_number, notes: `Returned to CDSC Warehouse (${data.return_number})`,
+          })
+        }
+      }
+    }
+
+    toast.success(`Return ${data.return_number} saved${returnType === 'warehouse' ? ' — warehouse stock updated' : ''}.`)
     setReturnFormOpen(false); resetReturnForm(); loadReturns()
     setReturnSaving(false)
   }
@@ -730,7 +765,7 @@ export default function ReceivingPage() {
                   <Label>Return Type</Label>
                   <div className="flex gap-2">
                     <Button type="button" variant={returnType === 'warehouse' ? 'default' : 'outline'} className={returnType === 'warehouse' ? 'bg-red-600 hover:bg-red-700' : ''} onClick={() => { setReturnType('warehouse'); setReturnSupplierId('') }}>Return to Warehouse</Button>
-                    <Button type="button" variant={returnType === 'supplier' ? 'default' : 'outline'} className={returnType === 'supplier' ? 'bg-red-600 hover:bg-red-700' : ''} onClick={() => setReturnType('supplier')}>Return to Supplier</Button>
+                    <Button type="button" variant={returnType === 'supplier' ? 'default' : 'outline'} className={returnType === 'supplier' ? 'bg-red-600 hover:bg-red-700' : ''} onClick={() => { setReturnType('supplier'); setReturnClientId('') }}>Return to Supplier</Button>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -738,14 +773,27 @@ export default function ReceivingPage() {
                     <Label>Return Date</Label>
                     <Input type="date" value={returnDate} onChange={e => setReturnDate(e.target.value)} />
                   </div>
-                  {returnType === 'supplier' && (
+                  {returnType === 'supplier' ? (
                     <div className="space-y-1.5">
                       <Label>Supplier</Label>
                       <Select value={returnSupplierId} onValueChange={v => setReturnSupplierId(v ?? '')}>
-                        <SelectTrigger>
+                        <SelectTrigger className="w-full">
                           {returnSupplierId ? <span className="text-sm truncate">{suppliers.find(s => s.id === returnSupplierId)?.company_name}</span> : <span className="text-muted-foreground text-sm">Select supplier</span>}
                         </SelectTrigger>
-                        <SelectContent>{suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.company_name}</SelectItem>)}</SelectContent>
+                        <SelectContent className="min-w-[320px]">{suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.company_name}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                  ) : (
+                    <div className="space-y-1.5">
+                      <Label>Client <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                      <Select value={returnClientId || '_none'} onValueChange={v => setReturnClientId(!v || v === '_none' ? '' : v)}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue>{() => returnClientId ? selectedReturnClient?.company_name ?? '—' : 'No client — internal return'}</SelectValue>
+                        </SelectTrigger>
+                        <SelectContent className="min-w-[320px]">
+                          <SelectItem value="_none">No client — internal return</SelectItem>
+                          {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+                        </SelectContent>
                       </Select>
                     </div>
                   )}
@@ -766,11 +814,31 @@ export default function ReceivingPage() {
                       <TableBody>
                         {returnItems.map((row, idx) => (
                           <TableRow key={idx}>
-                            <TableCell className="py-1.5">
-                              <Select value={row.item_name} onValueChange={v => updateReturnItem(idx, 'item_name', v ?? '')}>
-                                <SelectTrigger className="h-8 text-sm"><SelectValue placeholder="Select item" /></SelectTrigger>
-                                <SelectContent>{items.map(it => <SelectItem key={it.item_name} value={it.item_name}>{it.item_name}</SelectItem>)}</SelectContent>
-                              </Select>
+                            <TableCell className="py-1.5 relative">
+                              <input
+                                className="w-full h-8 rounded-md border border-input bg-background px-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring placeholder:text-muted-foreground"
+                                placeholder="Search item…"
+                                value={returnItemSearchIdx === idx ? returnItemSearchQuery : row.item_name}
+                                onChange={e => { setReturnItemSearchIdx(idx); setReturnItemSearchQuery(e.target.value) }}
+                                onFocus={() => { setReturnItemSearchIdx(idx); setReturnItemSearchQuery('') }}
+                                onBlur={() => setTimeout(() => setReturnItemSearchIdx(i => (i === idx ? null : i)), 150)}
+                              />
+                              {returnItemSearchIdx === idx && (
+                                <div className="absolute top-full left-0 right-0 mt-1 bg-popover border rounded-lg shadow-lg z-50 max-h-52 overflow-y-auto min-w-[240px]">
+                                  {(() => {
+                                    const q = returnItemSearchQuery.toLowerCase()
+                                    const matches = q ? items.filter(it => it.item_name.toLowerCase().includes(q)) : items
+                                    if (matches.length === 0) return <div className="px-3 py-2.5 text-sm text-muted-foreground">No items found</div>
+                                    return matches.slice(0, 50).map(it => (
+                                      <button
+                                        key={it.item_name} type="button"
+                                        className="w-full text-left px-3 py-2 text-sm hover:bg-muted border-b last:border-0"
+                                        onMouseDown={() => { updateReturnItem(idx, 'item_name', it.item_name); setReturnItemSearchIdx(null) }}
+                                      >{it.item_name}</button>
+                                    ))
+                                  })()}
+                                </div>
+                              )}
                             </TableCell>
                             <TableCell className="py-1.5"><Input type="number" min="0" className="h-8 text-sm" value={row.quantity} onChange={e => updateReturnItem(idx, 'quantity', e.target.value)} /></TableCell>
                             <TableCell className="py-1.5"><Input className="h-8 text-sm bg-muted/30" value={row.unit} readOnly /></TableCell>
@@ -827,7 +895,7 @@ export default function ReceivingPage() {
                         <TableCell className="font-mono text-xs font-semibold text-red-600">{ret.return_number}</TableCell>
                         <TableCell className="text-sm">{ret.return_date}</TableCell>
                         <TableCell><Badge variant="outline" className="text-xs capitalize">{ret.return_type === 'supplier' ? 'To Supplier' : 'To Warehouse'}</Badge></TableCell>
-                        <TableCell className="text-sm">{ret.return_type === 'supplier' ? (ret.supplier_name ?? '—') : 'Warehouse'}</TableCell>
+                        <TableCell className="text-sm">{ret.return_type === 'supplier' ? (ret.supplier_name ?? '—') : (ret.client_name ? `Warehouse — ${ret.client_name}` : 'Warehouse')}</TableCell>
                         <TableCell><Badge variant="outline" className="text-xs text-green-700 border-green-300">✓ {ret.status}</Badge></TableCell>
                         <TableCell className="text-sm text-muted-foreground">{ret.notes ?? '—'}</TableCell>
                         <TableCell>
