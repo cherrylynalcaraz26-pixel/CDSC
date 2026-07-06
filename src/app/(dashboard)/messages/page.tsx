@@ -19,6 +19,7 @@ interface ClientMessage {
   status: string
   reply: string | null
   replied_at: string | null
+  clients: { company_name: string | null; contact_person: string | null } | null
 }
 
 export default function MessagesPage() {
@@ -34,9 +35,9 @@ export default function MessagesPage() {
     setLoading(true)
     const { data } = await supabase
       .from('client_messages')
-      .select('*')
+      .select('*, clients(company_name, contact_person)')
       .order('sent_at', { ascending: false })
-    setMessages(data ?? [])
+    setMessages((data ?? []) as ClientMessage[])
     setLoading(false)
   }
 
@@ -78,6 +79,14 @@ export default function MessagesPage() {
     if (filter === 'replied') return m.status === 'replied'
     return true
   })
+
+  function companyOf(msg: ClientMessage) {
+    return msg.clients?.company_name || msg.client_name || 'Unknown Client'
+  }
+
+  function nameOf(msg: ClientMessage) {
+    return msg.clients?.contact_person || null
+  }
 
   const statusBadge = (s: string) => {
     if (s === 'unread') return <Badge className="bg-red-100 text-red-700 text-[10px]">Unread</Badge>
@@ -146,7 +155,8 @@ export default function MessagesPage() {
                   <div className="flex items-center gap-2 min-w-0">
                     <div className={`h-2 w-2 rounded-full shrink-0 mt-1 ${msg.status === 'unread' ? 'bg-red-500' : 'bg-transparent'}`} />
                     <div className="min-w-0">
-                      <div className="text-sm font-medium truncate">{msg.client_name ?? 'Unknown Client'}</div>
+                      <div className="text-sm font-medium truncate">{companyOf(msg)}</div>
+                      {nameOf(msg) && <div className="text-xs text-muted-foreground truncate">{nameOf(msg)}</div>}
                       <div className="text-xs text-muted-foreground truncate mt-0.5">{msg.message}</div>
                     </div>
                   </div>
@@ -180,7 +190,8 @@ export default function MessagesPage() {
                       <User className="h-4 w-4 text-red-600" />
                     </div>
                     <div>
-                      <div className="font-semibold text-sm">{selected.client_name ?? 'Unknown Client'}</div>
+                      <div className="font-semibold text-sm">{companyOf(selected)}</div>
+                      {nameOf(selected) && <div className="text-xs text-muted-foreground">{nameOf(selected)}</div>}
                       <div className="text-xs text-muted-foreground">
                         {selected.sent_at ? format(new Date(selected.sent_at), 'MMM d, yyyy · h:mm a') : '—'}
                       </div>

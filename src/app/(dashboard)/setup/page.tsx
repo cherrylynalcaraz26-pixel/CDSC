@@ -88,7 +88,7 @@ function UOMTab() {
               <TableHead>Name</TableHead>
               <TableHead>Description</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="w-24" />
+              <TableHead className="w-24">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -224,7 +224,7 @@ function BrandsTab() {
               <TableHead>Brand Name</TableHead>
               <TableHead>Description</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="w-24" />
+              <TableHead className="w-24">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -387,7 +387,7 @@ function AttributesTab() {
               <TableHead>Type</TableHead>
               <TableHead>Options</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="w-24" />
+              <TableHead className="w-24">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -563,7 +563,7 @@ function CategoriesTab() {
               <TableHead>Code</TableHead>
               <TableHead>Name</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="w-24" />
+              <TableHead className="w-24">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -761,7 +761,7 @@ function SuppliersTab() {
               <TableHead>TIN</TableHead>
               <TableHead>Category</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="w-12" />
+              <TableHead className="w-12">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1020,7 +1020,7 @@ function ClientsTab() {
               <TableHead>Type</TableHead>
               <TableHead>Credit Limit</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="w-12" />
+              <TableHead className="w-12">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1339,7 +1339,7 @@ function ItemListTab() {
               <TableHead className="text-right">Unit Cost</TableHead>
               <TableHead className="text-right">Selling Price</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="w-10" />
+              <TableHead className="w-10">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

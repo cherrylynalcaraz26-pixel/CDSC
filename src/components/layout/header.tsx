@@ -149,6 +149,7 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
             <Input
               placeholder={isDataPage ? 'Search this page…' : 'Search pages…'}
               className="pl-9 h-9"
+              autoComplete="off"
               value={query}
               onChange={e => { setQuery(e.target.value); setShowResults(true) }}
               onFocus={() => setShowResults(true)}

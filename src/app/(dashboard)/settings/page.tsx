@@ -284,7 +284,7 @@ function LivePreview({ s }: { s: Settings }) {
         {/* Header: logo + company info */}
         <div className="p-5 border-b">
           <div className="flex items-start gap-4">
-            <div className="h-14 w-14 rounded-lg border bg-muted/30 flex items-center justify-center shrink-0 overflow-hidden">
+            <div className="h-14 w-14 rounded-lg border bg-white flex items-center justify-center shrink-0 overflow-hidden">
               {s.logo_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={s.logo_url} alt="logo" className="w-full h-full object-contain p-1" />
@@ -576,10 +576,15 @@ function SecurityTab() {
             <Separator />
             <div className="space-y-3">
               <Label className="text-sm font-semibold">Change Password</Label>
+              {/* Hidden username field so browser autofill associates the password
+                  fields below with this account instead of hijacking an unrelated
+                  input elsewhere on the page (e.g. the header search bar). */}
+              <input type="text" name="username" autoComplete="username" value={email} readOnly className="sr-only" tabIndex={-1} aria-hidden="true" />
               <div className="space-y-2">
                 <div className="relative">
                   <Input
                     type={showPw ? 'text' : 'password'}
+                    autoComplete="new-password"
                     placeholder="New password (min. 8 characters)"
                     value={newPw}
                     onChange={e => setNewPw(e.target.value)}
@@ -595,6 +600,7 @@ function SecurityTab() {
                 </div>
                 <Input
                   type={showPw ? 'text' : 'password'}
+                  autoComplete="new-password"
                   placeholder="Confirm new password"
                   value={confirmPw}
                   onChange={e => setConfirmPw(e.target.value)}
@@ -653,11 +659,11 @@ function PortfolioPreview({ s }: { s: Settings }) {
         {/* Header */}
         <div className="bg-gradient-to-r from-slate-800 to-slate-900 p-5">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-white/10 flex items-center justify-center overflow-hidden shrink-0">
+            <div className="h-10 w-10 rounded-lg bg-white flex items-center justify-center overflow-hidden shrink-0">
               {s.logo_url
                 // eslint-disable-next-line @next/next/no-img-element
                 ? <img src={s.logo_url} alt="logo" className="w-full h-full object-contain p-1" />
-                : <Building2 className="h-5 w-5 text-white/50" />}
+                : <Building2 className="h-5 w-5 text-slate-400" />}
             </div>
             <div>
               <div className="text-white font-bold text-sm leading-tight">{fullName}</div>
