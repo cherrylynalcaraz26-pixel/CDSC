@@ -56,6 +56,30 @@ interface JournalLine {
 
 const fmt = (n: number) => `₱${n.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
 
+const ONES = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
+  'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen']
+const TENS = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety']
+
+function integerToWords(n: number): string {
+  if (n === 0) return ''
+  if (n < 20) return ONES[n]
+  if (n < 100) return `${TENS[Math.floor(n / 10)]}${n % 10 ? ' ' + ONES[n % 10] : ''}`
+  if (n < 1000) return `${ONES[Math.floor(n / 100)]} Hundred${n % 100 ? ' ' + integerToWords(n % 100) : ''}`
+  if (n < 1_000_000) return `${integerToWords(Math.floor(n / 1000))} Thousand${n % 1000 ? ' ' + integerToWords(n % 1000) : ''}`
+  if (n < 1_000_000_000) return `${integerToWords(Math.floor(n / 1_000_000))} Million${n % 1_000_000 ? ' ' + integerToWords(n % 1_000_000) : ''}`
+  return `${integerToWords(Math.floor(n / 1_000_000_000))} Billion${n % 1_000_000_000 ? ' ' + integerToWords(n % 1_000_000_000) : ''}`
+}
+
+// Spells out a peso amount the way it's written on a PH Official Receipt, e.g.
+// 1500.50 → "One Thousand Five Hundred Pesos and 50/100 Only".
+function amountToWords(amount: number): string {
+  const pesos = Math.floor(Math.abs(amount))
+  const centavos = Math.round((Math.abs(amount) - pesos) * 100)
+  const pesosWords = pesos === 0 ? 'Zero' : integerToWords(pesos)
+  const centavosPart = centavos > 0 ? ` and ${String(centavos).padStart(2, '0')}/100` : ''
+  return `${pesosWords} Pesos${centavosPart} Only`
+}
+
 function exportCSV(filename: string, headers: string[], rows: (string | number)[][]) {
   const esc = (v: string | number) => {
     const s = String(v ?? '')
@@ -353,13 +377,10 @@ interface OrBlankCalib {
   fontSizePt: number
   dateTop: number; dateLeft: number
   receivedFromTop: number; receivedFromLeft: number
-  paymentModeTop: number; paymentModeLeft: number
-  referenceNoTop: number; referenceNoLeft: number
-  siReferenceTop: number; siReferenceLeft: number
-  forTop: number; forLeft: number
-  grossAmountTop: number; grossAmountLeft: number
-  lessEwtTop: number; lessEwtLeft: number
-  netAmountTop: number; netAmountLeft: number
+  tinTop: number; tinLeft: number
+  addressTop: number; addressLeft: number
+  amountWordsTop: number; amountWordsLeft: number
+  amountTop: number; amountLeft: number
 }
 
 const DEFAULT_OR_BLANK_CALIB: OrBlankCalib = {
@@ -368,13 +389,10 @@ const DEFAULT_OR_BLANK_CALIB: OrBlankCalib = {
   fontSizePt: 10,
   dateTop: 25, dateLeft: 150,
   receivedFromTop: 33, receivedFromLeft: 45,
-  paymentModeTop: 41, paymentModeLeft: 45,
-  referenceNoTop: 41, referenceNoLeft: 120,
-  siReferenceTop: 49, siReferenceLeft: 45,
-  forTop: 57, forLeft: 45,
-  grossAmountTop: 70, grossAmountLeft: 150,
-  lessEwtTop: 77, lessEwtLeft: 150,
-  netAmountTop: 84, netAmountLeft: 150,
+  tinTop: 41, tinLeft: 45,
+  addressTop: 49, addressLeft: 45,
+  amountWordsTop: 57, amountWordsLeft: 45,
+  amountTop: 65, amountLeft: 150,
 }
 
 const OR_BLANK_CALIB_KEY = 'cdsc_or_blank_form_calib'
@@ -414,7 +432,7 @@ function OrCalibPair({ label, top, left, onChange }: { label: string; top: numbe
 function CollectionsTab() {
   const supabase = createClient()
   const [records, setRecords] = useState<Collection[]>([])
-  const [clients, setClients] = useState<{ id: string; company_name: string }[]>([])
+  const [clients, setClients] = useState<{ id: string; company_name: string; tin: string | null; address: string | null; city: string | null; province: string | null }[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -433,12 +451,17 @@ function CollectionsTab() {
   const [readyToCollect, setReadyToCollect] = useState<{ so_number: string; client_name: string; csi_total: number; collected_total: number; outstanding: number }[]>([])
   const [companyInfo, setCompanyInfo] = useState<{ company_name: string | null; address: string | null; phone: string | null; tin: string | null } | null>(null)
   const [viewRecord, setViewRecord] = useState<Collection | null>(null)
+  const [blankFormOpen, setBlankFormOpen] = useState(false)
+  const [blankFormClientId, setBlankFormClientId] = useState('')
+  const [blankFormInvoices, setBlankFormInvoices] = useState<{ si_number: string; si_date: string; total: number }[]>([])
+  const [blankFormSelectedSis, setBlankFormSelectedSis] = useState<Set<string>>(new Set())
+  const [blankFormDate, setBlankFormDate] = useState('')
 
   async function load() {
     setLoading(true)
     const [{ data: colData }, { data: cliData }, { data: drRows }, { data: csiRows }] = await Promise.all([
       supabase.from('collections').select('*').order('created_at', { ascending: false }),
-      supabase.from('clients').select('id, company_name').eq('status', 'active').order('company_name'),
+      supabase.from('clients').select('id, company_name, tin, address, city, province').eq('status', 'active').order('company_name'),
       supabase.from('dr_logs').select('po_number, status').not('po_number', 'is', null).in('status', ['received', 'partial']),
       supabase.from('csi_records').select('po_number, si_number, amount, client_name').not('po_number', 'is', null),
     ])
@@ -513,6 +536,65 @@ function CollectionsTab() {
     if (!siNumber) { setForm(p => ({ ...p, si_number: '' })); return }
     const csi = csiOptions.find(c => c.si_number === siNumber)
     setForm(p => ({ ...p, si_number: siNumber, amount: csi ? String(csi.total) : p.amount }))
+  }
+
+  // Unpaid CSI invoices for a client, same "not already linked to a posted collection"
+  // rule as loadCsiOptions — kept separate so the Print Blank Form dialog doesn't
+  // interfere with the New Collection form's own selection state.
+  async function loadBlankFormInvoices(clientName: string) {
+    if (!clientName) { setBlankFormInvoices([]); return }
+    const [{ data: csiData }, { data: linkedRows }] = await Promise.all([
+      supabase.from('csi_records').select('si_number, si_date, amount').eq('client_name', clientName),
+      supabase.from('collections').select('si_number').eq('client_name', clientName).eq('status', 'posted').not('si_number', 'is', null),
+    ])
+    const linkedSet = new Set((linkedRows ?? []).map(r => r.si_number))
+    const map: Record<string, { si_number: string; si_date: string; total: number }> = {}
+    for (const r of (csiData ?? [])) {
+      if (!r.si_number || linkedSet.has(r.si_number)) continue
+      if (!map[r.si_number]) map[r.si_number] = { si_number: r.si_number, si_date: r.si_date, total: 0 }
+      map[r.si_number].total += Number(r.amount) || 0
+    }
+    setBlankFormInvoices(Object.values(map).sort((a, b) => (b.si_date ?? '').localeCompare(a.si_date ?? '')))
+  }
+
+  function openBlankFormDialog() {
+    setBlankFormClientId('')
+    setBlankFormInvoices([])
+    setBlankFormSelectedSis(new Set())
+    setBlankFormDate(new Date().toISOString().split('T')[0])
+    setBlankFormOpen(true)
+  }
+
+  function selectBlankFormClient(clientId: string) {
+    setBlankFormClientId(clientId)
+    setBlankFormSelectedSis(new Set())
+    const client = clients.find(c => c.id === clientId)
+    loadBlankFormInvoices(client?.company_name ?? '')
+  }
+
+  function toggleBlankFormSi(siNumber: string) {
+    setBlankFormSelectedSis(prev => {
+      const next = new Set(prev)
+      if (next.has(siNumber)) next.delete(siNumber)
+      else next.add(siNumber)
+      return next
+    })
+  }
+
+  function submitBlankForm() {
+    const client = clients.find(c => c.id === blankFormClientId)
+    if (!client) { toast.error('Select a client'); return }
+    if (blankFormSelectedSis.size === 0) { toast.error('Select at least one invoice'); return }
+    const total = blankFormInvoices.filter(i => blankFormSelectedSis.has(i.si_number)).reduce((s, i) => s + i.total, 0)
+    const addressLine = [client.address, client.city, client.province].filter(Boolean).join(', ')
+    printOrBlankForm({
+      date: blankFormDate,
+      receivedFrom: client.company_name,
+      tin: client.tin,
+      address: addressLine || null,
+      amount: total,
+    })
+    setBlankFormOpen(false)
   }
 
   function openCollectFor(row: { client_name: string }) {
@@ -643,16 +725,15 @@ function CollectionsTab() {
     setOrCalibOpen(true)
   }
 
-  // Overlays a collection's real field values on a blank page at the calibrated
-  // coordinates, for printing directly onto a pre-printed OR booklet page loaded into
-  // the printer — same approach as DR Logs' "Print (Blank Form)".
-  function printORBlank(r: Collection) {
+  // Overlays real field values on a blank page at the calibrated coordinates, for
+  // printing directly onto a pre-printed OR booklet page loaded into the printer —
+  // same approach as DR Logs' "Print (Blank Form)".
+  function printOrBlankForm(data: { date: string; receivedFrom: string; tin: string | null; address: string | null; amount: number }) {
     const c = orBlankCalib
-    const net = (r.amount ?? 0) - (r.form_2307 ?? 0)
-    const dateStr = r.collection_date ? format(new Date(r.collection_date), 'MM/dd/yyyy') : ''
+    const dateStr = data.date ? format(new Date(data.date), 'MM/dd/yyyy') : ''
     const field = (top: number, left: number, value: string) =>
       value ? `<div style="position:absolute;top:${top}mm;left:${left}mm;">${value}</div>` : ''
-    const html = `<!DOCTYPE html><html><head><title>OR ${r.or_number ?? ''} (Blank Form)</title>
+    const html = `<!DOCTYPE html><html><head><title>Official Receipt (Blank Form)</title>
     <style>
       @page { size: ${c.pageWidthMm}mm ${c.pageHeightMm}mm; margin: 0; }
       html, body { margin: 0; padding: 0; }
@@ -661,20 +742,29 @@ function CollectionsTab() {
     </style>
     </head><body>
     ${field(c.dateTop, c.dateLeft, dateStr)}
-    ${field(c.receivedFromTop, c.receivedFromLeft, r.client_name ?? '')}
-    ${field(c.paymentModeTop, c.paymentModeLeft, (r.payment_mode ?? '').replace('_', ' '))}
-    ${field(c.referenceNoTop, c.referenceNoLeft, r.reference_number ?? '')}
-    ${field(c.siReferenceTop, c.siReferenceLeft, r.si_number ?? '')}
-    ${field(c.forTop, c.forLeft, r.remarks ?? '')}
-    ${field(c.grossAmountTop, c.grossAmountLeft, fmt(r.amount ?? 0))}
-    ${field(c.lessEwtTop, c.lessEwtLeft, r.form_2307 ? fmt(r.form_2307) : '')}
-    ${field(c.netAmountTop, c.netAmountLeft, fmt(net))}
+    ${field(c.receivedFromTop, c.receivedFromLeft, data.receivedFrom)}
+    ${field(c.tinTop, c.tinLeft, data.tin ?? '')}
+    ${field(c.addressTop, c.addressLeft, data.address ?? '')}
+    ${field(c.amountWordsTop, c.amountWordsLeft, amountToWords(data.amount))}
+    ${field(c.amountTop, c.amountLeft, fmt(data.amount))}
     </body></html>`
     const win = window.open('', '_blank', 'width=900,height=700')
     if (!win) return
     win.document.write(html)
     win.document.close()
     setTimeout(() => { win.focus(); win.print(); win.close() }, 500)
+  }
+
+  function printORBlank(r: Collection) {
+    const client = clients.find(c => c.id === r.client_id) ?? clients.find(c => c.company_name === r.client_name)
+    const addressLine = client ? [client.address, client.city, client.province].filter(Boolean).join(', ') : ''
+    printOrBlankForm({
+      date: r.collection_date ?? '',
+      receivedFrom: r.client_name ?? '',
+      tin: client?.tin ?? null,
+      address: addressLine || null,
+      amount: r.amount ?? 0,
+    })
   }
 
   // Prints a 5mm-spaced ruler grid on the current calibration's page size, so you can
@@ -721,6 +811,9 @@ function CollectionsTab() {
         <div className="flex items-center gap-2">
           <Button variant="outline" size="icon" title="Calibrate Blank Form Print" onClick={openOrCalib}>
             <SlidersHorizontal className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" onClick={openBlankFormDialog}>
+            <Printer className="h-4 w-4 mr-2" />Print Blank Form
           </Button>
           <Button onClick={() => { resetForm(); setOpen(true) }} className="bg-red-600 hover:bg-red-700">
             <Plus className="h-4 w-4 mr-2" />New Collection
@@ -1034,6 +1127,67 @@ function CollectionsTab() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={blankFormOpen} onOpenChange={setBlankFormOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Printer className="h-4 w-4 text-red-600" />Print Blank Form</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground -mt-2">
+            Pick a client and the invoice(s) this OR covers — a client with multiple unpaid invoices can have more
+            than one included in a single receipt, and the amount is their combined total.
+          </p>
+          <div className="space-y-3 py-1">
+            <div className="space-y-1.5">
+              <Label>Date</Label>
+              <Input type="date" value={blankFormDate} onChange={e => setBlankFormDate(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Client</Label>
+              <Select value={blankFormClientId} onValueChange={v => selectBlankFormClient(v ?? '')}>
+                <SelectTrigger className="w-full"><SelectValue placeholder="Select client…" /></SelectTrigger>
+                <SelectContent>
+                  {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {blankFormClientId && (
+              <div className="space-y-1.5">
+                <Label>Invoice(s) to include</Label>
+                <div className="border rounded-lg max-h-48 overflow-y-auto">
+                  {blankFormInvoices.length === 0 ? (
+                    <div className="px-3 py-3 text-sm text-muted-foreground">No unpaid invoices for this client.</div>
+                  ) : blankFormInvoices.map(inv => (
+                    <button
+                      key={inv.si_number} type="button"
+                      className={`w-full text-left px-3 py-2 text-sm hover:bg-muted border-b last:border-0 flex items-center justify-between gap-2 ${blankFormSelectedSis.has(inv.si_number) ? 'bg-red-50' : ''}`}
+                      onClick={() => toggleBlankFormSi(inv.si_number)}
+                    >
+                      <span className="flex items-center gap-2">
+                        {blankFormSelectedSis.has(inv.si_number) && <CheckCircle2 className="h-3.5 w-3.5 text-red-600 shrink-0" />}
+                        <span className="font-mono">{inv.si_number}</span>
+                        <span className="text-xs text-muted-foreground">{inv.si_date ? format(new Date(inv.si_date), 'MMM d, yyyy') : ''}</span>
+                      </span>
+                      <span className="font-medium shrink-0">{fmt(inv.total)}</span>
+                    </button>
+                  ))}
+                </div>
+                {blankFormSelectedSis.size > 0 && (
+                  <p className="text-sm font-semibold text-right">
+                    Total: {fmt(blankFormInvoices.filter(i => blankFormSelectedSis.has(i.si_number)).reduce((s, i) => s + i.total, 0))}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBlankFormOpen(false)}>Cancel</Button>
+            <Button onClick={submitBlankForm} className="bg-red-600 hover:bg-red-700 gap-1.5">
+              <Printer className="h-4 w-4" />Print
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={orCalibOpen} onOpenChange={setOrCalibOpen}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
@@ -1058,22 +1212,14 @@ function CollectionsTab() {
               onChange={(top, left) => setOrCalibDraft(d => ({ ...d, dateTop: top, dateLeft: left }))} />
             <OrCalibPair label="Received From" top={orCalibDraft.receivedFromTop} left={orCalibDraft.receivedFromLeft}
               onChange={(top, left) => setOrCalibDraft(d => ({ ...d, receivedFromTop: top, receivedFromLeft: left }))} />
-            <OrCalibPair label="Payment Mode" top={orCalibDraft.paymentModeTop} left={orCalibDraft.paymentModeLeft}
-              onChange={(top, left) => setOrCalibDraft(d => ({ ...d, paymentModeTop: top, paymentModeLeft: left }))} />
-            <OrCalibPair label="Reference No." top={orCalibDraft.referenceNoTop} left={orCalibDraft.referenceNoLeft}
-              onChange={(top, left) => setOrCalibDraft(d => ({ ...d, referenceNoTop: top, referenceNoLeft: left }))} />
-            <OrCalibPair label="SI Reference" top={orCalibDraft.siReferenceTop} left={orCalibDraft.siReferenceLeft}
-              onChange={(top, left) => setOrCalibDraft(d => ({ ...d, siReferenceTop: top, siReferenceLeft: left }))} />
-            <OrCalibPair label="For" top={orCalibDraft.forTop} left={orCalibDraft.forLeft}
-              onChange={(top, left) => setOrCalibDraft(d => ({ ...d, forTop: top, forLeft: left }))} />
-            <div className="col-span-2 border-t pt-3 grid grid-cols-2 gap-3">
-              <OrCalibPair label="Gross Amount" top={orCalibDraft.grossAmountTop} left={orCalibDraft.grossAmountLeft}
-                onChange={(top, left) => setOrCalibDraft(d => ({ ...d, grossAmountTop: top, grossAmountLeft: left }))} />
-              <OrCalibPair label="Less EWT" top={orCalibDraft.lessEwtTop} left={orCalibDraft.lessEwtLeft}
-                onChange={(top, left) => setOrCalibDraft(d => ({ ...d, lessEwtTop: top, lessEwtLeft: left }))} />
-            </div>
-            <OrCalibPair label="Net Amount" top={orCalibDraft.netAmountTop} left={orCalibDraft.netAmountLeft}
-              onChange={(top, left) => setOrCalibDraft(d => ({ ...d, netAmountTop: top, netAmountLeft: left }))} />
+            <OrCalibPair label="TIN" top={orCalibDraft.tinTop} left={orCalibDraft.tinLeft}
+              onChange={(top, left) => setOrCalibDraft(d => ({ ...d, tinTop: top, tinLeft: left }))} />
+            <OrCalibPair label="Address" top={orCalibDraft.addressTop} left={orCalibDraft.addressLeft}
+              onChange={(top, left) => setOrCalibDraft(d => ({ ...d, addressTop: top, addressLeft: left }))} />
+            <OrCalibPair label="Amount in Words" top={orCalibDraft.amountWordsTop} left={orCalibDraft.amountWordsLeft}
+              onChange={(top, left) => setOrCalibDraft(d => ({ ...d, amountWordsTop: top, amountWordsLeft: left }))} />
+            <OrCalibPair label="Amount" top={orCalibDraft.amountTop} left={orCalibDraft.amountLeft}
+              onChange={(top, left) => setOrCalibDraft(d => ({ ...d, amountTop: top, amountLeft: left }))} />
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setOrCalibDraft(DEFAULT_OR_BLANK_CALIB)}>Reset to Defaults</Button>
