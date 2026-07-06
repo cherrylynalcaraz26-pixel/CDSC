@@ -55,6 +55,13 @@ interface JournalLine {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 const fmt = (n: number) => `₱${n.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
+const fmtNoPeso = (n: number) => n.toLocaleString('en-PH', { minimumFractionDigits: 2 })
+
+// Keeps the OR's "In Payment For" line readable when many invoices are selected —
+// e.g. "SI No. 1111, 2222, 3333, 4444, 5555, and etc." instead of a huge list.
+function formatSiList(siNumbers: string[]): string {
+  return siNumbers.length > 5 ? `${siNumbers.slice(0, 5).join(', ')}, and etc.` : siNumbers.join(', ')
+}
 
 const ONES = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten',
   'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen']
@@ -493,16 +500,16 @@ function OrBlankPreview({ calib, data }: { calib: OrBlankCalib; data: OrBlankPre
         <OrBlankPreviewField key={`no-${inv.si_number}`} calib={calib} top={calib.invoiceTableTop + i * calib.invoiceRowHeight} left={calib.invoiceNoLeft} value={inv.si_number} />
       ))}
       {data.invoices.slice(0, calib.invoiceMaxRows).map((inv, i) => (
-        <OrBlankPreviewField key={`amt-${inv.si_number}`} calib={calib} top={calib.invoiceTableTop + i * calib.invoiceRowHeight} left={calib.invoiceAmountLeft} value={fmt(inv.amount)} />
+        <OrBlankPreviewField key={`amt-${inv.si_number}`} calib={calib} top={calib.invoiceTableTop + i * calib.invoiceRowHeight} left={calib.invoiceAmountLeft} value={fmtNoPeso(inv.amount)} />
       ))}
-      <OrBlankPreviewField calib={calib} top={calib.totalSalesTop} left={calib.totalSalesLeft} value={total > 0 ? fmt(total) : ''} />
+      <OrBlankPreviewField calib={calib} top={calib.totalSalesTop} left={calib.totalSalesLeft} value={total > 0 ? fmtNoPeso(total) : ''} />
       <OrBlankPreviewField calib={calib} top={calib.dateTop} left={calib.dateLeft} value={data.date ? format(new Date(data.date), 'MM/dd/yyyy') : ''} />
       <OrBlankPreviewField calib={calib} top={calib.receivedFromTop} left={calib.receivedFromLeft} value={data.receivedFrom} />
       <OrBlankPreviewField calib={calib} top={calib.tinTop} left={calib.tinLeft} value={data.tin ?? ''} />
       <OrBlankPreviewField calib={calib} top={calib.addressTop} left={calib.addressLeft} value={data.address ?? ''} />
       <OrBlankPreviewField calib={calib} top={calib.businessStyleTop} left={calib.businessStyleLeft} value={data.businessStyle ?? ''} />
       <OrBlankPreviewField calib={calib} top={calib.amountWordsTop} left={calib.amountWordsLeft} value={total > 0 ? amountToWords(total) : ''} />
-      <OrBlankPreviewField calib={calib} top={calib.amountTop} left={calib.amountLeft} value={total > 0 ? fmt(total) : ''} />
+      <OrBlankPreviewField calib={calib} top={calib.amountTop} left={calib.amountLeft} value={total > 0 ? fmtNoPeso(total) : ''} />
       <OrBlankPreviewField calib={calib} top={calib.paymentForTop} left={calib.paymentForLeft} value={data.paymentFor ?? ''} />
     </div>
   )
@@ -675,7 +682,7 @@ function CollectionsTab() {
       tin: client.tin,
       address: addressLine || null,
       businessStyle: client.industry,
-      paymentFor: `SI No. ${selected.map(i => i.si_number).join(', ')}`,
+      paymentFor: `SI No. ${formatSiList(selected.map(i => i.si_number))}`,
       invoices: selected.map(i => ({ si_number: i.si_number, amount: i.total })),
     })
     setBlankFormOpen(false)
@@ -822,7 +829,7 @@ function CollectionsTab() {
       value ? `<div style="position:absolute;top:${top}mm;left:${left}mm;">${value}</div>` : ''
     const rows = data.invoices.slice(0, c.invoiceMaxRows).map((inv, i) => {
       const top = c.invoiceTableTop + i * c.invoiceRowHeight
-      return field(top, c.invoiceNoLeft, inv.si_number) + field(top, c.invoiceAmountLeft, fmt(inv.amount))
+      return field(top, c.invoiceNoLeft, inv.si_number) + field(top, c.invoiceAmountLeft, fmtNoPeso(inv.amount))
     }).join('')
     return `<!DOCTYPE html><html><head><title>Official Receipt (Blank Form)</title>
     <style>
@@ -833,14 +840,14 @@ function CollectionsTab() {
     </style>
     </head><body>
     ${rows}
-    ${field(c.totalSalesTop, c.totalSalesLeft, fmt(total))}
+    ${field(c.totalSalesTop, c.totalSalesLeft, fmtNoPeso(total))}
     ${field(c.dateTop, c.dateLeft, dateStr)}
     ${field(c.receivedFromTop, c.receivedFromLeft, data.receivedFrom)}
     ${field(c.tinTop, c.tinLeft, data.tin ?? '')}
     ${field(c.addressTop, c.addressLeft, data.address ?? '')}
     ${field(c.businessStyleTop, c.businessStyleLeft, data.businessStyle ?? '')}
     ${field(c.amountWordsTop, c.amountWordsLeft, amountToWords(total))}
-    ${field(c.amountTop, c.amountLeft, fmt(total))}
+    ${field(c.amountTop, c.amountLeft, fmtNoPeso(total))}
     ${field(c.paymentForTop, c.paymentForLeft, data.paymentFor ?? '')}
     </body></html>`
   }
@@ -1376,7 +1383,7 @@ function CollectionsTab() {
                     return c ? [c.address, c.city, c.province].filter(Boolean).join(', ') : null
                   })(),
                   businessStyle: clients.find(c => c.id === blankFormClientId)?.industry ?? null,
-                  paymentFor: blankFormSelectedSis.size > 0 ? `SI No. ${[...blankFormSelectedSis].join(', ')}` : null,
+                  paymentFor: blankFormSelectedSis.size > 0 ? `SI No. ${formatSiList([...blankFormSelectedSis])}` : null,
                   invoices: blankFormInvoices.filter(i => blankFormSelectedSis.has(i.si_number)).map(i => ({ si_number: i.si_number, amount: i.total })),
                 }}
               />
