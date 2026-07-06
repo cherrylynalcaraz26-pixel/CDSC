@@ -110,6 +110,19 @@ const EXPENSE_ACCOUNTS = [
 const PAYMENT_MODES_DISB = ['cash', 'check', 'bank_transfer', 'gcash']
 const PAYMENT_MODES_COL  = ['Cash', 'Check', 'Bank Transfer', 'GCash', 'Maya', 'Credit Card', 'Online Banking']
 
+type CWTType = 'none' | 'goods' | 'services'
+const CWT_CFG: Record<CWTType, { label: string; rate: number; atc: string }> = {
+  none:     { label: 'None',          rate: 0,    atc: '' },
+  goods:    { label: 'Goods (1%)',    rate: 0.01, atc: 'WC158' },
+  services: { label: 'Services (2%)', rate: 0.02, atc: 'WC157' },
+}
+
+// Strips a leading "OR-" (any case) so OR numbers stay in the plain numeric
+// format used on the physical Collection Receipt (e.g. "00031", not "OR-00031").
+function normalizeOrNumber(v: string): string {
+  return v.trim().replace(/^OR-\s*/i, '')
+}
+
 const STATUS_CLS: Record<string, string> = {
   posted:  'bg-green-100 text-green-700',
   voided:  'bg-red-100 text-red-700',
@@ -511,6 +524,7 @@ function CollectionsTab() {
   const [form, setForm] = useState({
     or_number: '', client_id: '', client_name: '', amount: '', si_number: '',
     payment_mode: 'Cash', reference_number: '', collection_date: '', remarks: '',
+    cwt_type: 'none' as CWTType,
   })
   const [clientSearch, setClientSearch] = useState('')
   const [clientDropdownOpen, setClientDropdownOpen] = useState(false)
@@ -569,7 +583,7 @@ function CollectionsTab() {
   useEffect(() => { load() }, [])
 
   function resetForm() {
-    setForm({ or_number: '', client_id: '', client_name: '', amount: '', si_number: '', payment_mode: 'Cash', reference_number: '', collection_date: '', remarks: '' })
+    setForm({ or_number: '', client_id: '', client_name: '', amount: '', si_number: '', payment_mode: 'Cash', reference_number: '', collection_date: '', remarks: '', cwt_type: 'none' })
     setClientSearch('')
     setClientDropdownOpen(false)
     setCsiOptions([])
@@ -685,11 +699,13 @@ function CollectionsTab() {
       : form.client_name
     if (!clientName.trim()) { toast.error('Client name required'); return }
     setSaving(true)
+    const form2307 = Number(form.amount) * CWT_CFG[form.cwt_type].rate
     const { error } = await supabase.from('collections').insert({
-      or_number: form.or_number.trim() || null,
+      or_number: normalizeOrNumber(form.or_number) || null,
       client_id: form.client_id || null,
       client_name: clientName.trim(),
       amount: Number(form.amount),
+      form_2307: form2307 > 0 ? form2307 : null,
       payment_mode: form.payment_mode.toLowerCase().replace(' ', '_'),
       reference_number: form.reference_number || null,
       collection_date: form.collection_date || new Date().toISOString().split('T')[0],
@@ -1136,8 +1152,8 @@ function CollectionsTab() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>OR Number</Label>
-                <Input placeholder="Leave blank to auto-generate" value={form.or_number}
-                  onChange={e => setForm(p => ({ ...p, or_number: e.target.value }))} />
+                <Input placeholder="e.g. 00031 (no OR- prefix)" value={form.or_number}
+                  onChange={e => setForm(p => ({ ...p, or_number: normalizeOrNumber(e.target.value) }))} />
               </div>
               <div className="space-y-1.5">
                 <Label>Collection Date</Label>
@@ -1206,6 +1222,27 @@ function CollectionsTab() {
                     {PAYMENT_MODES_COL.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Form 2307 (CWT)</Label>
+                <Select value={form.cwt_type} onValueChange={v => setForm(p => ({ ...p, cwt_type: (v ?? 'none') as CWTType }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(CWT_CFG) as CWTType[]).map(k => (
+                      <SelectItem key={k} value={k}>{CWT_CFG[k].label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Withheld Amount</Label>
+                <div className="h-9 flex items-center px-3 rounded-md border bg-muted text-sm text-muted-foreground">
+                  {form.cwt_type === 'none' || !form.amount
+                    ? '—'
+                    : fmt(Number(form.amount) * CWT_CFG[form.cwt_type].rate)}
+                </div>
               </div>
             </div>
             <div className="space-y-1.5">

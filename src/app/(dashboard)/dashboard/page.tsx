@@ -36,7 +36,7 @@ interface RecentPO { id: string; po_number: string | null; created_at: string; s
 interface ORClientRow { client: string; collected: number; ewt: number; ors: number }
 interface CSIClientRow { client: string; billed: number; invoices: number; items: number }
 interface ReconRow { client: string; csi_billed: number; or_collected: number; diff: number; status: 'Balanced' | 'Outstanding' | 'Over-collected' }
-interface MonthlySOBar { month: string; revenue: number; orders: number; csiRevenue: number; poAmount: number; net: number }
+interface MonthlySOBar { month: string; revenue: number; orders: number; csiRevenue: number; poAmount: number; collected: number; net: number }
 interface TopClient { client: string; revenue: number; orders: number }
 
 interface Insight {
@@ -114,6 +114,7 @@ export default function DashboardPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'sales_orders' }, () => setRealtimeTick(t => t + 1))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'purchase_orders' }, () => setRealtimeTick(t => t + 1))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'csi_records' }, () => setRealtimeTick(t => t + 1))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'collections' }, () => setRealtimeTick(t => t + 1))
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [])
@@ -264,6 +265,7 @@ export default function DashboardPage() {
       const allCSIDetail = csiDetailData.data ?? []
       const { data: poAll } = await supabase.from('purchase_orders').select('created_at, total_amount, status').not('status', 'eq', 'cancelled')
       const poList = poAll ?? []
+      const postedCollections = (collectionData.data ?? []).filter(c => c.status === 'posted')
       const soBars: MonthlySOBar[] = Array.from({ length: 6 }, (_, i) => {
         const d = subMonths(now, 5 - i)
         const start = startOfMonth(d).toISOString().slice(0, 10)
@@ -274,15 +276,18 @@ export default function DashboardPage() {
         })
         const monthCSI = allCSIDetail.filter((r: any) => r.si_date && r.si_date >= start && r.si_date <= end)
         const monthPOs = poList.filter(p => (p.created_at ?? '').slice(0, 10) >= start && (p.created_at ?? '').slice(0, 10) <= end)
+        const monthCollections = postedCollections.filter(c => c.collection_date && c.collection_date >= start && c.collection_date <= end)
         const revenue = monthSOs.reduce((sum: number, s: any) => sum + (Number(s.total_amount) || 0), 0)
         const poAmount = monthPOs.reduce((sum, p) => sum + (Number(p.total_amount) || 0), 0)
+        const collected = monthCollections.reduce((sum, c) => sum + (Number(c.amount) || 0), 0)
         return {
           month: format(d, 'MMM'),
           revenue,
           orders: monthSOs.length,
           csiRevenue: monthCSI.reduce((sum: number, r: any) => sum + (Number(r.quantity) || 0) * (Number(r.unit_price) || 0), 0),
           poAmount,
-          net: revenue - poAmount,
+          collected,
+          net: collected - poAmount,
         }
       })
       setSoMonthlyBars(soBars)
@@ -725,9 +730,9 @@ export default function DashboardPage() {
             <div className="pt-2 border-t space-y-2">
               <div>
                 <p className="text-xs font-semibold text-muted-foreground">Sales Orders vs Purchases — Net (Last 6 Months)</p>
-                <p className="text-[10px] text-muted-foreground">Bars compare monthly Sales Order and Purchase Order totals; the line is the Net difference (Sales − Purchases)</p>
+                <p className="text-[10px] text-muted-foreground">Bars compare monthly Collected (posted collections) and Purchase Order totals; the line is the Net difference (Collected − Purchases)</p>
               </div>
-              {loading || soMonthlyBars.every(m => m.revenue === 0 && m.poAmount === 0) ? (
+              {loading || soMonthlyBars.every(m => m.collected === 0 && m.poAmount === 0) ? (
                 <div className="h-52 flex items-center justify-center text-muted-foreground text-xs border rounded-lg">{loading ? 'Loading…' : 'No sales or purchase data yet'}</div>
               ) : (
                 <ResponsiveContainer width="100%" height={220}>
@@ -737,7 +742,7 @@ export default function DashboardPage() {
                     <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `₱${(v / 1000).toFixed(0)}k`} />
                     <Tooltip formatter={(v: any) => [`₱${(v ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`]} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
-                    <Bar dataKey="revenue" name="Sales Orders" fill="#2563eb" radius={[3, 3, 0, 0]} />
+                    <Bar dataKey="collected" name="Sales Orders (Collected)" fill="#2563eb" radius={[3, 3, 0, 0]} />
                     <Bar dataKey="poAmount" name="Purchases" fill="#f97316" radius={[3, 3, 0, 0]} />
                     <Line type="monotone" dataKey="net" name="Net" stroke="#16a34a" strokeWidth={2} dot={{ r: 3 }} />
                   </ComposedChart>
