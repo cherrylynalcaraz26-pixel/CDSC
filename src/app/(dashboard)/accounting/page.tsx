@@ -21,7 +21,7 @@ import {
   Plus, Download, Loader2, BookOpen, Banknote, TrendingUp,
   Scale, FileSpreadsheet, Trash2, Calculator, Receipt, FileText, DollarSign,
   Zap, MoreHorizontal, Printer, Eye, CheckCircle2, XCircle, AlertTriangle,
-  ChevronDown, ChevronRight, SlidersHorizontal,
+  ChevronDown, ChevronRight, SlidersHorizontal, Pencil,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
@@ -524,6 +524,7 @@ function CollectionsTab() {
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [clientFilter, setClientFilter] = useState(() => searchParams.get('client') ?? '')
   const df = useDateRangeFilter()
   const [orBlankCalib, setOrBlankCalib] = useState<OrBlankCalib>(() => loadOrBlankCalib())
@@ -592,6 +593,7 @@ function CollectionsTab() {
 
   function resetForm() {
     setForm({ or_number: '', client_id: '', client_name: '', amount: '', si_number: '', payment_mode: 'Cash', reference_number: '', collection_date: '', remarks: '', cwt_type: 'none' })
+    setEditingId(null)
     setClientSearch('')
     setClientDropdownOpen(false)
     setCsiOptions([])
@@ -698,6 +700,37 @@ function CollectionsTab() {
     setOpen(true)
   }
 
+  // Infers the CWT selector's value back from a stored form_2307 amount, since the
+  // rate itself isn't persisted — only the computed withheld amount is.
+  function cwtTypeFromAmount(amount: number, form2307: number | null): CWTType {
+    if (!form2307 || amount <= 0) return 'none'
+    const rate = form2307 / amount
+    if (Math.abs(rate - CWT_CFG.goods.rate) < 0.001) return 'goods'
+    if (Math.abs(rate - CWT_CFG.services.rate) < 0.001) return 'services'
+    return 'none'
+  }
+
+  function startEdit(r: Collection) {
+    resetForm()
+    setEditingId(r.id)
+    const matched = r.client_id ? clients.find(c => c.id === r.client_id) : clients.find(c => c.company_name === r.client_name)
+    const amount = r.amount ?? 0
+    setForm({
+      or_number: r.or_number ?? '',
+      client_id: matched?.id ?? r.client_id ?? '',
+      client_name: r.client_name ?? '',
+      amount: String(amount),
+      si_number: r.si_number ?? '',
+      payment_mode: PAYMENT_MODES_COL.find(m => m.toLowerCase().replace(' ', '_') === r.payment_mode) ?? 'Cash',
+      reference_number: r.reference_number ?? '',
+      collection_date: r.collection_date ?? '',
+      remarks: r.remarks ?? '',
+      cwt_type: cwtTypeFromAmount(amount, r.form_2307),
+    })
+    setClientSearch(r.client_name ?? '')
+    setOpen(true)
+  }
+
   const filteredClients = clients.filter(c => !clientSearch || c.company_name.toLowerCase().includes(clientSearch.toLowerCase()))
 
   async function save() {
@@ -708,7 +741,7 @@ function CollectionsTab() {
     if (!clientName.trim()) { toast.error('Client name required'); return }
     setSaving(true)
     const form2307 = Number(form.amount) * CWT_CFG[form.cwt_type].rate
-    const { error } = await supabase.from('collections').insert({
+    const payload = {
       or_number: normalizeOrNumber(form.or_number) || null,
       client_id: form.client_id || null,
       client_name: clientName.trim(),
@@ -719,10 +752,12 @@ function CollectionsTab() {
       collection_date: form.collection_date || new Date().toISOString().split('T')[0],
       remarks: form.remarks || null,
       si_number: form.si_number || null,
-      status: 'posted',
-    })
+    }
+    const { error } = editingId
+      ? await supabase.from('collections').update(payload).eq('id', editingId)
+      : await supabase.from('collections').insert({ ...payload, status: 'posted' })
     if (error) toast.error(error.message)
-    else { toast.success('Collection recorded'); setOpen(false); resetForm(); load() }
+    else { toast.success(editingId ? 'Collection updated' : 'Collection recorded'); setOpen(false); resetForm(); load() }
     setSaving(false)
   }
 
@@ -1129,6 +1164,9 @@ function CollectionsTab() {
                         <DropdownMenuItem onClick={() => setViewRecord(r)}>
                           <Eye className="mr-2 h-4 w-4" />View
                         </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => startEdit(r)}>
+                          <Pencil className="mr-2 h-4 w-4" />Edit
+                        </DropdownMenuItem>
                         <DropdownMenuItem onClick={() => printOR(r)}>
                           <Printer className="mr-2 h-4 w-4" />Print OR
                         </DropdownMenuItem>
@@ -1155,7 +1193,7 @@ function CollectionsTab() {
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>New Collection (OR)</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editingId ? 'Edit Collection (OR)' : 'New Collection (OR)'}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
@@ -1199,7 +1237,14 @@ function CollectionsTab() {
                 </div>
               )}
             </div>
-            {csiOptions.length > 0 && (
+            {editingId ? (
+              form.si_number && (
+                <div className="space-y-1.5">
+                  <Label>Linked CSI Invoice</Label>
+                  <div className="h-9 flex items-center px-3 rounded-md border bg-muted text-sm font-mono text-muted-foreground">{form.si_number}</div>
+                </div>
+              )
+            ) : csiOptions.length > 0 && (
               <div className="space-y-1.5">
                 <Label>Link to CSI Invoice (optional)</Label>
                 <Select value={form.si_number} onValueChange={v => selectCsi(v ?? '')}>
@@ -1267,7 +1312,7 @@ function CollectionsTab() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
             <Button onClick={save} disabled={saving} className="bg-red-600 hover:bg-red-700">
-              {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : 'Post Collection'}
+              {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : editingId ? 'Save Changes' : 'Post Collection'}
             </Button>
           </DialogFooter>
         </DialogContent>
