@@ -239,7 +239,7 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
               <Avatar className="h-8 w-8">
                 {userAvatarUrl && <AvatarImage src={userAvatarUrl} alt={userName} />}
                 <AvatarFallback className="bg-white p-0.5">
-                  <img src={logoSrc} alt={companyName} className="h-full w-full object-contain" />
+                  <img src={logoSrc} alt={companyName} className="h-full w-full object-cover" />
                 </AvatarFallback>
               </Avatar>
             </DropdownMenuTrigger>
@@ -247,7 +247,7 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
               {/* Company logo + name */}
               <div className="px-4 py-4 flex flex-col items-center gap-3 border-b text-center">
                 <div className="h-14 w-14 rounded-xl overflow-hidden shrink-0 border bg-white flex items-center justify-center">
-                  <img src={logoSrc} alt={companyName} className="h-full w-full object-contain p-1" />
+                  <img src={logoSrc} alt={companyName} className="h-full w-full object-cover" />
                 </div>
                 <div>
                   <p className="text-sm font-bold leading-tight">{companyName}</p>
