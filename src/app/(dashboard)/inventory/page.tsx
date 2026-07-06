@@ -106,6 +106,10 @@ export default function InventoryPage() {
   const [addNotes, setAddNotes] = useState('')
   const [addSaving, setAddSaving] = useState(false)
   const [itemOptions, setItemOptions] = useState<ItemOption[]>([])
+  const [addPoOptions, setAddPoOptions] = useState<{ id: string; po_number: string }[]>([])
+  const [addPoId, setAddPoId] = useState('')
+  const [addPoItems, setAddPoItems] = useState<{ item_name: string; quantity: number; unit_of_measure: string | null }[]>([])
+  const [addPoItemsLoading, setAddPoItemsLoading] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -478,8 +482,36 @@ export default function InventoryPage() {
     setAddQty('')
     setAddUnit('')
     setAddNotes('')
+    setAddPoId('')
+    setAddPoItems([])
     loadItemOptions()
+    loadAddPoOptions()
     setAddOpen(true)
+  }
+
+  async function loadAddPoOptions() {
+    const { data } = await supabase.from('purchase_orders').select('id, po_number').not('po_number', 'is', null).neq('status', 'cancelled').order('created_at', { ascending: false })
+    setAddPoOptions((data ?? []) as { id: string; po_number: string }[])
+  }
+
+  async function selectAddPo(poId: string) {
+    setAddPoId(poId)
+    setAddPoItems([])
+    if (!poId) return
+    setAddPoItemsLoading(true)
+    const { data } = await supabase.from('po_items').select('item_name, quantity, unit_of_measure').eq('po_id', poId)
+    setAddPoItems((data ?? []) as { item_name: string; quantity: number; unit_of_measure: string | null }[])
+    setAddPoItemsLoading(false)
+  }
+
+  function handleAddPoItemSelect(poItem: { item_name: string; quantity: number; unit_of_measure: string | null }) {
+    const matched = itemOptions.find(o => o.item_name === poItem.item_name)
+    setAddItemName(poItem.item_name)
+    setAddItemSearch('')
+    setAddItemFocus(false)
+    setAddSelectedItem(matched ?? null)
+    setAddUnit(poItem.unit_of_measure ?? matched?.unit_of_measure ?? '')
+    setAddQty(String(poItem.quantity))
   }
 
   function handleAddItemSelect(opt: ItemOption) {
@@ -503,7 +535,7 @@ export default function InventoryPage() {
     if (error) {
       toast.error(error.message)
     } else {
-      toast.success('Warehouse stock added')
+      toast.success(addPoId ? 'Stock received' : 'Warehouse stock added')
       setAddOpen(false)
       load()
     }
@@ -1642,10 +1674,47 @@ export default function InventoryPage() {
         <DialogContent className="w-[95vw] max-w-lg sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Plus className="h-4 w-4 text-red-600" /> Add Warehouse Stock
+              {addPoId ? <Truck className="h-4 w-4 text-red-600" /> : <Plus className="h-4 w-4 text-red-600" />}
+              {addPoId ? 'Receive Stock' : 'Add Warehouse Stock'}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
+
+            {/* PO picker — optional shortcut to pick items straight off a purchase order */}
+            <div className="space-y-1.5">
+              <Label>Purchase Order <span className="text-muted-foreground text-xs">(optional)</span></Label>
+              <Select value={addPoId || '_none'} onValueChange={v => selectAddPo(!v || v === '_none' ? '' : v)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue>{() => addPoId ? (addPoOptions.find(p => p.id === addPoId)?.po_number ?? '—') : 'No PO — add stock manually'}</SelectValue>
+                </SelectTrigger>
+                <SelectContent className="min-w-[280px]">
+                  <SelectItem value="_none">No PO — add stock manually</SelectItem>
+                  {addPoOptions.map(po => <SelectItem key={po.id} value={po.id}>{po.po_number}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {addPoId && (
+              <div className="space-y-1.5">
+                <Label>Items on this PO</Label>
+                <div className="border rounded-lg max-h-40 overflow-y-auto">
+                  {addPoItemsLoading ? (
+                    <div className="flex items-center justify-center py-4"><Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /></div>
+                  ) : addPoItems.length === 0 ? (
+                    <div className="px-3 py-3 text-sm text-muted-foreground">No items found on this PO.</div>
+                  ) : addPoItems.map((it, i) => (
+                    <button
+                      key={i} type="button"
+                      className={`w-full text-left px-3 py-2 text-sm hover:bg-muted border-b last:border-0 flex items-center justify-between gap-2 ${addItemName === it.item_name ? 'bg-red-50' : ''}`}
+                      onClick={() => handleAddPoItemSelect(it)}
+                    >
+                      <span className="font-medium truncate">{it.item_name}</span>
+                      <span className="text-xs text-muted-foreground shrink-0">{it.quantity} {it.unit_of_measure ?? ''}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Item picker */}
             <div className="space-y-1.5">
@@ -1731,7 +1800,9 @@ export default function InventoryPage() {
               disabled={addSaving || !addItemName.trim() || !addQty.trim()}
               className="bg-red-600 hover:bg-red-700 text-white gap-1.5"
             >
-              {addSaving ? <><Loader2 className="h-4 w-4 animate-spin" />Saving…</> : <><Plus className="h-4 w-4" />Add Stock</>}
+              {addSaving
+                ? <><Loader2 className="h-4 w-4 animate-spin" />{addPoId ? 'Receiving…' : 'Saving…'}</>
+                : addPoId ? <><Truck className="h-4 w-4" />Receive</> : <><Plus className="h-4 w-4" />Add Stock</>}
             </Button>
           </DialogFooter>
         </DialogContent>
