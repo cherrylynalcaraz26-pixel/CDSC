@@ -2648,7 +2648,6 @@ function AccountingPageContent() {
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="collections">Collections</TabsTrigger>
           <TabsTrigger value="csi">CSI</TabsTrigger>
-          <TabsTrigger value="bookkeeping">Bookkeeping</TabsTrigger>
           <TabsTrigger value="bir">BIR Compliance</TabsTrigger>
         </TabsList>
         <div>
