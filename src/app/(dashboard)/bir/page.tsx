@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -129,9 +129,14 @@ export default function BIRPage() {
   const [ewtRows, setEwtRows] = useState<EwtRow[]>([])
   const [slspRows, setSlspRows] = useState<SlspRow[]>([])
   const [suppliers, setSuppliers] = useState<{ id: string; tin: string | null; atc_code: string | null }[]>([])
-  const [filedKeys, setFiledKeys] = useState<Set<string>>(new Set())
+  const [filings, setFilings] = useState<{ form_type: string; tax_period: string; status: string }[]>([])
   const [vatRegistered, setVatRegistered] = useState(false)
   const [isCorporate, setIsCorporate] = useState(false)
+
+  const loadFilings = useCallback(async () => {
+    const { data } = await supabase.from('bir_filings').select('form_type, tax_period, status')
+    setFilings(data ?? [])
+  }, [supabase])
 
   useEffect(() => {
     async function loadTaxData() {
@@ -147,6 +152,7 @@ export default function BIRPage() {
       setSuppliers(supData ?? [])
       setVatRegistered(!!sysData?.vat_registered)
       setIsCorporate((sysData?.business_type ?? '').toLowerCase().includes('corp'))
+      await loadFilings()
       const supplierById = new Map((supData ?? []).map(s => [s.id, s]))
       const refByPoNumber = new Map((rrData ?? []).map(r => [r.po_number, r.si_number || r.dr_number || null]))
 
@@ -199,15 +205,16 @@ export default function BIRPage() {
   }, [])
 
   const baseForms = useMemo(() => buildBirForms(new Date(), vatRegistered, isCorporate), [vatRegistered, isCorporate])
+  const filedSet = useMemo(() => new Set(filings.filter(f => f.status === 'filed').map(f => `${f.form_type}|${f.tax_period}`)), [filings])
   const forms: BirForm[] = useMemo(() => {
     const now = new Date().getTime()
     return baseForms.map(f => {
-      if (filedKeys.has(f.key)) return { ...f, status: 'filed' as const }
+      if (filedSet.has(`${f.form}|${f.period}`)) return { ...f, status: 'filed' as const }
       const daysUntil = Math.ceil((new Date(f.due).getTime() - now) / 86400000)
       const status = daysUntil < 0 ? 'overdue' as const : daysUntil <= 10 ? 'due_soon' as const : 'pending' as const
       return { ...f, status }
     })
-  }, [baseForms, filedKeys])
+  }, [baseForms, filedSet])
 
   const readinessChecks = useMemo(() => {
     const totalSup = suppliers.length
@@ -225,9 +232,24 @@ export default function BIRPage() {
 
   const readinessScore = readinessChecks.length > 0 ? Math.round((readinessChecks.filter(c => c.status === 'pass').length / readinessChecks.length) * 100) : 0
 
-  function markFiled(key: string, formName: string) {
-    setFiledKeys(prev => new Set(prev).add(key))
-    toast.success(`Form ${formName} marked as filed`)
+  async function markFiled(form: BirForm) {
+    const { error } = await supabase.from('bir_filings').upsert(
+      {
+        form_type: form.form,
+        tax_period: form.period,
+        due_date: form.due,
+        filing_date: new Date().toISOString().split('T')[0],
+        status: 'filed',
+        amount_due: form.amount,
+      },
+      { onConflict: 'form_type,tax_period' }
+    )
+    if (error) { toast.error(error.message); return }
+    setFilings(prev => {
+      const others = prev.filter(f => !(f.form_type === form.form && f.tax_period === form.period))
+      return [...others, { form_type: form.form, tax_period: form.period, status: 'filed' }]
+    })
+    toast.success(`Form ${form.form} marked as filed`)
   }
 
   function runFilingReadyCheck() {
@@ -309,6 +331,47 @@ export default function BIRPage() {
     toast.success('Alphalist .dat file downloaded')
   }
 
+  function buildFilingCalendarHtml() {
+    const rows = forms.map(f => `<tr>
+      <td>${f.form}</td><td>${f.description}</td><td>${f.period}</td><td>${f.due}</td>
+      <td style="text-align:right">${f.amount ? `₱${f.amount.toLocaleString()}` : '—'}</td>
+      <td style="text-transform:capitalize">${f.status.replace('_', ' ')}</td>
+    </tr>`).join('')
+    return `<!DOCTYPE html><html><head><title>BIR Filing Calendar</title><style>
+      body{font-family:Arial,sans-serif;padding:24px;color:#111}
+      table{width:100%;border-collapse:collapse;font-size:11px}
+      th{background:#1f2937;color:#fff;text-align:left;padding:6px 8px}
+      td{padding:6px 8px;border-bottom:1px solid #e5e7eb}
+      h1{font-size:16px;margin-bottom:4px} p{color:#6b7280;font-size:11px;margin-top:0}
+      @media print { @page { margin: 12mm; size: A4 landscape; } }
+    </style></head><body>
+      <h1>BIR Filing Calendar ${new Date().getFullYear()}</h1>
+      <p>CDSC Industrial Supply — Filing due dates and status</p>
+      <table><thead><tr><th>Form</th><th>Description</th><th>Period</th><th>Due Date</th><th style="text-align:right">Amount</th><th>Status</th></tr></thead>
+      <tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:#9ca3af">No data</td></tr>'}</tbody></table>
+    </body></html>`
+  }
+
+  function printFilingCalendar() {
+    const win = window.open('', '_blank', 'width=1000,height=800')
+    if (!win) return
+    win.document.write(buildFilingCalendarHtml())
+    win.document.close()
+    win.focus()
+    setTimeout(() => win.print(), 400)
+  }
+
+  // Simplified pipe-delimited layout, same convention as the Alphalist .dat export.
+  function downloadFilingCalendarDat() {
+    const lines = forms.map(f => [f.form, f.period, f.due, f.status, f.amount.toFixed(2)].join('|'))
+    const blob = new Blob([lines.join('\r\n')], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url; a.download = 'BIR_Filing_Calendar.dat'; a.click()
+    URL.revokeObjectURL(url)
+    toast.success('Filing calendar .dat file downloaded')
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -383,8 +446,16 @@ export default function BIRPage() {
           </Card>
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">BIR Filing Calendar {new Date().getFullYear()}</CardTitle>
-              <CardDescription>Track all BIR form due dates and filing status</CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base">BIR Filing Calendar {new Date().getFullYear()}</CardTitle>
+                  <CardDescription>Track all BIR form due dates and filing status</CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" variant="outline" onClick={printFilingCalendar}><Printer className="h-4 w-4 mr-1" />Print</Button>
+                  <Button size="sm" variant="outline" onClick={downloadFilingCalendarDat}><Download className="h-4 w-4 mr-1" />Download .DAT</Button>
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               <Table>
@@ -418,7 +489,7 @@ export default function BIRPage() {
                       <TableCell>
                         {form.status !== 'filed' && (
                           <Button size="sm" variant="outline" className="h-7 text-xs"
-                            onClick={() => markFiled(form.key, form.form)}>
+                            onClick={() => markFiled(form)}>
                             Mark Filed
                           </Button>
                         )}
