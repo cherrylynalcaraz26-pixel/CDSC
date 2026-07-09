@@ -1,8 +1,9 @@
 # CDSC Client Portal — Demo Video
 
-`cdsc-client-portal-demo.mp4` (1600×900, ~87s) is a scripted walkthrough of the
-Client Portal: sign-in → dashboard → notifications → quotations (accept flow) →
-my orders → browse catalog → my stock → messaging.
+`cdsc-client-portal-demo.mp4` (1600×900, ~1m43s, narrated) is a scripted
+walkthrough of the Client Portal: sign-in → dashboard → notifications →
+quotations (accept flow) → my orders → browse catalog → my stock → account
+settings → messaging.
 
 The recording is fully self-contained and free to regenerate — no Supabase
 project, paid service, or real client data is used. A tiny Node mock of the
@@ -21,13 +22,17 @@ NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321 \
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6ImRlbW8ifQ.ZmFrZQ \
 npm run dev &
 
-# 3. record (needs playwright-core + a Chromium; set executablePath in the script)
-npm i --no-save playwright-core @ffmpeg-installer/ffmpeg
+# 3. voiceover clips (free local neural TTS — the piper VITS voice bundled
+#    in the terran-adjutant-tts npm package; fully offline)
+npm i --no-save playwright-core @ffmpeg-installer/ffmpeg terran-adjutant-tts
+node demo/gen-vo.js          # writes vo/*.wav + vo/durations.json
+
+# 4. record (drives Chromium; set executablePath in the script). Writes the
+#    .webm plus timeline.json with the ms offset of each narrated section.
 node demo/record-demo.js
 
-# 4. convert the .webm Playwright produces to mp4
-node -e "console.log(require('@ffmpeg-installer/ffmpeg').path)" # → FFMPEG
-$FFMPEG -i video/*.webm -c:v libx264 -crf 23 -pix_fmt yuv420p -movflags +faststart cdsc-client-portal-demo.mp4
+# 5. place narration at the timeline offsets and encode the final mp4
+node demo/mix-vo.js
 ```
 
 Demo sign-in used by the script: `maria.santos@northpointmfg.ph` /

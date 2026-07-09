@@ -4,6 +4,7 @@
  */
 const { chromium } = require('playwright-core')
 const path = require('path')
+const fs = require('fs')
 
 const BASE = 'http://localhost:3000'
 const VIDEO_DIR = path.join(__dirname, 'video')
@@ -74,6 +75,11 @@ async function main() {
   global.__page = page
   page.setDefaultTimeout(30000)
 
+  // narration timeline: section name -> ms offset from recording start
+  const T0 = Date.now()
+  const timeline = {}
+  const mark = (name) => { timeline[name] = Date.now() - T0 }
+
   const caption = async (t) => page.evaluate(t => window.__caption(t), t)
   const moveTo = async (loc) => {
     const box = await loc.boundingBox()
@@ -93,12 +99,14 @@ async function main() {
 
   // ---------- 1. intro on login page ----------
   await page.goto(BASE + '/login', { waitUntil: 'networkidle' })
+  mark('intro')
   await page.evaluate(() => window.__overlay('CDSC Client Portal', 'Product Demo — order, track & manage your supplies online'))
-  await sleep(3200)
+  await sleep(8800)
   await page.evaluate(() => window.__overlay(null))
   await sleep(900)
 
   // ---------- 2. sign in ----------
+  mark('login')
   await caption('Sign in with your client account')
   await page.mouse.move(W / 2, H / 2, { steps: 10 })
   const email = page.getByPlaceholder('you@cdsc.com')
@@ -113,6 +121,7 @@ async function main() {
 
   // ---------- 3. dashboard ----------
   await page.getByText('Welcome back, Northpoint').waitFor({ timeout: 45000 })
+  mark('dashboard')
   await sleep(600)
   await caption('Dashboard — orders, quotations & stock at a glance')
   await sleep(2600)
@@ -122,6 +131,7 @@ async function main() {
   await wheel(-1600, 10); await sleep(900)
 
   // notifications
+  mark('notifications')
   await caption('Delivery and low-stock alerts, right in your portal')
   const bell = page.locator('header button:has(svg.lucide-bell)').first()
   await clickNice(bell)
@@ -136,17 +146,20 @@ async function main() {
   await sleep(700)
 
   // ---------- 4. quotations ----------
+  mark('quotations')
   await caption('Quotations — review offers and respond online')
   await clickNice(page.locator('aside').first().getByRole('link', { name: 'Quotations' }))
   await page.getByText('QT-2026-0212').waitFor()
   await sleep(1800)
   await clickNice(page.getByRole('button', { name: 'View items' }).first())
   await sleep(2400)
+  mark('accept')
   await caption('Accept a quotation with one click')
   await clickNice(page.getByRole('button', { name: 'Mark as Accepted' }).first())
   await sleep(2600)
 
   // ---------- 5. my orders ----------
+  mark('orders')
   await caption('My Orders — live status, items and delivery records')
   await clickNice(page.locator('aside').first().getByRole('link', { name: 'My Orders' }))
   await page.getByText('SO-2026-0148').waitFor()
@@ -157,6 +170,7 @@ async function main() {
   await wheel(-600, 6); await sleep(600)
 
   // ---------- 6. browse catalog ----------
+  mark('catalog')
   await caption('Browse the CDSC catalog and order what you need')
   await clickNice(page.locator('aside').first().getByRole('link', { name: 'Browse Catalog' }))
   await page.getByPlaceholder('Search products…').waitFor()
@@ -173,13 +187,24 @@ async function main() {
   await wheel(-500, 6); await sleep(600)
 
   // ---------- 7. my stock ----------
+  mark('stock')
   await caption('My Stock — track on-hand levels and item movements')
   await clickNice(page.locator('aside').first().getByRole('link', { name: 'My Stock' }))
   await sleep(2400)
   await wheel(500); await sleep(1800)
   await wheel(-700, 6); await sleep(600)
 
-  // ---------- 8. messages ----------
+  // ---------- 8. account settings ----------
+  mark('account')
+  await caption('Account — manage your profile, logo and departments')
+  await clickNice(page.locator('aside').first().getByRole('link', { name: 'Account' }))
+  await page.getByText('Account Settings').first().waitFor()
+  await sleep(2300)
+  await clickNice(page.getByRole('button', { name: 'Department' }).first())
+  await sleep(2400)
+
+  // ---------- 9. messages ----------
+  mark('messages')
   await caption('Message the CDSC team directly from your portal')
   await clickNice(page.getByRole('button', { name: 'Messages' }))
   await sleep(2400)
@@ -190,13 +215,16 @@ async function main() {
   await page.keyboard.press('Enter')
   await sleep(2400)
 
-  // ---------- 9. outro ----------
+  // ---------- 10. outro ----------
   await caption(null)
+  mark('outro')
   await page.evaluate(() => window.__overlay('Order smarter. Track everything.', 'CDSC Industrial Supply — Client Portal'))
-  await sleep(3400)
+  await sleep(5200)
 
   await ctx.close()
+  fs.writeFileSync(path.join(__dirname, 'timeline.json'), JSON.stringify(timeline, null, 2))
   const video = await page.video().path()
+  console.log('TIMELINE=' + JSON.stringify(timeline))
   console.log('VIDEO=' + video)
   await browser.close()
 }
