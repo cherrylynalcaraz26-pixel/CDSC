@@ -11,7 +11,8 @@ const t = require('./timeline.json')
 const keys = ['intro', 'login', 'dashboard', 'notifications', 'quotations', 'accept',
   'orders', 'catalog', 'stock', 'account', 'messages', 'outro']
 
-const SR = 22050
+const SR = 24000
+const VO_DIR = 'vo-kokoro'
 const chunks = []
 let cursor = 0 // samples written so far
 
@@ -21,7 +22,7 @@ for (const k of keys) {
     chunks.push(Buffer.alloc((startSample - cursor) * 2)) // silence gap
     cursor = startSample
   }
-  const pcm = fs.readFileSync(path.join(__dirname, 'vo', k + '.wav')).subarray(44)
+  const pcm = fs.readFileSync(path.join(__dirname, VO_DIR, k + '.wav')).subarray(44)
   chunks.push(pcm)
   cursor += pcm.length / 2
 }
@@ -42,6 +43,7 @@ const r = spawnSync(FF, [
   '-i', path.join(__dirname, 'video', webm),
   '-i', path.join(__dirname, 'narration.wav'),
   '-map', '0:v', '-map', '1:a',
+  '-af', 'dynaudnorm=f=250:g=15:p=0.9:m=6',
   '-c:v', 'libx264', '-crf', '23', '-pix_fmt', 'yuv420p',
   '-c:a', 'aac', '-b:a', '128k', '-ar', '44100',
   '-movflags', '+faststart', '-y',

@@ -22,14 +22,17 @@ NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321 \
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiIsImlzcyI6ImRlbW8ifQ.ZmFrZQ \
 npm run dev &
 
-# 3. voiceover clips (free local neural TTS — the piper VITS voice bundled
-#    in the terran-adjutant-tts npm package; fully offline)
-npm i --no-save playwright-core @ffmpeg-installer/ffmpeg terran-adjutant-tts
-node demo/gen-vo.js          # writes vo/*.wav + vo/durations.json
-
-# 4. record (drives Chromium; set executablePath in the script). Writes the
+# 3. record (drives Chromium; set executablePath in the script). Writes the
 #    .webm plus timeline.json with the ms offset of each narrated section.
+npm i --no-save playwright-core @ffmpeg-installer/ffmpeg
 node demo/record-demo.js
+
+# 4. voiceover clips — Kokoro-82M neural TTS, fully offline & free. The model
+#    and voices ship inside the expo-kokoro npm package; phonemization uses
+#    the espeak-ng WASM in the `phonemizer` package. Extract the model first:
+ONNXRUNTIME_NODE_INSTALL_CUDA=skip npm i --no-save onnxruntime-node phonemizer
+npm pack expo-kokoro && mkdir -p kokoro-extract && tar xzf expo-kokoro-*.tgz -C kokoro-extract
+node demo/gen-vo-kokoro.js   # writes vo-kokoro/*.wav, auto-fits clips to slots
 
 # 5. place narration at the timeline offsets and encode the final mp4
 node demo/mix-vo.js
