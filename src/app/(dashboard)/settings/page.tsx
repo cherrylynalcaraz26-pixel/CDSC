@@ -52,6 +52,7 @@ interface Settings {
   email: string
   website: string
   logo_url: string
+  live_video_url: string
   vat_registered: boolean
   default_vat_rate: number
   ewt_default_rate: number
@@ -94,6 +95,7 @@ function defaultSettings(): Settings {
     email: 'cdsc.gmot@gmail.com',
     website: 'cdscindustrialsupply.netlify.app',
     logo_url: '',
+    live_video_url: '',
     vat_registered: true,
     default_vat_rate: 12,
     ewt_default_rate: 2,
@@ -136,11 +138,10 @@ function defaultSettings(): Settings {
   }
 }
 
-type TabId = 'profile' | 'proposal' | 'database' | 'security'
+type TabId = 'profile' | 'database' | 'security'
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: 'profile',   label: 'Company & Business Profile', icon: <Building2 className="h-3.5 w-3.5" /> },
-  { id: 'proposal',  label: 'Business Proposal',  icon: <FileText className="h-3.5 w-3.5" /> },
   { id: 'database',  label: 'Proposal Database',  icon: <Database className="h-3.5 w-3.5" /> },
   { id: 'security',  label: 'Security',           icon: <Shield className="h-3.5 w-3.5" /> },
 ]
@@ -178,6 +179,10 @@ function LivePreview({ s }: { s: Settings }) {
       .svc-name { font-size: 12px; font-weight: 700; color: #1e293b; }
       .svc-desc { font-size: 11px; color: #475569; line-height: 1.5; }
       .cert { display: inline-block; font-size: 11px; color: #15803d; border: 1px solid #bbf7d0; background: #f0fdf4; border-radius: 999px; padding: 2px 10px; margin: 0 6px 6px 0; }
+      .cta { background: linear-gradient(135deg, #b91c1c 0%, #7f1d1d 100%); color: #fff; border-radius: 10px; padding: 18px 20px; text-align: center; margin: 22px 0 14px; page-break-inside: avoid; }
+      .cta-title { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+      .cta-text { font-size: 11px; line-height: 1.6; color: #fecaca; margin-bottom: 10px; }
+      .cta-contact { font-size: 11px; font-weight: 700; letter-spacing: 0.02em; }
       .footer { margin-top: 20px; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; }
     </style></head><body>
     <div class="header">
@@ -213,6 +218,16 @@ function LivePreview({ s }: { s: Settings }) {
       </div>`).join('')}</div>` : ''}
     ${s.key_clients ? `<div class="section-title">Key Clients</div><div class="section"><div class="value">${s.key_clients}</div></div>` : ''}
     ${certifications.length > 0 ? `<div class="section-title">Certifications &amp; Accreditations</div><div class="section">${certifications.map(c => `<span class="cert">✓ ${c}</span>`).join('')}</div>` : ''}
+    ${s.proposal_introduction ? `<div class="section-title">A Message to Our Valued Clients</div><div class="section"><div class="value">${s.proposal_introduction}</div></div>` : ''}
+    ${s.executive_summary ? `<div class="section-title">Why Choose ${s.company_short_name || 'Us'}</div><div class="section"><div class="value">${s.executive_summary}</div></div>` : ''}
+    ${s.scope_of_work ? `<div class="section-title">What We Deliver</div><div class="section"><div class="value">${s.scope_of_work}</div></div>` : ''}
+    ${s.payment_schedule ? `<div class="section-title">Flexible Payment Options</div><div class="section"><div class="value">${s.payment_schedule}</div></div>` : ''}
+    ${s.terms_and_conditions ? `<div class="section-title">Terms &amp; Conditions</div><div class="section"><div class="value">${s.terms_and_conditions}</div></div>` : ''}
+    <div class="cta">
+      <div class="cta-title">Let&rsquo;s Build Your Success Together!</div>
+      <div class="cta-text">Experience quality products, competitive pricing, and reliable on-time delivery. We would love to be your trusted supply partner &mdash; request a free quotation today${s.validity_period ? ` (proposals valid for ${s.validity_period})` : ''}.</div>
+      <div class="cta-contact">${[s.phone || s.mobile, s.email, s.website].filter(Boolean).join(' &nbsp;·&nbsp; ')}</div>
+    </div>
     <div class="footer">${fullName}</div>
     </body></html>`
   }
@@ -506,94 +521,6 @@ function LivePreview({ s }: { s: Settings }) {
   )
 }
 
-// ── Proposal Live Preview ─────────────────────────────────────────────────────
-
-function ProposalPreview({ s }: { s: Settings }) {
-  return (
-    <div className="sticky top-4">
-      <div className="flex items-center gap-2 mb-3">
-        <Eye className="h-4 w-4 text-muted-foreground" />
-        <span className="text-sm font-medium text-muted-foreground">Proposal Preview</span>
-        <span className="ml-auto text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">● LIVE</span>
-      </div>
-
-      <div className="border rounded-xl overflow-hidden bg-white shadow-sm text-sm">
-        <div className="bg-gradient-to-r from-slate-800 to-slate-900 p-5">
-          <div className="flex items-start gap-3">
-            <div className="h-12 w-12 rounded-lg bg-white flex items-center justify-center overflow-hidden shrink-0">
-              {s.logo_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={s.logo_url} alt="logo" className="w-full h-full object-contain p-1" />
-              ) : (
-                <Building2 className="h-6 w-6 text-slate-400" />
-              )}
-            </div>
-            <div>
-              <div className="text-white font-bold text-base leading-tight">
-                {s.company_name || 'Company Name'}{s.legal_suffix ? ` ${s.legal_suffix}` : ''}
-              </div>
-              {s.tagline && <div className="text-white/50 text-xs italic mt-0.5">{s.tagline}</div>}
-              <div className="text-white/40 text-[11px] mt-1 space-x-3">
-                {s.phone && <span>{s.phone}</span>}
-                {s.email && <span>{s.email}</span>}
-              </div>
-            </div>
-          </div>
-          <div className="mt-4 border-t border-white/10 pt-3">
-            <div className="text-white/40 text-[10px] uppercase tracking-widest">Business Proposal</div>
-            <div className="text-white font-bold text-lg">PROPOSAL FOR SERVICES</div>
-            <div className="text-white/50 text-xs mt-0.5">
-              Date: {new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}
-              {s.validity_period && <span className="ml-3">Valid for: {s.validity_period}</span>}
-            </div>
-          </div>
-        </div>
-
-        <div className="p-5 space-y-4">
-          {s.proposal_introduction && (
-            <div>
-              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Introduction</div>
-              <p className="text-xs text-slate-600 whitespace-pre-line leading-relaxed">{s.proposal_introduction}</p>
-            </div>
-          )}
-          {s.executive_summary && (
-            <div>
-              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Executive Summary</div>
-              <p className="text-xs text-slate-600 whitespace-pre-line leading-relaxed">{s.executive_summary}</p>
-            </div>
-          )}
-          {s.scope_of_work && (
-            <div>
-              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Scope of Work</div>
-              <p className="text-xs text-slate-600 whitespace-pre-line leading-relaxed">{s.scope_of_work}</p>
-            </div>
-          )}
-          {s.payment_schedule && (
-            <div>
-              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Payment Schedule</div>
-              <p className="text-xs text-slate-600 whitespace-pre-line leading-relaxed">{s.payment_schedule}</p>
-            </div>
-          )}
-          {s.terms_and_conditions && (
-            <div>
-              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Terms &amp; Conditions</div>
-              <p className="text-xs text-slate-600 whitespace-pre-line leading-relaxed">{s.terms_and_conditions}</p>
-            </div>
-          )}
-          {!s.proposal_introduction && !s.executive_summary && !s.scope_of_work && (
-            <div className="text-center py-8 text-muted-foreground text-xs">
-              Fill in the form fields to see your proposal preview
-            </div>
-          )}
-          <div className="border-t pt-3 text-[10px] text-slate-400 text-center">
-            {s.company_name}{s.legal_suffix ? ` ${s.legal_suffix}` : ''} · Confidential Business Proposal
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // ── Security Tab ──────────────────────────────────────────────────────────────
 
 function SecurityTab() {
@@ -615,9 +542,12 @@ function SecurityTab() {
     if (newPw.length < 8) { toast.error('Password must be at least 8 characters'); return }
     setSaving(true)
     const { error } = await supabase.auth.updateUser({ password: newPw })
-    if (error) toast.error(error.message)
-    else { toast.success('Password updated'); setNewPw(''); setConfirmPw('') }
-    setSaving(false)
+    if (error) { toast.error(error.message); setSaving(false); return }
+    setNewPw(''); setConfirmPw('')
+    // Sign out and require a fresh login with the new password
+    toast.success('Password updated — please sign in again with your new password')
+    await supabase.auth.signOut()
+    setTimeout(() => { window.location.href = '/login' }, 1500)
   }
 
   return (
@@ -692,86 +622,6 @@ function SecurityTab() {
             </Button>
           </CardContent>
         </Card>
-      </div>
-    </div>
-  )
-}
-
-// ── Proposal Tab ──────────────────────────────────────────────────────────────
-
-interface ProposalTabProps {
-  settings: Settings
-  setSettings: React.Dispatch<React.SetStateAction<Settings>>
-  onSave: () => Promise<void>
-  onReset: () => void
-  saving: boolean
-}
-
-function ProposalTab({ settings, setSettings, onSave, onReset, saving }: ProposalTabProps) {
-  function setField(field: keyof Settings, value: string) {
-    setSettings(s => ({ ...s, [field]: value }))
-  }
-
-  const fields: { key: keyof Settings; label: string; placeholder: string; rows?: number }[] = [
-    { key: 'proposal_introduction', label: 'Proposal Introduction', placeholder: 'Opening paragraph introducing your company and the purpose of this proposal…', rows: 4 },
-    { key: 'executive_summary', label: 'Executive Summary', placeholder: 'Concise overview of your proposal, key benefits, and value proposition…', rows: 5 },
-    { key: 'scope_of_work', label: 'Scope of Work', placeholder: 'Detailed description of what will be delivered, timelines, milestones…', rows: 6 },
-    { key: 'terms_and_conditions', label: 'Terms & Conditions', placeholder: 'Legal terms, warranties, liabilities, and conditions of the proposal…', rows: 5 },
-    { key: 'payment_schedule', label: 'Payment Schedule', placeholder: 'e.g. 50% upon signing, 50% upon completion…', rows: 3 },
-    { key: 'validity_period', label: 'Validity Period', placeholder: 'e.g. 30 days', rows: 1 },
-  ]
-
-  return (
-    <div className="grid grid-cols-1 xl:grid-cols-[1fr_420px] gap-8">
-      <div className="space-y-0">
-        <div className="flex items-center justify-between mb-6 pb-4 border-b">
-          <h2 className="font-bold text-base uppercase tracking-wider text-slate-700">Business Proposal Template</h2>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={onReset} className="gap-1.5">
-              <RotateCcw className="h-3.5 w-3.5" />Reset
-            </Button>
-            <Button size="sm" onClick={onSave} disabled={saving} className="bg-amber-500 hover:bg-amber-600 text-white gap-1.5">
-              {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-              Save
-            </Button>
-          </div>
-        </div>
-
-        <div className="space-y-5">
-          {fields.map(f => (
-            <div key={String(f.key)} className="space-y-1.5">
-              <Label className="font-semibold">{f.label}</Label>
-              {f.rows === 1 ? (
-                <Input
-                  placeholder={f.placeholder}
-                  value={settings[f.key] as string}
-                  onChange={e => setField(f.key, e.target.value)}
-                />
-              ) : (
-                <Textarea
-                  rows={f.rows}
-                  placeholder={f.placeholder}
-                  value={settings[f.key] as string}
-                  onChange={e => setField(f.key, e.target.value)}
-                />
-              )}
-            </div>
-          ))}
-        </div>
-
-        <div className="pt-6 flex justify-end gap-2">
-          <Button variant="outline" onClick={onReset} className="gap-1.5">
-            <RotateCcw className="h-3.5 w-3.5" />Reset
-          </Button>
-          <Button onClick={onSave} disabled={saving} className="bg-amber-500 hover:bg-amber-600 text-white gap-1.5">
-            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-            Save Template
-          </Button>
-        </div>
-      </div>
-
-      <div className="hidden xl:block">
-        <ProposalPreview s={settings} />
       </div>
     </div>
   )
@@ -1208,16 +1058,6 @@ export default function SettingsPage() {
 
       {tab === 'security' && <SecurityTab />}
 
-      {tab === 'proposal' && (
-        <ProposalTab
-          settings={settings}
-          setSettings={setSettings}
-          onSave={save}
-          onReset={reset}
-          saving={saving}
-        />
-      )}
-
       {tab === 'database' && <ProposalDatabaseTab />}
 
       {tab === 'profile' && (
@@ -1407,6 +1247,12 @@ export default function SettingsPage() {
                   <Input placeholder="www.company.com" {...S('website')} />
                 </div>
               </div>
+
+              <div className="space-y-1.5">
+                <Label>Live Video URL</Label>
+                <Input placeholder="e.g. https://www.youtube.com/watch?v=… or a video/stream link" {...S('live_video_url')} />
+                <p className="text-xs text-muted-foreground">Shown via the &quot;Live Video&quot; button on the Admin and Client dashboards. Supports YouTube, Vimeo, Facebook, or a direct video/stream link.</p>
+              </div>
             </div>
 
             <Separator className="my-6" />
@@ -1493,6 +1339,42 @@ export default function SettingsPage() {
                   placeholder="e.g. ISO 9001:2015, PhilGEPS Registered, PCAB Licensed…"
                   {...S('certifications')}
                 />
+              </div>
+            </div>
+
+            <Separator className="my-6" />
+
+            <div className="space-y-5">
+              <p className="text-xs font-bold uppercase tracking-widest text-blue-600">Business Proposal</p>
+
+              <div className="space-y-1.5">
+                <Label className="font-semibold">Proposal Introduction</Label>
+                <Textarea rows={4} placeholder="Opening paragraph introducing your company and the purpose of this proposal…" {...S('proposal_introduction')} />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="font-semibold">Executive Summary / Why Choose Us</Label>
+                <Textarea rows={5} placeholder="Concise overview of your proposal, key benefits, and value proposition…" {...S('executive_summary')} />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="font-semibold">Scope of Work</Label>
+                <Textarea rows={6} placeholder="Detailed description of what will be delivered, timelines, milestones…" {...S('scope_of_work')} />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="font-semibold">Payment Schedule</Label>
+                <Textarea rows={3} placeholder="e.g. 50% upon signing, 50% upon completion…" {...S('payment_schedule')} />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="font-semibold">Terms &amp; Conditions</Label>
+                <Textarea rows={5} placeholder="Legal terms, warranties, liabilities, and conditions of the proposal…" {...S('terms_and_conditions')} />
+              </div>
+
+              <div className="space-y-1.5 max-w-xs">
+                <Label className="font-semibold">Validity Period</Label>
+                <Input placeholder="e.g. 30 days" {...S('validity_period')} />
               </div>
             </div>
 
