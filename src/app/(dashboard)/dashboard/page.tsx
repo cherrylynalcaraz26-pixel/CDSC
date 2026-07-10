@@ -17,7 +17,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns'
-import { LiveVideoButton, DemoVideoButton } from '@/components/live-video-button'
+import { DemoVideoButton } from '@/components/live-video-button'
 
 interface KPI {
   totalItems: number
@@ -384,7 +384,6 @@ export default function DashboardPage() {
         <div className="flex items-center gap-3">
           {loading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
           <DemoVideoButton />
-          <LiveVideoButton />
         </div>
       </div>
 
