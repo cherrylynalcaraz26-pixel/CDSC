@@ -65,7 +65,7 @@ export default function LoginPage() {
           <p className="text-red-200 text-base">Management System &amp; Client Portal</p>
         </div>
         <p className="absolute bottom-6 text-red-300/50 text-xs">
-          © 2026 CDSC Industrial Supply · Authorized users only
+          © 2020 CDSC Industrial Supply · Authorized users only
         </p>
       </div>
 
@@ -134,7 +134,7 @@ export default function LoginPage() {
               cdscindustrialsupply.netlify.app
             </a>
             <p className="text-gray-300 text-xs">
-              Authorized users only · © 2026 CDSC Industrial Supply
+              Authorized users only · © 2020 CDSC Industrial Supply
             </p>
           </div>
         </div>

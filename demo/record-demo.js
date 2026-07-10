@@ -61,7 +61,7 @@ const INIT = `
     el.style.cssText = 'position:fixed;inset:0;z-index:2147483644;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:linear-gradient(145deg,#b91c1c 0%,#7f1d1d 60%,#450a0a 100%);color:#fff;font-family:Quicksand,system-ui,sans-serif'
     el.innerHTML = '<div style="font-size:46px;font-weight:700;letter-spacing:-.5px">'+title+'</div>'
       + (sub ? '<div style="font-size:21px;opacity:.85;font-weight:500">'+sub+'</div>' : '')
-      + '<div style="position:absolute;bottom:34px;font-size:13px;opacity:.55">© 2026 CDSC Industrial Supply</div>'
+      + '<div style="position:absolute;bottom:34px;font-size:13px;opacity:.55">© 2020 CDSC Industrial Supply</div>'
     document.body.appendChild(el)
   })
 })()`
