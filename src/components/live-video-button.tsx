@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
 // The "Video Demo" walkthrough shown on the Admin and Client dashboards.
-const DEMO_VIDEO_URL = 'https://drive.google.com/file/d/1YhyU8WVIMBSv2Hz4V1eXQOSnIPztk13E/view?usp=sharing'
+const DEMO_VIDEO_URL = 'https://drive.google.com/file/d/1aGKS4Wk70ExguzxeB5HpL9OgPZdUpl4h/view?usp=sharing'
 const DEMO_VIDEO_TITLE = 'CDSC Client Portal demo v3'
 
 // Turns a pasted video link into something embeddable. Supports YouTube
