@@ -321,20 +321,30 @@ function PortalStockPageContent() {
     if (!clientId) return
     setUndoingId(tx.id)
     try {
+      // Stock quantity is maintained by a DB trigger that only fires on INSERT,
+      // so deleting a transaction alone doesn't restore the quantity. Insert a
+      // counter-transaction to reverse the stock effect, then delete that row too —
+      // otherwise the history is left with a misleading opposite-type entry
+      // (e.g. undoing a "received" used to leave an "issued" record behind).
+      if (tx.transaction_type === 'received' || tx.transaction_type === 'issued') {
+        const reverseType = tx.transaction_type === 'received' ? 'issued' : 'received'
+        const { data: reversal, error: revErr } = await supabase.from('client_inventory_transactions').insert({
+          client_id: clientId,
+          item_name: tx.item_name,
+          unit: tx.unit || null,
+          transaction_type: reverseType,
+          quantity: tx.quantity,
+          notes: `Undo of ${tx.transaction_type} transaction`,
+          reference_no: tx.reference_no || null,
+        }).select('id').single()
+        if (revErr) throw revErr
+        if (reversal?.id) {
+          await supabase.from('client_inventory_transactions').delete().eq('id', reversal.id)
+        }
+      }
       // Delete the original transaction record
       const { error: delErr } = await supabase.from('client_inventory_transactions').delete().eq('id', tx.id)
       if (delErr) throw delErr
-      // Insert a reversal note
-      const reverseType = tx.transaction_type === 'issued' ? 'received' : tx.transaction_type === 'received' ? 'issued' : 'adjusted'
-      await supabase.from('client_inventory_transactions').insert({
-        client_id: clientId,
-        item_name: tx.item_name,
-        unit: tx.unit || null,
-        transaction_type: reverseType,
-        quantity: tx.quantity,
-        notes: `Undo of ${tx.transaction_type} transaction`,
-        reference_no: tx.reference_no || null,
-      })
       toast.success('Transaction undone')
       await fetchData(clientId)
     } catch (err: any) {

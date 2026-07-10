@@ -65,24 +65,24 @@ export default function LoginPage() {
           <p className="text-red-200 text-base">Management System &amp; Client Portal</p>
         </div>
         <p className="absolute bottom-6 text-red-300/50 text-xs">
-          © {new Date().getFullYear()} CDSC Industrial Supply · Authorized users only
+          © 2020 CDSC Industrial Supply · Authorized users only
         </p>
       </div>
 
-      {/* Right panel — form */}
-      <div className="flex-1 flex flex-col items-center justify-center p-6">
+      {/* Right panel — form (red background on mobile, like the desktop branding panel) */}
+      <div className="flex-1 flex flex-col items-center justify-center p-6 bg-[linear-gradient(145deg,#b91c1c_0%,#7f1d1d_60%,#450a0a_100%)] lg:bg-none lg:bg-gray-50">
         {/* Mobile logo */}
         <div className="lg:hidden mb-8 flex flex-col items-center">
-          <div className="bg-white rounded-2xl shadow-md px-6 py-4 mb-4">
+          <div className="bg-white rounded-2xl shadow-2xl px-6 py-4 mb-4">
             <div className="relative w-48 h-20">
               <Image src="/cdsc-logo.jpg" alt="CDSC" fill className="object-contain" priority />
             </div>
           </div>
-          <h1 className="text-gray-800 font-bold text-xl tracking-tight">CDSC Industrial Supply</h1>
-          <p className="text-gray-400 text-sm mt-0.5">Management System &amp; Client Portal</p>
+          <h1 className="text-white font-bold text-xl tracking-tight">CDSC Industrial Supply</h1>
+          <p className="text-red-200 text-sm mt-0.5">Management System &amp; Client Portal</p>
         </div>
 
-        <div className="w-full max-w-sm">
+        <div className="w-full max-w-sm bg-white rounded-2xl shadow-2xl p-6 lg:bg-transparent lg:rounded-none lg:shadow-none lg:p-0">
           <div className="mb-8">
             <h2 className="text-gray-900 font-bold text-2xl">Welcome back</h2>
             <p className="text-gray-500 text-sm mt-1">Sign in to your account to continue</p>
@@ -134,7 +134,7 @@ export default function LoginPage() {
               cdscindustrialsupply.netlify.app
             </a>
             <p className="text-gray-300 text-xs">
-              Authorized users only · © {new Date().getFullYear()} CDSC Industrial Supply
+              Authorized users only · © 2020 CDSC Industrial Supply
             </p>
           </div>
         </div>

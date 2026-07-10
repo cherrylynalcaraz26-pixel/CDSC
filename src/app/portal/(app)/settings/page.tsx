@@ -145,12 +145,12 @@ export default function PortalSettingsPage() {
     const { error: signInError } = await supabase.auth.signInWithPassword({ email, password: currentPw })
     if (signInError) { toast.error('Current password is incorrect'); setChangingPw(false); return }
     const { error } = await supabase.auth.updateUser({ password: newPw })
-    if (error) toast.error(error.message)
-    else {
-      toast.success('Password changed successfully')
-      setCurrentPw(''); setNewPw(''); setConfirmPw('')
-    }
-    setChangingPw(false)
+    if (error) { toast.error(error.message); setChangingPw(false); return }
+    setCurrentPw(''); setNewPw(''); setConfirmPw('')
+    // Sign out and require a fresh login with the new password
+    toast.success('Password changed — please sign in again with your new password')
+    await supabase.auth.signOut()
+    setTimeout(() => { window.location.href = '/login' }, 1500)
   }
 
   async function addDepartment() {

@@ -20,7 +20,7 @@ import { Badge } from '@/components/ui/badge'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Search, Loader2, ChevronRight, ChevronDown, Pencil, AlertTriangle, Plus, X, MoreHorizontal, Trash2, FileText, Printer, Mail, Send, Truck } from 'lucide-react'
+import { Search, Loader2, ChevronRight, ChevronDown, Pencil, AlertTriangle, Plus, X, MoreHorizontal, Trash2, FileText, Printer, Mail, Send, Truck, Eye } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSearchContext } from '@/context/search-context'
 import { sendEmail } from '@/lib/send-email'
@@ -28,6 +28,21 @@ import { sendEmail } from '@/lib/send-email'
 interface DrDetail  { dr_number: string; qty: number; unit: string; unit_price: number | null; show_in_portal: boolean }
 interface CsiDetail { si_number: string; qty: number; unit: string; unit_price: number | null; show_in_portal: boolean }
 interface WsDetail  { id: string; notes: string | null; qty: number; unit: string; created_at: string }
+
+// Item detail modal (By Item view)
+interface ItemDetail {
+  item_name: string
+  unit: string
+  delivered: number
+  billed: number
+  balance: number
+  price: number
+}
+interface ItemDetailDrRow  { dr_date: string | null; dr_number: string | null; client_name: string | null; unit: string | null; quantity: number }
+interface ItemDetailCsiRow { id: string | number; si_date: string | null; si_number: string | null; client_name: string | null; unit: string | null; quantity: number | null; unit_price: number | null; amount: number | null; collection_status: string | null }
+
+const peso = (v: number | null | undefined) =>
+  '₱' + Number(v ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 interface InventoryRow {
   client: string
@@ -61,6 +76,12 @@ export default function InventoryPage() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [viewMode, setViewMode] = useState<'by_client' | 'by_item' | 'by_warehouse'>('by_client')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+
+  // Item detail modal (By Item view)
+  const [detailItem, setDetailItem] = useState<ItemDetail | null>(null)
+  const [detailDrRows, setDetailDrRows] = useState<ItemDetailDrRow[]>([])
+  const [detailCsiRows, setDetailCsiRows] = useState<ItemDetailCsiRow[]>([])
+  const [detailLoading, setDetailLoading] = useState(false)
 
   const [warehouseRows, setWarehouseRows] = useState<{id: string; client_name: string | null; item_name: string; unit: string; quantity: number; notes: string | null; created_at: string; hasClientRecord: boolean}[]>([])
   const [warehouseUpdateOpen, setWarehouseUpdateOpen] = useState(false)
@@ -654,6 +675,51 @@ export default function InventoryPage() {
     })
   }
 
+  // Opens the Product Details modal for a By Item group; DR dates and CSI
+  // statuses aren't part of the aggregated inventory data, so fetch them here.
+  async function openItemDetail(g: { item_name: string; unit: string; total_dr: number; total_csi: number; total_balance: number; rows: InventoryRow[] }) {
+    const price = g.rows.flatMap(r => r.dr_details).find(d => d.unit_price != null)?.unit_price ?? 0
+    setDetailItem({
+      item_name: g.item_name,
+      unit: g.unit,
+      delivered: g.total_dr,
+      billed: g.total_csi,
+      balance: g.total_balance,
+      price,
+    })
+    setDetailLoading(true)
+    setDetailDrRows([])
+    setDetailCsiRows([])
+    const [{ data: drItems }, { data: csiData }] = await Promise.all([
+      supabase.from('dr_log_items').select('dr_number, unit, quantity').eq('item_name', g.item_name),
+      supabase.from('csi_records').select('id, si_date, si_number, client_name, unit, quantity, unit_price, amount, collection_status').eq('item_name', g.item_name).order('si_date'),
+    ])
+    const drNums = Array.from(new Set((drItems ?? []).map(d => d.dr_number).filter(Boolean))) as string[]
+    const logMap: Record<string, { dr_date: string | null; supplier_name: string | null }> = {}
+    if (drNums.length > 0) {
+      const { data: logs } = await supabase
+        .from('dr_logs')
+        .select('dr_number, dr_date, supplier_name')
+        .in('dr_number', drNums)
+        .in('status', ['received', 'partial'])
+      for (const l of logs ?? []) logMap[l.dr_number] = { dr_date: l.dr_date ?? null, supplier_name: l.supplier_name ?? null }
+    }
+    setDetailDrRows(
+      (drItems ?? [])
+        .filter(d => d.dr_number && logMap[d.dr_number])
+        .map(d => ({
+          dr_date: logMap[d.dr_number!].dr_date,
+          dr_number: d.dr_number,
+          client_name: logMap[d.dr_number!].supplier_name,
+          unit: d.unit ?? null,
+          quantity: Number(d.quantity) || 0,
+        }))
+        .sort((a, b) => (a.dr_date ?? '').localeCompare(b.dr_date ?? ''))
+    )
+    setDetailCsiRows((csiData ?? []) as ItemDetailCsiRow[])
+    setDetailLoading(false)
+  }
+
   function openEdit(e: React.MouseEvent, row: InventoryRow) {
     e.stopPropagation()
     setEditRow(row)
@@ -991,51 +1057,34 @@ export default function InventoryPage() {
                     </TableCell>
                   </TableRow>
                 ) : viewMode === 'by_item' ? (
-                  // ── By Item view ──────────────────────────────
+                  // ── By Item view — click a row to open the Product Details modal ──
                   byItemGroups.length === 0 ? (
                     <TableRow><TableCell colSpan={9} className="text-center py-12 text-muted-foreground">No inventory data found.</TableCell></TableRow>
                   ) : pagedByItemGroups.map(g => {
-                    const key = 'item||' + g.item_name
-                    const isOpen = expanded.has(key)
                     const isDeficit = g.total_balance < 0
                     return (
-                      <Fragment key={key}>
-                        <TableRow className="cursor-pointer hover:bg-muted/50" onClick={() => toggleRow(key)}>
-                          <TableCell className="text-muted-foreground">
-                            {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                          </TableCell>
-                          <TableCell className="font-medium text-sm">
-                            <span className="flex items-center gap-1.5">
-                              {isDeficit && <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />}
-                              <span className="break-words">{g.item_name}</span>
-                            </span>
-                          </TableCell>
-                          <TableCell className="text-sm text-muted-foreground">{g.rows.length} client{g.rows.length !== 1 ? 's' : ''}</TableCell>
-                          <TableCell className="text-sm text-muted-foreground">{uomName(g.unit)}</TableCell>
-                          <TableCell className="text-right text-sm">{g.total_dr}</TableCell>
-                          <TableCell className="text-right text-sm">
-                            {g.total_ws > 0 ? <span className="text-green-600 font-medium">{g.total_ws}</span> : <span className="text-muted-foreground">—</span>}
-                          </TableCell>
-                          <TableCell className="text-right text-sm">{g.total_csi}</TableCell>
-                          <TableCell className={`text-right text-sm font-semibold ${g.total_balance > 0 ? 'text-green-600' : g.total_balance < 0 ? 'text-red-600' : 'text-gray-500'}`}>
-                            {g.total_balance}
-                          </TableCell>
-                          <TableCell>{balanceBadge(g.total_balance)}</TableCell>
-                        </TableRow>
-                        {isOpen && g.rows.map(r => (
-                          <TableRow key={r.client} className="bg-muted/20 text-xs">
-                            <TableCell />
-                            <TableCell className="pl-6 text-muted-foreground italic">{r.item_name}</TableCell>
-                            <TableCell className="font-medium">{r.client}</TableCell>
-                            <TableCell className="text-muted-foreground">{uomName(r.unit)}</TableCell>
-                            <TableCell className="text-right">{Number(r.dr_qty)}</TableCell>
-                            <TableCell className="text-right">{r.client_on_hand > 0 ? <span className="text-green-600">{Number(r.client_on_hand)}</span> : '—'}</TableCell>
-                            <TableCell className="text-right">{Number(r.csi_qty)}</TableCell>
-                            <TableCell className={`text-right font-semibold ${r.balance > 0 ? 'text-green-600' : r.balance < 0 ? 'text-red-600' : 'text-gray-500'}`}>{Number(r.balance)}</TableCell>
-                            <TableCell>{balanceBadge(r.balance)}</TableCell>
-                          </TableRow>
-                        ))}
-                      </Fragment>
+                      <TableRow key={'item||' + g.item_name} className="cursor-pointer hover:bg-muted/50" onClick={() => openItemDetail(g)}>
+                        <TableCell className="text-muted-foreground">
+                          <Eye className="h-4 w-4" />
+                        </TableCell>
+                        <TableCell className="font-medium text-sm">
+                          <span className="flex items-center gap-1.5">
+                            {isDeficit && <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />}
+                            <span className="break-words">{g.item_name}</span>
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{g.rows.length} client{g.rows.length !== 1 ? 's' : ''}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{uomName(g.unit)}</TableCell>
+                        <TableCell className="text-right text-sm">{g.total_dr}</TableCell>
+                        <TableCell className="text-right text-sm">
+                          {g.total_ws > 0 ? <span className="text-green-600 font-medium">{g.total_ws}</span> : <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                        <TableCell className="text-right text-sm">{g.total_csi}</TableCell>
+                        <TableCell className={`text-right text-sm font-semibold ${g.total_balance > 0 ? 'text-green-600' : g.total_balance < 0 ? 'text-red-600' : 'text-gray-500'}`}>
+                          {g.total_balance}
+                        </TableCell>
+                        <TableCell>{balanceBadge(g.total_balance)}</TableCell>
+                      </TableRow>
                     )
                   })
                 ) : filtered.length === 0 ? (
@@ -1709,6 +1758,134 @@ export default function InventoryPage() {
               {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : 'Save Changes'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Product Detail Dialog (By Item view) ──────────────────────────────── */}
+      <Dialog open={!!detailItem} onOpenChange={o => { if (!o) setDetailItem(null) }}>
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Product Details — {detailItem?.item_name}</DialogTitle>
+          </DialogHeader>
+          {detailItem && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-4 gap-3">
+                <div className="bg-blue-50 rounded-lg p-3 text-center border border-blue-100">
+                  <div className="text-xs text-blue-500 font-semibold">Delivered</div>
+                  <div className="text-2xl font-black text-blue-700">{detailItem.delivered}</div>
+                </div>
+                <div className="bg-purple-50 rounded-lg p-3 text-center border border-purple-100">
+                  <div className="text-xs text-purple-500 font-semibold">Billed (CSI)</div>
+                  <div className="text-2xl font-black text-purple-700">{detailItem.billed}</div>
+                </div>
+                <div className={`rounded-lg p-3 text-center border ${detailItem.balance > 0 ? 'bg-amber-50 border-amber-100' : detailItem.balance < 0 ? 'bg-red-50 border-red-100' : 'bg-gray-50 border-gray-100'}`}>
+                  <div className="text-xs font-semibold text-gray-500">On-Hand</div>
+                  <div className={`text-2xl font-black ${detailItem.balance > 0 ? 'text-amber-600' : detailItem.balance < 0 ? 'text-red-600' : 'text-gray-500'}`}>{detailItem.balance}</div>
+                </div>
+                <div className="bg-green-50 rounded-lg p-3 text-center border border-green-100">
+                  <div className="text-xs text-green-500 font-semibold">Est. Value</div>
+                  <div className="text-lg font-black text-green-700">{peso(detailItem.balance * detailItem.price)}</div>
+                </div>
+              </div>
+
+              {detailLoading ? (
+                <div className="py-10 text-center">
+                  <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
+                </div>
+              ) : (
+                <>
+                  {/* DR Records */}
+                  <div>
+                    <div className="font-semibold text-gray-700 text-sm mb-2 flex items-center gap-2">
+                      <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded text-xs font-bold">DR</span>
+                      Delivery Records ({detailDrRows.length})
+                    </div>
+                    <div className="overflow-x-auto rounded-lg border border-gray-200">
+                      <table className="w-full text-xs">
+                        <thead><tr className="bg-blue-600 text-white">
+                          <th className="px-3 py-2 text-left">Date</th>
+                          <th className="px-3 py-2 text-left">DR #</th>
+                          <th className="px-3 py-2 text-left">Client</th>
+                          <th className="px-3 py-2 text-left">Unit</th>
+                          <th className="px-3 py-2 text-right">Qty</th>
+                        </tr></thead>
+                        <tbody>
+                          {detailDrRows.length === 0
+                            ? <tr><td colSpan={5} className="px-3 py-4 text-center text-gray-400">No DR records.</td></tr>
+                            : detailDrRows.map((r, i) => (
+                              <tr key={i} className="border-b border-gray-100 hover:bg-blue-50/30">
+                                <td className="px-3 py-2 text-gray-500">{r.dr_date || '—'}</td>
+                                <td className="px-3 py-2 font-mono font-semibold text-blue-700">{r.dr_number || '—'}</td>
+                                <td className="px-3 py-2 font-medium">{r.client_name || '—'}</td>
+                                <td className="px-3 py-2 text-gray-500">{uomName(r.unit ?? '') || '—'}</td>
+                                <td className="px-3 py-2 text-right font-semibold text-blue-700">{r.quantity}</td>
+                              </tr>
+                            ))}
+                        </tbody>
+                        {detailDrRows.length > 0 && (
+                          <tfoot><tr className="bg-blue-50 font-bold">
+                            <td colSpan={4} className="px-3 py-2 text-right text-xs">Total Delivered</td>
+                            <td className="px-3 py-2 text-right text-blue-700">{detailDrRows.reduce((s, r) => s + r.quantity, 0)}</td>
+                          </tr></tfoot>
+                        )}
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* CSI Records */}
+                  <div>
+                    <div className="font-semibold text-gray-700 text-sm mb-2 flex items-center gap-2">
+                      <span className="bg-purple-100 text-purple-700 px-2 py-0.5 rounded text-xs font-bold">CSI</span>
+                      Sales Invoice Records ({detailCsiRows.length})
+                    </div>
+                    <div className="overflow-x-auto rounded-lg border border-gray-200">
+                      <table className="w-full text-xs">
+                        <thead><tr className="bg-purple-600 text-white">
+                          <th className="px-3 py-2 text-left">Date</th>
+                          <th className="px-3 py-2 text-left">SI #</th>
+                          <th className="px-3 py-2 text-left">Client</th>
+                          <th className="px-3 py-2 text-left">Unit</th>
+                          <th className="px-3 py-2 text-right">Qty</th>
+                          <th className="px-3 py-2 text-right">Unit Price</th>
+                          <th className="px-3 py-2 text-right">Amount</th>
+                          <th className="px-3 py-2 text-left">Status</th>
+                        </tr></thead>
+                        <tbody>
+                          {detailCsiRows.length === 0
+                            ? <tr><td colSpan={8} className="px-3 py-4 text-center text-gray-400">No CSI records.</td></tr>
+                            : detailCsiRows.map(r => (
+                              <tr key={r.id} className="border-b border-gray-100 hover:bg-purple-50/30">
+                                <td className="px-3 py-2 text-gray-500">{r.si_date || '—'}</td>
+                                <td className="px-3 py-2 font-mono font-semibold text-purple-700">{r.si_number || '—'}</td>
+                                <td className="px-3 py-2 font-medium">{r.client_name || '—'}</td>
+                                <td className="px-3 py-2 text-gray-500">{uomName(r.unit ?? '') || '—'}</td>
+                                <td className="px-3 py-2 text-right font-semibold text-purple-700">{r.quantity ?? '—'}</td>
+                                <td className="px-3 py-2 text-right font-mono">{peso(r.unit_price)}</td>
+                                <td className="px-3 py-2 text-right font-mono text-blue-700">{peso(r.amount)}</td>
+                                <td className="px-3 py-2">
+                                  <span className={`text-xs px-1.5 py-0.5 rounded font-semibold ${r.collection_status === 'collected' ? 'bg-green-100 text-green-700' : r.collection_status === 'uncollectible' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                                    {(r.collection_status || 'for_collection').replace(/_/g, ' ')}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                        </tbody>
+                        {detailCsiRows.length > 0 && (
+                          <tfoot><tr className="bg-purple-50 font-bold">
+                            <td colSpan={4} className="px-3 py-2 text-right text-xs">Totals</td>
+                            <td className="px-3 py-2 text-right text-purple-700">{detailCsiRows.reduce((s, r) => s + (Number(r.quantity) || 0), 0)}</td>
+                            <td />
+                            <td className="px-3 py-2 text-right font-mono text-blue-700">{peso(detailCsiRows.reduce((s, r) => s + (Number(r.amount) || 0), 0))}</td>
+                            <td />
+                          </tr></tfoot>
+                        )}
+                      </table>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
