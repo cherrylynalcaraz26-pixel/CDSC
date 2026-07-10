@@ -12,6 +12,10 @@ const W = 1600, H = 900
 
 const sleep = ms => new Promise(r => setTimeout(r, ms))
 
+// Quicksand for the demo's captions/overlays, embedded from @fontsource/quicksand
+const QS500 = fs.readFileSync(require.resolve('@fontsource/quicksand/files/quicksand-latin-500-normal.woff2')).toString('base64')
+const QS700 = fs.readFileSync(require.resolve('@fontsource/quicksand/files/quicksand-latin-700-normal.woff2')).toString('base64')
+
 // injected on every document: fake cursor, click ripple, caption + overlay helpers
 const INIT = `
 (() => {
@@ -33,6 +37,8 @@ const INIT = `
     }, true)
     const st = document.createElement('style')
     st.textContent = '@keyframes __rip{to{width:64px;height:64px;opacity:0}} @keyframes __capIn{from{opacity:0;transform:translate(-50%,14px)}to{opacity:1;transform:translate(-50%,0)}} nextjs-portal{display:none!important}'
+      + ' @font-face{font-family:Quicksand;font-style:normal;font-weight:500;src:url(data:font/woff2;base64,${QS500}) format("woff2")}'
+      + ' @font-face{font-family:Quicksand;font-style:normal;font-weight:700;src:url(data:font/woff2;base64,${QS700}) format("woff2")}'
     document.head.appendChild(st)
   })
   window.__caption = (text) => ready(() => {
@@ -40,7 +46,7 @@ const INIT = `
     if (!text) { el && el.remove(); return }
     if (!el) {
       el = document.createElement('div'); el.id = '__caption'
-      el.style.cssText = 'position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:rgba(17,17,17,.92);color:#fff;font:600 17px/1.4 system-ui,-apple-system,sans-serif;padding:12px 26px;border-radius:999px;z-index:2147483645;pointer-events:none;box-shadow:0 4px 24px rgba(0,0,0,.35);animation:__capIn .35s ease-out;white-space:nowrap'
+      el.style.cssText = 'position:fixed;bottom:28px;left:50%;transform:translateX(-50%);background:rgba(17,17,17,.92);color:#fff;font:700 17px/1.4 Quicksand,system-ui,sans-serif;padding:12px 26px;border-radius:999px;z-index:2147483645;pointer-events:none;box-shadow:0 4px 24px rgba(0,0,0,.35);animation:__capIn .35s ease-out;white-space:nowrap'
       document.body.appendChild(el)
     }
     el.textContent = text
@@ -52,8 +58,8 @@ const INIT = `
       return
     }
     el = document.createElement('div'); el.id = '__overlay'
-    el.style.cssText = 'position:fixed;inset:0;z-index:2147483644;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:linear-gradient(145deg,#b91c1c 0%,#7f1d1d 60%,#450a0a 100%);color:#fff;font-family:system-ui,-apple-system,sans-serif'
-    el.innerHTML = '<div style="font-size:46px;font-weight:800;letter-spacing:-.5px">'+title+'</div>'
+    el.style.cssText = 'position:fixed;inset:0;z-index:2147483644;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:linear-gradient(145deg,#b91c1c 0%,#7f1d1d 60%,#450a0a 100%);color:#fff;font-family:Quicksand,system-ui,sans-serif'
+    el.innerHTML = '<div style="font-size:46px;font-weight:700;letter-spacing:-.5px">'+title+'</div>'
       + (sub ? '<div style="font-size:21px;opacity:.85;font-weight:500">'+sub+'</div>' : '')
       + '<div style="position:absolute;bottom:34px;font-size:13px;opacity:.55">© 2026 CDSC Industrial Supply</div>'
     document.body.appendChild(el)

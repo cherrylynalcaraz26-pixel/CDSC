@@ -69,6 +69,7 @@ const DB = {
     website: 'cdscindustrialsupply.netlify.app',
     address: 'Quezon City, Metro Manila', phone: '+63 2 8123 4567',
     email: 'sales@cdscindustrialsupply.com', logo_url: null, tin: '123-456-789-000',
+    live_video_url: '',
   }],
   sales_orders: [
     { id: 'so-8', so_number: 'SO-2026-0148', client_po_number: 'PO-NPM-0231', so_date: agoDate(2),   created_at: ago(2),   status: 'draft',      total_amount: 48750.00, show_in_portal: true, client_name: COMPANY, remarks: 'Rush order — production line 2',

@@ -1,6 +1,6 @@
 # CDSC Client Portal — Demo Video
 
-`cdsc-client-portal-demo.mp4` (1600×900, ~1m43s, narrated) is a scripted
+`cdsc-client-portal-demo.mp4` (1600×900, ~1m47s, narrated) is a scripted
 walkthrough of the Client Portal: sign-in → dashboard → notifications →
 quotations (accept flow) → my orders → browse catalog → my stock → account
 settings → messaging.
