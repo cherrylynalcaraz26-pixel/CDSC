@@ -763,6 +763,14 @@ export async function htmlToPdfBase64(html: string): Promise<string> {
   iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;height:1px;border:none;visibility:hidden;'
   document.body.appendChild(iframe)
   await new Promise<void>(resolve => { iframe.onload = () => resolve(); iframe.srcdoc = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:Arial,sans-serif;margin:0;padding:24px;font-size:11px;}</style></head><body>${stripped}</body></html>` })
+  // Wait for images (e.g. the company logo) to finish loading before
+  // rasterizing, otherwise they're missing from the generated PDF. Bounded
+  // to 3s so a broken image URL can't hang the export.
+  const imgs = Array.from(iframe.contentDocument?.images ?? [])
+  await Promise.race([
+    Promise.all(imgs.map(img => img.complete ? Promise.resolve() : new Promise<void>(r => { img.onload = () => r(); img.onerror = () => r() }))),
+    new Promise<void>(r => setTimeout(r, 3000)),
+  ])
   await new Promise(r => setTimeout(r, 200))
   const iBody = iframe.contentDocument?.body
   if (!iBody) { document.body.removeChild(iframe); throw new Error('iframe body not found') }

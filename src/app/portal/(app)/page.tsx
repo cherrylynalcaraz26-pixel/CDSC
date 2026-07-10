@@ -13,7 +13,7 @@ import {
   AreaChart, Area, BarChart, Bar, Cell,
   XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts'
-import { LiveVideoButton, DemoVideoButton } from '@/components/live-video-button'
+import { DemoVideoButton } from '@/components/live-video-button'
 
 interface SalesOrder {
   id: string
@@ -155,7 +155,6 @@ export default function PortalDashboard() {
         </div>
         <div className="flex gap-2 flex-wrap">
           <DemoVideoButton />
-          <LiveVideoButton hideWhenUnset />
           <Link href="/portal/requests/new"
             className="inline-flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
             <Plus className="h-4 w-4" /> New Order

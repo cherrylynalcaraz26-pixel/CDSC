@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Video, X, PlayCircle } from 'lucide-react'
-import { toast } from 'sonner'
+import { X, PlayCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-// The "Video Demo" walkthrough shown on the Admin and Client dashboards.
+// Default demo walkthrough. Can be overridden with the "Demo Video URL"
+// field in Company Profile settings (system_settings.live_video_url).
 const DEMO_VIDEO_URL = 'https://drive.google.com/file/d/1aGKS4Wk70ExguzxeB5HpL9OgPZdUpl4h/view?usp=sharing'
 const DEMO_VIDEO_TITLE = 'CDSC Client Portal demo v3'
 
@@ -28,7 +28,7 @@ function toEmbed(url: string): { kind: 'iframe' | 'video'; src: string } {
   return { kind: 'iframe', src: u.startsWith('http') ? u : `https://${u}` }
 }
 
-function VideoModal({ title, url, live, onClose }: { title: string; url: string; live?: boolean; onClose: () => void }) {
+function VideoModal({ title, url, onClose }: { title: string; url: string; onClose: () => void }) {
   const embed = toEmbed(url)
   return (
     <div
@@ -37,14 +37,7 @@ function VideoModal({ title, url, live, onClose }: { title: string; url: string;
       <div className="w-full max-w-4xl">
         <div className="flex items-center justify-between mb-2">
           <span className="inline-flex items-center gap-2 text-white text-sm font-semibold">
-            {live ? (
-              <span className="relative flex h-2.5 w-2.5">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
-              </span>
-            ) : (
-              <PlayCircle className="h-4 w-4 text-red-400" />
-            )}
+            <PlayCircle className="h-4 w-4 text-red-400" />
             {title}
           </span>
           <button onClick={onClose} className="text-white/70 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors">
@@ -68,62 +61,30 @@ function VideoModal({ title, url, live, onClose }: { title: string; url: string;
   )
 }
 
-export function LiveVideoButton({ hideWhenUnset = false, className }: { hideWhenUnset?: boolean; className?: string }) {
-  const [url, setUrl] = useState<string | null>(null)
+export function DemoVideoButton({ className }: { className?: string }) {
+  const [url, setUrl] = useState(DEMO_VIDEO_URL)
   const [open, setOpen] = useState(false)
 
   useEffect(() => {
     const supabase = createClient()
     supabase.from('system_settings').select('live_video_url').single().then(({ data }) => {
       const v = (data?.live_video_url ?? '').trim()
-      setUrl(v || null)
+      if (v) setUrl(v)
     })
   }, [])
 
-  if (hideWhenUnset && !url) return null
-
-  function handleClick() {
-    if (!url) {
-      toast.info('No live video configured yet. Add a Live Video URL in Company Profile settings.')
-      return
-    }
-    setOpen(true)
-  }
-
-  return (
-    <>
-      <button
-        onClick={handleClick}
-        className={cn(
-          'inline-flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors',
-          className,
-        )}>
-        <span className="relative flex h-2 w-2">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
-          <span className="relative inline-flex rounded-full h-2 w-2 bg-white" />
-        </span>
-        <Video className="h-4 w-4" /> Live Video
-      </button>
-
-      {open && url && <VideoModal title="Live Video" url={url} live onClose={() => setOpen(false)} />}
-    </>
-  )
-}
-
-export function DemoVideoButton({ className }: { className?: string }) {
-  const [open, setOpen] = useState(false)
   return (
     <>
       <button
         onClick={() => setOpen(true)}
         className={cn(
-          'inline-flex items-center gap-1.5 border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-semibold px-4 py-2 rounded-lg transition-colors bg-white',
+          'inline-flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors',
           className,
         )}>
-        <PlayCircle className="h-4 w-4 text-red-600" /> Video Demo
+        <PlayCircle className="h-4 w-4" /> Demo Video
       </button>
 
-      {open && <VideoModal title={DEMO_VIDEO_TITLE} url={DEMO_VIDEO_URL} onClose={() => setOpen(false)} />}
+      {open && <VideoModal title={DEMO_VIDEO_TITLE} url={url} onClose={() => setOpen(false)} />}
     </>
   )
 }

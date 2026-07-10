@@ -204,6 +204,11 @@ function LivePreview({ s }: { s: Settings }) {
       .cta-text { font-size: 11px; line-height: 1.6; color: #fecaca; margin-bottom: 10px; }
       .cta-contact { font-size: 11px; font-weight: 700; letter-spacing: 0.02em; }
       .footer { margin-top: 20px; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; }
+      @media print {
+        @page { margin: 12mm; size: A4 portrait; }
+        body { padding: 0; }
+        .cta { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      }
     </style></head><body>
     <div class="header">
       ${s.logo_url ? `<img src="${s.logo_url}" class="logo" alt="logo" />` : '<div class="logo-placeholder">LOGO</div>'}
@@ -258,7 +263,9 @@ function LivePreview({ s }: { s: Settings }) {
     win.document.write(buildProfileHtml())
     win.document.close()
     win.focus()
-    win.print()
+    // Give the logo image time to load before printing, otherwise it's
+    // missing from the printed/saved PDF.
+    setTimeout(() => { win.print() }, 400)
   }
 
   function openEmailDialog() {
@@ -1155,9 +1162,7 @@ export default function SettingsPage() {
                 <Label>Mission Statement</Label>
                 <Textarea rows={3} placeholder="Your company's mission and purpose…" {...S('mission_statement')} />
               </div>
-            </CollapsibleSection>
-
-            <Separator className="my-6" />
+              <Separator />
 
             <div className="space-y-5">
               <p className="text-xs font-bold uppercase tracking-widest text-blue-600">Registration &amp; Compliance</p>
@@ -1267,11 +1272,12 @@ export default function SettingsPage() {
               </div>
 
               <div className="space-y-1.5">
-                <Label>Live Video URL</Label>
+                <Label>Demo Video URL</Label>
                 <Input placeholder="e.g. https://www.youtube.com/watch?v=… or a video/stream link" {...S('live_video_url')} />
-                <p className="text-xs text-muted-foreground">Shown via the &quot;Live Video&quot; button on the Admin and Client dashboards. Supports YouTube, Vimeo, Facebook, or a direct video/stream link.</p>
+                <p className="text-xs text-muted-foreground">Played by the &quot;Demo Video&quot; button on the Client Dashboard. Leave blank to use the default CDSC Client Portal demo. Supports YouTube, Vimeo, Facebook, Google Drive, or a direct video link.</p>
               </div>
             </div>
+            </CollapsibleSection>
 
             <Separator className="my-6" />
 
