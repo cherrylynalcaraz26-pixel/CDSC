@@ -18,6 +18,7 @@ import {
   Building2, Upload, RotateCcw, Save, Shield,
   FileText, Database, User, Globe, Phone, Mail, MapPin,
   CheckCircle2, Eye, EyeOff, Loader2, Plus, Trash2, X, Send,
+  ChevronDown, ChevronUp,
 } from 'lucide-react'
 import { sendEmail } from '@/lib/send-email'
 import { uploadImageToDrive } from '@/lib/upload-image'
@@ -145,6 +146,25 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: 'database',  label: 'Proposal Database',  icon: <Database className="h-3.5 w-3.5" /> },
   { id: 'security',  label: 'Security',           icon: <Shield className="h-3.5 w-3.5" /> },
 ]
+
+// ── Collapsible form section ──────────────────────────────────────────────────
+
+function CollapsibleSection({ title, defaultOpen = false, children }: { title: string; defaultOpen?: boolean; children: React.ReactNode }) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <div className="border rounded-xl">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/40 transition-colors rounded-xl"
+      >
+        <p className="text-xs font-bold uppercase tracking-widest text-blue-600">{title}</p>
+        {open ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+      </button>
+      {open && <div className="px-4 pb-5 space-y-5">{children}</div>}
+    </div>
+  )
+}
 
 // ── Live Preview ──────────────────────────────────────────────────────────────
 
@@ -1076,9 +1096,7 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <div className="space-y-5">
-              <p className="text-xs font-bold uppercase tracking-widest text-blue-600">Business Details</p>
-
+            <CollapsibleSection title="Business Details" defaultOpen>
               <div className="space-y-2">
                 <Label>Company Logo</Label>
                 <div className="flex items-start gap-4">
@@ -1137,7 +1155,7 @@ export default function SettingsPage() {
                 <Label>Mission Statement</Label>
                 <Textarea rows={3} placeholder="Your company's mission and purpose…" {...S('mission_statement')} />
               </div>
-            </div>
+            </CollapsibleSection>
 
             <Separator className="my-6" />
 
@@ -1257,9 +1275,7 @@ export default function SettingsPage() {
 
             <Separator className="my-6" />
 
-            <div className="space-y-5">
-              <p className="text-xs font-bold uppercase tracking-widest text-blue-600">Business Profile</p>
-
+            <CollapsibleSection title="Business Profile">
               <div className="space-y-1.5">
                 <Label className="font-semibold">About Company</Label>
                 <Textarea
@@ -1340,13 +1356,11 @@ export default function SettingsPage() {
                   {...S('certifications')}
                 />
               </div>
-            </div>
+            </CollapsibleSection>
 
             <Separator className="my-6" />
 
-            <div className="space-y-5">
-              <p className="text-xs font-bold uppercase tracking-widest text-blue-600">Business Proposal</p>
-
+            <CollapsibleSection title="Business Proposal">
               <div className="space-y-1.5">
                 <Label className="font-semibold">Proposal Introduction</Label>
                 <Textarea rows={4} placeholder="Opening paragraph introducing your company and the purpose of this proposal…" {...S('proposal_introduction')} />
@@ -1376,7 +1390,7 @@ export default function SettingsPage() {
                 <Label className="font-semibold">Validity Period</Label>
                 <Input placeholder="e.g. 30 days" {...S('validity_period')} />
               </div>
-            </div>
+            </CollapsibleSection>
 
             <div className="pt-6 flex justify-end gap-2">
               <Button variant="outline" onClick={reset} className="gap-1.5">
