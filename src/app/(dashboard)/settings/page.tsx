@@ -15,7 +15,7 @@ import {
 import { toast } from 'sonner'
 import { useCompany } from '@/context/company-context'
 import {
-  Building2, Upload, RotateCcw, Save, Shield, Briefcase,
+  Building2, Upload, RotateCcw, Save, Shield,
   FileText, Database, User, Globe, Phone, Mail, MapPin,
   CheckCircle2, Eye, EyeOff, Loader2, Plus, Trash2, X, Send,
 } from 'lucide-react'
@@ -136,11 +136,10 @@ function defaultSettings(): Settings {
   }
 }
 
-type TabId = 'profile' | 'portfolio' | 'proposal' | 'database' | 'security'
+type TabId = 'profile' | 'proposal' | 'database' | 'security'
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
-  { id: 'profile',   label: 'Company Profile',    icon: <Building2 className="h-3.5 w-3.5" /> },
-  { id: 'portfolio', label: 'Company Portfolio',  icon: <Briefcase className="h-3.5 w-3.5" /> },
+  { id: 'profile',   label: 'Company & Business Profile', icon: <Building2 className="h-3.5 w-3.5" /> },
   { id: 'proposal',  label: 'Business Proposal',  icon: <FileText className="h-3.5 w-3.5" /> },
   { id: 'database',  label: 'Proposal Database',  icon: <Database className="h-3.5 w-3.5" /> },
   { id: 'security',  label: 'Security',           icon: <Shield className="h-3.5 w-3.5" /> },
@@ -149,7 +148,6 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
 // ── Live Preview ──────────────────────────────────────────────────────────────
 
 function LivePreview({ s }: { s: Settings }) {
-  const today = new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: '2-digit' })
   const fullName = [s.company_name || 'Company Name', s.legal_suffix].filter(Boolean).join(' ')
   const addressLine = [s.address, s.city, s.province, s.zip_code].filter(Boolean).join(', ')
 
@@ -160,7 +158,9 @@ function LivePreview({ s }: { s: Settings }) {
   const [sendingEmail, setSendingEmail] = useState(false)
 
   function buildProfileHtml() {
-    return `<!DOCTYPE html><html><head><title>${fullName} – Company Profile</title>
+    const services = (s.core_services ?? []).filter(svc => svc.name || svc.description)
+    const certifications = (s.certifications ?? '').split('\n').map(c => c.trim()).filter(Boolean)
+    return `<!DOCTYPE html><html><head><title>${fullName} – Company &amp; Business Profile</title>
     <style>
       body { font-family: Arial, sans-serif; margin: 0; padding: 24px; color: #1e293b; }
       .header { display: flex; align-items: flex-start; gap: 16px; border-bottom: 2px solid #dc2626; padding-bottom: 16px; margin-bottom: 16px; }
@@ -169,14 +169,15 @@ function LivePreview({ s }: { s: Settings }) {
       h1 { margin: 0 0 4px; font-size: 18px; color: #0f172a; }
       .tagline { color: #64748b; font-style: italic; font-size: 12px; margin: 0 0 6px; }
       .contact { font-size: 11px; color: #475569; line-height: 1.7; }
-      .section { margin-bottom: 14px; }
+      .section { margin-bottom: 14px; page-break-inside: avoid; }
+      .section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #dc2626; border-bottom: 1px solid #fecaca; padding-bottom: 3px; margin: 18px 0 8px; }
       .label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; margin-bottom: 2px; }
-      .value { font-size: 12px; font-weight: 500; color: #1e293b; }
+      .value { font-size: 12px; font-weight: 500; color: #1e293b; white-space: pre-line; }
       .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
-      .doc-type { font-size: 20px; font-weight: 700; color: #dc2626; }
-      table { width: 100%; border-collapse: collapse; font-size: 11px; }
-      th { background: #f8fafc; text-align: left; padding: 6px 8px; border-bottom: 1px solid #e2e8f0; font-size: 10px; text-transform: uppercase; color: #64748b; }
-      td { padding: 6px 8px; border-bottom: 1px solid #f1f5f9; }
+      .svc { margin-bottom: 8px; page-break-inside: avoid; }
+      .svc-name { font-size: 12px; font-weight: 700; color: #1e293b; }
+      .svc-desc { font-size: 11px; color: #475569; line-height: 1.5; }
+      .cert { display: inline-block; font-size: 11px; color: #15803d; border: 1px solid #bbf7d0; background: #f0fdf4; border-radius: 999px; padding: 2px 10px; margin: 0 6px 6px 0; }
       .footer { margin-top: 20px; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; }
     </style></head><body>
     <div class="header">
@@ -203,7 +204,16 @@ function LivePreview({ s }: { s: Settings }) {
     </div>
     ${s.mission_statement ? `<div class="section"><div class="label">Mission</div><div class="value">${s.mission_statement}</div></div>` : ''}
     ${s.brand_positioning ? `<div class="section"><div class="label">Brand Positioning</div><div class="value">${s.brand_positioning}</div></div>` : ''}
-    <div class="footer">Generated: ${today} &nbsp;·&nbsp; ${fullName}</div>
+    ${s.about_company ? `<div class="section-title">About Us</div><div class="section"><div class="value">${s.about_company}</div></div>` : ''}
+    ${s.years_of_experience ? `<div class="section"><div class="label">Years of Experience</div><div class="value">${s.years_of_experience}+ years</div></div>` : ''}
+    ${services.length > 0 ? `<div class="section-title">Core Services</div><div class="section">${services.map(svc => `
+      <div class="svc">
+        ${svc.name ? `<div class="svc-name">• ${svc.name}</div>` : ''}
+        ${svc.description ? `<div class="svc-desc">${svc.description}</div>` : ''}
+      </div>`).join('')}</div>` : ''}
+    ${s.key_clients ? `<div class="section-title">Key Clients</div><div class="section"><div class="value">${s.key_clients}</div></div>` : ''}
+    ${certifications.length > 0 ? `<div class="section-title">Certifications &amp; Accreditations</div><div class="section">${certifications.map(c => `<span class="cert">✓ ${c}</span>`).join('')}</div>` : ''}
+    <div class="footer">${fullName}</div>
     </body></html>`
   }
 
@@ -218,9 +228,9 @@ function LivePreview({ s }: { s: Settings }) {
 
   function openEmailDialog() {
     setEmailTo('')
-    setEmailSubject(`Company Profile – ${fullName}`)
+    setEmailSubject(`Company & Business Profile – ${fullName}`)
     setEmailBody(
-      `Dear Sir/Madam,\n\nPlease find attached our company profile:\n\n` +
+      `Dear Sir/Madam,\n\nPlease find attached our company & business profile:\n\n` +
       `Company: ${fullName}\n` +
       (s.tagline ? `Tagline: ${s.tagline}\n` : '') +
       (addressLine ? `Address: ${addressLine}\n` : '') +
@@ -242,7 +252,7 @@ function LivePreview({ s }: { s: Settings }) {
         subject: emailSubject,
         body: emailBody,
         printHtml: buildProfileHtml(),
-        pdfFilename: `${fullName} - Company Profile.pdf`,
+        pdfFilename: `${fullName} - Company & Business Profile.pdf`,
       })
       toast.success('Email sent')
       setEmailOpen(false)
@@ -359,6 +369,57 @@ function LivePreview({ s }: { s: Settings }) {
               <div className="text-xs text-slate-600 leading-relaxed line-clamp-3">{s.mission_statement}</div>
             </div>
           )}
+          {s.about_company && (
+            <div className="pt-1 border-t">
+              <div className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">About Us</div>
+              <div className="text-xs text-slate-600 leading-relaxed whitespace-pre-line line-clamp-6">{s.about_company}</div>
+            </div>
+          )}
+          {(s.years_of_experience || s.core_services.some(svc => svc.name || svc.description)) && (
+            <div className="pt-1 border-t">
+              {s.years_of_experience && (
+                <div className="mb-2">
+                  <span className="inline-flex items-center gap-1 bg-red-50 text-red-700 text-xs font-semibold px-2.5 py-1 rounded-full border border-red-100">
+                    {s.years_of_experience}+ Years of Experience
+                  </span>
+                </div>
+              )}
+              {s.core_services.some(svc => svc.name || svc.description) && (
+                <div>
+                  <div className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1.5">Core Services</div>
+                  <div className="space-y-1.5">
+                    {s.core_services.filter(svc => svc.name || svc.description).map((svc, i) => (
+                      <div key={i} className="flex items-start gap-2">
+                        <div className="h-1.5 w-1.5 rounded-full bg-red-500 mt-1.5 shrink-0" />
+                        <div>
+                          {svc.name && <div className="text-xs font-semibold text-slate-700">{svc.name}</div>}
+                          {svc.description && <div className="text-[11px] text-slate-500 leading-relaxed">{svc.description}</div>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          {s.key_clients && (
+            <div className="pt-1 border-t">
+              <div className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1">Key Clients</div>
+              <div className="text-xs text-slate-600 leading-relaxed whitespace-pre-line">{s.key_clients}</div>
+            </div>
+          )}
+          {s.certifications && (
+            <div className="pt-1 border-t">
+              <div className="text-[10px] text-muted-foreground uppercase tracking-wide mb-1.5">Certifications &amp; Accreditations</div>
+              <div className="flex flex-wrap gap-1.5">
+                {s.certifications.split('\n').filter(Boolean).map((cert, i) => (
+                  <span key={i} className="text-[11px] bg-green-50 text-green-700 border border-green-100 px-2 py-0.5 rounded-full font-medium">
+                    ✓ {cert.trim()}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
           <div className="text-[10px] text-muted-foreground text-right border-t pt-2">
             EWT Default: {s.ewt_default_rate}% &nbsp;·&nbsp; Fiscal Year: {s.fiscal_year_start}
           </div>
@@ -402,7 +463,7 @@ function LivePreview({ s }: { s: Settings }) {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Send className="h-4 w-4 text-blue-600" />
-              Send Company Profile by Email
+              Send Company &amp; Business Profile by Email
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-1">
@@ -430,7 +491,7 @@ function LivePreview({ s }: { s: Settings }) {
                 onChange={e => setEmailBody(e.target.value)}
               />
             </div>
-            <p className="text-xs text-muted-foreground">A PDF of the company profile will be attached automatically.</p>
+            <p className="text-xs text-muted-foreground">A PDF of the company &amp; business profile will be attached automatically.</p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEmailOpen(false)}>Cancel</Button>
@@ -632,259 +693,6 @@ function SecurityTab() {
           </CardContent>
         </Card>
       </div>
-    </div>
-  )
-}
-
-// ── Portfolio Tab ─────────────────────────────────────────────────────────────
-
-interface PortfolioTabProps {
-  settings: Settings
-  setSettings: React.Dispatch<React.SetStateAction<Settings>>
-  onSave: () => Promise<void>
-  onReset: () => void
-  saving: boolean
-}
-
-function PortfolioPreview({ s }: { s: Settings }) {
-  const fullName = [s.company_name || 'Company Name', s.legal_suffix].filter(Boolean).join(' ')
-  return (
-    <div className="sticky top-4">
-      <div className="flex items-center gap-2 mb-3">
-        <Eye className="h-4 w-4 text-muted-foreground" />
-        <span className="text-sm font-medium text-muted-foreground">Portfolio Preview</span>
-        <span className="ml-auto text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">● LIVE</span>
-      </div>
-      <div className="border rounded-xl overflow-hidden bg-white shadow-sm">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-slate-800 to-slate-900 p-5">
-          <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-lg bg-white flex items-center justify-center overflow-hidden shrink-0">
-              {s.logo_url
-                // eslint-disable-next-line @next/next/no-img-element
-                ? <img src={s.logo_url} alt="logo" className="w-full h-full object-contain p-1" />
-                : <Building2 className="h-5 w-5 text-slate-400" />}
-            </div>
-            <div>
-              <div className="text-white font-bold text-sm leading-tight">{fullName}</div>
-              {s.tagline && <div className="text-white/50 text-[11px] italic mt-0.5">{s.tagline}</div>}
-            </div>
-          </div>
-          <div className="mt-3 border-t border-white/10 pt-3">
-            <div className="text-white/40 text-[10px] uppercase tracking-widest">Company Portfolio</div>
-          </div>
-        </div>
-
-        <div className="p-5 space-y-4 text-sm">
-          {/* About */}
-          {s.about_company ? (
-            <div>
-              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">About Us</div>
-              <p className="text-xs text-slate-600 whitespace-pre-line leading-relaxed line-clamp-6">{s.about_company}</p>
-            </div>
-          ) : (
-            <div className="text-center py-4 text-xs text-muted-foreground border border-dashed rounded-lg">
-              Fill in the form to see your portfolio preview
-            </div>
-          )}
-
-          {/* Years + Core Services */}
-          {(s.years_of_experience || s.core_services.length > 0) && (
-            <div className="border-t pt-4">
-              {s.years_of_experience && (
-                <div className="mb-3">
-                  <span className="inline-flex items-center gap-1 bg-red-50 text-red-700 text-xs font-semibold px-2.5 py-1 rounded-full border border-red-100">
-                    {s.years_of_experience}+ Years of Experience
-                  </span>
-                </div>
-              )}
-              {s.core_services.length > 0 && (
-                <div>
-                  <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Core Services</div>
-                  <div className="space-y-2">
-                    {s.core_services.map((svc, i) => (
-                      <div key={i} className="flex items-start gap-2">
-                        <div className="h-1.5 w-1.5 rounded-full bg-red-500 mt-1.5 shrink-0" />
-                        <div>
-                          {svc.name && <div className="text-xs font-semibold text-slate-700">{svc.name}</div>}
-                          {svc.description && <div className="text-[11px] text-slate-500 leading-relaxed">{svc.description}</div>}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Key Clients */}
-          {s.key_clients && (
-            <div className="border-t pt-4">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Key Clients</div>
-              <p className="text-xs text-slate-600 whitespace-pre-line leading-relaxed">{s.key_clients}</p>
-            </div>
-          )}
-
-          {/* Certifications */}
-          {s.certifications && (
-            <div className="border-t pt-4">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">Certifications &amp; Accreditations</div>
-              <div className="flex flex-wrap gap-1.5">
-                {s.certifications.split('\n').filter(Boolean).map((cert, i) => (
-                  <span key={i} className="text-[11px] bg-green-50 text-green-700 border border-green-100 px-2 py-0.5 rounded-full font-medium">
-                    ✓ {cert.trim()}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function PortfolioTab({ settings, setSettings, onSave, onReset, saving }: PortfolioTabProps) {
-  function setField(field: keyof Settings, value: string | CoreService[]) {
-    setSettings(s => ({ ...s, [field]: value }))
-  }
-
-  function addService() {
-    setSettings(s => ({ ...s, core_services: [...s.core_services, { name: '', description: '' }] }))
-  }
-
-  function removeService(idx: number) {
-    setSettings(s => ({ ...s, core_services: s.core_services.filter((_, i) => i !== idx) }))
-  }
-
-  function updateService(idx: number, field: 'name' | 'description', value: string) {
-    setSettings(s => ({
-      ...s,
-      core_services: s.core_services.map((svc, i) => i === idx ? { ...svc, [field]: value } : svc),
-    }))
-  }
-
-  return (
-    <div className="grid grid-cols-1 xl:grid-cols-[1fr_420px] gap-8">
-    <div className="space-y-0">
-      <div className="flex items-center justify-between mb-6 pb-4 border-b">
-        <h2 className="font-bold text-base uppercase tracking-wider text-slate-700">Company Portfolio</h2>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={onReset} className="gap-1.5">
-            <RotateCcw className="h-3.5 w-3.5" />Reset
-          </Button>
-          <Button size="sm" onClick={onSave} disabled={saving} className="bg-amber-500 hover:bg-amber-600 text-white gap-1.5">
-            {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-            Save
-          </Button>
-        </div>
-      </div>
-
-      <div className="space-y-6">
-        <div className="space-y-1.5">
-          <Label className="font-semibold">About Company</Label>
-          <Textarea
-            rows={5}
-            placeholder="Describe your company — history, background, what you do, and what sets you apart…"
-            value={settings.about_company}
-            onChange={e => setField('about_company', e.target.value)}
-          />
-        </div>
-
-        <div className="space-y-1.5 max-w-xs">
-          <Label className="font-semibold">Years of Experience</Label>
-          <Input
-            type="number"
-            min={0}
-            placeholder="e.g. 10"
-            value={settings.years_of_experience}
-            onChange={e => setField('years_of_experience', e.target.value)}
-          />
-        </div>
-
-        <Separator />
-
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <Label className="font-semibold">Core Services</Label>
-            <Button type="button" variant="outline" size="sm" onClick={addService} className="gap-1.5">
-              <Plus className="h-3.5 w-3.5" />Add Service
-            </Button>
-          </div>
-          {settings.core_services.length === 0 && (
-            <div className="text-sm text-muted-foreground border border-dashed rounded-lg p-6 text-center">
-              No services added yet. Click &quot;Add Service&quot; to begin.
-            </div>
-          )}
-          <div className="space-y-3">
-            {settings.core_services.map((svc, idx) => (
-              <div key={idx} className="border rounded-lg p-4 space-y-3 bg-muted/20 relative">
-                <button
-                  type="button"
-                  onClick={() => removeService(idx)}
-                  className="absolute right-3 top-3 text-muted-foreground hover:text-destructive transition-colors"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-                <div className="space-y-1.5 pr-6">
-                  <Label className="text-xs text-muted-foreground">Service Name</Label>
-                  <Input
-                    placeholder="e.g. Industrial Supply & Distribution"
-                    value={svc.name}
-                    onChange={e => updateService(idx, 'name', e.target.value)}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">Description</Label>
-                  <Textarea
-                    rows={2}
-                    placeholder="Brief description of this service…"
-                    value={svc.description}
-                    onChange={e => updateService(idx, 'description', e.target.value)}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <Separator />
-
-        <div className="space-y-1.5">
-          <Label className="font-semibold">Key Clients</Label>
-          <Textarea
-            rows={3}
-            placeholder="List notable clients, one per line or comma-separated…"
-            value={settings.key_clients}
-            onChange={e => setField('key_clients', e.target.value)}
-          />
-        </div>
-
-        <div className="space-y-1.5">
-          <Label className="font-semibold">Certifications &amp; Accreditations</Label>
-          <Textarea
-            rows={3}
-            placeholder="e.g. ISO 9001:2015, PhilGEPS Registered, PCAB Licensed…"
-            value={settings.certifications}
-            onChange={e => setField('certifications', e.target.value)}
-          />
-        </div>
-      </div>
-
-      <div className="pt-6 flex justify-end gap-2">
-        <Button variant="outline" onClick={onReset} className="gap-1.5">
-          <RotateCcw className="h-3.5 w-3.5" />Reset
-        </Button>
-        <Button onClick={onSave} disabled={saving} className="bg-amber-500 hover:bg-amber-600 text-white gap-1.5">
-          {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-          Save Portfolio
-        </Button>
-      </div>
-    </div>
-    {/* Live preview column */}
-    <div className="hidden xl:block">
-      <PortfolioPreview s={settings} />
-    </div>
     </div>
   )
 }
@@ -1319,6 +1127,21 @@ export default function SettingsPage() {
     setSettings(s => ({ ...s, [field]: value }))
   }
 
+  function addService() {
+    setSettings(s => ({ ...s, core_services: [...s.core_services, { name: '', description: '' }] }))
+  }
+
+  function removeService(idx: number) {
+    setSettings(s => ({ ...s, core_services: s.core_services.filter((_, i) => i !== idx) }))
+  }
+
+  function updateService(idx: number, field: 'name' | 'description', value: string) {
+    setSettings(s => ({
+      ...s,
+      core_services: s.core_services.map((svc, i) => i === idx ? { ...svc, [field]: value } : svc),
+    }))
+  }
+
   function reset() {
     setSettings(original)
     toast.info('Changes reset')
@@ -1384,16 +1207,6 @@ export default function SettingsPage() {
       </div>
 
       {tab === 'security' && <SecurityTab />}
-
-      {tab === 'portfolio' && (
-        <PortfolioTab
-          settings={settings}
-          setSettings={setSettings}
-          onSave={save}
-          onReset={reset}
-          saving={saving}
-        />
-      )}
 
       {tab === 'proposal' && (
         <ProposalTab
@@ -1593,6 +1406,93 @@ export default function SettingsPage() {
                   <Label>Website</Label>
                   <Input placeholder="www.company.com" {...S('website')} />
                 </div>
+              </div>
+            </div>
+
+            <Separator className="my-6" />
+
+            <div className="space-y-5">
+              <p className="text-xs font-bold uppercase tracking-widest text-blue-600">Business Profile</p>
+
+              <div className="space-y-1.5">
+                <Label className="font-semibold">About Company</Label>
+                <Textarea
+                  rows={5}
+                  placeholder="Describe your company — history, background, what you do, and what sets you apart…"
+                  {...S('about_company')}
+                />
+              </div>
+
+              <div className="space-y-1.5 max-w-xs">
+                <Label className="font-semibold">Years of Experience</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  placeholder="e.g. 10"
+                  {...S('years_of_experience')}
+                />
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <Label className="font-semibold">Core Services</Label>
+                  <Button type="button" variant="outline" size="sm" onClick={addService} className="gap-1.5">
+                    <Plus className="h-3.5 w-3.5" />Add Service
+                  </Button>
+                </div>
+                {settings.core_services.length === 0 && (
+                  <div className="text-sm text-muted-foreground border border-dashed rounded-lg p-6 text-center">
+                    No services added yet. Click &quot;Add Service&quot; to begin.
+                  </div>
+                )}
+                <div className="space-y-3">
+                  {settings.core_services.map((svc, idx) => (
+                    <div key={idx} className="border rounded-lg p-4 space-y-3 bg-muted/20 relative">
+                      <button
+                        type="button"
+                        onClick={() => removeService(idx)}
+                        className="absolute right-3 top-3 text-muted-foreground hover:text-destructive transition-colors"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                      <div className="space-y-1.5 pr-6">
+                        <Label className="text-xs text-muted-foreground">Service Name</Label>
+                        <Input
+                          placeholder="e.g. Industrial Supply & Distribution"
+                          value={svc.name}
+                          onChange={e => updateService(idx, 'name', e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-muted-foreground">Description</Label>
+                        <Textarea
+                          rows={2}
+                          placeholder="Brief description of this service…"
+                          value={svc.description}
+                          onChange={e => updateService(idx, 'description', e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="font-semibold">Key Clients</Label>
+                <Textarea
+                  rows={3}
+                  placeholder="List notable clients, one per line or comma-separated…"
+                  {...S('key_clients')}
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="font-semibold">Certifications &amp; Accreditations</Label>
+                <Textarea
+                  rows={3}
+                  placeholder="e.g. ISO 9001:2015, PhilGEPS Registered, PCAB Licensed…"
+                  {...S('certifications')}
+                />
               </div>
             </div>
 
