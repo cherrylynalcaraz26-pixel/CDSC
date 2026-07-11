@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Fragment } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { fetchAllRows } from '@/lib/supabase/fetch-all'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -180,7 +181,7 @@ export default function ReceivingPage() {
         .from('dr_logs')
         .select('id, dr_number, po_number, supplier_name, dr_date, status')
         .order('dr_date', { ascending: false }),
-      supabase.from('csi_records').select('dr_number').not('dr_number', 'is', null),
+      fetchAllRows((from, to) => supabase.from('csi_records').select('dr_number').not('dr_number', 'is', null).order('id').range(from, to)).then(data => ({ data })),
     ])
     const invoicedDrNumbers = new Set((csiData ?? []).map((r: { dr_number: string }) => r.dr_number))
     const mapped = (data ?? []).map((log: any) => ({

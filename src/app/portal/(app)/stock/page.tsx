@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { fetchAllRows } from '@/lib/supabase/fetch-all'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Package, Loader2, Search, AlertTriangle, ArrowDownCircle, ArrowUpCircle,
@@ -169,14 +170,16 @@ function PortalStockPageContent() {
 
     const showCsi = csiVisible !== undefined ? csiVisible : showCsiInPortal
     if (companyName && showCsi) {
-      const { data: csiData } = await supabase
+      const csiData = await fetchAllRows((from, to) => supabase
         .from('csi_records')
         .select('si_number,si_date,item_name,unit,quantity,unit_price,amount,dr_number')
         .eq('client_name', companyName)
         .eq('show_in_portal', true)
         .order('si_date', { ascending: false })
         .order('si_number')
-      setCsiRecords(csiData ?? [])
+        .order('id')
+        .range(from, to))
+      setCsiRecords(csiData)
     } else {
       setCsiRecords([])
     }

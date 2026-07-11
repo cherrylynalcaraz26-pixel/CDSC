@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, Fragment } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { fetchAllRows } from '@/lib/supabase/fetch-all'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -196,7 +197,7 @@ export default function PurchaseOrdersPage() {
     // Pipeline data
     const [{ data: rrData }, { data: csiData }, { data: colData }] = await Promise.all([
       supabase.from('receiving_reports').select('po_number'),
-      supabase.from('csi_records').select('client_name'),
+      fetchAllRows((from, to) => supabase.from('csi_records').select('client_name').order('id').range(from, to)).then(data => ({ data })),
       supabase.from('collections').select('client_name'),
     ])
     setReceivedPONums(new Set((rrData ?? []).map((r: any) => r.po_number).filter(Boolean)))

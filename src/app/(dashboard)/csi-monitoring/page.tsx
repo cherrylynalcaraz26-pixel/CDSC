@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, Fragment } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { fetchAllRows } from '@/lib/supabase/fetch-all'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -184,17 +185,19 @@ export default function CSIMonitoringPage() {
 
   async function load() {
     setLoading(true)
-    const [{ data: itemOptData }, { data: clientData }, { data: soData }, { data: drItemsData }, { data: drLogData }] = await Promise.all([
+    const [{ data: itemOptData }, { data: clientData }, { data: soData }, drItemsData, drLogData] = await Promise.all([
       supabase.from('items').select('item_name, unit_of_measure').order('item_name'),
       supabase.from('clients').select('id, company_name, show_csi_in_portal, address, city, province, tin, industry').eq('status', 'active').order('company_name'),
       supabase.from('sales_orders').select('id, so_number').not('so_number', 'is', null).order('created_at', { ascending: false }),
-      supabase.from('dr_log_items').select('dr_number, item_name, dr_logs!inner(client_name)').order('item_name'),
-      supabase.from('dr_logs').select('id, dr_number, po_number').order('dr_date', { ascending: false }),
+      fetchAllRows((from, to) => supabase.from('dr_log_items').select('dr_number, item_name').order('item_name').order('id').range(from, to)),
+      fetchAllRows((from, to) => supabase.from('dr_logs').select('id, dr_number, po_number, supplier_name').order('dr_date', { ascending: false }).order('id').range(from, to)),
     ])
-    setDrItemsForCrossRef((drItemsData ?? []).map((d: any) => ({ dr_number: d.dr_number, item_name: d.item_name, client_name: d.dr_logs?.client_name ?? null })))
+    // On DR logs the "supplier" field holds the delivered-to client.
+    const drClientMap = new Map((drLogData as any[]).map(d => [d.dr_number, d.supplier_name ?? null]))
+    setDrItemsForCrossRef((drItemsData as any[]).map(d => ({ dr_number: d.dr_number, item_name: d.item_name, client_name: drClientMap.get(d.dr_number) ?? null })))
     setItemOptions((itemOptData ?? []) as ItemOption[])
     setClientOptions((clientData ?? []) as ClientOption[])
-    setDrNumbers((drLogData ?? []) as { id: string; dr_number: string; po_number: string | null }[])
+    setDrNumbers(drLogData as { id: string; dr_number: string; po_number: string | null }[])
     const filteredSOs = (soData ?? []).filter((s: any) => s.so_number) as { id: string; so_number: string }[]
     setSoNumbers(filteredSOs)
     const soIds = filteredSOs.map(s => s.id)

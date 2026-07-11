@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { fetchAllRows } from '@/lib/supabase/fetch-all'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
@@ -524,7 +525,7 @@ function CollectionsTab() {
       supabase.from('collections').select('*').order('created_at', { ascending: false }),
       supabase.from('clients').select('id, company_name, tin, address, city, province, industry').eq('status', 'active').order('company_name'),
       supabase.from('dr_logs').select('po_number, status').not('po_number', 'is', null).in('status', ['received', 'partial']),
-      supabase.from('csi_records').select('po_number, si_number, amount, client_name').not('po_number', 'is', null),
+      fetchAllRows((from, to) => supabase.from('csi_records').select('po_number, si_number, amount, client_name').not('po_number', 'is', null).order('id').range(from, to)).then(data => ({ data })),
     ])
     setRecords((colData ?? []) as Collection[])
     setClients(cliData ?? [])
@@ -574,7 +575,7 @@ function CollectionsTab() {
   async function loadCsiOptions(clientName: string) {
     if (!clientName) { setCsiOptions([]); return }
     const [{ data: csiData }, { data: linkedRows }] = await Promise.all([
-      supabase.from('csi_records').select('si_number, si_date, amount').eq('client_name', clientName),
+      fetchAllRows((from, to) => supabase.from('csi_records').select('si_number, si_date, amount').eq('client_name', clientName).order('id').range(from, to)).then(data => ({ data })),
       supabase.from('collections').select('si_number').eq('client_name', clientName).eq('status', 'posted').not('si_number', 'is', null),
     ])
     const linkedSet = new Set((linkedRows ?? []).map(r => r.si_number))
@@ -606,7 +607,7 @@ function CollectionsTab() {
   async function loadBlankFormInvoices(clientName: string) {
     if (!clientName) { setBlankFormInvoices([]); return }
     const [{ data: csiData }, { data: linkedRows }] = await Promise.all([
-      supabase.from('csi_records').select('si_number, si_date, amount').eq('client_name', clientName),
+      fetchAllRows((from, to) => supabase.from('csi_records').select('si_number, si_date, amount').eq('client_name', clientName).order('id').range(from, to)).then(data => ({ data })),
       supabase.from('collections').select('si_number').eq('client_name', clientName).eq('status', 'posted').not('si_number', 'is', null),
     ])
     const linkedSet = new Set((linkedRows ?? []).map(r => r.si_number))
@@ -2269,7 +2270,7 @@ function BookkeepingTab({ activeSub, onSubChange }: { activeSub: string; onSubCh
       supabase.from('disbursements').select('*').order('disb_date', { ascending: false }),
       supabase.from('chart_of_accounts').select('account_code,account_name,account_type,normal_balance,is_header').eq('is_active', true).order('account_code'),
       supabase.from('journal_lines').select('*, journal_entries(entry_date,entry_number,memo,entry_type)').order('created_at'),
-      supabase.from('csi_records').select('id,si_number,si_date,client_name,item_name,unit,quantity,unit_price,amount').order('si_date'),
+      fetchAllRows((from, to) => supabase.from('csi_records').select('id,si_number,si_date,client_name,item_name,unit,quantity,unit_price,amount').order('si_date').order('id').range(from, to)).then(data => ({ data })),
     ])
     setCollections((colData ?? []) as Collection[])
     setDisbursements((disbData ?? []) as Disbursement[])

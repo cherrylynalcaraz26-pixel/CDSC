@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { fetchAllRows } from '@/lib/supabase/fetch-all'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
@@ -174,8 +175,8 @@ export default function PullOutBillingPage() {
       { data: clientsData },
     ] = await Promise.all([
       supabase.from('dr_logs').select('dr_number, dr_date, supplier_name, po_number').order('dr_date', { ascending: false }),
-      supabase.from('dr_log_items').select('dr_number, item_name, quantity, unit'),
-      supabase.from('csi_records').select('id, si_number, si_date, client_name, item_name, unit, quantity, unit_price, amount, collection_status').order('si_date', { ascending: false }),
+      fetchAllRows((from, to) => supabase.from('dr_log_items').select('dr_number, item_name, quantity, unit').order('id').range(from, to)).then(data => ({ data })),
+      fetchAllRows((from, to) => supabase.from('csi_records').select('id, si_number, si_date, client_name, item_name, unit, quantity, unit_price, amount, collection_status').order('si_date', { ascending: false }).order('id').range(from, to)).then(data => ({ data })),
       supabase.from('pull_out_requests').select('*').order('created_at', { ascending: false }),
       supabase.from('items').select('id, item_name, unit_of_measure, selling_price').order('item_name'),
       supabase.from('clients').select('id, company_name').order('company_name'),

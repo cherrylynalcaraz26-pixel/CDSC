@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { fetchAllRows } from '@/lib/supabase/fetch-all'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -71,8 +72,8 @@ export default function ReportsPage() {
         if (data) exportCSV('purchase-requests.csv', ['PR Number','Date','Department','Priority','Purpose','Status'], data.map(r => [r.pr_number, r.date ?? r.created_at, r.department, r.priority, r.purpose, r.status]))
         else toast.error('No data')
       } else if (key === 'dr_logs') {
-        const { data } = await supabase.from('dr_logs').select('dr_number, date, delivered_to, status').order('date', { ascending: false })
-        if (data) exportCSV('dr-logs.csv', ['DR Number','Date','Delivered To','Status'], data.map(r => [r.dr_number, r.date, r.delivered_to, r.status]))
+        const data = await fetchAllRows((from, to) => supabase.from('dr_logs').select('dr_number, dr_date, supplier_name, status').order('dr_date', { ascending: false }).order('id').range(from, to))
+        if (data.length > 0) exportCSV('dr-logs.csv', ['DR Number','Date','Delivered To','Status'], data.map(r => [r.dr_number, r.dr_date, r.supplier_name, r.status]))
         else toast.error('No data')
       } else if (key === 'suppliers') {
         const { data } = await supabase.from('suppliers').select('supplier_code, company_name, contact_person, email, mobile_number, tin, supplier_category, payment_terms').order('company_name')
@@ -83,8 +84,8 @@ export default function ReportsPage() {
         if (data) exportCSV('clients.csv', ['Code','Company','Contact','Email','Type','Credit Limit','Status'], data.map(r => [r.client_code, r.company_name, r.contact_person, r.email, r.client_type, r.credit_limit, r.status]))
         else toast.error('No data')
       } else if (key === 'csi') {
-        const { data } = await supabase.from('csi_records').select('si_number, date, client_name, item_name, quantity, unit').order('date', { ascending: false })
-        if (data) exportCSV('csi-records.csv', ['SI Number','Date','Client','Item','Qty','Unit'], data.map(r => [r.si_number, r.date, r.client_name, r.item_name, r.quantity, r.unit]))
+        const data = await fetchAllRows((from, to) => supabase.from('csi_records').select('si_number, si_date, client_name, item_name, quantity, unit').order('si_date', { ascending: false }).order('id').range(from, to))
+        if (data.length > 0) exportCSV('csi-records.csv', ['SI Number','Date','Client','Item','Qty','Unit'], data.map(r => [r.si_number, r.si_date, r.client_name, r.item_name, r.quantity, r.unit]))
         else toast.error('No data')
       } else {
         toast.info('This report is coming soon')

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { fetchAllRows } from '@/lib/supabase/fetch-all'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -130,24 +131,21 @@ export default function DashboardPage() {
         return { label: format(d, 'MMM'), start: startOfMonth(d).toISOString(), end: endOfMonth(d).toISOString() }
       })
 
-      const [items, suppliers, pos, prs, assets, drLogs, csiRecs, recentDRData, recentPOData, collectionData, csiDetailData] = await Promise.all([
+      const [items, suppliers, pos, prs, assets, allDRs, recentDRData, recentPOData, collectionData, allCSI] = await Promise.all([
         supabase.from('items').select('id', { count: 'exact', head: true }).eq('status', 'active'),
         supabase.from('suppliers').select('id', { count: 'exact', head: true }).eq('is_active', true),
         supabase.from('purchase_orders').select('id, status', { count: 'exact' }),
         supabase.from('purchase_requests').select('id, status', { count: 'exact' }),
         supabase.from('assets').select('id', { count: 'exact', head: true }),
-        supabase.from('dr_logs').select('id, dr_date', { count: 'exact' }),
-        supabase.from('csi_records').select('id, si_date', { count: 'exact' }),
+        fetchAllRows((from, to) => supabase.from('dr_logs').select('id, dr_date').order('id').range(from, to)),
         supabase.from('dr_logs').select('id, dr_number, dr_date, supplier_name, status').order('dr_date', { ascending: false }).limit(8),
         supabase.from('purchase_orders').select('id, po_number, created_at, status, total_amount, supplier:suppliers(company_name)').order('created_at', { ascending: false }).limit(6),
         supabase.from('collections').select('client_name, or_number, amount, form_2307, status, collection_date, si_number'),
-        supabase.from('csi_records').select('client_name, si_number, item_name, quantity, unit_price, si_date, po_number'),
+        fetchAllRows((from, to) => supabase.from('csi_records').select('client_name, si_number, item_name, quantity, unit_price, si_date, po_number').order('id').range(from, to)),
       ])
 
       const allPOs = pos.data ?? []
       const allPRs = prs.data ?? []
-      const allDRs = drLogs.data ?? []
-      const allCSI = csiRecs.data ?? []
 
       const bars: MonthBar[] = months.map(m => ({
         month: m.label,
@@ -163,7 +161,7 @@ export default function DashboardPage() {
         drLogsThisMonth: allDRs.filter(d => d.dr_date && d.dr_date >= thisMonthStart.slice(0, 10) && d.dr_date <= thisMonthEnd.slice(0, 10)).length,
         csiThisMonth: allCSI.filter(c => c.si_date && c.si_date >= thisMonthStart.slice(0, 10) && c.si_date <= thisMonthEnd.slice(0, 10)).length,
         totalAssets: assets.count ?? 0,
-        totalDRs: drLogs.count ?? 0,
+        totalDRs: allDRs.length,
       })
 
       // --- OR collections by client ---
@@ -187,7 +185,7 @@ export default function DashboardPage() {
       // --- CSI invoices by client ---
       const csiMap: Record<string, { billed: number; siNums: Set<string>; items: number }> = {}
       const csiDetailMap: Record<string, any[]> = {}
-      for (const r of csiDetailData.data ?? []) {
+      for (const r of allCSI) {
         const name = r.client_name?.trim() || 'Unknown'
         if (!csiMap[name]) csiMap[name] = { billed: 0, siNums: new Set(), items: 0 }
         csiMap[name].billed += (Number(r.quantity) || 0) * (Number(r.unit_price) || 0)
@@ -233,7 +231,7 @@ export default function DashboardPage() {
         (collectionData.data ?? []).filter(c => c.status === 'posted' && c.si_number).map(c => c.si_number)
       )
       const csiBySo = new Map<string, string[]>()
-      for (const r of (csiDetailData.data ?? [])) {
+      for (const r of allCSI) {
         if (!r.po_number || !r.si_number) continue
         if (!csiBySo.has(r.po_number)) csiBySo.set(r.po_number, [])
         csiBySo.get(r.po_number)!.push(r.si_number)
@@ -262,7 +260,7 @@ export default function DashboardPage() {
       // --- Decision Maker: monthly SO revenue + top clients ---
       const { data: soAll } = await supabase.from('sales_orders').select('so_date, created_at, client_name, total_amount, status').not('status', 'eq', 'cancelled')
       const soList = soAll ?? []
-      const allCSIDetail = csiDetailData.data ?? []
+      const allCSIDetail = allCSI
       const { data: poAll } = await supabase.from('purchase_orders').select('created_at, total_amount, status').not('status', 'eq', 'cancelled')
       const poList = poAll ?? []
       const postedCollections = (collectionData.data ?? []).filter(c => c.status === 'posted')
