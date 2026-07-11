@@ -778,17 +778,59 @@ export async function htmlToPdfBase64(html: string): Promise<string> {
   iframe.style.height = contentH + 'px'
   await new Promise(r => setTimeout(r, 50))
   try {
+    // Leaf-element bounds (in CSS px, relative to the document top) — page cuts
+    // must not pass through any of these, otherwise a line of text or a table
+    // row gets sliced in half across two pages.
+    const bodyTop = iBody.getBoundingClientRect().top
+    const leafRects: { top: number; bottom: number }[] = []
+    iBody.querySelectorAll('*').forEach(el => {
+      if (el.children.length === 0) {
+        const r = el.getBoundingClientRect()
+        if (r.height > 0) leafRects.push({ top: r.top - bodyTop, bottom: r.bottom - bodyTop })
+      }
+    })
+
     // scale 1.5 + JPEG (not PNG) keeps long reports well under the email API's request
     // size limit — a tall table rendered at scale 2 as lossless PNG could produce a
     // multi-MB base64 payload and trip a 413 on send.
     const canvas = await html2canvas(iBody, { scale: 1.5, useCORS: true, backgroundColor: '#ffffff', windowWidth: 794, windowHeight: contentH, logging: false })
-    const imgData = canvas.toDataURL('image/jpeg', 0.85)
     const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' })
     const pageW = pdf.internal.pageSize.getWidth()
     const pageH = pdf.internal.pageSize.getHeight()
-    const imgH = (canvas.height / canvas.width) * pageW
-    if (imgH <= pageH) { pdf.addImage(imgData, 'JPEG', 0, 0, pageW, imgH) }
-    else { const n = Math.ceil(imgH / pageH); for (let p = 0; p < n; p++) { if (p > 0) pdf.addPage(); pdf.addImage(imgData, 'JPEG', 0, -(p * pageH), pageW, imgH) } }
+    const marginY = 20 // top/bottom page margin in pt
+    const ratio = canvas.width / 794 // CSS px → canvas px
+    const unsafe = leafRects.map(l => ({ top: l.top * ratio, bottom: l.bottom * ratio }))
+    const pagePx = Math.floor(((pageH - marginY * 2) / pageW) * canvas.width) // usable canvas px per page
+
+    let y = 0
+    let firstPage = true
+    while (y < canvas.height) {
+      let cut = Math.min(y + pagePx, canvas.height)
+      if (cut < canvas.height) {
+        // Pull the cut up until it sits in a gap between elements, so nothing
+        // is split mid-line. Give up (hard cut) if that would waste most of
+        // the page — e.g. a single element taller than a page.
+        let safe = cut
+        for (let guard = 0; guard < 100; guard++) {
+          const hit = unsafe.find(u => u.top < safe && u.bottom > safe)
+          if (!hit) break
+          safe = Math.floor(hit.top) - 2
+        }
+        if (safe > y + pagePx * 0.3) cut = safe
+      }
+      const sliceH = cut - y
+      const pageCanvas = document.createElement('canvas')
+      pageCanvas.width = canvas.width
+      pageCanvas.height = sliceH
+      const ctx = pageCanvas.getContext('2d')!
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, pageCanvas.width, sliceH)
+      ctx.drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, canvas.width, sliceH)
+      if (!firstPage) pdf.addPage()
+      pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.85), 'JPEG', 0, marginY, pageW, (sliceH / canvas.width) * pageW)
+      firstPage = false
+      y = cut
+    }
     return pdf.output('datauristring').split(',')[1]
   } finally { document.body.removeChild(iframe) }
 }
