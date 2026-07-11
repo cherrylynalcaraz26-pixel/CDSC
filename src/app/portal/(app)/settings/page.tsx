@@ -80,15 +80,21 @@ export default function PortalSettingsPage() {
       }
 
       // Billed vs collected — shows the client their outstanding balance with
-      // CDSC. Lives here (Account) rather than on the dashboard so it's only
-      // visible inside the client's own account page.
+      // CDSC. Counts only portal-visible CSI records (show_in_portal = true)
+      // so the balance matches exactly what the client can see in their
+      // portal, using each invoice's own collection status.
       if (clientRow?.company_name) {
-        const [csiRows, { data: colRows }] = await Promise.all([
-          fetchAllRows((from, to) => supabase.from('csi_records').select('quantity, unit_price').eq('client_name', clientRow.company_name).order('id').range(from, to)),
-          supabase.from('collections').select('amount').eq('client_name', clientRow.company_name).eq('status', 'posted'),
-        ])
-        const billed = csiRows.reduce((s: number, r: any) => s + (Number(r.quantity) || 0) * (Number(r.unit_price) || 0), 0)
-        const collected = (colRows ?? []).reduce((s: number, r: any) => s + (Number(r.amount) || 0), 0)
+        const csiRows = await fetchAllRows((from, to) =>
+          supabase.from('csi_records')
+            .select('amount, quantity, unit_price, collection_status')
+            .eq('client_name', clientRow.company_name)
+            .eq('show_in_portal', true)
+            .order('id')
+            .range(from, to)
+        )
+        const rowAmount = (r: any) => Number(r.amount) || (Number(r.quantity) || 0) * (Number(r.unit_price) || 0)
+        const billed = csiRows.reduce((s: number, r: any) => s + rowAmount(r), 0)
+        const collected = csiRows.filter((r: any) => r.collection_status === 'collected').reduce((s: number, r: any) => s + rowAmount(r), 0)
         if (billed > 0) setBilling({ billed, collected })
       }
       setLoading(false)
