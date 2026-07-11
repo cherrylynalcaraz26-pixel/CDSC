@@ -730,11 +730,113 @@ const STATUS_STYLES: Record<string, string> = {
   rejected: 'bg-red-100 text-red-600',
 }
 
-function ProposalDatabaseTab({ settings }: { settings: Settings }) {
+// Live document preview shown next to the inline New Proposal form.
+function ProposalLivePreview({ s, client, title, amount, number }: {
+  s: Settings; client: string; title: string; amount: string; number: string
+}) {
+  const fullName = [s.company_name || 'Company Name', s.legal_suffix].filter(Boolean).join(' ')
+  const today = new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
+  const amt = parseFloat(amount) || 0
+  return (
+    <div className="sticky top-4">
+      <div className="flex items-center gap-2 mb-3">
+        <Eye className="h-4 w-4 text-muted-foreground" />
+        <span className="text-sm font-medium text-muted-foreground">Proposal Preview</span>
+        <span className="ml-auto text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">● LIVE</span>
+      </div>
+
+      <div className="border rounded-xl overflow-hidden bg-white shadow-sm text-sm">
+        <div className="bg-gradient-to-r from-slate-800 to-slate-900 p-5">
+          <div className="flex items-start gap-3">
+            <div className="h-12 w-12 rounded-lg bg-white flex items-center justify-center overflow-hidden shrink-0">
+              {s.logo_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={s.logo_url} alt="logo" className="w-full h-full object-contain p-1" />
+              ) : (
+                <Building2 className="h-6 w-6 text-slate-400" />
+              )}
+            </div>
+            <div>
+              <div className="text-white font-bold text-base leading-tight">{fullName}</div>
+              {s.tagline && <div className="text-white/50 text-xs italic mt-0.5">{s.tagline}</div>}
+            </div>
+          </div>
+          <div className="mt-4 border-t border-white/10 pt-3">
+            <div className="text-white/40 text-[10px] uppercase tracking-widest">Business Proposal</div>
+            <div className="text-white font-bold text-lg font-mono">{number}</div>
+            <div className="text-white/50 text-xs mt-0.5">
+              Date: {today}
+              {s.validity_period && <span className="ml-3">Valid for: {s.validity_period}</span>}
+            </div>
+          </div>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <div className="grid grid-cols-2 gap-3 border rounded-lg bg-slate-50 px-4 py-3">
+            <div>
+              <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Prepared For</div>
+              <div className="text-xs font-semibold">{client.trim() || '—'}</div>
+            </div>
+            <div>
+              <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Subject</div>
+              <div className="text-xs font-semibold">{title.trim() || '—'}</div>
+            </div>
+            <div>
+              <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Amount</div>
+              <div className="text-xs font-semibold">{amt > 0 ? `₱${amt.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}</div>
+            </div>
+            <div>
+              <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Date</div>
+              <div className="text-xs font-semibold">{today}</div>
+            </div>
+          </div>
+
+          {s.proposal_introduction && (
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Introduction</div>
+              <p className="text-xs text-slate-600 whitespace-pre-line leading-relaxed line-clamp-4">{s.proposal_introduction}</p>
+            </div>
+          )}
+          {s.executive_summary && (
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Executive Summary</div>
+              <p className="text-xs text-slate-600 whitespace-pre-line leading-relaxed line-clamp-4">{s.executive_summary}</p>
+            </div>
+          )}
+          {s.scope_of_work && (
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Scope of Work</div>
+              <p className="text-xs text-slate-600 whitespace-pre-line leading-relaxed line-clamp-4">{s.scope_of_work}</p>
+            </div>
+          )}
+          {s.payment_schedule && (
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Payment Schedule</div>
+              <p className="text-xs text-slate-600 whitespace-pre-line leading-relaxed line-clamp-4">{s.payment_schedule}</p>
+            </div>
+          )}
+          {s.terms_and_conditions && (
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Terms &amp; Conditions</div>
+              <p className="text-xs text-slate-600 whitespace-pre-line leading-relaxed line-clamp-4">{s.terms_and_conditions}</p>
+            </div>
+          )}
+          <div className="border-t pt-3 text-[10px] text-slate-400 text-center">
+            {fullName} · Confidential Business Proposal
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ProposalDatabaseTab({ settings, proposals, loading, onReload }: {
+  settings: Settings
+  proposals: Proposal[]
+  loading: boolean
+  onReload: () => Promise<void>
+}) {
   const supabase = createClient()
-  const [proposals, setProposals] = useState<Proposal[]>([])
-  const [loading, setLoading] = useState(true)
-  const [dialogOpen, setDialogOpen] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [form, setForm] = useState({
     client: '',
@@ -751,47 +853,29 @@ function ProposalDatabaseTab({ settings }: { settings: Settings }) {
   const [emailBody, setEmailBody] = useState('')
   const [sendingEmail, setSendingEmail] = useState(false)
 
-  async function loadProposals() {
-    setLoading(true)
-    const { data, error } = await supabase
-      .from('proposals')
-      .select('*')
-      .order('created_at', { ascending: false })
-    if (error) toast.error(error.message)
-    else setProposals(data ?? [])
-    setLoading(false)
-  }
+  const nextNumber = `PROP-${new Date().getFullYear()}-${String(proposals.length + 1).padStart(4, '0')}`
 
-  useEffect(() => { loadProposals() }, [])
-
-  function openNew() {
-    setForm({ client: '', title: '', amount: '', status: 'draft' })
-    setDialogOpen(true)
-  }
-
-  async function submitProposal() {
+  async function submitProposal(sendAfter: boolean) {
     if (!form.client.trim()) { toast.error('Client is required'); return }
     if (!form.title.trim()) { toast.error('Title is required'); return }
     setSubmitting(true)
 
-    const year = new Date().getFullYear()
-    const count = proposals.length + 1
-    const proposal_number = `PROP-${year}-${String(count).padStart(4, '0')}`
-
-    const { error } = await supabase.from('proposals').insert({
-      proposal_number,
+    const { data, error } = await supabase.from('proposals').insert({
+      proposal_number: nextNumber,
       client: form.client.trim(),
       title: form.title.trim(),
       amount: parseFloat(form.amount) || 0,
       status: form.status,
       date: new Date().toISOString().split('T')[0],
-    })
+    }).select().single()
 
-    if (error) toast.error(error.message)
-    else {
-      toast.success('Proposal created')
-      setDialogOpen(false)
-      loadProposals()
+    if (error) {
+      toast.error(error.message)
+    } else {
+      toast.success('Proposal saved')
+      setForm({ client: '', title: '', amount: '', status: 'draft' })
+      await onReload()
+      if (sendAfter && data) openEmailDialog(data as Proposal)
     }
     setSubmitting(false)
   }
@@ -801,7 +885,7 @@ function ProposalDatabaseTab({ settings }: { settings: Settings }) {
     if (error) toast.error(error.message)
     else {
       toast.success('Proposal deleted')
-      setProposals(ps => ps.filter(p => p.id !== id))
+      await onReload()
     }
   }
 
@@ -826,9 +910,9 @@ function ProposalDatabaseTab({ settings }: { settings: Settings }) {
         pdfFilename: `${emailProposal.proposal_number}.pdf`,
       })
       // Mark as sent if still draft
-      if (emailProposal && emailProposal.status === 'draft') {
+      if (emailProposal.status === 'draft') {
         await supabase.from('proposals').update({ status: 'sent' }).eq('id', emailProposal.id)
-        setProposals(ps => ps.map(p => p.id === emailProposal.id ? { ...p, status: 'sent' } : p))
+        await onReload()
       }
       toast.success('Proposal email sent successfully')
       setEmailDialogOpen(false)
@@ -840,15 +924,71 @@ function ProposalDatabaseTab({ settings }: { settings: Settings }) {
   }
 
   return (
+    <div className="grid grid-cols-1 xl:grid-cols-[1fr_420px] gap-8">
     <div className="space-y-4">
       <div className="flex items-center justify-between pb-4 border-b">
         <div>
           <h2 className="font-bold text-base uppercase tracking-wider text-slate-700">Proposal Database</h2>
           <p className="text-xs text-muted-foreground mt-0.5">{proposals.length} proposal{proposals.length !== 1 ? 's' : ''} on record</p>
         </div>
-        <Button size="sm" onClick={openNew} className="bg-red-600 hover:bg-red-700 text-white gap-1.5">
-          <Plus className="h-3.5 w-3.5" />New Proposal
-        </Button>
+      </div>
+
+      {/* Inline new proposal form */}
+      <div className="border rounded-xl p-5 space-y-4 bg-muted/10">
+        <div className="flex items-center justify-between">
+          <p className="text-xs font-bold uppercase tracking-widest text-blue-600">New Proposal</p>
+          <span className="text-xs font-mono text-muted-foreground">{nextNumber}</span>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label>Client <span className="text-destructive">*</span></Label>
+            <Input
+              placeholder="e.g. ABC Corporation"
+              value={form.client}
+              onChange={e => setForm(f => ({ ...f, client: e.target.value }))}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Title <span className="text-destructive">*</span></Label>
+            <Input
+              placeholder="e.g. Supply of Industrial Equipment"
+              value={form.title}
+              onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Amount (₱)</Label>
+            <Input
+              type="number"
+              min={0}
+              placeholder="0.00"
+              value={form.amount}
+              onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Status</Label>
+            <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: (v ?? 'draft') as Proposal['status'] }))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="draft">Draft</SelectItem>
+                <SelectItem value="sent">Sent</SelectItem>
+                <SelectItem value="accepted">Accepted</SelectItem>
+                <SelectItem value="rejected">Rejected</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={() => submitProposal(false)} disabled={submitting} className="gap-1.5">
+            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            Save Proposal
+          </Button>
+          <Button onClick={() => submitProposal(true)} disabled={submitting} className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5">
+            {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+            Save &amp; Send Email
+          </Button>
+        </div>
       </div>
 
       {loading ? (
@@ -856,12 +996,9 @@ function ProposalDatabaseTab({ settings }: { settings: Settings }) {
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
       ) : proposals.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-3">
+        <div className="flex flex-col items-center justify-center py-14 text-muted-foreground gap-3">
           <FileText className="h-10 w-10 opacity-20" />
-          <p className="text-sm">No proposals yet. Create your first one.</p>
-          <Button variant="outline" size="sm" onClick={openNew} className="gap-1.5">
-            <Plus className="h-3.5 w-3.5" />New Proposal
-          </Button>
+          <p className="text-sm">No proposals yet. Fill in the form above to save your first one.</p>
         </div>
       ) : (
         <div className="border rounded-xl overflow-hidden">
@@ -972,61 +1109,12 @@ function ProposalDatabaseTab({ settings }: { settings: Settings }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </div>
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>New Proposal</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-1.5">
-              <Label>Client <span className="text-destructive">*</span></Label>
-              <Input
-                placeholder="e.g. ABC Corporation"
-                value={form.client}
-                onChange={e => setForm(f => ({ ...f, client: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Title <span className="text-destructive">*</span></Label>
-              <Input
-                placeholder="e.g. Supply of Industrial Equipment"
-                value={form.title}
-                onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Amount (₱)</Label>
-              <Input
-                type="number"
-                min={0}
-                placeholder="0.00"
-                value={form.amount}
-                onChange={e => setForm(f => ({ ...f, amount: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Status</Label>
-              <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v as Proposal['status'] }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="draft">Draft</SelectItem>
-                  <SelectItem value="sent">Sent</SelectItem>
-                  <SelectItem value="accepted">Accepted</SelectItem>
-                  <SelectItem value="rejected">Rejected</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button onClick={submitProposal} disabled={submitting} className="bg-red-600 hover:bg-red-700 text-white gap-1.5">
-              {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-              Create Proposal
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+    {/* Live preview column */}
+    <div className="hidden xl:block">
+      <ProposalLivePreview s={settings} client={form.client} title={form.title} amount={form.amount} number={nextNumber} />
+    </div>
     </div>
   )
 }
@@ -1042,6 +1130,35 @@ export default function SettingsPage() {
   const [original, setOriginal] = useState<Settings>(defaultSettings())
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
+
+  // Proposal Database records — shared by the Proposal Database tab and the
+  // Business Proposal section's proposal picker.
+  const [proposals, setProposals] = useState<Proposal[]>([])
+  const [proposalsLoading, setProposalsLoading] = useState(true)
+  const [selectedProposalId, setSelectedProposalId] = useState('')
+  const selectedProposal = proposals.find(p => String(p.id) === selectedProposalId) ?? null
+
+  async function loadProposals() {
+    setProposalsLoading(true)
+    const { data, error } = await supabase
+      .from('proposals')
+      .select('*')
+      .order('created_at', { ascending: false })
+    if (error) toast.error(error.message)
+    else setProposals(data ?? [])
+    setProposalsLoading(false)
+  }
+
+  useEffect(() => { loadProposals() }, [])
+
+  function printProposal(p: Proposal) {
+    const win = window.open('', '_blank')
+    if (!win) return
+    win.document.write(buildProposalHtml(settings, p))
+    win.document.close()
+    win.focus()
+    setTimeout(() => { win.print() }, 400)
+  }
 
   useEffect(() => {
     async function load() {
@@ -1144,7 +1261,9 @@ export default function SettingsPage() {
 
       {tab === 'security' && <SecurityTab />}
 
-      {tab === 'database' && <ProposalDatabaseTab settings={settings} />}
+      {tab === 'database' && (
+        <ProposalDatabaseTab settings={settings} proposals={proposals} loading={proposalsLoading} onReload={loadProposals} />
+      )}
 
       {tab === 'profile' && (
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-8">
@@ -1426,6 +1545,64 @@ export default function SettingsPage() {
             <Separator className="my-6" />
 
             <CollapsibleSection title="Business Proposal">
+              <div className="space-y-1.5">
+                <Label className="font-semibold">Use with a Saved Proposal</Label>
+                <Select value={selectedProposalId || undefined} onValueChange={v => setSelectedProposalId(v ?? '')}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={proposals.length === 0 ? 'No proposals yet — add one in the Proposal Database tab' : 'Select a proposal from the Proposal Database…'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {proposals.map(p => (
+                      <SelectItem key={p.id} value={String(p.id)}>
+                        {p.proposal_number} — {p.client} — {p.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Pick a proposal saved in the Proposal Database to print it using this template.</p>
+              </div>
+
+              {selectedProposal && (
+                <div className="border rounded-lg p-4 bg-muted/20 space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Proposal No.</div>
+                      <div className="text-xs font-mono font-semibold">{selectedProposal.proposal_number}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Date</div>
+                      <div className="text-xs font-semibold">{selectedProposal.date ? new Date(selectedProposal.date).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' }) : '—'}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Client</div>
+                      <div className="text-xs font-semibold">{selectedProposal.client}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Title</div>
+                      <div className="text-xs font-semibold">{selectedProposal.title}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Amount</div>
+                      <div className="text-xs font-semibold">{selectedProposal.amount ? `₱${selectedProposal.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}</div>
+                    </div>
+                    <div>
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-wide">Status</div>
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold capitalize ${STATUS_STYLES[selectedProposal.status] ?? ''}`}>
+                        {selectedProposal.status}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex justify-end">
+                    <Button size="sm" variant="outline" onClick={() => printProposal(selectedProposal)} className="gap-1.5">
+                      <FileText className="h-3.5 w-3.5" />
+                      Print / Save PDF
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              <Separator />
+
               <div className="space-y-1.5">
                 <Label className="font-semibold">Proposal Introduction</Label>
                 <Textarea rows={4} placeholder="Opening paragraph introducing your company and the purpose of this proposal…" {...S('proposal_introduction')} />
