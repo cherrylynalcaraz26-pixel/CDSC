@@ -656,6 +656,62 @@ function SecurityTab() {
 
 // ── Proposal Database Tab ─────────────────────────────────────────────────────
 
+// PDF attached when a proposal is emailed from the database: the saved
+// Business Proposal template filled in with this proposal's details.
+function buildProposalHtml(s: Settings, p: Proposal) {
+  const fullName = [s.company_name || 'Company Name', s.legal_suffix].filter(Boolean).join(' ')
+  const addressLine = [s.address, s.city, s.province, s.zip_code].filter(Boolean).join(', ')
+  const dateStr = p.date ? new Date(p.date).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }) : ''
+  const amountStr = p.amount ? `₱${p.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : ''
+  return `<!DOCTYPE html><html><head><title>${p.proposal_number} – Business Proposal</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; padding: 24px; color: #1e293b; }
+    .header { display: flex; align-items: flex-start; gap: 16px; border-bottom: 2px solid #dc2626; padding-bottom: 16px; margin-bottom: 16px; }
+    .logo { width: 64px; height: 64px; object-fit: contain; border-radius: 8px; border: 1px solid #e2e8f0; }
+    h1 { margin: 0 0 4px; font-size: 18px; color: #0f172a; }
+    .tagline { color: #64748b; font-style: italic; font-size: 12px; margin: 0 0 6px; }
+    .contact { font-size: 11px; color: #475569; line-height: 1.7; }
+    .doc-title { font-size: 20px; font-weight: 700; color: #dc2626; text-align: center; margin: 4px 0 14px; letter-spacing: 0.04em; }
+    .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 14px; background: #f8fafc; }
+    .label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; margin-bottom: 2px; }
+    .value { font-size: 12px; font-weight: 600; color: #1e293b; white-space: pre-line; }
+    .section { margin-bottom: 14px; page-break-inside: avoid; }
+    .section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #dc2626; border-bottom: 1px solid #fecaca; padding-bottom: 3px; margin: 18px 0 8px; }
+    .text { font-size: 12px; color: #1e293b; line-height: 1.6; white-space: pre-line; }
+    .footer { margin-top: 20px; font-size: 10px; color: #94a3b8; border-top: 1px solid #e2e8f0; padding-top: 8px; text-align: center; }
+  </style></head><body>
+  <div class="header">
+    ${s.logo_url ? `<img src="${s.logo_url}" class="logo" alt="logo" />` : ''}
+    <div>
+      <h1>${fullName}</h1>
+      ${s.tagline ? `<p class="tagline">${s.tagline}</p>` : ''}
+      <div class="contact">
+        ${addressLine ? `${addressLine}<br/>` : ''}
+        ${s.phone ? `Tel: ${s.phone}` : ''}${s.mobile ? ` / ${s.mobile}` : ''}${(s.phone || s.mobile) ? '<br/>' : ''}
+        ${s.email ? `Email: ${s.email}<br/>` : ''}
+        ${s.website ? `Web: ${s.website}<br/>` : ''}
+        ${s.tin ? `TIN: ${s.tin}` : ''}
+      </div>
+    </div>
+  </div>
+  <div class="doc-title">BUSINESS PROPOSAL</div>
+  <div class="meta">
+    <div><div class="label">Proposal No.</div><div class="value">${p.proposal_number}</div></div>
+    ${dateStr ? `<div><div class="label">Date</div><div class="value">${dateStr}</div></div>` : ''}
+    <div><div class="label">Prepared For</div><div class="value">${p.client}</div></div>
+    <div><div class="label">Subject</div><div class="value">${p.title}</div></div>
+    ${amountStr ? `<div><div class="label">Proposal Amount</div><div class="value">${amountStr}</div></div>` : ''}
+    ${s.validity_period ? `<div><div class="label">Valid For</div><div class="value">${s.validity_period}</div></div>` : ''}
+  </div>
+  ${s.proposal_introduction ? `<div class="section-title">Introduction</div><div class="section"><div class="text">${s.proposal_introduction}</div></div>` : ''}
+  ${s.executive_summary ? `<div class="section-title">Executive Summary</div><div class="section"><div class="text">${s.executive_summary}</div></div>` : ''}
+  ${s.scope_of_work ? `<div class="section-title">Scope of Work</div><div class="section"><div class="text">${s.scope_of_work}</div></div>` : ''}
+  ${s.payment_schedule ? `<div class="section-title">Payment Schedule</div><div class="section"><div class="text">${s.payment_schedule}</div></div>` : ''}
+  ${s.terms_and_conditions ? `<div class="section-title">Terms &amp; Conditions</div><div class="section"><div class="text">${s.terms_and_conditions}</div></div>` : ''}
+  <div class="footer">${fullName} · Confidential Business Proposal · ${p.proposal_number}</div>
+  </body></html>`
+}
+
 interface Proposal {
   id: number
   proposal_number: string
@@ -674,7 +730,7 @@ const STATUS_STYLES: Record<string, string> = {
   rejected: 'bg-red-100 text-red-600',
 }
 
-function ProposalDatabaseTab() {
+function ProposalDatabaseTab({ settings }: { settings: Settings }) {
   const supabase = createClient()
   const [proposals, setProposals] = useState<Proposal[]>([])
   const [loading, setLoading] = useState(true)
@@ -758,6 +814,7 @@ function ProposalDatabaseTab() {
   }
 
   async function handleSendEmail() {
+    if (!emailProposal) return
     if (!emailTo.trim()) { toast.error('Recipient email is required'); return }
     setSendingEmail(true)
     try {
@@ -765,7 +822,8 @@ function ProposalDatabaseTab() {
         to: emailTo.trim(),
         subject: emailSubject,
         body: emailBody,
-        pdfFilename: `${emailProposal?.proposal_number ?? 'proposal'}.pdf`,
+        printHtml: buildProposalHtml(settings, emailProposal),
+        pdfFilename: `${emailProposal.proposal_number}.pdf`,
       })
       // Mark as sent if still draft
       if (emailProposal && emailProposal.status === 'draft') {
@@ -903,6 +961,7 @@ function ProposalDatabaseTab() {
                 onChange={e => setEmailBody(e.target.value)}
               />
             </div>
+            <p className="text-xs text-muted-foreground">A PDF of the proposal will be attached automatically.</p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEmailDialogOpen(false)}>Cancel</Button>
@@ -1085,7 +1144,7 @@ export default function SettingsPage() {
 
       {tab === 'security' && <SecurityTab />}
 
-      {tab === 'database' && <ProposalDatabaseTab />}
+      {tab === 'database' && <ProposalDatabaseTab settings={settings} />}
 
       {tab === 'profile' && (
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-8">
@@ -1397,16 +1456,6 @@ export default function SettingsPage() {
                 <Input placeholder="e.g. 30 days" {...S('validity_period')} />
               </div>
             </CollapsibleSection>
-
-            <div className="pt-6 flex justify-end gap-2">
-              <Button variant="outline" onClick={reset} className="gap-1.5">
-                <RotateCcw className="h-3.5 w-3.5" />Reset
-              </Button>
-              <Button onClick={save} disabled={saving} className="bg-amber-500 hover:bg-amber-600 text-white gap-1.5">
-                {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                Save All
-              </Button>
-            </div>
           </div>
 
           <div className="hidden lg:block">
