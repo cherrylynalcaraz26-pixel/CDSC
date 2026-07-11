@@ -85,6 +85,7 @@ export default function PortalDashboard() {
   const [clientName, setClientName] = useState('')
   const [userName, setUserName] = useState('')
   const [billing, setBilling] = useState<{ billed: number; collected: number } | null>(null)
+  const [showCsi, setShowCsi] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -107,7 +108,11 @@ export default function PortalDashboard() {
 
         // Billed vs collected — tells the client whether CDSC still has a
         // collection pending from them (same recon the admin dashboard uses).
-        if (clientRow.show_csi_in_portal) {
+        // Shown regardless of the show_csi_in_portal toggle: that flag hides
+        // invoice line items, but the outstanding balance itself should always
+        // be visible to the client.
+        setShowCsi(clientRow.show_csi_in_portal === true)
+        {
           const [csiRows, { data: colRows }] = await Promise.all([
             fetchAllRows((from, to) => supabase.from('csi_records').select('quantity, unit_price').eq('client_name', clientRow.company_name).order('id').range(from, to)),
             supabase.from('collections').select('amount').eq('client_name', clientRow.company_name).eq('status', 'posted'),
@@ -193,10 +198,12 @@ export default function PortalDashboard() {
               </span>
             </div>
           </div>
-          <Link href="/portal/stock"
-            className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-red-700 border border-red-300 hover:bg-red-100 px-3 py-1.5 rounded-lg transition-colors">
-            View Invoices <ChevronRight className="h-3.5 w-3.5" />
-          </Link>
+          {showCsi && (
+            <Link href="/portal/stock"
+              className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-red-700 border border-red-300 hover:bg-red-100 px-3 py-1.5 rounded-lg transition-colors">
+              View Invoices <ChevronRight className="h-3.5 w-3.5" />
+            </Link>
+          )}
         </div>
       ) : (
         <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-center gap-2">
