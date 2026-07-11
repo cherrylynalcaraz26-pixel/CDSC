@@ -464,7 +464,7 @@ export default function DashboardPage() {
                 <FileText className="h-4 w-4 text-blue-600" />
                 Sales Order Pipeline — Next Actions
               </CardTitle>
-              <p className="text-[10px] text-muted-foreground mt-0.5">CSI is logged in Pull-Out &amp; Billing → Bill CSI</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">CSI is logged in CSI Monitoring → New Record</p>
             </div>
             {soPipelineOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
           </button>

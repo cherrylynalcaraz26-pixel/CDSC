@@ -32,7 +32,6 @@ const BOTTOM_NAV: { label: string; href: string; icon: React.ComponentType<{ cla
       { label: 'Inventory', href: '/inventory' },
       { label: 'DR Logs', href: '/dr-logs' },
       { label: 'CSI Monitoring', href: '/csi-monitoring' },
-      { label: 'Pull Out & Billing', href: '/pull-out-billing' },
     ],
   },
   { label: 'Accounting', href: '/accounting', icon: Calculator },
