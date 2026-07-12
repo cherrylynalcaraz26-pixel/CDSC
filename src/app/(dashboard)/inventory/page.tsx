@@ -1069,7 +1069,7 @@ export default function InventoryPage() {
                         <TableCell className="text-sm text-muted-foreground">{r.unit ? uomName(r.unit) : '—'}</TableCell>
                         <TableCell className="text-right text-sm font-semibold text-green-700">{r.quantity}</TableCell>
                         <TableCell className="text-right text-sm font-medium text-gray-700">
-                          {itemPriceMap[r.item_name] ? `₱${warehouseEstValue(r).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : <span className="text-gray-300">—</span>}
+                          {r.item_name in itemPriceMap ? `₱${warehouseEstValue(r).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : <span className="text-gray-300">—</span>}
                         </TableCell>
                         <TableCell className="text-sm max-w-[220px]">
                           {noClientRecord ? (
