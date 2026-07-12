@@ -395,6 +395,15 @@ export default function BIRPage() {
     return `<span class="chkbox">${checked ? 'X' : ''}</span>`
   }
 
+  function revCode(formNo: string) {
+    const rev = BIR_FORM_REV[formNo] ?? ''
+    const [monthName, year] = rev.split(' ')
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+    const mm = String(months.indexOf(monthName) + 1).padStart(2, '0')
+    const yy = year ? year.slice(-2) : ''
+    return mm !== '00' && yy ? `${formNo} ${mm}/${yy} P1` : `${formNo} P1`
+  }
+
   function buildFilledFormHtml(form: BirForm) {
     const rowsHtml = formGenRows.map(r => `<tr>
       <td>${r.label}${r.sub ? `<br/><span style="color:#9ca3af;font-size:9px">${r.sub}</span>` : ''}</td>
@@ -403,6 +412,7 @@ export default function BIRPage() {
     const rate = parseFloat(formGenRate) || 0
     const isRemittance = ['0619-E', '0619-F', '1601-EQ', '1601-FQ'].includes(form.form)
     const isFinalTax = form.form === '0619-F' || form.form === '1601-FQ'
+    const isEwt = form.form === '0619-E' || form.form === '1601-EQ'
     const isPercentageTax = form.form === '2551Q' || form.form === '2550Q'
     const isIncomeTax = form.form === '1701Q' || form.form === '1702Q'
     const isQuarterly = form.form.includes('Q')
@@ -470,6 +480,16 @@ export default function BIRPage() {
       .signblock .sigline{border-top:1px solid #111;margin-top:26px;padding-top:2px;font-size:7.5px}
 
       .note{padding:6px 10px;font-size:7.5px;color:#6b7280;border-top:1px solid #111}
+      .masttable td{vertical-align:middle;padding:6px 10px 8px}
+      .sealbox{width:56px}
+      .masttext{text-align:center}
+      .masttext .republic{font-size:9px;font-weight:700}
+      .masttext .bureau{font-size:9px;font-weight:700}
+      .headerbox .barcodecell{width:16%;border-left:2px solid #111;text-align:center;vertical-align:middle;padding:8px 6px}
+      .barcode-stripes{height:26px;background-image:repeating-linear-gradient(90deg,#111 0 2px,#fff 2px 3px,#111 3px 5px,#fff 5px 7px,#111 7px 8px,#fff 8px 11px);margin:0 4px}
+      .barcode-code{font-size:7.5px;font-weight:700;margin-top:3px;letter-spacing:0.5px}
+      .footerpay td{border:1px solid #111;padding:8px;font-size:7.5px;vertical-align:top}
+      .footerpay .ftitle{text-align:center;font-weight:600;margin-bottom:20px}
       @media print { @page { margin: 8mm; size: A4 portrait; } }
     </style></head><body>
       <div class="page">
@@ -479,10 +499,20 @@ export default function BIRPage() {
           <td></td>
         </tr></table>
 
-        <div class="masthead">
-          <div class="republic">Republika ng Pilipinas &nbsp;/&nbsp; Republic of the Philippines</div>
-          <div class="bureau">Kagawaran ng Pananalapi / Department of Finance &nbsp;•&nbsp; Kawanihan ng Rentas Internas / Bureau of Internal Revenue</div>
-        </div>
+        <table class="masttable"><tr>
+          <td class="sealbox">
+            <svg viewBox="0 0 100 100" width="52" height="52">
+              <circle cx="50" cy="50" r="46" fill="#fff" stroke="#111" stroke-width="3"/>
+              <circle cx="50" cy="50" r="36" fill="none" stroke="#111" stroke-width="1.5"/>
+              <path d="M50 26 L58 46 L80 46 L62 58 L69 79 L50 66 L31 79 L38 58 L20 46 L42 46 Z" fill="#111"/>
+            </svg>
+          </td>
+          <td class="masttext">
+            <div class="republic">Republika ng Pilipinas &nbsp;/&nbsp; Republic of the Philippines</div>
+            <div class="bureau">Kagawaran ng Pananalapi / Department of Finance &nbsp;•&nbsp; Kawanihan ng Rentas Internas / Bureau of Internal Revenue</div>
+          </td>
+          <td class="sealbox"></td>
+        </tr></table>
 
         <table class="headerbox"><tr>
           <td style="width:16%; border-right:2px solid #111">
@@ -494,6 +524,10 @@ export default function BIRPage() {
             <h1>${BIR_FORM_SHORT_TITLES[form.form] ?? officialTitle}</h1>
             ${officialTitle !== (BIR_FORM_SHORT_TITLES[form.form] ?? '') ? `<h2>${officialTitle}</h2>` : ''}
             <div class="instr">Enter all required information in CAPITAL LETTERS using BLACK ink. Mark all applicable boxes with an "X".<br/>Two copies MUST be filed with the BIR and one held by the Taxpayer.</div>
+          </td>
+          <td class="barcodecell">
+            <div class="barcode-stripes"></div>
+            <div class="barcode-code">${revCode(form.form)}</div>
           </td>
         </tr></table>
 
@@ -524,45 +558,61 @@ export default function BIRPage() {
             <div class="flabel">Tax Type Code**</div>
             <div class="fval"><span class="blank">— see Part II —</span></div>
           </td>
+        </tr>` : isEwt ? `<tr>
+          <td class="num">4</td>
+          <td>
+            <div class="flabel">Any Taxes Withheld?</div>
+            <div class="fval">${checkbox(true)} Yes &nbsp;&nbsp; ${checkbox(false)} No</div>
+          </td>
+          <td class="num">5</td>
+          <td>
+            <div class="flabel">ATC</div>
+            <div class="fval" style="font-weight:700">WME10</div>
+          </td>
+          <td class="num">6</td>
+          <td>
+            <div class="flabel">Tax Type Code</div>
+            <div class="fval" style="font-weight:700">WE</div>
+          </td>
         </tr>` : ''}</table>
 
         <div class="section-title">Part I — Background Information</div>
         <table class="fields">
           <tr>
             <td style="width:60%">
-              <span class="flabel">${isFinalTax ? '<b>6</b> ' : ''}Taxpayer Identification Number (TIN)</span>
+              <span class="flabel">${isFinalTax ? '<b>6</b> ' : isEwt ? '<b>7</b> ' : ''}Taxpayer Identification Number (TIN)</span>
               ${tinDigits ? boxRow(tinDigits, 12, { dashEvery: 3 }) : `<span class="blank">— not on file —</span>`}
             </td>
             <td style="width:40%">
-              <span class="flabel">${isFinalTax ? '<b>7</b> ' : ''}RDO Code</span>
+              <span class="flabel">${isFinalTax ? '<b>7</b> ' : isEwt ? '<b>8</b> ' : ''}RDO Code</span>
               <span class="blank">— fill in manually —</span>
             </td>
           </tr>
           <tr>
             <td colspan="2">
-              <span class="flabel">${isFinalTax ? '<b>8</b> ' : ''}Withholding Agent's / Taxpayer's Name <span class="sub">(Registered Name)</span></span>
+              <span class="flabel">${isFinalTax ? '<b>8</b> ' : isEwt ? '<b>9</b> ' : ''}Withholding Agent's / Taxpayer's Name <span class="sub">(Registered Name)</span></span>
               ${companyInfo?.company_name ?? '<span class="blank">—</span>'}
             </td>
           </tr>
           <tr>
             <td colspan="2">
-              <span class="flabel">${isFinalTax ? '<b>9</b> ' : ''}Registered Address ${isFinalTax ? '<span class="sub">(9A Zip Code — fill in manually)</span>' : ''}</span>
+              <span class="flabel">${isFinalTax ? '<b>9</b> ' : isEwt ? '<b>10</b> ' : ''}Registered Address ${isFinalTax ? '<span class="sub">(9A Zip Code — fill in manually)</span>' : isEwt ? '<span class="sub">(10A Zip Code — fill in manually)</span>' : ''}</span>
               ${companyInfo?.address ?? '<span class="blank">—</span>'}
             </td>
           </tr>
           <tr>
             <td>
-              <span class="flabel">${isFinalTax ? '<b>10</b> ' : ''}Contact Number</span>
+              <span class="flabel">${isFinalTax ? '<b>10</b> ' : isEwt ? '<b>11</b> ' : ''}Contact Number</span>
               ${companyInfo?.phone ?? '<span class="blank">—</span>'}
             </td>
             <td>
-              <span class="flabel">${isFinalTax ? '<b>11</b> ' : ''}Category</span>
+              <span class="flabel">${isFinalTax ? '<b>11</b> ' : isEwt ? '<b>12</b> ' : ''}Category</span>
               ${checkbox(true)} Private &nbsp;&nbsp; ${checkbox(false)} Government
             </td>
           </tr>
-          ${isFinalTax ? `<tr>
+          ${isFinalTax || isEwt ? `<tr>
             <td colspan="2">
-              <span class="flabel"><b>12</b> Email Address</span>
+              <span class="flabel"><b>${isFinalTax ? '12' : '13'}</b> Email Address</span>
               <span class="blank">— fill in manually —</span>
             </td>
           </tr>` : ''}
@@ -602,6 +652,32 @@ export default function BIRPage() {
             <tr><td><b>22</b> Tax Debit Memo</td><td><span class="blank">—</span></td><td><span class="blank">—</span></td><td><span class="blank">—</span></td><td class="r"><span class="blank">—</span></td></tr>
             <tr><td><b>23</b> Others (specify below)</td><td><span class="blank">—</span></td><td><span class="blank">—</span></td><td><span class="blank">—</span></td><td class="r"><span class="blank">—</span></td></tr>
           </tbody></table>
+        ` : isEwt ? `
+          <div class="section-title">Part II — Tax Remittance</div>
+          <table class="amtrow">
+            <tr class="shade"><td class="lbl"><b>14</b> Amount of Remittance</td><td class="amtcell">${amountBoxRow(netAmount)}</td></tr>
+            <tr><td class="lbl"><b>15</b> Less: Amount Remitted from Previously Filed Form, if this is an amended form</td><td class="amtcell">${amountBoxRow(0)}</td></tr>
+            <tr class="shade"><td class="lbl"><b>16</b> Net Amount of Remittance <span class="sub">(Item 14 Less Item 15)</span></td><td class="amtcell">${amountBoxRow(netAmount)}</td></tr>
+            <tr><td class="lbl"><b>17</b> Add: Penalties</td><td class="amtcell"></td></tr>
+            <tr><td class="lbl" style="padding-left:22px"><b>17A</b> Surcharge</td><td class="amtcell">${amountBoxRow(0)}</td></tr>
+            <tr><td class="lbl" style="padding-left:22px"><b>17B</b> Interest</td><td class="amtcell">${amountBoxRow(0)}</td></tr>
+            <tr><td class="lbl" style="padding-left:22px"><b>17C</b> Compromise</td><td class="amtcell">${amountBoxRow(0)}</td></tr>
+            <tr><td class="lbl" style="padding-left:22px"><b>17D</b> Total Penalties <span class="sub">(Sum of Items 17A to 17C)</span></td><td class="amtcell">${amountBoxRow(0)}</td></tr>
+            <tr class="shade"><td class="lbl"><b>18</b> Total Amount of Remittance <span class="sub">(Sum of Items 16 and 17D)</span></td><td class="amtcell">${amountBoxRow(totalPayable)}</td></tr>
+          </table>
+
+          <div class="section-title">Part III — Details of Payment</div>
+          <table class="rows"><thead><tr><th>Particulars</th><th>Drawee Bank/Agency</th><th>Number</th><th>Date</th><th class="r">Amount</th></tr></thead>
+          <tbody>
+            <tr><td><b>19</b> Cash/Bank Debit Memo</td><td><span class="blank">—</span></td><td><span class="blank">—</span></td><td><span class="blank">—</span></td><td class="r"><span class="blank">—</span></td></tr>
+            <tr><td><b>20</b> Check</td><td><span class="blank">—</span></td><td><span class="blank">—</span></td><td><span class="blank">—</span></td><td class="r"><span class="blank">—</span></td></tr>
+            <tr><td><b>21</b> Tax Debit Memo</td><td><span class="blank">—</span></td><td><span class="blank">—</span></td><td><span class="blank">—</span></td><td class="r"><span class="blank">—</span></td></tr>
+            <tr><td><b>22</b> Others (specify below)</td><td><span class="blank">—</span></td><td><span class="blank">—</span></td><td><span class="blank">—</span></td><td class="r"><span class="blank">—</span></td></tr>
+          </tbody></table>
+
+          <div class="note" style="border-top:1px solid #111">Supporting schedule (system-generated, not part of the official form):</div>
+          <table class="rows"><thead><tr><th>${breakdownLabel}</th><th class="r">Amount</th></tr></thead>
+          <tbody>${rowsHtml || '<tr><td colspan="2" style="text-align:center;color:#9ca3af">No records for this period</td></tr>'}</tbody></table>
         ` : formGenManual
           ? `<div class="section-title">Part II — ${isRemittance ? 'Tax Remittance' : 'Computation of Tax'}</div>
              <div class="note" style="border-top:none">No source data is tracked in the system for this form yet — the amount below must be entered manually.</div>`
@@ -609,7 +685,7 @@ export default function BIRPage() {
              <table class="rows"><thead><tr><th>${breakdownLabel}</th><th class="r">Amount</th></tr></thead>
              <tbody>${rowsHtml || '<tr><td colspan="2" style="text-align:center;color:#9ca3af">No records for this period</td></tr>'}</tbody></table>`}
 
-        ${isFinalTax ? '' : `<div class="section-title">Part III — ${isRemittance ? 'Tax Remittance' : 'Computation of Tax'}</div>
+        ${isFinalTax || isEwt ? '' : `<div class="section-title">Part III — ${isRemittance ? 'Tax Remittance' : 'Computation of Tax'}</div>
         <table class="amtrow">
           ${isRemittance ? `
             <tr class="shade"><td class="lbl"><b>14</b> Amount of Remittance</td><td class="amtcell">${amountBoxRow(netAmount)}</td></tr>
@@ -631,7 +707,37 @@ export default function BIRPage() {
           `}
         </table>`}
 
-        <div class="declaration">I/We declare under the penalties of perjury that this return has been made in good faith, verified by me/us, and to the best of my/our knowledge and belief, is true and correct, pursuant to the provisions of the National Internal Revenue Code, as amended, and the regulations issued under authority thereof.</div>
+        <div class="declaration">I/We declare under the penalties of perjury that this ${isFinalTax || isEwt ? 'remittance form' : 'return'} has been made in good faith, verified by me/us, and to the best of my/our knowledge and belief, is true and correct, pursuant to the provisions of the National Internal Revenue Code, as amended, and the regulations issued under authority thereof.${isFinalTax || isEwt ? ' Further, I/we give my/our consent to the processing of my/our information as contemplated under the *Data Privacy Act of 2012 (R.A. No. 10173) for legitimate and lawful purposes. (If Authorized Representative, attach authorization letter)' : ''}</div>
+        ${isFinalTax || isEwt ? `
+        <table class="signblock"><tr>
+          <td style="width:50%"><b>For Individual:</b></td>
+          <td style="width:50%"><b>For Non-Individual:</b></td>
+        </tr></table>
+        <table class="signblock"><tr>
+          <td style="width:50%">
+            <div class="sigline">Signature over Printed Name of Taxpayer/Authorized Representative/ Tax Agent<br/>(Indicate Title/Designation and TIN)</div>
+          </td>
+          <td style="width:50%">
+            <div class="sigline">Signature over Printed Name of President/Vice President/<br/>Authorized Officer or Representative/Tax Agent<br/>(Indicate Title/Designation and TIN)</div>
+          </td>
+        </tr></table>
+        <table class="signblock"><tr>
+          <td style="width:34%">Tax Agent Accreditation No./<br/>Attorney's Roll No. <span class="sub">(if applicable)</span></td>
+          <td style="width:33%">Date of Issue <span class="sub">(MM/DD/YYYY)</span></td>
+          <td style="width:33%">Date of Expiry <span class="sub">(MM/DD/YYYY)</span></td>
+        </tr></table>
+
+        <table class="footerpay"><tr>
+          <td style="width:60%">
+            <div class="ftitle">Machine Validation/Revenue Official Receipt Details <span class="sub">(if not filed with an Authorized Agent Bank)</span></div>
+          </td>
+          <td style="width:40%">
+            <div class="ftitle">Stamp of Receiving Office/AAB and Date of Receipt<br/><span class="sub">(RO's Signature/Bank Teller's Initial)</span></div>
+          </td>
+        </tr></table>
+
+        <div class="note">*NOTE: Please read the BIR Data Privacy Policy found in the BIR website (www.bir.gov.ph)</div>
+        ` : `
         <table class="signblock"><tr>
           <td style="width:50%">
             <div class="sigline">Signature over Printed Name of Taxpayer/Authorized Representative<br/>(Indicate Title/Designation and TIN)</div>
@@ -642,6 +748,7 @@ export default function BIRPage() {
         </tr></table>
 
         <div class="note">Generated ${new Date().toLocaleDateString('en-PH')} from CDSC system records — a working copy to guide manual filing, not a substitute for the official BIR Form ${form.form}. Verify every figure before filing.</div>
+        `}
       </div>
     </body></html>`
   }
