@@ -402,6 +402,7 @@ export default function BIRPage() {
     </tr>`).join('')
     const rate = parseFloat(formGenRate) || 0
     const isRemittance = ['0619-E', '0619-F', '1601-EQ', '1601-FQ'].includes(form.form)
+    const isFinalTax = form.form === '0619-F' || form.form === '1601-FQ'
     const isPercentageTax = form.form === '2551Q' || form.form === '2550Q'
     const isIncomeTax = form.form === '1701Q' || form.form === '1702Q'
     const isQuarterly = form.form.includes('Q')
@@ -512,52 +513,103 @@ export default function BIRPage() {
             <div class="flabel">Amended Form?</div>
             <div class="fval">${checkbox(false)} Yes &nbsp;&nbsp; ${checkbox(true)} No</div>
           </td>
-        </tr></table>
+        </tr>${isFinalTax ? `<tr>
+          <td class="num">4</td>
+          <td>
+            <div class="flabel">Any Taxes Withheld?</div>
+            <div class="fval">${checkbox(true)} Yes &nbsp;&nbsp; ${checkbox(false)} No</div>
+          </td>
+          <td class="num">5</td>
+          <td colspan="3">
+            <div class="flabel">Tax Type Code**</div>
+            <div class="fval"><span class="blank">— see Part II —</span></div>
+          </td>
+        </tr>` : ''}</table>
 
         <div class="section-title">Part I — Background Information</div>
         <table class="fields">
           <tr>
             <td style="width:60%">
-              <span class="flabel">Taxpayer Identification Number (TIN)</span>
+              <span class="flabel">${isFinalTax ? '<b>6</b> ' : ''}Taxpayer Identification Number (TIN)</span>
               ${tinDigits ? boxRow(tinDigits, 12, { dashEvery: 3 }) : `<span class="blank">— not on file —</span>`}
             </td>
             <td style="width:40%">
-              <span class="flabel">RDO Code</span>
+              <span class="flabel">${isFinalTax ? '<b>7</b> ' : ''}RDO Code</span>
               <span class="blank">— fill in manually —</span>
             </td>
           </tr>
           <tr>
             <td colspan="2">
-              <span class="flabel">Withholding Agent's / Taxpayer's Name <span class="sub">(Registered Name)</span></span>
+              <span class="flabel">${isFinalTax ? '<b>8</b> ' : ''}Withholding Agent's / Taxpayer's Name <span class="sub">(Registered Name)</span></span>
               ${companyInfo?.company_name ?? '<span class="blank">—</span>'}
             </td>
           </tr>
           <tr>
             <td colspan="2">
-              <span class="flabel">Registered Address</span>
+              <span class="flabel">${isFinalTax ? '<b>9</b> ' : ''}Registered Address ${isFinalTax ? '<span class="sub">(9A Zip Code — fill in manually)</span>' : ''}</span>
               ${companyInfo?.address ?? '<span class="blank">—</span>'}
             </td>
           </tr>
           <tr>
             <td>
-              <span class="flabel">Contact Number</span>
+              <span class="flabel">${isFinalTax ? '<b>10</b> ' : ''}Contact Number</span>
               ${companyInfo?.phone ?? '<span class="blank">—</span>'}
             </td>
             <td>
-              <span class="flabel">Category</span>
+              <span class="flabel">${isFinalTax ? '<b>11</b> ' : ''}Category</span>
               ${checkbox(true)} Private &nbsp;&nbsp; ${checkbox(false)} Government
             </td>
           </tr>
+          ${isFinalTax ? `<tr>
+            <td colspan="2">
+              <span class="flabel"><b>12</b> Email Address</span>
+              <span class="blank">— fill in manually —</span>
+            </td>
+          </tr>` : ''}
         </table>
 
-        ${formGenManual
+        ${isFinalTax ? `
+          <div class="section-title">Part II — Tax Remittance</div>
+          <table class="fields" style="border-collapse:collapse">
+            <tr><td style="width:12%"><b>ATC</b></td><td style="width:58%"><b>Description</b></td><td style="width:30%" class="r"><b>Amount for Remittance</b></td></tr>
+            <tr>
+              <td><b>13</b> WMF10</td>
+              <td>Remittance of Final Income Taxes Withheld on Interest Paid on Deposits and Yield on Deposit Substitutes/Trusts/Etc.</td>
+              <td class="r">${amountBoxRow(0)}</td>
+            </tr>
+            <tr>
+              <td><b>14</b> WMF20</td>
+              <td>Remittance of Final Income Taxes Withheld on Other Final Income Taxes</td>
+              <td class="r">${amountBoxRow(0)}</td>
+            </tr>
+          </table>
+          <table class="amtrow">
+            <tr class="shade"><td class="lbl"><b>15</b> Total <span class="sub">(Sum of Items 13 and 14)</span></td><td class="amtcell">${amountBoxRow(netAmount)}</td></tr>
+            <tr><td class="lbl"><b>16</b> Less: Amount Remitted from Previously Filed Form, if amended</td><td class="amtcell">${amountBoxRow(0)}</td></tr>
+            <tr class="shade"><td class="lbl"><b>17</b> Net Amount of Remittance <span class="sub">(Item 15 Less Item 16)</span></td><td class="amtcell">${amountBoxRow(netAmount)}</td></tr>
+            <tr><td class="lbl"><b>18A</b> Add: Penalties — Surcharge</td><td class="amtcell">${amountBoxRow(0)}</td></tr>
+            <tr><td class="lbl"><b>18B</b> Interest</td><td class="amtcell">${amountBoxRow(0)}</td></tr>
+            <tr><td class="lbl"><b>18C</b> Compromise</td><td class="amtcell">${amountBoxRow(0)}</td></tr>
+            <tr class="shade"><td class="lbl"><b>18D</b> Total Penalties <span class="sub">(Sum of 18A to 18C)</span></td><td class="amtcell">${amountBoxRow(0)}</td></tr>
+            <tr class="shade"><td class="lbl"><b>19</b> Total Amount of Remittance <span class="sub">(Sum of Item 17 and 18D)</span></td><td class="amtcell">${amountBoxRow(totalPayable)}</td></tr>
+          </table>
+
+          <div class="section-title">Part III — Details of Payment</div>
+          <table class="rows"><thead><tr><th>Particulars</th><th>Drawee Bank/Agency</th><th>Number</th><th>Date</th><th class="r">Amount</th></tr></thead>
+          <tbody>
+            <tr><td><b>20</b> Cash/Bank Debit Memo</td><td><span class="blank">—</span></td><td><span class="blank">—</span></td><td><span class="blank">—</span></td><td class="r"><span class="blank">—</span></td></tr>
+            <tr><td><b>21</b> Check</td><td><span class="blank">—</span></td><td><span class="blank">—</span></td><td><span class="blank">—</span></td><td class="r"><span class="blank">—</span></td></tr>
+            <tr><td><b>22</b> Tax Debit Memo</td><td><span class="blank">—</span></td><td><span class="blank">—</span></td><td><span class="blank">—</span></td><td class="r"><span class="blank">—</span></td></tr>
+            <tr><td><b>23</b> Others (specify below)</td><td><span class="blank">—</span></td><td><span class="blank">—</span></td><td><span class="blank">—</span></td><td class="r"><span class="blank">—</span></td></tr>
+          </tbody></table>
+        ` : formGenManual
           ? `<div class="section-title">Part II — ${isRemittance ? 'Tax Remittance' : 'Computation of Tax'}</div>
              <div class="note" style="border-top:none">No source data is tracked in the system for this form yet — the amount below must be entered manually.</div>`
           : `<div class="section-title">Part II — Schedule of ${breakdownLabel}s</div>
              <table class="rows"><thead><tr><th>${breakdownLabel}</th><th class="r">Amount</th></tr></thead>
              <tbody>${rowsHtml || '<tr><td colspan="2" style="text-align:center;color:#9ca3af">No records for this period</td></tr>'}</tbody></table>`}
 
-        <div class="section-title">Part III — ${isRemittance ? 'Tax Remittance' : 'Computation of Tax'}</div>
+        ${isFinalTax ? '' : `<div class="section-title">Part III — ${isRemittance ? 'Tax Remittance' : 'Computation of Tax'}</div>
         <table class="amtrow">
           ${isRemittance ? `
             <tr class="shade"><td class="lbl"><b>14</b> Amount of Remittance</td><td class="amtcell">${amountBoxRow(netAmount)}</td></tr>
@@ -577,7 +629,7 @@ export default function BIRPage() {
             <tr class="shade"><td class="lbl">Less: Tax Credits / Payments</td><td class="amtcell">${amountBoxRow(0)}</td></tr>
             <tr><td class="lbl">Total Amount Payable</td><td class="amtcell">${amountBoxRow(totalPayable)}</td></tr>
           `}
-        </table>
+        </table>`}
 
         <div class="declaration">I/We declare under the penalties of perjury that this return has been made in good faith, verified by me/us, and to the best of my/our knowledge and belief, is true and correct, pursuant to the provisions of the National Internal Revenue Code, as amended, and the regulations issued under authority thereof.</div>
         <table class="signblock"><tr>
