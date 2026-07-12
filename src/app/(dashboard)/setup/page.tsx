@@ -26,7 +26,7 @@ import { uploadImageToDrive } from '@/lib/upload-image'
 /* ─── UOM ─────────────────────────────────────────────── */
 interface UOM { id: string; code: string; name: string; description: string | null; is_active: boolean }
 
-function UOMTab() {
+function UOMTab({ configSelector }: { configSelector: React.ReactNode }) {
   const supabase = createClient()
   const [rows, setRows] = useState<UOM[]>([])
   const [loading, setLoading] = useState(true)
@@ -74,8 +74,9 @@ function UOMTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button onClick={openAdd} size="sm" className="bg-red-600 hover:bg-red-700">
+      <div className="flex items-center gap-3">
+        {configSelector}
+        <Button onClick={openAdd} size="sm" className="bg-red-600 hover:bg-red-700 ml-auto">
           <Plus className="h-4 w-4 mr-1" /> Add UOM
         </Button>
       </div>
@@ -163,7 +164,7 @@ function UOMTab() {
 /* ─── Brands ──────────────────────────────────────────── */
 interface Brand { id: string; name: string; description: string | null; is_active: boolean }
 
-function BrandsTab() {
+function BrandsTab({ configSelector }: { configSelector: React.ReactNode }) {
   const supabase = createClient()
   const [rows, setRows] = useState<Brand[]>([])
   const [loading, setLoading] = useState(true)
@@ -211,8 +212,9 @@ function BrandsTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button onClick={openAdd} size="sm" className="bg-red-600 hover:bg-red-700">
+      <div className="flex items-center gap-3">
+        {configSelector}
+        <Button onClick={openAdd} size="sm" className="bg-red-600 hover:bg-red-700 ml-auto">
           <Plus className="h-4 w-4 mr-1" /> Add Brand
         </Button>
       </div>
@@ -294,7 +296,7 @@ function BrandsTab() {
 /* ─── Attributes ──────────────────────────────────────── */
 interface Attribute { id: string; name: string; data_type: string; options: string[] | null; is_active: boolean }
 
-function AttributesTab() {
+function AttributesTab({ configSelector }: { configSelector: React.ReactNode }) {
   const supabase = createClient()
   const [rows, setRows] = useState<Attribute[]>([])
   const [loading, setLoading] = useState(true)
@@ -373,8 +375,9 @@ function AttributesTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button onClick={openAdd} size="sm" className="bg-red-600 hover:bg-red-700">
+      <div className="flex items-center gap-3">
+        {configSelector}
+        <Button onClick={openAdd} size="sm" className="bg-red-600 hover:bg-red-700 ml-auto">
           <Plus className="h-4 w-4 mr-1" /> Add Attribute
         </Button>
       </div>
@@ -501,7 +504,7 @@ function AttributesTab() {
 /* ─── Categories ──────────────────────────────────────── */
 interface Category { id: string; category_code: string | null; category_name: string; status: string }
 
-function CategoriesTab() {
+function CategoriesTab({ configSelector }: { configSelector: React.ReactNode }) {
   const supabase = createClient()
   const [rows, setRows] = useState<Category[]>([])
   const [loading, setLoading] = useState(true)
@@ -550,8 +553,9 @@ function CategoriesTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button onClick={openAdd} size="sm" className="bg-red-600 hover:bg-red-700">
+      <div className="flex items-center gap-3">
+        {configSelector}
+        <Button onClick={openAdd} size="sm" className="bg-red-600 hover:bg-red-700 ml-auto">
           <Plus className="h-4 w-4 mr-1" /> Add Category
         </Button>
       </div>
@@ -658,7 +662,7 @@ const emptySupplierForm = () => ({
   vat_classification: 'vatable',
 })
 
-function SuppliersTab() {
+function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
   const supabase = createClient()
   const [rows, setRows] = useState<Supplier[]>([])
   const [loading, setLoading] = useState(true)
@@ -746,7 +750,8 @@ function SuppliersTab() {
         <div className="relative flex-1 max-w-sm">
           <Input placeholder="Search suppliers…" value={search} onChange={e => setSearch(e.target.value)} className="pl-3" />
         </div>
-        <Button onClick={openAdd} size="sm" className="bg-red-600 hover:bg-red-700">
+        {configSelector}
+        <Button onClick={openAdd} size="sm" className="bg-red-600 hover:bg-red-700 ml-auto">
           <Plus className="h-4 w-4 mr-1" />Add Supplier
         </Button>
       </div>
@@ -922,7 +927,24 @@ interface UOMOption { id: string; code: string; name: string }
 interface BrandOption { id: string; name: string }
 interface AttributeOption { id: string; name: string }
 
-function ItemListTab() {
+// Windowed page list — always shows first/last, current ±1, with '…' gaps —
+// so pagination stays compact even with dozens of pages.
+function paginationRange(current: number, total: number): (number | '…')[] {
+  const pages = new Set([1, total, current, current - 1, current + 1])
+  const sorted = [...pages].filter(p => p >= 1 && p <= total).sort((a, b) => a - b)
+  const result: (number | '…')[] = []
+  let prev = 0
+  for (const p of sorted) {
+    if (prev && p - prev > 1) result.push('…')
+    result.push(p)
+    prev = p
+  }
+  return result
+}
+
+const ITEM_LIST_PAGE_SIZE = 24
+
+function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
   const supabase = createClient()
   const [rows, setRows] = useState<ItemRow[]>([])
   const [uomList, setUomList] = useState<UOMOption[]>([])
@@ -930,6 +952,7 @@ function ItemListTab() {
   const [attributeList, setAttributeList] = useState<AttributeOption[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<ItemRow | null>(null)
   const [form, setForm] = useState({ item_code: '', item_name: '', brand: '', unit_of_measure: '', cost: '', selling_price: '', attribute: '', image_url: '' })
@@ -961,6 +984,9 @@ function ItemListTab() {
     r.item_code.toLowerCase().includes(search.toLowerCase()) ||
     (r.brand ?? '').toLowerCase().includes(search.toLowerCase())
   )
+  useEffect(() => { setPage(1) }, [search, viewMode])
+  const totalPages = Math.max(1, Math.ceil(filtered.length / ITEM_LIST_PAGE_SIZE))
+  const paged = filtered.slice((page - 1) * ITEM_LIST_PAGE_SIZE, page * ITEM_LIST_PAGE_SIZE)
 
   async function openAdd() {
     setEditing(null)
@@ -1048,6 +1074,7 @@ function ItemListTab() {
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <Input placeholder="Search items…" value={search} onChange={e => setSearch(e.target.value)} className="max-w-sm" />
+        {configSelector}
         <div className="flex border rounded-md overflow-hidden shrink-0 ml-auto">
           <button onClick={() => setViewMode('list')}
             className={`h-9 w-9 flex items-center justify-center transition-colors ${viewMode === 'list' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-accent'}`}>
@@ -1069,7 +1096,7 @@ function ItemListTab() {
             <div className="col-span-full text-center py-6 text-muted-foreground">Loading…</div>
           ) : filtered.length === 0 ? (
             <div className="col-span-full text-center py-6 text-muted-foreground">No items found</div>
-          ) : filtered.map(r => (
+          ) : paged.map(r => (
             <div key={r.id} className="rounded-lg border bg-card overflow-hidden flex flex-col">
               <div className="h-28 bg-muted/40 flex items-center justify-center overflow-hidden">
                 {r.image_url ? (
@@ -1128,7 +1155,7 @@ function ItemListTab() {
               <TableRow><TableCell colSpan={10} className="text-center py-6 text-muted-foreground">Loading…</TableCell></TableRow>
             ) : filtered.length === 0 ? (
               <TableRow><TableCell colSpan={10} className="text-center py-6 text-muted-foreground">No items found</TableCell></TableRow>
-            ) : filtered.map(r => (
+            ) : paged.map(r => (
               <TableRow key={r.id}>
                 <TableCell>
                   <div className="h-9 w-9 rounded border bg-muted/40 flex items-center justify-center overflow-hidden shrink-0">
@@ -1174,6 +1201,34 @@ function ItemListTab() {
           </TableBody>
         </Table>
       </div>
+      )}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-muted-foreground">
+            Showing {((page - 1) * ITEM_LIST_PAGE_SIZE) + 1}–{Math.min(page * ITEM_LIST_PAGE_SIZE, filtered.length)} of {filtered.length}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="px-3 py-1.5 rounded-md border text-sm font-medium disabled:opacity-40 hover:bg-muted transition-colors"
+            >← Prev</button>
+            {paginationRange(page, totalPages).map((p, i) => p === '…' ? (
+              <span key={`gap-${i}`} className="w-8 h-8 flex items-center justify-center text-sm text-muted-foreground">…</span>
+            ) : (
+              <button
+                key={p}
+                onClick={() => setPage(p)}
+                className={`w-8 h-8 rounded-md text-sm font-medium transition-colors ${p === page ? 'bg-red-600 text-white' : 'border hover:bg-muted'}`}
+              >{p}</button>
+            ))}
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="px-3 py-1.5 rounded-md border text-sm font-medium disabled:opacity-40 hover:bg-muted transition-colors"
+            >Next →</button>
+          </div>
+        </div>
       )}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-lg">
@@ -1329,6 +1384,21 @@ export default function SetupPage() {
     loadCounts()
   }, [])
 
+  const configSelector = (
+    <Select value={active} onValueChange={v => setActive(v ?? 'suppliers')}>
+      <SelectTrigger className="w-56 shrink-0">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {CONFIG_TABS.map(tab => (
+          <SelectItem key={tab.key} value={tab.key}>
+            {tab.label}{counts[tab.key] !== undefined ? ` (${counts[tab.key].toLocaleString()})` : ''}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  )
+
   return (
     <div className="space-y-4">
       <div>
@@ -1336,28 +1406,13 @@ export default function SetupPage() {
         <p className="text-muted-foreground text-sm">Manage items, suppliers, categories, and system settings</p>
       </div>
 
-      <div className="flex justify-center">
-        <Select value={active} onValueChange={v => setActive(v ?? 'suppliers')}>
-          <SelectTrigger className="w-64">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {CONFIG_TABS.map(tab => (
-              <SelectItem key={tab.key} value={tab.key}>
-                {tab.label}{counts[tab.key] !== undefined ? ` (${counts[tab.key].toLocaleString()})` : ''}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
-
       <div className="min-w-0">
-        {active === 'suppliers'  && <SuppliersTab />}
-        {active === 'items'      && <ItemListTab />}
-        {active === 'categories' && <CategoriesTab />}
-        {active === 'uom'        && <UOMTab />}
-        {active === 'brands'     && <BrandsTab />}
-        {active === 'attributes' && <AttributesTab />}
+        {active === 'suppliers'  && <SuppliersTab configSelector={configSelector} />}
+        {active === 'items'      && <ItemListTab configSelector={configSelector} />}
+        {active === 'categories' && <CategoriesTab configSelector={configSelector} />}
+        {active === 'uom'        && <UOMTab configSelector={configSelector} />}
+        {active === 'brands'     && <BrandsTab configSelector={configSelector} />}
+        {active === 'attributes' && <AttributesTab configSelector={configSelector} />}
       </div>
     </div>
   )
