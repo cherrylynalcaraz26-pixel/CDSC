@@ -497,8 +497,8 @@ export default function InventoryPage() {
 
   function openAddDialog() {
     setAddItems([{ item_name: '', quantity: '', unit: '' }])
-    setAddItemSearches({})
-    setAddItemDropdowns({})
+    setItemPickerRowIdx(null)
+    setItemPickerSearch('')
     setAddNotes('')
     setAddPoId('')
     setAddPoItems([])
