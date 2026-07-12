@@ -338,6 +338,7 @@ export default function ItemsPage() {
               <TableHead>Category</TableHead>
               <TableHead>UOM</TableHead>
               <TableHead className="text-right">Cost</TableHead>
+              <TableHead className="text-right">Selling Price</TableHead>
               <TableHead className="text-right">On Hand</TableHead>
               <TableHead>Stock</TableHead>
               <TableHead className="w-12" />
@@ -345,9 +346,9 @@ export default function ItemsPage() {
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Loading…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={11} className="text-center py-8 text-muted-foreground">Loading…</TableCell></TableRow>
             ) : filtered.length === 0 ? (
-              <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">No items found</TableCell></TableRow>
+              <TableRow><TableCell colSpan={11} className="text-center py-8 text-muted-foreground">No items found</TableCell></TableRow>
             ) : filtered.map(item => {
               const stock = stockStatus(item)
               const qty = item.stock_levels?.reduce((s, l) => s + (l.quantity_on_hand ?? 0), 0) ?? 0
@@ -381,6 +382,9 @@ export default function ItemsPage() {
                   <TableCell className="text-sm text-muted-foreground">{(item.category as any)?.category_name ?? '—'}</TableCell>
                   <TableCell className="text-sm">{item.unit_of_measure}</TableCell>
                   <TableCell className="text-right font-medium">₱{(item.cost ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</TableCell>
+                  <TableCell className="text-right font-medium">
+                    {item.selling_price != null ? `₱${item.selling_price.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : <span className="text-muted-foreground/40">—</span>}
+                  </TableCell>
                   <TableCell className="text-right font-medium">{qty.toLocaleString()}</TableCell>
                   <TableCell>
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${stock.cls}`}>{stock.label}</span>
