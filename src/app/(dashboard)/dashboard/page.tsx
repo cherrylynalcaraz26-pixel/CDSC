@@ -13,7 +13,7 @@ import {
 } from 'recharts'
 import {
   Package, ShoppingCart, Truck, FileText, ClipboardList,
-  TrendingUp, TrendingDown, Cpu, Users, ArrowRight, Loader2, ChevronDown, ChevronUp,
+  TrendingUp, TrendingDown, Users, ArrowRight, Loader2, ChevronDown, ChevronUp,
   AlertTriangle, CheckCircle2, Clock, Lightbulb, Bell,
 } from 'lucide-react'
 import Link from 'next/link'
@@ -26,7 +26,6 @@ interface KPI {
   pendingPRs: number
   drLogsThisMonth: number
   csiThisMonth: number
-  totalAssets: number
   totalDRs: number
 }
 
@@ -82,7 +81,7 @@ function StatCard({ title, value, icon: Icon, sub, color, href }: {
 export default function DashboardPage() {
   const supabase = createClient()
   const router = useRouter()
-  const [kpi, setKpi] = useState<KPI>({ totalItems: 0, activeSuppliers: 0, openPOs: 0, pendingPRs: 0, drLogsThisMonth: 0, csiThisMonth: 0, totalAssets: 0, totalDRs: 0 })
+  const [kpi, setKpi] = useState<KPI>({ totalItems: 0, activeSuppliers: 0, openPOs: 0, pendingPRs: 0, drLogsThisMonth: 0, csiThisMonth: 0, totalDRs: 0 })
   const [monthlyData, setMonthlyData] = useState<MonthBar[]>([])
   const [recentDRs, setRecentDRs] = useState<RecentDR[]>([])
   const [recentPOs, setRecentPOs] = useState<RecentPO[]>([])
@@ -131,12 +130,11 @@ export default function DashboardPage() {
         return { label: format(d, 'MMM'), start: startOfMonth(d).toISOString(), end: endOfMonth(d).toISOString() }
       })
 
-      const [items, suppliers, pos, prs, assets, allDRs, recentDRData, recentPOData, collectionData, allCSI] = await Promise.all([
+      const [items, suppliers, pos, prs, allDRs, recentDRData, recentPOData, collectionData, allCSI] = await Promise.all([
         supabase.from('items').select('id', { count: 'exact', head: true }).eq('status', 'active'),
         supabase.from('suppliers').select('id', { count: 'exact', head: true }).eq('is_active', true),
         supabase.from('purchase_orders').select('id, status', { count: 'exact' }),
         supabase.from('purchase_requests').select('id, status', { count: 'exact' }),
-        supabase.from('assets').select('id', { count: 'exact', head: true }),
         fetchAllRows((from, to) => supabase.from('dr_logs').select('id, dr_date').order('id').range(from, to)),
         supabase.from('dr_logs').select('id, dr_number, dr_date, supplier_name, status').order('dr_date', { ascending: false }).limit(8),
         supabase.from('purchase_orders').select('id, po_number, created_at, status, total_amount, supplier:suppliers(company_name)').order('created_at', { ascending: false }).limit(6),
@@ -160,7 +158,6 @@ export default function DashboardPage() {
         pendingPRs: allPRs.filter(p => ['submitted', 'dept_approved', 'admin_approved'].includes(p.status)).length,
         drLogsThisMonth: allDRs.filter(d => d.dr_date && d.dr_date >= thisMonthStart.slice(0, 10) && d.dr_date <= thisMonthEnd.slice(0, 10)).length,
         csiThisMonth: allCSI.filter(c => c.si_date && c.si_date >= thisMonthStart.slice(0, 10) && c.si_date <= thisMonthEnd.slice(0, 10)).length,
-        totalAssets: assets.count ?? 0,
         totalDRs: allDRs.length,
       })
 
@@ -382,7 +379,7 @@ export default function DashboardPage() {
       </div>
 
       {/* KPI Row */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
         <StatCard title="Items" value={loading ? '—' : kpi.totalItems.toLocaleString()} icon={Package} href="/items" />
         <StatCard title="Suppliers" value={loading ? '—' : kpi.activeSuppliers} icon={TrendingUp} href="/setup" />
         <StatCard title="Open POs" value={loading ? '—' : kpi.openPOs} icon={ShoppingCart} color="text-blue-600" href="/purchase-orders" sub="Awaiting delivery" />
@@ -390,7 +387,6 @@ export default function DashboardPage() {
         <StatCard title="DR Logs" value={loading ? '—' : kpi.totalDRs.toLocaleString()} icon={Truck} href="/dr-logs" sub="All time" />
         <StatCard title="DR This Month" value={loading ? '—' : kpi.drLogsThisMonth} icon={ClipboardList} color="text-green-600" href="/dr-logs" />
         <StatCard title="CSI This Month" value={loading ? '—' : kpi.csiThisMonth} icon={TrendingUp} color="text-purple-600" href="/csi-monitoring" />
-        <StatCard title="Assets" value={loading ? '—' : kpi.totalAssets} icon={Cpu} href="/assets" />
       </div>
 
       {/* PO Pipeline */}

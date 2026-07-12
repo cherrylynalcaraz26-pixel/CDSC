@@ -120,9 +120,12 @@ export default function ReceivingPage() {
     ])
     // A PO marked "completed" without ever being received would otherwise vanish from this
     // list, since completion and receiving are separate manual steps — so keep completed POs
-    // visible here until a receiving report actually exists for them.
+    // visible here until a receiving report actually exists for them. Conversely, a PO left
+    // marked "open" (status never advanced) that already has a receiving report has, in fact,
+    // been received — only "partially_delivered" POs stay pending regardless of an existing
+    // RR, since that status explicitly means more deliveries are still expected.
     const receivedPONumbers = new Set(((rrData ?? []) as RR[]).map(rr => rr.po_number))
-    const pending = ((poData ?? []) as unknown as PO[]).filter(po => po.status !== 'completed' || !receivedPONumbers.has(po.po_number))
+    const pending = ((poData ?? []) as unknown as PO[]).filter(po => po.status === 'partially_delivered' || !receivedPONumbers.has(po.po_number))
     setPOs(pending)
     const supplierByPoNumber: Record<string, string> = {}
     for (const po of (allPoData ?? []) as unknown as { po_number: string; supplier: { company_name: string } | null }[]) {
