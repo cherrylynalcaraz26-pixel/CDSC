@@ -5,14 +5,9 @@ import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import {
   Loader2, Save, Eye, EyeOff, User, Lock, Building2, Tag, Plus, Trash2,
-  FileCheck2, CheckCircle2, AlertCircle, Camera, ImagePlus, X, Receipt,
+  FileCheck2, CheckCircle2, AlertCircle, Camera, ImagePlus, X,
 } from 'lucide-react'
 import { uploadImageToDrive, cacheBustImageUrl } from '@/lib/upload-image'
-import { fetchAllRows } from '@/lib/supabase/fetch-all'
-
-function fmtPeso(n: number) {
-  return '₱' + n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-}
 
 type Tab = 'account' | 'bir' | 'department' | 'password'
 
@@ -50,9 +45,6 @@ export default function PortalSettingsPage() {
   const [newDept, setNewDept] = useState('')
   const [addingDept, setAddingDept] = useState(false)
 
-  // Outstanding balance with CDSC (billed vs collected)
-  const [billing, setBilling] = useState<{ billed: number; collected: number } | null>(null)
-
   useEffect(() => {
     async function load() {
       const { data: { session } } = await supabase.auth.getSession()
@@ -77,25 +69,6 @@ export default function PortalSettingsPage() {
         setClientId(clientRow.id)
         const { data: deptData } = await supabase.from('client_departments').select('id, name').eq('client_id', clientRow.id).order('name')
         setDepartments(deptData ?? [])
-      }
-
-      // Billed vs collected — shows the client their outstanding balance with
-      // CDSC. Counts only portal-visible CSI records (show_in_portal = true)
-      // so the balance matches exactly what the client can see in their
-      // portal, using each invoice's own collection status.
-      if (clientRow?.company_name) {
-        const csiRows = await fetchAllRows((from, to) =>
-          supabase.from('csi_records')
-            .select('amount, quantity, unit_price, collection_status')
-            .eq('client_name', clientRow.company_name)
-            .eq('show_in_portal', true)
-            .order('id')
-            .range(from, to)
-        )
-        const rowAmount = (r: any) => Number(r.amount) || (Number(r.quantity) || 0) * (Number(r.unit_price) || 0)
-        const billed = csiRows.reduce((s: number, r: any) => s + rowAmount(r), 0)
-        const collected = csiRows.filter((r: any) => r.collection_status === 'collected').reduce((s: number, r: any) => s + rowAmount(r), 0)
-        if (billed > 0) setBilling({ billed, collected })
       }
       setLoading(false)
     }
@@ -300,27 +273,6 @@ export default function PortalSettingsPage() {
       {/* Account tab */}
       {tab === 'account' && (
         <div className="space-y-4">
-          {/* Pending collection notice — this client's own balance with CDSC */}
-          {billing && (billing.billed - billing.collected > 0.01 ? (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-2">
-              <Receipt className="h-4 w-4 text-red-600 shrink-0 mt-0.5" />
-              <div>
-                <span className="text-sm font-semibold text-red-800 block">Pending Collection</span>
-                <span className="text-xs text-red-700">
-                  CDSC has a pending collection of <span className="font-bold">{fmtPeso(billing.billed - billing.collected)}</span> on your account
-                  ({fmtPeso(billing.billed)} billed, {fmtPeso(billing.collected)} collected). Please coordinate payment with CDSC.
-                </span>
-              </div>
-            </div>
-          ) : (
-            <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
-              <span className="text-xs text-green-800">
-                <span className="font-semibold">No pending collections</span> — your account with CDSC is fully settled ({fmtPeso(billing.billed)} billed and collected).
-              </span>
-            </div>
-          ))}
-
           {/* Profile info */}
           <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
             <div className="flex items-center gap-2 mb-2">
