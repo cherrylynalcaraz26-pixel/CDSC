@@ -571,15 +571,19 @@ function CollectionsTab() {
     setCsiOptions([])
   }
 
-  // CSI invoices for this client that don't already have a posted collection linked —
-  // so the same invoice can't be selected (and collected) twice.
+  // CSI invoices for this client that aren't already spoken for — excludes any SI
+  // already linked to a posted collection, and any SI whose CSI record(s) are already
+  // marked collected, so the same invoice can't be selected (and collected) twice.
   async function loadCsiOptions(clientName: string) {
     if (!clientName) { setCsiOptions([]); return }
     const [{ data: csiData }, { data: linkedRows }] = await Promise.all([
-      fetchAllRows((from, to) => supabase.from('csi_records').select('si_number, si_date, amount').eq('client_name', clientName).order('id').range(from, to)).then(data => ({ data })),
+      fetchAllRows((from, to) => supabase.from('csi_records').select('si_number, si_date, amount, collection_status').eq('client_name', clientName).order('id').range(from, to)).then(data => ({ data })),
       supabase.from('collections').select('si_number').eq('client_name', clientName).eq('status', 'posted').not('si_number', 'is', null),
     ])
     const linkedSet = new Set((linkedRows ?? []).map(r => r.si_number))
+    for (const r of (csiData ?? [])) {
+      if (r.si_number && r.collection_status === 'collected') linkedSet.add(r.si_number)
+    }
     const map: Record<string, { si_number: string; si_date: string; total: number }> = {}
     for (const r of (csiData ?? [])) {
       if (!r.si_number || linkedSet.has(r.si_number)) continue
@@ -602,16 +606,20 @@ function CollectionsTab() {
     setForm(p => ({ ...p, si_number: siNumber, amount: csi ? String(csi.total) : p.amount }))
   }
 
-  // Unpaid CSI invoices for a client, same "not already linked to a posted collection"
-  // rule as loadCsiOptions — kept separate so the Print Blank Form dialog doesn't
-  // interfere with the New Collection form's own selection state.
+  // Unpaid CSI invoices for a client, same "not already linked to a posted collection,
+  // and not already marked collected" rule as loadCsiOptions — kept separate so the
+  // Print Blank Form dialog doesn't interfere with the New Collection form's own
+  // selection state.
   async function loadBlankFormInvoices(clientName: string) {
     if (!clientName) { setBlankFormInvoices([]); return }
     const [{ data: csiData }, { data: linkedRows }] = await Promise.all([
-      fetchAllRows((from, to) => supabase.from('csi_records').select('si_number, si_date, amount').eq('client_name', clientName).order('id').range(from, to)).then(data => ({ data })),
+      fetchAllRows((from, to) => supabase.from('csi_records').select('si_number, si_date, amount, collection_status').eq('client_name', clientName).order('id').range(from, to)).then(data => ({ data })),
       supabase.from('collections').select('si_number').eq('client_name', clientName).eq('status', 'posted').not('si_number', 'is', null),
     ])
     const linkedSet = new Set((linkedRows ?? []).map(r => r.si_number))
+    for (const r of (csiData ?? [])) {
+      if (r.si_number && r.collection_status === 'collected') linkedSet.add(r.si_number)
+    }
     const map: Record<string, { si_number: string; si_date: string; total: number }> = {}
     for (const r of (csiData ?? [])) {
       if (!r.si_number || linkedSet.has(r.si_number)) continue
@@ -1198,7 +1206,7 @@ function CollectionsTab() {
       </Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="w-[95vw] max-w-2xl sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editingId ? 'Edit Collection (OR)' : 'New Collection (OR)'}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-4">

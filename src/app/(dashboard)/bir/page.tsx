@@ -12,7 +12,8 @@ import { Separator } from '@/components/ui/separator'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { CheckCircle2, XCircle, AlertTriangle, Download, FileBarChart, Zap, FileText, Loader2, Printer, Sparkles } from 'lucide-react'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { CheckCircle2, XCircle, AlertTriangle, Download, FileBarChart, Zap, FileText, Loader2, Printer, Sparkles, MoreHorizontal } from 'lucide-react'
 import { toast } from 'sonner'
 import { htmlToPdfBase64 } from '@/lib/send-email'
 
@@ -364,49 +365,73 @@ export default function BIRPage() {
     setFormGenLoading(false)
   }
 
+  // Plain tables/block elements only — no flexbox or grid. html2canvas (used for the
+  // PDF download path) renders flex layouts unreliably, which made Print and Download
+  // PDF produce visibly different output for the same document.
   function buildFilledFormHtml(form: BirForm) {
     const rowsHtml = formGenRows.map(r => `<tr>
       <td>${r.label}${r.sub ? `<br/><span style="color:#9ca3af;font-size:9px">${r.sub}</span>` : ''}</td>
-      <td style="text-align:right">₱${r.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+      <td class="r">₱${r.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
     </tr>`).join('')
     const rate = parseFloat(formGenRate) || 0
     const isPercentageTax = form.form === '2551Q' || form.form === '2550Q'
     const isIncomeTax = form.form === '1701Q' || form.form === '1702Q'
     const breakdownLabel = isIncomeTax ? 'Account' : isPercentageTax ? 'Client' : 'Supplier'
     return `<!DOCTYPE html><html><head><title>BIR Form ${form.form}</title><style>
-      body{font-family:Arial,sans-serif;padding:24px;color:#111}
-      table{width:100%;border-collapse:collapse;font-size:11px;margin-top:8px}
-      th{background:#1f2937;color:#fff;text-align:left;padding:6px 8px}
-      td{padding:6px 8px;border-bottom:1px solid #e5e7eb}
-      h1{font-size:18px;margin-bottom:2px} h2{font-size:12px;color:#6b7280;margin:0 0 12px}
-      .co{border-bottom:2px solid #1f2937;padding-bottom:10px;margin-bottom:14px}
-      .co-name{font-size:15px;font-weight:700} .co-sub{font-size:10px;color:#6b7280}
-      .meta{display:flex;justify-content:space-between;font-size:11px;margin-bottom:10px}
-      .meta div{line-height:1.6}
-      .total{display:flex;justify-content:space-between;font-size:14px;font-weight:700;border-top:2px solid #1f2937;padding-top:8px;margin-top:8px}
-      @media print { @page { margin: 14mm; size: A4 portrait; } }
+      * { box-sizing: border-box; }
+      body{font-family:Arial,sans-serif;padding:0;margin:0;color:#111;font-size:11px}
+      .page{border:1px solid #1f2937;padding:0}
+      table{width:100%;border-collapse:collapse;font-size:11px}
+      td,th{padding:6px 10px}
+      th{background:#1f2937;color:#fff;text-align:left}
+      .rows td{border-bottom:1px solid #e5e7eb}
+      .rows td.r,th.r{text-align:right}
+      h1{font-size:16px;margin:0} h2{font-size:11px;color:#6b7280;margin:2px 0 0;font-weight:normal}
+      .letterhead td{padding:10px 14px;border-bottom:2px solid #1f2937;vertical-align:top}
+      .co-name{font-size:14px;font-weight:700} .co-sub{font-size:9px;color:#6b7280;margin-top:2px}
+      .meta td{padding:8px 14px;font-size:10px;border-bottom:1px solid #e5e7eb}
+      .meta td b{display:block;font-size:8px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.4px;font-weight:600;margin-bottom:2px}
+      .section-title{background:#f3f4f6;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#374151;padding:6px 14px}
+      .totals td{padding:8px 14px;font-size:11px;border-top:1px solid #e5e7eb}
+      .totals td.r{text-align:right}
+      .totals tr.grand td{font-size:13px;font-weight:700;border-top:2px solid #1f2937}
+      .note{padding:10px 14px;font-size:8px;color:#9ca3af}
+      @media print { @page { margin: 10mm; size: A4 portrait; } }
     </style></head><body>
-      <div class="co">
-        <div class="co-name">${companyInfo?.company_name ?? 'CDSC Industrial Supply'}</div>
-        <div class="co-sub">
-          ${companyInfo?.address ? `${companyInfo.address}<br/>` : ''}
-          ${companyInfo?.tin ? `TIN: ${companyInfo.tin}<br/>` : ''}
-          ${companyInfo?.phone ? `Tel: ${companyInfo.phone}` : ''}
-        </div>
+      <div class="page">
+        <table class="letterhead"><tr>
+          <td style="width:60%">
+            <div class="co-name">${companyInfo?.company_name ?? 'CDSC Industrial Supply'}</div>
+            <div class="co-sub">
+              ${companyInfo?.address ?? ''}${companyInfo?.address ? '<br/>' : ''}
+              ${companyInfo?.tin ? `TIN: ${companyInfo.tin}` : ''}${companyInfo?.phone ? ` &nbsp;|&nbsp; Tel: ${companyInfo.phone}` : ''}
+            </div>
+          </td>
+          <td style="text-align:right">
+            <h1>BIR Form ${form.form}</h1>
+            <h2>${form.description}</h2>
+          </td>
+        </tr></table>
+
+        <table class="meta"><tr>
+          <td style="width:50%"><b>Taxable Period</b>${form.period}</td>
+          <td style="width:50%"><b>Due Date</b>${form.due}</td>
+        </tr></table>
+
+        ${formGenManual
+          ? `<div class="note" style="font-size:10px;padding:14px">No source data is tracked in the system for this form yet — amount entered manually below.</div>`
+          : `<div class="section-title">Part II — ${breakdownLabel} Breakdown</div>
+             <table class="rows"><thead><tr><th>${breakdownLabel}</th><th class="r">Amount</th></tr></thead>
+             <tbody>${rowsHtml || '<tr><td colspan="2" style="text-align:center;color:#9ca3af">No records for this period</td></tr>'}</tbody></table>`}
+
+        <table class="totals">
+          <tr><td>${formGenBaseLabel}</td><td class="r">₱${formGenBaseAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td></tr>
+          ${isPercentageTax ? `<tr><td>Tax Rate</td><td class="r">${rate}%</td></tr>` : ''}
+          <tr class="grand"><td>Amount Due</td><td class="r">₱${(parseFloat(formGenAmount) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td></tr>
+        </table>
+
+        <div class="note">Generated ${new Date().toLocaleDateString('en-PH')} from CDSC system records. Verify against official BIR Form ${form.form} before filing.</div>
       </div>
-      <h1>BIR Form ${form.form}</h1>
-      <h2>${form.description}</h2>
-      <div class="meta">
-        <div><strong>Taxable Period:</strong> ${form.period}</div>
-        <div><strong>Due Date:</strong> ${form.due}</div>
-      </div>
-      ${formGenManual
-        ? `<p style="font-size:11px;color:#6b7280">No source data is tracked in the system for this form yet — amount entered manually below.</p>`
-        : `<table><thead><tr><th>${breakdownLabel}</th><th style="text-align:right">Amount</th></tr></thead><tbody>${rowsHtml || '<tr><td colspan="2" style="text-align:center;color:#9ca3af">No records for this period</td></tr>'}</tbody></table>`}
-      <div class="total"><span>${formGenBaseLabel}</span><span>₱${formGenBaseAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
-      ${isPercentageTax ? `<div class="total" style="font-size:12px;border-top:none;padding-top:2px"><span>Tax Rate</span><span>${rate}%</span></div>` : ''}
-      <div class="total"><span>Amount Due</span><span>₱${(parseFloat(formGenAmount) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
-      <p style="margin-top:24px;font-size:9px;color:#9ca3af">Generated ${new Date().toLocaleDateString('en-PH')} from CDSC system records. Verify against official BIR Form ${form.form} before filing.</p>
     </body></html>`
   }
 
@@ -619,7 +644,7 @@ export default function BIRPage() {
                     <TableHead>Due Date</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="w-64">Actions</TableHead>
+                    <TableHead className="w-12" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -639,28 +664,26 @@ export default function BIRPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center gap-1.5">
-                          <Button size="sm" variant="outline" className="h-7 text-xs"
-                            onClick={() => openFormGenerator(form)}>
-                            <Sparkles className="h-3.5 w-3.5 mr-1" />Generate
-                          </Button>
-                          {form.status !== 'filed' && (
-                            <Button size="sm" variant="outline" className="h-7 text-xs"
-                              onClick={() => markFiled(form)}>
-                              Mark Filed
-                            </Button>
-                          )}
-                          {BIR_FORM_PDF_URLS[form.form] && (
-                            <a
-                              href={BIR_FORM_PDF_URLS[form.form]}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 h-7 px-2.5 rounded-md border border-input bg-background text-xs font-medium hover:bg-muted transition-colors"
-                            >
-                              <Download className="h-3.5 w-3.5" />Form
-                            </a>
-                          )}
-                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => openFormGenerator(form)}>
+                              <Sparkles className="h-3.5 w-3.5 mr-2" />Generate
+                            </DropdownMenuItem>
+                            {form.status !== 'filed' && (
+                              <DropdownMenuItem onClick={() => markFiled(form)}>
+                                Mark Filed
+                              </DropdownMenuItem>
+                            )}
+                            {BIR_FORM_PDF_URLS[form.form] && (
+                              <DropdownMenuItem onClick={() => window.open(BIR_FORM_PDF_URLS[form.form], '_blank', 'noopener,noreferrer')}>
+                                <Download className="h-3.5 w-3.5 mr-2" />Blank Form (PDF)
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   ))}

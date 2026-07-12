@@ -19,7 +19,7 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Plus, X, Search, MoreHorizontal, Loader2, FileText, LayoutGrid, List, ChevronDown, ChevronRight, ChevronUp, Package, Trash2, Printer, SlidersHorizontal, FileOutput } from 'lucide-react'
+import { Plus, X, Search, MoreHorizontal, Loader2, FileText, LayoutGrid, List, ChevronDown, ChevronUp, Package, Trash2, Printer, SlidersHorizontal, FileOutput } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
@@ -1312,7 +1312,6 @@ export default function CSIMonitoringPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-8" />
                     <TableHead className="w-12">No.</TableHead>
                     <TableHead className="w-28">Date</TableHead>
                     <TableHead className="w-32">SI Number</TableHead>
@@ -1328,13 +1327,13 @@ export default function CSIMonitoringPage() {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={10} className="text-center py-10">
+                      <TableCell colSpan={9} className="text-center py-10">
                         <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                       </TableCell>
                     </TableRow>
                   ) : siGroups.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
+                      <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
                         No records found. Click <strong>New Record</strong> to add one.
                       </TableCell>
                     </TableRow>
@@ -1344,11 +1343,6 @@ export default function CSIMonitoringPage() {
                         className="cursor-pointer hover:bg-muted/50"
                         onClick={() => toggleSI(group.si_number)}
                       >
-                        <TableCell className="text-muted-foreground">
-                          {expandedSIs.has(group.si_number)
-                            ? <ChevronDown className="h-4 w-4" />
-                            : <ChevronRight className="h-4 w-4" />}
-                        </TableCell>
                         <TableCell className="text-sm text-muted-foreground">{(page - 1) * PAGE_SIZE + i + 1}</TableCell>
                         <TableCell className="text-sm whitespace-nowrap">
                           {format(parseISO(group.date), 'MMM d, yyyy')}
@@ -1385,7 +1379,7 @@ export default function CSIMonitoringPage() {
                       </TableRow>
                       {expandedSIs.has(group.si_number) && (
                         <TableRow key={`${group.si_number}-items`}>
-                          <TableCell colSpan={10} className="p-0 bg-muted/20">
+                          <TableCell colSpan={9} className="p-0 bg-muted/20">
                             <div className="px-8 py-2">
                               <Table>
                                 <TableHeader>

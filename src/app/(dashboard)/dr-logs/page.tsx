@@ -19,7 +19,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
-import { Plus, Search, MoreHorizontal, Loader2, Truck, Trash2, ChevronDown, ChevronRight, LayoutGrid, List, X, Printer, SlidersHorizontal, FileOutput } from 'lucide-react'
+import { Plus, Search, MoreHorizontal, Loader2, Truck, Trash2, LayoutGrid, List, X, Printer, SlidersHorizontal, FileOutput } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
@@ -963,7 +963,6 @@ export default function DRLogsPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-8" />
                     <TableHead className="w-12">No.</TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead>DR Number</TableHead>
@@ -976,13 +975,13 @@ export default function DRLogsPage() {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-10">
+                      <TableCell colSpan={7} className="text-center py-10">
                         <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                       </TableCell>
                     </TableRow>
                   ) : filtered.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
+                      <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                         No DR logs found. Click <strong>New DR Log</strong> to add one.
                       </TableCell>
                     </TableRow>
@@ -999,11 +998,6 @@ export default function DRLogsPage() {
                           className="cursor-pointer hover:bg-muted/50"
                           onClick={() => toggleExpand(log.id)}
                         >
-                          <TableCell className="pr-0">
-                            {isExpanded
-                              ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                              : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-                          </TableCell>
                           <TableCell className="text-sm text-muted-foreground">{(page - 1) * PAGE_SIZE + i + 1}</TableCell>
                           <TableCell className="text-sm whitespace-nowrap">
                             {format(parseISO(log.dr_date), 'MM/dd/yyyy')}
@@ -1031,7 +1025,7 @@ export default function DRLogsPage() {
 
                         {isExpanded && (
                           <TableRow key={`${log.id}-expanded`} className="bg-muted/30 hover:bg-muted/30">
-                            <TableCell colSpan={8} className="py-3 px-6">
+                            <TableCell colSpan={7} className="py-3 px-6">
                               <div className="space-y-3">
                                 <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
                                   {log.po_number && <span>SO: <span className="font-mono text-foreground">{log.po_number}</span></span>}
