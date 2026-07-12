@@ -2396,11 +2396,13 @@ function AccountingPageContent() {
       </div>
 
       <Tabs value={activeTab} onValueChange={v => setTab(v ?? 'overview')}>
-        <TabsList variant="line">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="collections">Collections</TabsTrigger>
-          <TabsTrigger value="bir">BIR Compliance</TabsTrigger>
-        </TabsList>
+        {activeTab !== 'bookkeeping' && (
+          <TabsList variant="line">
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="collections">Collections</TabsTrigger>
+            <TabsTrigger value="bir">BIR Compliance</TabsTrigger>
+          </TabsList>
+        )}
         <div>
           <TabsContent value="overview"><OverviewTab /></TabsContent>
           <TabsContent value="collections"><CollectionsTab /></TabsContent>

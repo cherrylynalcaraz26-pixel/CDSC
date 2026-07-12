@@ -368,89 +368,228 @@ export default function BIRPage() {
   // Plain tables/block elements only — no flexbox or grid. html2canvas (used for the
   // PDF download path) renders flex layouts unreliably, which made Print and Download
   // PDF produce visibly different output for the same document.
+  // Renders a value as a row of individual boxed cells, the way BIR forms present
+  // TIN/date/amount fields — the single most recognizable visual signature of these
+  // forms. Plain inline-block <span> cells only — no flex/grid, and no
+  // inline-table (html2canvas support for it is inconsistent) — so html2canvas
+  // renders it the same as the browser print path.
+  function boxRow(text: string, size: number, opts?: { dashEvery?: number }) {
+    const chars = text.padStart(size, ' ').slice(-size).split('')
+    const cells = chars.map((c, i) => {
+      const dash = opts?.dashEvery && i > 0 && i < size && i % opts.dashEvery === 0
+        ? '<span class="dbox sep">-</span>' : ''
+      return `${dash}<span class="dbox">${c.trim()}</span>`
+    }).join('')
+    return `<span class="boxgrid">${cells}</span>`
+  }
+
+  function amountBoxRow(amount: number, intDigits = 11) {
+    const [intPart, decPart] = Math.abs(amount).toFixed(2).split('.')
+    const intChars = intPart.padStart(intDigits, ' ').slice(-intDigits).split('')
+    const intCells = intChars.map(c => `<span class="dbox">${c.trim()}</span>`).join('')
+    const decCells = decPart.split('').map(c => `<span class="dbox dec">${c}</span>`).join('')
+    return `<span class="boxgrid">${intCells}<span class="dbox sep">.</span>${decCells}</span>`
+  }
+
+  function checkbox(checked: boolean) {
+    return `<span class="chkbox">${checked ? 'X' : ''}</span>`
+  }
+
   function buildFilledFormHtml(form: BirForm) {
     const rowsHtml = formGenRows.map(r => `<tr>
       <td>${r.label}${r.sub ? `<br/><span style="color:#9ca3af;font-size:9px">${r.sub}</span>` : ''}</td>
       <td class="r">₱${r.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
     </tr>`).join('')
     const rate = parseFloat(formGenRate) || 0
+    const isRemittance = ['0619-E', '0619-F', '1601-EQ', '1601-FQ'].includes(form.form)
     const isPercentageTax = form.form === '2551Q' || form.form === '2550Q'
     const isIncomeTax = form.form === '1701Q' || form.form === '1702Q'
+    const isQuarterly = form.form.includes('Q')
     const breakdownLabel = isIncomeTax ? 'Account' : isPercentageTax ? 'Client' : 'Supplier'
     const officialTitle = BIR_FORM_TITLES[form.form] ?? form.description
-    const taxDueLabel = isIncomeTax ? 'Net Taxable Income' : isPercentageTax ? 'Tax Due' : 'Total Tax Withheld/Remitted'
+    const netAmount = formGenBaseAmount
+    const totalPayable = parseFloat(formGenAmount) || 0
+
+    const d = (iso: string) => new Date(iso + 'T00:00:00')
+    const periodDate = d(isQuarterly ? form.periodEnd : form.periodStart)
+    const periodMY = `${String(periodDate.getMonth() + 1).padStart(2, '0')}/${periodDate.getFullYear()}`
+    const due = d(form.due)
+    const dueMDY = `${String(due.getMonth() + 1).padStart(2, '0')}/${String(due.getDate()).padStart(2, '0')}/${due.getFullYear()}`
+    const tinDigits = (companyInfo?.tin ?? '').replace(/\D/g, '')
 
     return `<!DOCTYPE html><html><head><title>BIR Form ${form.form}</title><style>
       * { box-sizing: border-box; }
-      body{font-family:Arial,sans-serif;padding:0;margin:0;color:#111;font-size:10px}
-      .page{border:1px solid #1f2937}
-      table{width:100%;border-collapse:collapse;font-size:10px}
-      td,th{padding:5px 9px}
+      body{font-family:Arial,sans-serif;padding:0;margin:0;color:#111;font-size:9px}
+      .page{border:2px solid #111}
+      table{width:100%;border-collapse:collapse;font-size:9px}
+      td,th{padding:4px 8px}
       th{background:#1f2937;color:#fff;text-align:left}
       .rows td{border-bottom:1px solid #e5e7eb}
       .rows td.r,th.r{text-align:right}
 
-      .masthead{text-align:center;padding:10px 14px 8px;border-bottom:2px solid #1f2937}
-      .masthead .republic{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.3px}
-      .masthead .bureau{font-size:9px;color:#4b5563}
-      .masthead .formno{float:right;border:1px solid #1f2937;padding:3px 8px;font-size:9px;font-weight:700}
-      .masthead h1{font-size:14px;margin:8px 0 1px;text-transform:uppercase}
-      .masthead h2{font-size:10px;color:#6b7280;margin:0;font-weight:normal}
+      .utility td{padding:3px 8px;font-size:8px;border-bottom:1px solid #111}
+      .utility .label{color:#4b5563}
+      .masthead{text-align:center;padding:6px 10px 8px}
+      .masthead .republic{font-size:9px;font-weight:700}
+      .masthead .bureau{font-size:9px;font-weight:700}
+      .headerbox{border-top:2px solid #111;border-bottom:2px solid #111}
+      .headerbox td{vertical-align:top;padding:8px 10px}
+      .headerbox .formno-label{font-size:8px;font-weight:700}
+      .headerbox .formno{font-size:26px;font-weight:800;line-height:1.1}
+      .headerbox .rev{font-size:8px;margin-top:2px}
+      .headerbox h1{font-size:15px;margin:0;text-align:center;text-transform:none}
+      .headerbox h2{font-size:11px;margin:2px 0 6px;text-align:center;font-weight:700}
+      .headerbox .instr{font-size:8px;font-style:italic;text-align:center;color:#374151;line-height:1.4}
 
-      .section-title{background:#f3f4f6;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#374151;padding:5px 14px;border-top:1px solid #d1d5db;border-bottom:1px solid #d1d5db}
-      .fields td{padding:6px 14px;font-size:10px;border-bottom:1px solid #e5e7eb;vertical-align:top}
-      .fields td b{display:block;font-size:8px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.4px;font-weight:600;margin-bottom:2px}
-      .blank{color:#d1d5db}
+      .fieldsgrid td{border:1px solid #111;padding:4px 8px;vertical-align:top}
+      .fieldsgrid .num{width:22px;text-align:center;font-weight:700}
+      .fieldsgrid .flabel{font-weight:700}
+      .fieldsgrid .fval{padding-top:6px}
 
-      .totals td{padding:7px 14px;font-size:10px;border-top:1px solid #e5e7eb}
-      .totals td.r{text-align:right}
-      .totals tr.grand td{font-size:12px;font-weight:700;border-top:2px solid #1f2937}
-      .note{padding:8px 14px;font-size:8px;color:#9ca3af}
-      @media print { @page { margin: 10mm; size: A4 portrait; } }
+      .section-title{background:#e5e7eb;font-size:10px;font-weight:700;text-align:center;padding:4px;border-top:2px solid #111;border-bottom:2px solid #111}
+
+      .fields td{border:1px solid #111;padding:5px 8px;vertical-align:top}
+      .fields .flabel{font-weight:700;display:block;margin-bottom:3px}
+      .fields .sub{font-weight:400;font-style:italic;font-size:8px;color:#4b5563}
+      .blank{color:#9ca3af}
+
+      .boxgrid{display:inline-block;white-space:nowrap}
+      .dbox{display:inline-block;border:1px solid #111;width:13px;height:15px;line-height:15px;text-align:center;font-family:'Courier New',monospace;font-size:9px;vertical-align:top;margin-right:-1px}
+      .dbox.sep{background:#9ca3af;color:#fff;font-weight:700}
+      .chkbox{display:inline-block;width:10px;height:10px;border:1px solid #111;text-align:center;font-size:8px;line-height:10px;font-weight:800}
+
+      .amtrow td{border:1px solid #111;padding:4px 8px;vertical-align:middle}
+      .amtrow .lbl{font-weight:600}
+      .amtrow .lbl b{display:inline-block;width:16px}
+      .amtrow.shade{background:#f3f4f6}
+      .amtrow .amtcell{text-align:right}
+
+      .declaration{padding:8px 10px;font-size:7.5px;font-style:italic;border-top:1px solid #111;line-height:1.4}
+      .signblock td{border:1px solid #111;padding:14px 10px 4px;font-size:8px;vertical-align:bottom}
+      .signblock .sigline{border-top:1px solid #111;margin-top:26px;padding-top:2px;font-size:7.5px}
+
+      .note{padding:6px 10px;font-size:7.5px;color:#6b7280;border-top:1px solid #111}
+      @media print { @page { margin: 8mm; size: A4 portrait; } }
     </style></head><body>
       <div class="page">
+        <table class="utility"><tr>
+          <td style="width:14%"><span class="label">For BIR</span><br/>Use Only</td>
+          <td style="width:14%"><span class="label">BCS/Item:</span></td>
+          <td></td>
+        </tr></table>
+
         <div class="masthead">
-          <div class="formno">BIR Form No.<br/><span style="font-size:13px">${form.form}</span></div>
-          <div class="republic">Republika ng Pilipinas / Republic of the Philippines</div>
-          <div class="bureau">Kagawaran ng Pananalapi &nbsp;•&nbsp; Kawanihan ng Rentas Internas<br/>Department of Finance &nbsp;•&nbsp; Bureau of Internal Revenue</div>
-          <h1>${officialTitle}</h1>
-          <h2>${form.description}</h2>
+          <div class="republic">Republika ng Pilipinas &nbsp;/&nbsp; Republic of the Philippines</div>
+          <div class="bureau">Kagawaran ng Pananalapi / Department of Finance &nbsp;•&nbsp; Kawanihan ng Rentas Internas / Bureau of Internal Revenue</div>
         </div>
+
+        <table class="headerbox"><tr>
+          <td style="width:16%; border-right:2px solid #111">
+            <div class="formno-label">BIR Form No.</div>
+            <div class="formno">${form.form}</div>
+            <div class="rev">${BIR_FORM_REV[form.form] ?? ''}<br/>Page 1</div>
+          </td>
+          <td>
+            <h1>${BIR_FORM_SHORT_TITLES[form.form] ?? officialTitle}</h1>
+            ${officialTitle !== (BIR_FORM_SHORT_TITLES[form.form] ?? '') ? `<h2>${officialTitle}</h2>` : ''}
+            <div class="instr">Enter all required information in CAPITAL LETTERS using BLACK ink. Mark all applicable boxes with an "X".<br/>Two copies MUST be filed with the BIR and one held by the Taxpayer.</div>
+          </td>
+        </tr></table>
+
+        <table class="fieldsgrid"><tr>
+          <td class="num">1</td>
+          <td>
+            <div class="flabel">${isQuarterly ? 'For the Quarter Ending' : 'For the Month of'} <span class="sub">(MM/YYYY)</span></div>
+            <div class="fval">${boxRow(periodMY.replace('/', ''), 6)}</div>
+          </td>
+          <td class="num">2</td>
+          <td>
+            <div class="flabel">Due Date <span class="sub">(MM/DD/YYYY)</span></div>
+            <div class="fval">${boxRow(dueMDY.replace(/\//g, ''), 8)}</div>
+          </td>
+          <td class="num">3</td>
+          <td>
+            <div class="flabel">Amended Form?</div>
+            <div class="fval">${checkbox(false)} Yes &nbsp;&nbsp; ${checkbox(true)} No</div>
+          </td>
+        </tr></table>
 
         <div class="section-title">Part I — Background Information</div>
         <table class="fields">
           <tr>
-            <td style="width:50%"><b>Taxpayer / Withholding Agent's Name</b>${companyInfo?.company_name ?? '<span class="blank">—</span>'}</td>
-            <td style="width:50%"><b>TIN</b>${companyInfo?.tin ?? '<span class="blank">—</span>'}</td>
+            <td style="width:60%">
+              <span class="flabel">Taxpayer Identification Number (TIN)</span>
+              ${tinDigits ? boxRow(tinDigits, 12, { dashEvery: 3 }) : `<span class="blank">— not on file —</span>`}
+            </td>
+            <td style="width:40%">
+              <span class="flabel">RDO Code</span>
+              <span class="blank">— fill in manually —</span>
+            </td>
           </tr>
           <tr>
-            <td colspan="2"><b>Registered Address</b>${companyInfo?.address ?? '<span class="blank">—</span>'}</td>
+            <td colspan="2">
+              <span class="flabel">Withholding Agent's / Taxpayer's Name <span class="sub">(Registered Name)</span></span>
+              ${companyInfo?.company_name ?? '<span class="blank">—</span>'}
+            </td>
           </tr>
           <tr>
-            <td><b>RDO Code</b><span class="blank">— (fill in manually)</span></td>
-            <td><b>Contact Number</b>${companyInfo?.phone ?? '<span class="blank">—</span>'}</td>
+            <td colspan="2">
+              <span class="flabel">Registered Address</span>
+              ${companyInfo?.address ?? '<span class="blank">—</span>'}
+            </td>
           </tr>
           <tr>
-            <td><b>Taxable Period</b>${form.period}</td>
-            <td><b>Due Date</b>${form.due}</td>
+            <td>
+              <span class="flabel">Contact Number</span>
+              ${companyInfo?.phone ?? '<span class="blank">—</span>'}
+            </td>
+            <td>
+              <span class="flabel">Category</span>
+              ${checkbox(true)} Private &nbsp;&nbsp; ${checkbox(false)} Government
+            </td>
           </tr>
         </table>
 
         ${formGenManual
-          ? `<div class="note" style="font-size:10px;padding:12px 14px">No source data is tracked in the system for this form yet — the amount below must be entered manually.</div>`
+          ? `<div class="section-title">Part II — ${isRemittance ? 'Tax Remittance' : 'Computation of Tax'}</div>
+             <div class="note" style="border-top:none">No source data is tracked in the system for this form yet — the amount below must be entered manually.</div>`
           : `<div class="section-title">Part II — Schedule of ${breakdownLabel}s</div>
              <table class="rows"><thead><tr><th>${breakdownLabel}</th><th class="r">Amount</th></tr></thead>
              <tbody>${rowsHtml || '<tr><td colspan="2" style="text-align:center;color:#9ca3af">No records for this period</td></tr>'}</tbody></table>`}
 
-        <div class="section-title">Part III — Computation of Tax</div>
-        <table class="totals">
-          <tr><td>${taxDueLabel}</td><td class="r">₱${formGenBaseAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td></tr>
-          ${isPercentageTax ? `<tr><td>Tax Rate</td><td class="r">${rate}%</td></tr>` : ''}
-          <tr><td>Less: Tax Credits / Payments</td><td class="r blank">—</td></tr>
-          <tr class="grand"><td>Total Amount Payable</td><td class="r">₱${(parseFloat(formGenAmount) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td></tr>
+        <div class="section-title">Part III — ${isRemittance ? 'Tax Remittance' : 'Computation of Tax'}</div>
+        <table class="amtrow">
+          ${isRemittance ? `
+            <tr class="shade"><td class="lbl"><b>14</b> Amount of Remittance</td><td class="amtcell">${amountBoxRow(netAmount)}</td></tr>
+            <tr><td class="lbl"><b>15</b> Less: Amount Remitted from Previously Filed Form, if amended</td><td class="amtcell">${amountBoxRow(0)}</td></tr>
+            <tr class="shade"><td class="lbl"><b>16</b> Net Amount of Remittance <span class="sub">(Item 14 Less Item 15)</span></td><td class="amtcell">${amountBoxRow(netAmount)}</td></tr>
+            <tr><td class="lbl"><b>17</b> Add: Penalties — Surcharge / Interest / Compromise</td><td class="amtcell">${amountBoxRow(0)}</td></tr>
+            <tr class="shade"><td class="lbl"><b>18</b> Total Amount of Remittance <span class="sub">(Sum of Items 16 and 17)</span></td><td class="amtcell">${amountBoxRow(totalPayable)}</td></tr>
+          ` : isPercentageTax ? `
+            <tr class="shade"><td class="lbl">Gross Sales / Receipts</td><td class="amtcell">${amountBoxRow(netAmount)}</td></tr>
+            <tr><td class="lbl">Tax Rate</td><td class="amtcell" style="text-align:right;font-weight:700">${rate}%</td></tr>
+            <tr class="shade"><td class="lbl">Tax Due</td><td class="amtcell">${amountBoxRow((netAmount * rate) / 100)}</td></tr>
+            <tr><td class="lbl">Less: Tax Credits / Payments</td><td class="amtcell">${amountBoxRow(0)}</td></tr>
+            <tr class="shade"><td class="lbl">Total Amount Payable</td><td class="amtcell">${amountBoxRow(totalPayable)}</td></tr>
+          ` : `
+            <tr class="shade"><td class="lbl">Net Taxable Income</td><td class="amtcell">${amountBoxRow(netAmount)}</td></tr>
+            <tr><td class="lbl">Tax Due</td><td class="amtcell">${amountBoxRow(totalPayable)}</td></tr>
+            <tr class="shade"><td class="lbl">Less: Tax Credits / Payments</td><td class="amtcell">${amountBoxRow(0)}</td></tr>
+            <tr><td class="lbl">Total Amount Payable</td><td class="amtcell">${amountBoxRow(totalPayable)}</td></tr>
+          `}
         </table>
 
-        <div class="note">Generated ${new Date().toLocaleDateString('en-PH')} from CDSC system records. This is a system-generated working copy — transcribe onto the official BIR Form ${form.form} (see Blank Form download) before filing, and verify all figures.</div>
+        <div class="declaration">I/We declare under the penalties of perjury that this return has been made in good faith, verified by me/us, and to the best of my/our knowledge and belief, is true and correct, pursuant to the provisions of the National Internal Revenue Code, as amended, and the regulations issued under authority thereof.</div>
+        <table class="signblock"><tr>
+          <td style="width:50%">
+            <div class="sigline">Signature over Printed Name of Taxpayer/Authorized Representative<br/>(Indicate Title/Designation and TIN)</div>
+          </td>
+          <td style="width:50%">
+            <div class="sigline">Signature over Printed Name of President/Authorized Officer<br/>(Indicate Title/Designation and TIN)</div>
+          </td>
+        </tr></table>
+
+        <div class="note">Generated ${new Date().toLocaleDateString('en-PH')} from CDSC system records — a working copy to guide manual filing, not a substitute for the official BIR Form ${form.form}. Verify every figure before filing.</div>
       </div>
     </body></html>`
   }
@@ -584,6 +723,30 @@ export default function BIRPage() {
     '2550Q': 'Quarterly Value-Added Tax Return',
     '1701Q': 'Quarterly Income Tax Return for Individuals, Estates, and Trusts',
     '1702Q': 'Quarterly Income Tax Return for Corporations, Partnerships and Other Non-Individual Taxpayers',
+  }
+
+  // Short line shown above the full title in the masthead (matches the two-line
+  // title treatment on the actual forms, e.g. "Monthly Remittance Form" / "of
+  // Creditable Income Taxes Withheld (Expanded)").
+  const BIR_FORM_SHORT_TITLES: Record<string, string> = {
+    '0619-E': 'Monthly Remittance Form',
+    '0619-F': 'Monthly Remittance Form',
+    '1601-EQ': 'Quarterly Remittance Return',
+    '1601-FQ': 'Quarterly Remittance Return',
+    '2551Q': 'Quarterly Percentage Tax Return',
+    '2550Q': 'Quarterly Value-Added Tax Return',
+    '1701Q': 'Quarterly Income Tax Return',
+    '1702Q': 'Quarterly Income Tax Return',
+  }
+
+  // Revision dates as printed on each form (per the filenames of the official PDFs).
+  const BIR_FORM_REV: Record<string, string> = {
+    '0619-E': 'January 2018',
+    '0619-F': 'January 2018',
+    '1601-EQ': 'January 2019',
+    '1601-FQ': '2020',
+    '2551Q': 'January 2018',
+    '1701Q': 'January 2018',
   }
 
   return (
