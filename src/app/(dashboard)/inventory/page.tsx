@@ -1034,7 +1034,6 @@ export default function InventoryPage() {
                     <TableHead className="min-w-[280px]">Item Name</TableHead>
                     <TableHead>Unit</TableHead>
                     <TableHead className="text-right">Qty</TableHead>
-                    <TableHead className="text-right">Unit Cost</TableHead>
                     <TableHead className="text-right">Est. Value</TableHead>
                     <TableHead>Warehouse Note</TableHead>
                     <TableHead>Date Added</TableHead>
@@ -1043,9 +1042,9 @@ export default function InventoryPage() {
                 </TableHeader>
                 <TableBody>
                   {loading ? (
-                    <TableRow><TableCell colSpan={9} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
+                    <TableRow><TableCell colSpan={8} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
                   ) : warehouseRows.length === 0 ? (
-                    <TableRow><TableCell colSpan={9} className="text-center py-12 text-muted-foreground">No warehouse stock records found.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={8} className="text-center py-12 text-muted-foreground">No warehouse stock records found.</TableCell></TableRow>
                   ) : pagedWarehouseRows.map(r => {
                     // client_name is null for general-pool stock by design (that's how
                     // Receiving always adds it) — that alone isn't a red flag. Only warn
@@ -1068,9 +1067,6 @@ export default function InventoryPage() {
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">{r.unit ? uomName(r.unit) : '—'}</TableCell>
                         <TableCell className="text-right text-sm font-semibold text-green-700">{r.quantity}</TableCell>
-                        <TableCell className="text-right text-sm text-muted-foreground">
-                          {r.item_name in itemPriceMap ? `₱${itemPriceMap[r.item_name].toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : <span className="text-gray-300">—</span>}
-                        </TableCell>
                         <TableCell className="text-right text-sm font-medium text-gray-700">
                           {r.item_name in itemPriceMap ? `₱${warehouseEstValue(r).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : <span className="text-gray-300">—</span>}
                         </TableCell>
