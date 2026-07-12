@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Fragment } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -20,7 +20,7 @@ import { Badge } from '@/components/ui/badge'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Search, Loader2, ChevronRight, ChevronDown, Pencil, AlertTriangle, Plus, X, MoreHorizontal, Trash2, FileText, Printer, Mail, Send, Truck, Eye } from 'lucide-react'
+import { Search, Loader2, Pencil, AlertTriangle, Plus, X, MoreHorizontal, Trash2, FileText, Printer, Mail, Send, Truck, Package } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSearchContext } from '@/context/search-context'
 import { sendEmail } from '@/lib/send-email'
@@ -75,7 +75,7 @@ export default function InventoryPage() {
   const [itemSearch, setItemSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [viewMode, setViewMode] = useState<'by_client' | 'by_item' | 'by_warehouse'>('by_client')
-  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [clientDetailRow, setClientDetailRow] = useState<InventoryRow | null>(null)
 
   // Item detail modal (By Item view)
   const [detailItem, setDetailItem] = useState<ItemDetail | null>(null)
@@ -542,7 +542,7 @@ export default function InventoryPage() {
 
   function selectAddItemForRow(idx: number, opt: ItemOption) {
     setAddItems(prev => prev.map((row, i) => i === idx ? { ...row, item_name: opt.item_name, unit: opt.unit_of_measure ?? '' } : row))
-    setAddItemSearches(s => ({ ...s, [idx]: opt.item_name }))
+    setAddItemSearches(s => { const next = { ...s }; delete next[idx]; return next })
     setAddItemDropdowns(d => ({ ...d, [idx]: false }))
   }
 
@@ -685,14 +685,6 @@ export default function InventoryPage() {
   const whTotalEstValue = filteredWarehouseRows.reduce((s, r) => s + warehouseEstValue(r), 0)
 
   function rowKey(r: InventoryRow) { return `${r.client}||${r.item_name}` }
-
-  function toggleRow(key: string) {
-    setExpanded(prev => {
-      const next = new Set(prev)
-      next.has(key) ? next.delete(key) : next.add(key)
-      return next
-    })
-  }
 
   // Opens the Product Details modal for a By Item group; DR dates and CSI
   // statuses aren't part of the aggregated inventory data, so fetch them here.
@@ -1140,9 +1132,7 @@ export default function InventoryPage() {
                     const isDeficit = g.total_balance < 0
                     return (
                       <TableRow key={'item||' + g.item_name} className="cursor-pointer hover:bg-muted/50" onClick={() => openItemDetail(g)}>
-                        <TableCell className="text-muted-foreground">
-                          <Eye className="h-4 w-4" />
-                        </TableCell>
+                        <TableCell />
                         <TableCell className="font-medium text-sm">
                           <span className="flex items-center gap-1.5">
                             {isDeficit && <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />}
@@ -1169,17 +1159,14 @@ export default function InventoryPage() {
                   </TableRow>
                 ) : pagedFiltered.map((row) => {
                   const key = rowKey(row)
-                  const isOpen = expanded.has(key)
                   const isDeficit = row.balance < 0
                   return (
-                    <Fragment key={key}>
-                      <TableRow
-                        className="cursor-pointer hover:bg-muted/50"
-                        onClick={() => toggleRow(key)}
-                      >
-                        <TableCell className="text-muted-foreground">
-                          {isOpen ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                        </TableCell>
+                    <TableRow
+                      key={key}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => setClientDetailRow(row)}
+                    >
+                      <TableCell />
                         <TableCell className="text-sm">{row.client}</TableCell>
                         <TableCell className="text-sm font-medium min-w-[200px]">
                           <span className="flex items-center gap-1.5">
@@ -1220,115 +1207,6 @@ export default function InventoryPage() {
                           </DropdownMenu>
                         </TableCell>
                       </TableRow>
-
-                      {isOpen && (
-                        <TableRow key={`${key}-detail`}>
-                          <TableCell colSpan={10} className="p-0 bg-muted/20">
-                            <div className="px-10 py-3 grid grid-cols-3 gap-6">
-                              <div>
-                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">DR Deliveries</p>
-                                {row.dr_details.length === 0 ? (
-                                  <p className="text-xs text-muted-foreground italic">No DR records</p>
-                                ) : (
-                                  <table className="w-full text-xs">
-                                    <thead>
-                                      <tr className="text-muted-foreground border-b">
-                                        <th className="text-left pb-1">DR #</th>
-                                        <th className="text-right pb-1">Qty</th>
-                                        <th className="text-left pb-1 pl-2">Unit</th>
-                                        <th className="text-right pb-1">Unit Price</th>
-                                        <th className="text-right pb-1">Amount</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {row.dr_details.map((d, j) => {
-                                        const amount = d.unit_price != null ? d.qty * d.unit_price : null
-                                        return (
-                                          <tr key={j} className="border-b border-muted/30">
-                                            <td className="py-1 font-mono text-blue-600">{d.dr_number}</td>
-                                            <td className="py-1 text-right font-medium">{Number(d.qty)}</td>
-                                            <td className="py-1 pl-2 text-muted-foreground">{uomName(d.unit)}</td>
-                                            <td className="py-1 text-right text-blue-600 font-medium">
-                                              {d.unit_price != null ? `₱${Number(d.unit_price).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}
-                                            </td>
-                                            <td className="py-1 text-right font-semibold">
-                                              {amount != null ? `₱${amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}
-                                            </td>
-                                          </tr>
-                                        )
-                                      })}
-                                    </tbody>
-                                  </table>
-                                )}
-                              </div>
-                              <div>
-                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Warehouse Stock</p>
-                                {row.ws_details.length === 0 ? (
-                                  <p className="text-xs text-muted-foreground italic">No warehouse stock</p>
-                                ) : (
-                                  <table className="w-full text-xs">
-                                    <thead>
-                                      <tr className="text-muted-foreground border-b">
-                                        <th className="text-left pb-1">Date Added</th>
-                                        <th className="text-left pb-1 pl-2">Notes</th>
-                                        <th className="text-right pb-1">Qty</th>
-                                        <th className="text-left pb-1 pl-2">Unit</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {row.ws_details.map((d) => (
-                                        <tr key={d.id} className="border-b border-muted/30">
-                                          <td className="py-1 font-mono text-green-700">{new Date(d.created_at).toLocaleDateString('en-PH')}</td>
-                                          <td className="py-1 pl-2 text-muted-foreground">{d.notes ?? '—'}</td>
-                                          <td className="py-1 text-right font-medium text-green-600">{Number(d.qty)}</td>
-                                          <td className="py-1 pl-2 text-muted-foreground">{uomName(d.unit)}</td>
-                                        </tr>
-                                      ))}
-                                    </tbody>
-                                  </table>
-                                )}
-                              </div>
-                              <div>
-                                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">CSI Charges</p>
-                                {row.csi_details.length === 0 ? (
-                                  <p className="text-xs text-muted-foreground italic">No CSI records</p>
-                                ) : (
-                                  <table className="w-full text-xs">
-                                    <thead>
-                                      <tr className="text-muted-foreground border-b">
-                                        <th className="text-left pb-1">SI #</th>
-                                        <th className="text-right pb-1">Qty</th>
-                                        <th className="text-left pb-1 pl-2">Unit</th>
-                                        <th className="text-right pb-1">Unit Price</th>
-                                        <th className="text-right pb-1">Amount</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {row.csi_details.map((d, j) => {
-                                        const amount = d.unit_price != null ? d.qty * d.unit_price : null
-                                        return (
-                                          <tr key={j} className="border-b border-muted/30">
-                                            <td className="py-1 font-mono text-red-600">{d.si_number}</td>
-                                            <td className="py-1 text-right font-medium">{Number(d.qty)}</td>
-                                            <td className="py-1 pl-2 text-muted-foreground">{uomName(d.unit)}</td>
-                                            <td className="py-1 text-right text-blue-600 font-medium">
-                                              {d.unit_price != null ? `₱${Number(d.unit_price).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}
-                                            </td>
-                                            <td className="py-1 text-right font-semibold">
-                                              {amount != null ? `₱${amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}
-                                            </td>
-                                          </tr>
-                                        )
-                                      })}
-                                    </tbody>
-                                  </table>
-                                )}
-                              </div>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </Fragment>
                   )
                 })}
               </TableBody>
@@ -1769,7 +1647,7 @@ export default function InventoryPage() {
                   <div className="space-y-1.5">
                     <Label>Delivered To Client <span className="text-muted-foreground text-xs">(optional)</span></Label>
                     <Select value={wsDeliverClientId} onValueChange={v => setWsDeliverClientId(v ?? '')}>
-                      <SelectTrigger><SelectValue placeholder="Select client…" /></SelectTrigger>
+                      <SelectTrigger className="w-full"><SelectValue placeholder="Select client…" /></SelectTrigger>
                       <SelectContent>
                         {clientOptions.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
                       </SelectContent>
@@ -1965,6 +1843,118 @@ export default function InventoryPage() {
         </DialogContent>
       </Dialog>
 
+      {/* ── Client Row Detail Dialog (By Client view) ──────────────────────────── */}
+      <Dialog open={!!clientDetailRow} onOpenChange={o => { if (!o) setClientDetailRow(null) }}>
+        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{clientDetailRow?.client} — {clientDetailRow?.item_name}</DialogTitle>
+          </DialogHeader>
+          {clientDetailRow && (
+            <div className="grid grid-cols-3 gap-6">
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">DR Deliveries</p>
+                {clientDetailRow.dr_details.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic">No DR records</p>
+                ) : (
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-muted-foreground border-b">
+                        <th className="text-left pb-1">DR #</th>
+                        <th className="text-right pb-1">Qty</th>
+                        <th className="text-left pb-1 pl-2">Unit</th>
+                        <th className="text-right pb-1">Unit Price</th>
+                        <th className="text-right pb-1">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {clientDetailRow.dr_details.map((d, j) => {
+                        const amount = d.unit_price != null ? d.qty * d.unit_price : null
+                        return (
+                          <tr key={j} className="border-b border-muted/30">
+                            <td className="py-1 font-mono text-blue-600">{d.dr_number}</td>
+                            <td className="py-1 text-right font-medium">{Number(d.qty)}</td>
+                            <td className="py-1 pl-2 text-muted-foreground">{uomName(d.unit)}</td>
+                            <td className="py-1 text-right text-blue-600 font-medium">
+                              {d.unit_price != null ? `₱${Number(d.unit_price).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}
+                            </td>
+                            <td className="py-1 text-right font-semibold">
+                              {amount != null ? `₱${amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Warehouse Stock</p>
+                {clientDetailRow.ws_details.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic">No warehouse stock</p>
+                ) : (
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-muted-foreground border-b">
+                        <th className="text-left pb-1">Date Added</th>
+                        <th className="text-left pb-1 pl-2">Notes</th>
+                        <th className="text-right pb-1">Qty</th>
+                        <th className="text-left pb-1 pl-2">Unit</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {clientDetailRow.ws_details.map((d) => (
+                        <tr key={d.id} className="border-b border-muted/30">
+                          <td className="py-1 font-mono text-green-700">{new Date(d.created_at).toLocaleDateString('en-PH')}</td>
+                          <td className="py-1 pl-2 text-muted-foreground">{d.notes ?? '—'}</td>
+                          <td className="py-1 text-right font-medium text-green-600">{Number(d.qty)}</td>
+                          <td className="py-1 pl-2 text-muted-foreground">{uomName(d.unit)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+              <div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">CSI Charges</p>
+                {clientDetailRow.csi_details.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic">No CSI records</p>
+                ) : (
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="text-muted-foreground border-b">
+                        <th className="text-left pb-1">SI #</th>
+                        <th className="text-right pb-1">Qty</th>
+                        <th className="text-left pb-1 pl-2">Unit</th>
+                        <th className="text-right pb-1">Unit Price</th>
+                        <th className="text-right pb-1">Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {clientDetailRow.csi_details.map((d, j) => {
+                        const amount = d.unit_price != null ? d.qty * d.unit_price : null
+                        return (
+                          <tr key={j} className="border-b border-muted/30">
+                            <td className="py-1 font-mono text-red-600">{d.si_number}</td>
+                            <td className="py-1 text-right font-medium">{Number(d.qty)}</td>
+                            <td className="py-1 pl-2 text-muted-foreground">{uomName(d.unit)}</td>
+                            <td className="py-1 text-right text-blue-600 font-medium">
+                              {d.unit_price != null ? `₱${Number(d.unit_price).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}
+                            </td>
+                            <td className="py-1 text-right font-semibold">
+                              {amount != null ? `₱${amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={addOpen} onOpenChange={o => { if (!o) setAddOpen(false) }}>
         <DialogContent className="w-[95vw] max-w-lg sm:max-w-lg">
           <DialogHeader>
@@ -2043,20 +2033,29 @@ export default function InventoryPage() {
                       <TableRow key={idx}>
                         <TableCell className="py-1.5">
                           <div className="relative">
-                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-                            <input
-                              value={addItemSearches[idx] ?? row.item_name}
-                              onChange={e => {
-                                setAddItemSearches(s => ({ ...s, [idx]: e.target.value }))
-                                setAddItemDropdowns(d => ({ ...d, [idx]: true }))
-                              }}
-                              onFocus={() => setAddItemDropdowns(d => ({ ...d, [idx]: true }))}
-                              onBlur={() => setTimeout(() => setAddItemDropdowns(d => ({ ...d, [idx]: false })), 150)}
-                              placeholder="Search item…"
-                              className="w-full h-8 pl-8 pr-3 rounded-md border border-input bg-background text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            />
+                            <button
+                              type="button"
+                              onClick={() => setAddItemDropdowns(d => ({ ...d, [idx]: !d[idx] }))}
+                              className="w-full h-8 pl-3 pr-2.5 rounded-md border border-input bg-background text-sm flex items-center justify-between gap-2 hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            >
+                              <span className={`truncate ${row.item_name ? '' : 'text-muted-foreground'}`}>{row.item_name || 'Select item…'}</span>
+                              <Package className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            </button>
                             {addItemDropdowns[idx] && (
-                              <div className="absolute z-20 w-full mt-1 bg-popover border rounded-lg shadow-lg max-h-52 overflow-y-auto min-w-[240px]">
+                              <div className="absolute z-20 w-full mt-1 bg-popover border rounded-lg shadow-lg max-h-64 overflow-y-auto min-w-[240px]">
+                                <div className="sticky top-0 bg-popover p-1.5 border-b">
+                                  <div className="relative">
+                                    <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                                    <input
+                                      autoFocus
+                                      value={addItemSearches[idx] ?? ''}
+                                      onChange={e => setAddItemSearches(s => ({ ...s, [idx]: e.target.value }))}
+                                      onBlur={() => setTimeout(() => setAddItemDropdowns(d => ({ ...d, [idx]: false })), 150)}
+                                      placeholder="Search item…"
+                                      className="w-full h-7 pl-7 pr-2 rounded border border-input bg-background text-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                    />
+                                  </div>
+                                </div>
                                 {(() => {
                                   const q = (addItemSearches[idx] ?? '').toLowerCase()
                                   const matches = q
