@@ -7,7 +7,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
-import { cn } from '@/lib/utils'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
@@ -1337,43 +1336,28 @@ export default function SetupPage() {
         <p className="text-muted-foreground text-sm">Manage items, suppliers, categories, and system settings</p>
       </div>
 
-      <div className="flex gap-6 items-start">
-        {/* Vertical nav */}
-        <nav className="w-48 shrink-0 rounded-xl border bg-card shadow-sm overflow-hidden">
-          {CONFIG_TABS.map((tab, i) => (
-            <button
-              key={tab.key}
-              onClick={() => setActive(tab.key)}
-              className={cn(
-                'w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium transition-colors',
-                i < CONFIG_TABS.length - 1 && 'border-b border-border/60',
-                active === tab.key
-                  ? 'bg-red-600 text-white'
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground',
-              )}
-            >
-              <span>{tab.label}</span>
-              {counts[tab.key] !== undefined && (
-                <span className={cn(
-                  'text-xs rounded-full px-2 py-0.5 font-semibold',
-                  active === tab.key ? 'bg-white/20 text-white' : 'bg-muted text-muted-foreground'
-                )}>
-                  {counts[tab.key].toLocaleString()}
-                </span>
-              )}
-            </button>
-          ))}
-        </nav>
+      <div className="flex justify-center">
+        <Select value={active} onValueChange={v => setActive(v ?? 'suppliers')}>
+          <SelectTrigger className="w-64">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {CONFIG_TABS.map(tab => (
+              <SelectItem key={tab.key} value={tab.key}>
+                {tab.label}{counts[tab.key] !== undefined ? ` (${counts[tab.key].toLocaleString()})` : ''}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
-        {/* Content */}
-        <div className="flex-1 min-w-0">
-          {active === 'suppliers'  && <SuppliersTab />}
-          {active === 'items'      && <ItemListTab />}
-          {active === 'categories' && <CategoriesTab />}
-          {active === 'uom'        && <UOMTab />}
-          {active === 'brands'     && <BrandsTab />}
-          {active === 'attributes' && <AttributesTab />}
-        </div>
+      <div className="min-w-0">
+        {active === 'suppliers'  && <SuppliersTab />}
+        {active === 'items'      && <ItemListTab />}
+        {active === 'categories' && <CategoriesTab />}
+        {active === 'uom'        && <UOMTab />}
+        {active === 'brands'     && <BrandsTab />}
+        {active === 'attributes' && <AttributesTab />}
       </div>
     </div>
   )

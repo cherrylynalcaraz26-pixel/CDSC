@@ -1559,6 +1559,21 @@ function CollectionsTab() {
 
 // ── Sales Journal (CRJ) sub-tab ───────────────────────────────────────────────
 
+// Windowed page list — always shows first/last, current ±1, with '…' gaps —
+// so pagination stays compact even with dozens of pages.
+function paginationRange(current: number, total: number): (number | '…')[] {
+  const pages = new Set([1, total, current, current - 1, current + 1])
+  const sorted = [...pages].filter(p => p >= 1 && p <= total).sort((a, b) => a - b)
+  const result: (number | '…')[] = []
+  let prev = 0
+  for (const p of sorted) {
+    if (prev && p - prev > 1) result.push('…')
+    result.push(p)
+    prev = p
+  }
+  return result
+}
+
 const SALES_JOURNAL_PAGE_SIZE = 20
 
 function SalesJournalTab({ collections, csiRecords }: { collections: Collection[]; csiRecords: any[] }) {
@@ -1640,7 +1655,9 @@ function SalesJournalTab({ collections, csiRecords }: { collections: Collection[
               disabled={page === 1}
               className="px-3 py-1.5 rounded-md border text-sm font-medium disabled:opacity-40 hover:bg-muted transition-colors"
             >← Prev</button>
-            {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+            {paginationRange(page, totalPages).map((p, i) => p === '…' ? (
+              <span key={`gap-${i}`} className="w-8 h-8 flex items-center justify-center text-sm text-muted-foreground">…</span>
+            ) : (
               <button
                 key={p}
                 onClick={() => setPage(p)}

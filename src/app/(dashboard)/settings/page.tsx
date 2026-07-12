@@ -184,12 +184,13 @@ function LivePreview({ s }: { s: Settings }) {
     return `<!DOCTYPE html><html><head><title>${fullName} – Company &amp; Business Profile</title>
     <style>
       body { font-family: Arial, sans-serif; margin: 0; padding: 24px; color: #1e293b; }
-      .header { display: flex; align-items: flex-start; gap: 16px; border-bottom: 2px solid #dc2626; padding-bottom: 16px; margin-bottom: 16px; }
-      .logo { width: 64px; height: 64px; object-fit: contain; border-radius: 8px; border: 1px solid #e2e8f0; }
-      .logo-placeholder { width: 64px; height: 64px; background: #f1f5f9; border-radius: 8px; border: 1px solid #e2e8f0; display: flex; align-items: center; justify-content: center; font-size: 10px; color: #94a3b8; }
-      h1 { margin: 0 0 4px; font-size: 18px; color: #0f172a; }
-      .tagline { color: #64748b; font-style: italic; font-size: 12px; margin: 0 0 6px; }
-      .contact { font-size: 11px; color: #475569; line-height: 1.7; }
+      .header { display: flex; align-items: center; justify-content: space-between; gap: 20px; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); color: #fff; padding: 22px 24px; border-radius: 10px; margin: -24px -24px 20px; }
+      .logo { width: 60px; height: 60px; object-fit: contain; border-radius: 8px; background: #fff; padding: 4px; }
+      .logo-placeholder { width: 60px; height: 60px; background: rgba(255,255,255,0.1); border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-size: 10px; color: rgba(255,255,255,0.6); }
+      .header-info { text-align: right; }
+      h1 { margin: 0 0 4px; font-size: 18px; color: #fff; }
+      .tagline { color: #cbd5e1; font-style: italic; font-size: 12px; margin: 0 0 6px; }
+      .contact { font-size: 11px; color: #e2e8f0; line-height: 1.7; }
       .section { margin-bottom: 14px; page-break-inside: avoid; }
       .section-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #dc2626; border-bottom: 1px solid #fecaca; padding-bottom: 3px; margin: 18px 0 8px; }
       .label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; margin-bottom: 2px; }
@@ -212,7 +213,7 @@ function LivePreview({ s }: { s: Settings }) {
     </style></head><body>
     <div class="header">
       ${s.logo_url ? `<img src="${s.logo_url}" class="logo" alt="logo" />` : '<div class="logo-placeholder">LOGO</div>'}
-      <div>
+      <div class="header-info">
         <h1>${fullName}</h1>
         ${s.tagline ? `<p class="tagline">${s.tagline}</p>` : ''}
         <div class="contact">
@@ -501,7 +502,7 @@ function LivePreview({ s }: { s: Settings }) {
 
       {/* Email Dialog */}
       <Dialog open={emailOpen} onOpenChange={setEmailOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="w-[95vw] max-w-3xl sm:max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Send className="h-4 w-4 text-blue-600" />
