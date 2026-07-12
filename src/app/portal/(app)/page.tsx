@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { fetchAllRows } from '@/lib/supabase/fetch-all'
 import { format, subMonths, startOfMonth, endOfMonth, parseISO } from 'date-fns'
 import Link from 'next/link'
 import {
   ShoppingCart, Clock, Truck, CheckCircle2, Plus, Package,
   ChevronRight, Loader2, FileText, Boxes, ClipboardList,
-  TrendingUp, AlertTriangle, Send, CheckCircle, XCircle,
+  TrendingUp, AlertTriangle, Send, CheckCircle, XCircle, Receipt,
 } from 'lucide-react'
 import {
   AreaChart, Area, BarChart, Bar, Cell,
@@ -83,6 +84,8 @@ export default function PortalDashboard() {
   const [stock, setStock] = useState<StockRow[]>([])
   const [clientName, setClientName] = useState('')
   const [userName, setUserName] = useState('')
+  const [billing, setBilling] = useState<{ billed: number; collected: number } | null>(null)
+  const [showCsi, setShowCsi] = useState(false)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -103,6 +106,25 @@ export default function PortalDashboard() {
         setQuotations(quoteData ?? [])
         setStock(stockData ?? [])
 
+        // Pending collection — counts only portal-visible CSI records
+        // (show_in_portal = true) so the balance matches exactly what the
+        // client can see in their portal, using each invoice's own
+        // collection status.
+        setShowCsi(clientRow.show_csi_in_portal === true)
+        {
+          const csiRows = await fetchAllRows((from, to) =>
+            supabase.from('csi_records')
+              .select('amount, quantity, unit_price, collection_status')
+              .eq('client_name', clientRow.company_name)
+              .eq('show_in_portal', true)
+              .order('id')
+              .range(from, to)
+          )
+          const rowAmount = (r: any) => Number(r.amount) || (Number(r.quantity) || 0) * (Number(r.unit_price) || 0)
+          const billed = csiRows.reduce((s: number, r: any) => s + rowAmount(r), 0)
+          const collected = csiRows.filter((r: any) => r.collection_status === 'collected').reduce((s: number, r: any) => s + rowAmount(r), 0)
+          if (billed > 0) setBilling({ billed, collected })
+        }
       }
       setLoading(false)
     }
@@ -166,6 +188,35 @@ export default function PortalDashboard() {
           </Link>
         </div>
       </div>
+
+      {/* Pending collection notice — this client's own balance with CDSC */}
+      {billing && (billing.billed - billing.collected > 0.01 ? (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="flex items-center gap-2 flex-1">
+            <Receipt className="h-4 w-4 text-red-600 shrink-0" />
+            <div>
+              <span className="text-sm font-semibold text-red-800 block">Pending Collection</span>
+              <span className="text-xs text-red-700">
+                CDSC has a pending collection of <span className="font-bold">{fmt(billing.billed - billing.collected)}</span> on your account
+                ({fmt(billing.billed)} billed, {fmt(billing.collected)} collected). Please coordinate payment with CDSC.
+              </span>
+            </div>
+          </div>
+          {showCsi && (
+            <Link href="/portal/stock"
+              className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-red-700 border border-red-300 hover:bg-red-100 px-3 py-1.5 rounded-lg transition-colors">
+              View Invoices <ChevronRight className="h-3.5 w-3.5" />
+            </Link>
+          )}
+        </div>
+      ) : (
+        <div className="bg-green-50 border border-green-200 rounded-xl px-4 py-3 flex items-center gap-2">
+          <CheckCircle2 className="h-4 w-4 text-green-600 shrink-0" />
+          <span className="text-xs text-green-800">
+            <span className="font-semibold">No pending collections</span> — your account with CDSC is fully settled ({fmt(billing.billed)} billed and collected).
+          </span>
+        </div>
+      ))}
 
       {/* Low stock / out of stock alerts */}
       {(lowStockItems.length > 0 || outOfStock.length > 0) && (

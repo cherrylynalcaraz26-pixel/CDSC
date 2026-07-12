@@ -650,20 +650,34 @@ export default function InventoryPage() {
   const PAGE_SIZE = 30
   const [page, setPage] = useState(1)
 
+  // KPI stats per view mode
+  // By Client — client × item line rows
   const totalItems = filtered.length
+  const uniqueClients = new Set(filtered.map(r => r.client)).size
   const inStock  = filtered.filter(r => r.balance > 0).length
   const balanced = filtered.filter(r => r.balance === 0).length
   const negative = filtered.filter(r => r.balance < 0).length
 
+  // By Item — grouped across clients (byItemGroups is only built in that view)
+  const itemGroupsInStock  = byItemGroups.filter(g => g.total_balance > 0).length
+  const itemGroupsBalanced = byItemGroups.filter(g => g.total_balance === 0).length
+  const itemGroupsDeficit  = byItemGroups.filter(g => g.total_balance < 0).length
+  const itemTotalDelivered = byItemGroups.reduce((s, g) => s + g.total_dr, 0)
+
+  // By Warehouse — raw warehouse stock entries (search applies)
+  const filteredWarehouseRows = warehouseRows.filter(r => {
+    const q = search.toLowerCase()
+    return !q || r.item_name.toLowerCase().includes(q) || (r.client_name ?? '').toLowerCase().includes(q)
+  })
+  const whTotalQty     = filteredWarehouseRows.reduce((s, r) => s + (Number(r.quantity) || 0), 0)
+  const whUniqueItems  = new Set(filteredWarehouseRows.map(r => r.item_name)).size
+  const whUnassigned   = filteredWarehouseRows.filter(r => !r.client_name).length
+
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const pagedFiltered = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
   const pagedByItemGroups = byItemGroups.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
-  const pagedWarehouseRows = warehouseRows
-    .filter(r => { const q = search.toLowerCase(); return !q || r.item_name.toLowerCase().includes(q) || (r.client_name ?? '').toLowerCase().includes(q) })
-    .slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
-  const warehouseTotalPages = Math.max(1, Math.ceil(
-    warehouseRows.filter(r => { const q = search.toLowerCase(); return !q || r.item_name.toLowerCase().includes(q) || (r.client_name ?? '').toLowerCase().includes(q) }).length / PAGE_SIZE
-  ))
+  const pagedWarehouseRows = filteredWarehouseRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const warehouseTotalPages = Math.max(1, Math.ceil(filteredWarehouseRows.length / PAGE_SIZE))
 
   function rowKey(r: InventoryRow) { return `${r.client}||${r.item_name}` }
 
@@ -817,24 +831,77 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card><CardContent className="pt-4 pb-3">
-          <div className="text-2xl font-bold">{loading ? '—' : totalItems}</div>
-          <div className="text-xs text-muted-foreground">Line Items</div>
-        </CardContent></Card>
-        <Card><CardContent className="pt-4 pb-3">
-          <div className="text-2xl font-bold text-green-600">{loading ? '—' : inStock}</div>
-          <div className="text-xs text-muted-foreground">In Stock</div>
-        </CardContent></Card>
-        <Card><CardContent className="pt-4 pb-3">
-          <div className="text-2xl font-bold text-gray-500">{loading ? '—' : balanced}</div>
-          <div className="text-xs text-muted-foreground">Balanced</div>
-        </CardContent></Card>
-        <Card><CardContent className="pt-4 pb-3">
-          <div className="text-2xl font-bold text-red-600">{loading ? '—' : negative}</div>
-          <div className="text-xs text-muted-foreground">Deficit</div>
-        </CardContent></Card>
-      </div>
+      {/* KPI cards — specific to the active view */}
+      {viewMode === 'by_client' && (
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <Card><CardContent className="pt-4 pb-3">
+            <div className="text-2xl font-bold text-blue-600">{loading ? '—' : uniqueClients}</div>
+            <div className="text-xs text-muted-foreground">Clients</div>
+          </CardContent></Card>
+          <Card><CardContent className="pt-4 pb-3">
+            <div className="text-2xl font-bold">{loading ? '—' : totalItems}</div>
+            <div className="text-xs text-muted-foreground">Line Items</div>
+          </CardContent></Card>
+          <Card><CardContent className="pt-4 pb-3">
+            <div className="text-2xl font-bold text-green-600">{loading ? '—' : inStock}</div>
+            <div className="text-xs text-muted-foreground">In Stock</div>
+          </CardContent></Card>
+          <Card><CardContent className="pt-4 pb-3">
+            <div className="text-2xl font-bold text-gray-500">{loading ? '—' : balanced}</div>
+            <div className="text-xs text-muted-foreground">Balanced</div>
+          </CardContent></Card>
+          <Card><CardContent className="pt-4 pb-3">
+            <div className="text-2xl font-bold text-red-600">{loading ? '—' : negative}</div>
+            <div className="text-xs text-muted-foreground">Deficit</div>
+          </CardContent></Card>
+        </div>
+      )}
+
+      {viewMode === 'by_item' && (
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <Card><CardContent className="pt-4 pb-3">
+            <div className="text-2xl font-bold">{loading ? '—' : byItemGroups.length}</div>
+            <div className="text-xs text-muted-foreground">Unique Items</div>
+          </CardContent></Card>
+          <Card><CardContent className="pt-4 pb-3">
+            <div className="text-2xl font-bold text-blue-600">{loading ? '—' : itemTotalDelivered.toLocaleString('en-PH')}</div>
+            <div className="text-xs text-muted-foreground">Total Delivered (DR)</div>
+          </CardContent></Card>
+          <Card><CardContent className="pt-4 pb-3">
+            <div className="text-2xl font-bold text-green-600">{loading ? '—' : itemGroupsInStock}</div>
+            <div className="text-xs text-muted-foreground">In Stock</div>
+          </CardContent></Card>
+          <Card><CardContent className="pt-4 pb-3">
+            <div className="text-2xl font-bold text-gray-500">{loading ? '—' : itemGroupsBalanced}</div>
+            <div className="text-xs text-muted-foreground">Balanced</div>
+          </CardContent></Card>
+          <Card><CardContent className="pt-4 pb-3">
+            <div className="text-2xl font-bold text-red-600">{loading ? '—' : itemGroupsDeficit}</div>
+            <div className="text-xs text-muted-foreground">Deficit Items</div>
+          </CardContent></Card>
+        </div>
+      )}
+
+      {viewMode === 'by_warehouse' && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Card><CardContent className="pt-4 pb-3">
+            <div className="text-2xl font-bold">{loading ? '—' : filteredWarehouseRows.length}</div>
+            <div className="text-xs text-muted-foreground">Stock Entries</div>
+          </CardContent></Card>
+          <Card><CardContent className="pt-4 pb-3">
+            <div className="text-2xl font-bold text-blue-600">{loading ? '—' : whUniqueItems}</div>
+            <div className="text-xs text-muted-foreground">Unique Items</div>
+          </CardContent></Card>
+          <Card><CardContent className="pt-4 pb-3">
+            <div className="text-2xl font-bold text-green-600">{loading ? '—' : whTotalQty.toLocaleString('en-PH')}</div>
+            <div className="text-xs text-muted-foreground">Total On Hand</div>
+          </CardContent></Card>
+          <Card><CardContent className="pt-4 pb-3">
+            <div className="text-2xl font-bold text-amber-600">{loading ? '—' : whUnassigned}</div>
+            <div className="text-xs text-muted-foreground">General (No Client)</div>
+          </CardContent></Card>
+        </div>
+      )}
 
       {/* View toggle — hidden when report is open */}
       {!reportOpen && <div className="flex items-center gap-3 flex-wrap">
