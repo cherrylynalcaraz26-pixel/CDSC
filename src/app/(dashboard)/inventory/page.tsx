@@ -665,6 +665,13 @@ export default function InventoryPage() {
     warehouseRows.filter(r => { const q = search.toLowerCase(); return !q || r.item_name.toLowerCase().includes(q) || (r.client_name ?? '').toLowerCase().includes(q) }).length / PAGE_SIZE
   ))
 
+  // Est. Value per warehouse row — quantity × item cost (falls back to selling price
+  // when cost isn't set), same pricing source used elsewhere in this page.
+  const itemPriceMap: Record<string, number> = {}
+  for (const it of itemOptions) itemPriceMap[it.item_name] = it.cost ?? it.selling_price ?? 0
+  const warehouseEstValue = (r: { item_name: string; quantity: number }) => r.quantity * (itemPriceMap[r.item_name] ?? 0)
+  const warehouseTotalEstValue = warehouseRows.reduce((s, r) => s + warehouseEstValue(r), 0)
+
   function rowKey(r: InventoryRow) { return `${r.client}||${r.item_name}` }
 
   function toggleRow(key: string) {
@@ -817,24 +824,26 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card><CardContent className="pt-4 pb-3">
-          <div className="text-2xl font-bold">{loading ? '—' : totalItems}</div>
-          <div className="text-xs text-muted-foreground">Line Items</div>
-        </CardContent></Card>
-        <Card><CardContent className="pt-4 pb-3">
-          <div className="text-2xl font-bold text-green-600">{loading ? '—' : inStock}</div>
-          <div className="text-xs text-muted-foreground">In Stock</div>
-        </CardContent></Card>
-        <Card><CardContent className="pt-4 pb-3">
-          <div className="text-2xl font-bold text-gray-500">{loading ? '—' : balanced}</div>
-          <div className="text-xs text-muted-foreground">Balanced</div>
-        </CardContent></Card>
-        <Card><CardContent className="pt-4 pb-3">
-          <div className="text-2xl font-bold text-red-600">{loading ? '—' : negative}</div>
-          <div className="text-xs text-muted-foreground">Deficit</div>
-        </CardContent></Card>
-      </div>
+      {viewMode !== 'by_warehouse' && (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          <Card><CardContent className="pt-4 pb-3">
+            <div className="text-2xl font-bold">{loading ? '—' : totalItems}</div>
+            <div className="text-xs text-muted-foreground">Line Items</div>
+          </CardContent></Card>
+          <Card><CardContent className="pt-4 pb-3">
+            <div className="text-2xl font-bold text-green-600">{loading ? '—' : inStock}</div>
+            <div className="text-xs text-muted-foreground">In Stock</div>
+          </CardContent></Card>
+          <Card><CardContent className="pt-4 pb-3">
+            <div className="text-2xl font-bold text-gray-500">{loading ? '—' : balanced}</div>
+            <div className="text-xs text-muted-foreground">Balanced</div>
+          </CardContent></Card>
+          <Card><CardContent className="pt-4 pb-3">
+            <div className="text-2xl font-bold text-red-600">{loading ? '—' : negative}</div>
+            <div className="text-xs text-muted-foreground">Deficit</div>
+          </CardContent></Card>
+        </div>
+      )}
 
       {/* View toggle — hidden when report is open */}
       {!reportOpen && <div className="flex items-center gap-3 flex-wrap">
@@ -952,6 +961,23 @@ export default function InventoryPage() {
       )}
 
       {!reportOpen && viewMode === 'by_warehouse' && (
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          <Card><CardContent className="pt-4 pb-3">
+            <div className="text-2xl font-bold">{loading ? '—' : warehouseRows.length}</div>
+            <div className="text-xs text-muted-foreground">Line Items</div>
+          </CardContent></Card>
+          <Card><CardContent className="pt-4 pb-3">
+            <div className="text-2xl font-bold text-blue-600">{loading ? '—' : warehouseRows.reduce((s, r) => s + r.quantity, 0)}</div>
+            <div className="text-xs text-muted-foreground">Total Qty</div>
+          </CardContent></Card>
+          <Card><CardContent className="pt-4 pb-3">
+            <div className="text-2xl font-bold text-green-600">{loading ? '—' : `₱${warehouseTotalEstValue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`}</div>
+            <div className="text-xs text-muted-foreground">Est. Value</div>
+          </CardContent></Card>
+        </div>
+      )}
+
+      {!reportOpen && viewMode === 'by_warehouse' && (
         <Card>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
@@ -962,6 +988,7 @@ export default function InventoryPage() {
                     <TableHead className="min-w-[280px]">Item Name</TableHead>
                     <TableHead>Unit</TableHead>
                     <TableHead className="text-right">Qty</TableHead>
+                    <TableHead className="text-right">Est. Value</TableHead>
                     <TableHead>Warehouse Note</TableHead>
                     <TableHead>Date Added</TableHead>
                     <TableHead className="w-28">Action</TableHead>
@@ -969,9 +996,9 @@ export default function InventoryPage() {
                 </TableHeader>
                 <TableBody>
                   {loading ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
+                    <TableRow><TableCell colSpan={8} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
                   ) : warehouseRows.length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-12 text-muted-foreground">No warehouse stock records found.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={8} className="text-center py-12 text-muted-foreground">No warehouse stock records found.</TableCell></TableRow>
                   ) : pagedWarehouseRows.map(r => {
                     // client_name is null for general-pool stock by design (that's how
                     // Receiving always adds it) — that alone isn't a red flag. Only warn
@@ -994,6 +1021,9 @@ export default function InventoryPage() {
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">{r.unit ? uomName(r.unit) : '—'}</TableCell>
                         <TableCell className="text-right text-sm font-semibold text-green-700">{r.quantity}</TableCell>
+                        <TableCell className="text-right text-sm font-medium text-gray-700">
+                          {itemPriceMap[r.item_name] ? `₱${warehouseEstValue(r).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : <span className="text-gray-300">—</span>}
+                        </TableCell>
                         <TableCell className="text-sm max-w-[220px]">
                           {noClientRecord ? (
                             <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 text-xs font-medium">

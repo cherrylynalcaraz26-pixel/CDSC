@@ -50,7 +50,6 @@ const navigation: NavItem[] = [
     children: [
       { label: 'Overview', href: '/accounting?tab=overview', icon: Calculator },
       { label: 'Collections', href: '/accounting?tab=collections', icon: Receipt },
-      { label: 'CSI Revenue', href: '/accounting?tab=csi', icon: Receipt },
       { label: 'BIR Compliance', href: '/accounting?tab=bir', icon: FileText },
     ],
   },
