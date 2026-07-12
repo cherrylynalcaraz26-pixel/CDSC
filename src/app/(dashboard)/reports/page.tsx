@@ -87,6 +87,18 @@ export default function ReportsPage() {
         const data = await fetchAllRows((from, to) => supabase.from('csi_records').select('si_number, si_date, client_name, item_name, quantity, unit').order('si_date', { ascending: false }).order('id').range(from, to))
         if (data.length > 0) exportCSV('csi-records.csv', ['SI Number','Date','Client','Item','Qty','Unit'], data.map(r => [r.si_number, r.si_date, r.client_name, r.item_name, r.quantity, r.unit]))
         else toast.error('No data')
+      } else if (key === 'bir_crj_sj') {
+        const { data } = await supabase.from('collections').select('collection_date, or_number, client_name, amount, form_2307').eq('status', 'posted').order('collection_date')
+        if (data && data.length > 0) exportCSV('BIR_SJ_SalesJournal.csv', ['Date','OR No.','Name of Payor','Amount of Collection','Form 2307 Amount','Net Amount Received'], data.map(c => [c.collection_date ?? '', c.or_number ?? '', c.client_name ?? '', c.amount, c.form_2307 ?? 0, c.amount - (c.form_2307 ?? 0)]))
+        else toast.error('No data')
+      } else if (key === 'bir_cdj') {
+        const { data } = await supabase.from('disbursements').select('*').eq('status', 'posted').order('disb_date', { ascending: false })
+        if (data && data.length > 0) exportCSV('BIR_CDJ_DisbursementsJournal.csv', ['Date','CDJ No.','Payee','Nature of Payment','Account Charged','Amount','Payment Mode','Check Number'], data.map((d: any) => [d.disb_date, d.disb_number, d.payee, d.description ?? '', d.expense_account, d.amount, d.payment_mode, d.check_number ?? '']))
+        else toast.error('No data')
+      } else if (key === 'bir_2307') {
+        const { data } = await supabase.from('collections').select('or_number, collection_date, client_name, amount, form_2307').eq('status', 'posted').gt('form_2307', 0)
+        if (data && data.length > 0) exportCSV('BIR_Form2307_Summary.csv', ['OR No.','Date','Name of Income Payor','ATC','Amount of Income','Tax Withheld'], data.map(c => [c.or_number ?? '', c.collection_date ?? '', c.client_name ?? '', 'WC158', c.amount, c.form_2307 ?? 0]))
+        else toast.error('No data')
       } else {
         toast.info('This report is coming soon')
       }
@@ -151,6 +163,15 @@ export default function ReportsPage() {
         { key: 'ewt_summary', name: 'EWT Summary Report', description: 'Expanded withholding tax totals', formats: ['CSV'] },
         { key: 'alphalist', name: 'Alphalist Report', description: 'Supplier alphalist for BIR', formats: ['CSV'] },
         { key: 'slsp', name: 'SLSP Report', description: 'Summary List of Purchases', formats: ['CSV'] },
+      ],
+    },
+    {
+      group: 'BIR / CAS Books',
+      icon: FileSpreadsheet,
+      reports: [
+        { key: 'bir_crj_sj', name: 'Cash Receipts Journal (CRJ / SJ)', description: 'BIR-required book for all cash collections and official receipts', formats: ['CSV'] },
+        { key: 'bir_cdj', name: 'Cash Disbursements Journal (CDJ)', description: 'BIR-required book for all cash outflows, expenses, and payments', formats: ['CSV'] },
+        { key: 'bir_2307', name: 'Form 2307 Summary', description: 'Summary of all Certificates of Creditable Tax Withheld (Form 2307)', formats: ['CSV'] },
       ],
     },
   ]

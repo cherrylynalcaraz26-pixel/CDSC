@@ -733,11 +733,31 @@ function CollectionsTab() {
       remarks: form.remarks || null,
       si_number: form.si_number || null,
     }
-    const { error } = editingId
-      ? await supabase.from('collections').update(payload).eq('id', editingId)
-      : await supabase.from('collections').insert({ ...payload, status: 'posted' })
-    if (error) toast.error(error.message)
-    else { toast.success(editingId ? 'Collection updated' : 'Collection recorded'); setOpen(false); resetForm(); load() }
+    if (editingId) {
+      const { error } = await supabase.from('collections').update(payload).eq('id', editingId)
+      if (error) toast.error(error.message)
+      else { toast.success('Collection updated'); setOpen(false); resetForm(); load() }
+      setSaving(false)
+      return
+    }
+    const { data: colData, error } = await supabase.from('collections').insert({ ...payload, status: 'posted' }).select().single()
+    if (error) { toast.error(error.message); setSaving(false); return }
+    const memo = `Collection: ${payload.or_number ?? ''} – ${clientName.trim()}`
+    const { data: jeData, error: jeErr } = await supabase.from('journal_entries').insert({
+      entry_date: payload.collection_date, memo, entry_type: 'sales_receipt',
+      source_table: 'collections', source_id: (colData as any).id, status: 'posted',
+    }).select().single()
+    if (!jeErr && jeData) {
+      const jeId = (jeData as any).id
+      const net = Number(form.amount) - (payload.form_2307 ?? 0)
+      const lines = [
+        { entry_id: jeId, account_code: '1100', account_name: 'Cash on Hand', memo, debit: net, credit: 0 },
+        { entry_id: jeId, account_code: '4100', account_name: 'Sales Revenue', memo, debit: 0, credit: Number(form.amount) },
+      ]
+      if (payload.form_2307) lines.push({ entry_id: jeId, account_code: '1120', account_name: 'Withholding Tax Receivable (2307)', memo, debit: payload.form_2307, credit: 0 })
+      await supabase.from('journal_lines').insert(lines)
+    }
+    toast.success('Collection recorded'); setOpen(false); resetForm(); load()
     setSaving(false)
   }
 
@@ -1539,6 +1559,8 @@ function CollectionsTab() {
 
 // ── Sales Journal (CRJ) sub-tab ───────────────────────────────────────────────
 
+const SALES_JOURNAL_PAGE_SIZE = 20
+
 function SalesJournalTab({ collections, csiRecords }: { collections: Collection[]; csiRecords: any[] }) {
   // Group CSI records by SI number
   const siMap: Record<string, { date: string; client: string; items: any[]; total: number }> = {}
@@ -1549,6 +1571,11 @@ function SalesJournalTab({ collections, csiRecords }: { collections: Collection[
   })
   const siRows = Object.entries(siMap).sort((a, b) => (a[1].date > b[1].date ? 1 : -1))
   const totalSales = siRows.reduce((s, [, v]) => s + v.total, 0)
+
+  const [page, setPage] = useState(1)
+  useEffect(() => { setPage(1) }, [csiRecords])
+  const totalPages = Math.max(1, Math.ceil(siRows.length / SALES_JOURNAL_PAGE_SIZE))
+  const pagedRows = siRows.slice((page - 1) * SALES_JOURNAL_PAGE_SIZE, page * SALES_JOURNAL_PAGE_SIZE)
 
   function exportSJ() {
     exportCSV('SalesJournal_CSI.csv',
@@ -1583,7 +1610,7 @@ function SalesJournalTab({ collections, csiRecords }: { collections: Collection[
           <TableBody>
             {siRows.length === 0 ? (
               <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">No CSI records in this date range.</TableCell></TableRow>
-            ) : siRows.map(([si, v]) => (
+            ) : pagedRows.map(([si, v]) => (
               <TableRow key={si}>
                 <TableCell className="text-sm whitespace-nowrap">{v.date ? format(new Date(v.date), 'MMM d, yyyy') : '—'}</TableCell>
                 <TableCell className="font-mono text-xs font-semibold text-red-600">{si}</TableCell>
@@ -1601,6 +1628,33 @@ function SalesJournalTab({ collections, csiRecords }: { collections: Collection[
           </div>
         )}
       </CardContent></Card>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-muted-foreground">
+            Showing {((page - 1) * SALES_JOURNAL_PAGE_SIZE) + 1}–{Math.min(page * SALES_JOURNAL_PAGE_SIZE, siRows.length)} of {siRows.length}
+          </span>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="px-3 py-1.5 rounded-md border text-sm font-medium disabled:opacity-40 hover:bg-muted transition-colors"
+            >← Prev</button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+              <button
+                key={p}
+                onClick={() => setPage(p)}
+                className={`w-8 h-8 rounded-md text-sm font-medium transition-colors ${p === page ? 'bg-red-600 text-white' : 'border hover:bg-muted'}`}
+              >{p}</button>
+            ))}
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="px-3 py-1.5 rounded-md border text-sm font-medium disabled:opacity-40 hover:bg-muted transition-colors"
+            >Next →</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -1814,7 +1868,7 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
       </CardContent></Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="w-[95vw] max-w-2xl sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>New Disbursement</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-3">

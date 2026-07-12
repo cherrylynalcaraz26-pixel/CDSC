@@ -13,7 +13,7 @@ import {
   SlidersHorizontal, ArrowRightLeft, LogOut, X, Wrench,
   Receipt, PanelLeftClose, PanelLeftOpen, ClipboardList, BoxesIcon,
   TrendingUp, MessageSquare, Globe,
-  BookOpen, Banknote, BarChart3, Scale, FileSpreadsheet, Download,
+  BookOpen, Banknote, BarChart3, Scale, FileSpreadsheet,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useCompany } from '@/context/company-context'
@@ -63,7 +63,6 @@ const navigation: NavItem[] = [
       { label: 'Trial Balance', href: '/accounting?tab=bookkeeping&sub=tb', icon: Scale },
       { label: 'Income Statement', href: '/accounting?tab=bookkeeping&sub=is', icon: TrendingUp },
       { label: 'Balance Sheet', href: '/accounting?tab=bookkeeping&sub=bs', icon: FileSpreadsheet },
-      { label: 'BIR / CAS', href: '/accounting?tab=bookkeeping&sub=bir', icon: Download },
     ],
   },
   { label: 'Messages', href: '/messages', icon: MessageSquare },
