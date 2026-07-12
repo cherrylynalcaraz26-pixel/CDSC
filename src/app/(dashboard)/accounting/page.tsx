@@ -497,6 +497,7 @@ function CollectionsTab() {
   const [saving, setSaving] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [clientFilter, setClientFilter] = useState(() => searchParams.get('client') ?? '')
+  const [page, setPage] = useState(1)
   const df = useDateRangeFilter()
   const [orBlankCalib, setOrBlankCalib] = useState<OrBlankCalib>(() => loadOrBlankCalib())
   const [orCalibOpen, setOrCalibOpen] = useState(false)
@@ -919,6 +920,12 @@ function CollectionsTab() {
   const countPosted = filteredRecords.filter(r => r.status === 'posted').length
   const countVoided = filteredRecords.filter(r => r.status === 'voided').length
 
+  const PAGE_SIZE = 30
+  const totalPages = Math.max(1, Math.ceil(filteredRecords.length / PAGE_SIZE))
+  const pagedRecords = filteredRecords.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+
+  useEffect(() => { setPage(1) }, [clientFilter, df.filterFrom, df.filterTo])
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -1084,6 +1091,7 @@ function CollectionsTab() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12">No.</TableHead>
                 <TableHead>OR Number</TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead>Client</TableHead>
@@ -1098,15 +1106,16 @@ function CollectionsTab() {
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={10} className="text-center py-10">
+                <TableRow><TableCell colSpan={11} className="text-center py-10">
                   <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                 </TableCell></TableRow>
               ) : filteredRecords.length === 0 ? (
-                <TableRow><TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
+                <TableRow><TableCell colSpan={11} className="text-center py-12 text-muted-foreground">
                   {clientFilter ? `No collections found for "${clientFilter}".` : 'No collections yet. Click New Collection to record one.'}
                 </TableCell></TableRow>
-              ) : filteredRecords.map(r => (
+              ) : pagedRecords.map((r, i) => (
                 <TableRow key={r.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setViewRecord(r)}>
+                  <TableCell className="text-sm text-muted-foreground">{(page - 1) * PAGE_SIZE + i + 1}</TableCell>
                   <TableCell className="font-mono text-xs font-semibold text-red-600">{r.or_number ?? '—'}</TableCell>
                   <TableCell className="text-sm whitespace-nowrap">
                     {r.collection_date ? format(new Date(r.collection_date), 'MMM d, yyyy') : '—'}
@@ -1159,6 +1168,32 @@ function CollectionsTab() {
               ))}
             </TableBody>
           </Table>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between text-sm px-4 py-3 border-t">
+              <span className="text-muted-foreground">
+                Showing {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, filteredRecords.length)} of {filteredRecords.length}
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="px-3 py-1.5 rounded-md border text-sm font-medium disabled:opacity-40 hover:bg-muted transition-colors"
+                >← Prev</button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                  <button
+                    key={p}
+                    onClick={() => setPage(p)}
+                    className={`w-8 h-8 rounded-md text-sm font-medium transition-colors ${p === page ? 'bg-red-600 text-white' : 'border hover:bg-muted'}`}
+                  >{p}</button>
+                ))}
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  className="px-3 py-1.5 rounded-md border text-sm font-medium disabled:opacity-40 hover:bg-muted transition-colors"
+                >Next →</button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

@@ -331,45 +331,15 @@ export default function BIRPage() {
     toast.success('Alphalist .dat file downloaded')
   }
 
-  function buildFilingCalendarHtml() {
-    const rows = forms.map(f => `<tr>
-      <td>${f.form}</td><td>${f.description}</td><td>${f.period}</td><td>${f.due}</td>
-      <td style="text-align:right">${f.amount ? `₱${f.amount.toLocaleString()}` : '—'}</td>
-      <td style="text-transform:capitalize">${f.status.replace('_', ' ')}</td>
-    </tr>`).join('')
-    return `<!DOCTYPE html><html><head><title>BIR Filing Calendar</title><style>
-      body{font-family:Arial,sans-serif;padding:24px;color:#111}
-      table{width:100%;border-collapse:collapse;font-size:11px}
-      th{background:#1f2937;color:#fff;text-align:left;padding:6px 8px}
-      td{padding:6px 8px;border-bottom:1px solid #e5e7eb}
-      h1{font-size:16px;margin-bottom:4px} p{color:#6b7280;font-size:11px;margin-top:0}
-      @media print { @page { margin: 12mm; size: A4 landscape; } }
-    </style></head><body>
-      <h1>BIR Filing Calendar ${new Date().getFullYear()}</h1>
-      <p>CDSC Industrial Supply — Filing due dates and status</p>
-      <table><thead><tr><th>Form</th><th>Description</th><th>Period</th><th>Due Date</th><th style="text-align:right">Amount</th><th>Status</th></tr></thead>
-      <tbody>${rows || '<tr><td colspan="6" style="text-align:center;color:#9ca3af">No data</td></tr>'}</tbody></table>
-    </body></html>`
-  }
-
-  function printFilingCalendar() {
-    const win = window.open('', '_blank', 'width=1000,height=800')
-    if (!win) return
-    win.document.write(buildFilingCalendarHtml())
-    win.document.close()
-    win.focus()
-    setTimeout(() => win.print(), 400)
-  }
-
-  // Simplified pipe-delimited layout, same convention as the Alphalist .dat export.
-  function downloadFilingCalendarDat() {
-    const lines = forms.map(f => [f.form, f.period, f.due, f.status, f.amount.toFixed(2)].join('|'))
-    const blob = new Blob([lines.join('\r\n')], { type: 'text/plain' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url; a.download = 'BIR_Filing_Calendar.dat'; a.click()
-    URL.revokeObjectURL(url)
-    toast.success('Filing calendar .dat file downloaded')
+  // Official BIR PDF form templates, linked from the Filing Calendar's per-row
+  // action menu so a blank copy of the form is one click away.
+  const BIR_FORM_PDF_URLS: Record<string, string> = {
+    '0619-E': 'https://bir-cdn.bir.gov.ph/local/pdf/0619-E%20Jan%202018%20rev%20final.pdf',
+    '0619-F': 'https://bir-cdn.bir.gov.ph/local/pdf/0619-F%20Jan%202018%20rev%20final.pdf',
+    '1601-EQ': 'https://bir-cdn.bir.gov.ph/local/pdf/1601-EQ%20January%202019%20ENCS%20final.pdf',
+    '1601-FQ': 'https://bir-cdn.bir.gov.ph/local/pdf/1601-FQ%202020%20final.pdf',
+    '2551Q': 'https://bir-cdn.bir.gov.ph/local/pdf/2551Q%20Jan%202018%20ENCS%20final%20rev%203_copy.pdf',
+    '1701Q': 'https://bir-cdn.bir.gov.ph/local/pdf/1701Q%20Jan%202018%20final%20rev2_copy.pdf',
   }
 
   return (
@@ -451,10 +421,6 @@ export default function BIRPage() {
                   <CardTitle className="text-base">BIR Filing Calendar {new Date().getFullYear()}</CardTitle>
                   <CardDescription>Track all BIR form due dates and filing status</CardDescription>
                 </div>
-                <div className="flex gap-2">
-                  <Button size="sm" variant="outline" onClick={printFilingCalendar}><Printer className="h-4 w-4 mr-1" />Print</Button>
-                  <Button size="sm" variant="outline" onClick={downloadFilingCalendarDat}><Download className="h-4 w-4 mr-1" />Download .DAT</Button>
-                </div>
               </div>
             </CardHeader>
             <CardContent className="p-0">
@@ -467,7 +433,7 @@ export default function BIRPage() {
                     <TableHead>Due Date</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="w-24">Actions</TableHead>
+                    <TableHead className="w-48">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -487,12 +453,24 @@ export default function BIRPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        {form.status !== 'filed' && (
-                          <Button size="sm" variant="outline" className="h-7 text-xs"
-                            onClick={() => markFiled(form)}>
-                            Mark Filed
-                          </Button>
-                        )}
+                        <div className="flex items-center gap-1.5">
+                          {form.status !== 'filed' && (
+                            <Button size="sm" variant="outline" className="h-7 text-xs"
+                              onClick={() => markFiled(form)}>
+                              Mark Filed
+                            </Button>
+                          )}
+                          {BIR_FORM_PDF_URLS[form.form] && (
+                            <a
+                              href={BIR_FORM_PDF_URLS[form.form]}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 h-7 px-2.5 rounded-md border border-input bg-background text-xs font-medium hover:bg-muted transition-colors"
+                            >
+                              <Download className="h-3.5 w-3.5" />Form
+                            </a>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}

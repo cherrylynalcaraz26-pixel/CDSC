@@ -152,6 +152,7 @@ export default function DRLogsPage() {
   const [yearFilter, setYearFilter] = usePersistedState('dr-logs:yearFilter', 'all')
   const [drFilter, setDrFilter] = usePersistedState('dr-logs:drFilter', '')
   const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<DRLog | null>(null)
   const [form, setForm] = useState<DRForm>(emptyForm())
@@ -424,6 +425,17 @@ export default function DRLogsPage() {
     )
     return matchSearch && matchStatus && matchClient && matchYear && matchDR && matchItem
   })
+
+  const PAGE_SIZE = 30
+  const pagedFiltered = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const allItemsFlat = filtered.flatMap(log =>
+    getItems(log.dr_number).map(item => ({ ...item, log }))
+  )
+  const pagedItemsFlat = allItemsFlat.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const activeTotal = viewMode === 'by-dr' ? filtered.length : allItemsFlat.length
+  const totalPages = Math.max(1, Math.ceil(activeTotal / PAGE_SIZE))
+
+  useEffect(() => { setPage(1) }, [search, statusFilter, clientFilter, yearFilter, drFilter, itemFilter, viewMode])
 
   function toggleExpand(id: string) {
     setExpandedId(prev => prev === id ? null : id)
@@ -952,6 +964,7 @@ export default function DRLogsPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-8" />
+                    <TableHead className="w-12">No.</TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead>DR Number</TableHead>
                     <TableHead>Delivered To</TableHead>
@@ -963,17 +976,17 @@ export default function DRLogsPage() {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-10">
+                      <TableCell colSpan={8} className="text-center py-10">
                         <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                       </TableCell>
                     </TableRow>
                   ) : filtered.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                      <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
                         No DR logs found. Click <strong>New DR Log</strong> to add one.
                       </TableCell>
                     </TableRow>
-                  ) : filtered.map(log => {
+                  ) : pagedFiltered.map((log, i) => {
                     const sc = STATUS_CFG[log.status] ?? STATUS_CFG.received
                     const isExpanded = expandedId === log.id
                     const logItems = getItems(log.dr_number)
@@ -991,6 +1004,7 @@ export default function DRLogsPage() {
                               ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
                               : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                           </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{(page - 1) * PAGE_SIZE + i + 1}</TableCell>
                           <TableCell className="text-sm whitespace-nowrap">
                             {format(parseISO(log.dr_date), 'MM/dd/yyyy')}
                           </TableCell>
@@ -1017,7 +1031,7 @@ export default function DRLogsPage() {
 
                         {isExpanded && (
                           <TableRow key={`${log.id}-expanded`} className="bg-muted/30 hover:bg-muted/30">
-                            <TableCell colSpan={7} className="py-3 px-6">
+                            <TableCell colSpan={8} className="py-3 px-6">
                               <div className="space-y-3">
                                 <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
                                   {log.po_number && <span>SO: <span className="font-mono text-foreground">{log.po_number}</span></span>}
@@ -1113,13 +1127,11 @@ export default function DRLogsPage() {
               </Table>
             ) : (
               (() => {
-                const allItemsFlat = filtered.flatMap(log =>
-                  getItems(log.dr_number).map(item => ({ ...item, log }))
-                )
                 return (
                   <Table>
                     <TableHeader>
                       <TableRow>
+                        <TableHead className="w-12">No.</TableHead>
                         <TableHead>DR Number</TableHead>
                         <TableHead>Date</TableHead>
                         <TableHead>Delivered To</TableHead>
@@ -1132,20 +1144,21 @@ export default function DRLogsPage() {
                     <TableBody>
                       {loading ? (
                         <TableRow>
-                          <TableCell colSpan={7} className="text-center py-10">
+                          <TableCell colSpan={8} className="text-center py-10">
                             <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                           </TableCell>
                         </TableRow>
                       ) : allItemsFlat.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                          <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
                             No item records found.
                           </TableCell>
                         </TableRow>
-                      ) : allItemsFlat.map((row, i) => {
+                      ) : pagedItemsFlat.map((row, i) => {
                         const sc = STATUS_CFG[row.log.status] ?? STATUS_CFG.received
                         return (
                           <TableRow key={`${row.id ?? i}-flat`}>
+                            <TableCell className="text-sm text-muted-foreground">{(page - 1) * PAGE_SIZE + i + 1}</TableCell>
                             <TableCell className="font-mono text-sm font-semibold text-red-600">{row.dr_number}</TableCell>
                             <TableCell className="text-sm whitespace-nowrap">
                               {format(parseISO(row.log.dr_date), 'MM/dd/yyyy')}
@@ -1166,6 +1179,32 @@ export default function DRLogsPage() {
               })()
             )}
           </div>
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between text-sm px-4 py-3 border-t">
+              <span className="text-muted-foreground">
+                Showing {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, activeTotal)} of {activeTotal}
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="px-3 py-1.5 rounded-md border text-sm font-medium disabled:opacity-40 hover:bg-muted transition-colors"
+                >← Prev</button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                  <button
+                    key={p}
+                    onClick={() => setPage(p)}
+                    className={`w-8 h-8 rounded-md text-sm font-medium transition-colors ${p === page ? 'bg-red-600 text-white' : 'border hover:bg-muted'}`}
+                  >{p}</button>
+                ))}
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  className="px-3 py-1.5 rounded-md border text-sm font-medium disabled:opacity-40 hover:bg-muted transition-colors"
+                >Next →</button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
       </>)}

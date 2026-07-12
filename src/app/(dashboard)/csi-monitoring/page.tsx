@@ -162,6 +162,7 @@ export default function CSIMonitoringPage() {
   const [viewMode, setViewMode] = usePersistedState<'by-si' | 'all-items' | 'cross-ref'>('csi-monitoring:viewMode', 'by-si')
   const [drItemsForCrossRef, setDrItemsForCrossRef] = useState<{ dr_number: string; item_name: string; client_name: string | null }[]>([])
   const [expandedSIs, setExpandedSIs] = useState<Set<string>>(new Set())
+  const [page, setPage] = useState(1)
   const [inventoryItem, setInventoryItem] = useState<string>('')
   const [inventoryOpen, setInventoryOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'form' | 'preview'>('form')
@@ -464,6 +465,14 @@ export default function CSIMonitoringPage() {
       })
     }
   }
+
+  const PAGE_SIZE = 30
+  const pagedSiGroups = siGroups.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const pagedFiltered = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const activeTotal = viewMode === 'by-si' ? siGroups.length : filtered.length
+  const totalPages = Math.max(1, Math.ceil(activeTotal / PAGE_SIZE))
+
+  useEffect(() => { setPage(1) }, [search, siFilter, itemFilter, clientFilter, yearFilter, viewMode])
 
   function toggleSI(si: string) {
     setExpandedSIs(prev => {
@@ -1304,6 +1313,7 @@ export default function CSIMonitoringPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-8" />
+                    <TableHead className="w-12">No.</TableHead>
                     <TableHead className="w-28">Date</TableHead>
                     <TableHead className="w-32">SI Number</TableHead>
                     <TableHead className="w-32">SO Number</TableHead>
@@ -1318,17 +1328,17 @@ export default function CSIMonitoringPage() {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center py-10">
+                      <TableCell colSpan={10} className="text-center py-10">
                         <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                       </TableCell>
                     </TableRow>
                   ) : siGroups.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
+                      <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
                         No records found. Click <strong>New Record</strong> to add one.
                       </TableCell>
                     </TableRow>
-                  ) : siGroups.map(group => (
+                  ) : pagedSiGroups.map((group, i) => (
                     <Fragment key={group.si_number}>
                       <TableRow
                         className="cursor-pointer hover:bg-muted/50"
@@ -1339,6 +1349,7 @@ export default function CSIMonitoringPage() {
                             ? <ChevronDown className="h-4 w-4" />
                             : <ChevronRight className="h-4 w-4" />}
                         </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{(page - 1) * PAGE_SIZE + i + 1}</TableCell>
                         <TableCell className="text-sm whitespace-nowrap">
                           {format(parseISO(group.date), 'MMM d, yyyy')}
                         </TableCell>
@@ -1374,7 +1385,7 @@ export default function CSIMonitoringPage() {
                       </TableRow>
                       {expandedSIs.has(group.si_number) && (
                         <TableRow key={`${group.si_number}-items`}>
-                          <TableCell colSpan={9} className="p-0 bg-muted/20">
+                          <TableCell colSpan={10} className="p-0 bg-muted/20">
                             <div className="px-8 py-2">
                               <Table>
                                 <TableHeader>
@@ -1422,6 +1433,7 @@ export default function CSIMonitoringPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-12">No.</TableHead>
                     <TableHead className="w-28">Date</TableHead>
                     <TableHead className="w-32">SI Number</TableHead>
                     <TableHead className="min-w-[160px]">Client</TableHead>
@@ -1436,18 +1448,19 @@ export default function CSIMonitoringPage() {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center py-10">
+                      <TableCell colSpan={10} className="text-center py-10">
                         <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                       </TableCell>
                     </TableRow>
                   ) : filtered.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
+                      <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
                         No records found. Click <strong>New Record</strong> to add one.
                       </TableCell>
                     </TableRow>
-                  ) : filtered.map(rec => (
+                  ) : pagedFiltered.map((rec, i) => (
                     <TableRow key={rec.id}>
+                      <TableCell className="text-sm text-muted-foreground">{(page - 1) * PAGE_SIZE + i + 1}</TableCell>
                       <TableCell className="text-sm whitespace-nowrap">
                         {format(parseISO(rec.si_date), 'MMM d, yyyy')}
                       </TableCell>
@@ -1475,6 +1488,32 @@ export default function CSIMonitoringPage() {
               </Table>
             )}
           </div>
+          {viewMode !== 'cross-ref' && totalPages > 1 && (
+            <div className="flex items-center justify-between text-sm px-4 py-3 border-t">
+              <span className="text-muted-foreground">
+                Showing {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, activeTotal)} of {activeTotal}
+              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="px-3 py-1.5 rounded-md border text-sm font-medium disabled:opacity-40 hover:bg-muted transition-colors"
+                >← Prev</button>
+                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
+                  <button
+                    key={p}
+                    onClick={() => setPage(p)}
+                    className={`w-8 h-8 rounded-md text-sm font-medium transition-colors ${p === page ? 'bg-red-600 text-white' : 'border hover:bg-muted'}`}
+                  >{p}</button>
+                ))}
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  className="px-3 py-1.5 rounded-md border text-sm font-medium disabled:opacity-40 hover:bg-muted transition-colors"
+                >Next →</button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
       }
