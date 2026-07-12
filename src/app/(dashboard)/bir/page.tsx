@@ -377,60 +377,80 @@ export default function BIRPage() {
     const isPercentageTax = form.form === '2551Q' || form.form === '2550Q'
     const isIncomeTax = form.form === '1701Q' || form.form === '1702Q'
     const breakdownLabel = isIncomeTax ? 'Account' : isPercentageTax ? 'Client' : 'Supplier'
+    const officialTitle = BIR_FORM_TITLES[form.form] ?? form.description
+    const taxDueLabel = isIncomeTax ? 'Net Taxable Income' : isPercentageTax ? 'Tax Due' : 'Total Tax Withheld/Remitted'
+
     return `<!DOCTYPE html><html><head><title>BIR Form ${form.form}</title><style>
       * { box-sizing: border-box; }
-      body{font-family:Arial,sans-serif;padding:0;margin:0;color:#111;font-size:11px}
-      .page{border:1px solid #1f2937;padding:0}
-      table{width:100%;border-collapse:collapse;font-size:11px}
-      td,th{padding:6px 10px}
+      body{font-family:Arial,sans-serif;padding:0;margin:0;color:#111;font-size:10px}
+      .page{border:1px solid #1f2937}
+      table{width:100%;border-collapse:collapse;font-size:10px}
+      td,th{padding:5px 9px}
       th{background:#1f2937;color:#fff;text-align:left}
       .rows td{border-bottom:1px solid #e5e7eb}
       .rows td.r,th.r{text-align:right}
-      h1{font-size:16px;margin:0} h2{font-size:11px;color:#6b7280;margin:2px 0 0;font-weight:normal}
-      .letterhead td{padding:10px 14px;border-bottom:2px solid #1f2937;vertical-align:top}
-      .co-name{font-size:14px;font-weight:700} .co-sub{font-size:9px;color:#6b7280;margin-top:2px}
-      .meta td{padding:8px 14px;font-size:10px;border-bottom:1px solid #e5e7eb}
-      .meta td b{display:block;font-size:8px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.4px;font-weight:600;margin-bottom:2px}
-      .section-title{background:#f3f4f6;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#374151;padding:6px 14px}
-      .totals td{padding:8px 14px;font-size:11px;border-top:1px solid #e5e7eb}
+
+      .masthead{text-align:center;padding:10px 14px 8px;border-bottom:2px solid #1f2937}
+      .masthead .republic{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.3px}
+      .masthead .bureau{font-size:9px;color:#4b5563}
+      .masthead .formno{float:right;border:1px solid #1f2937;padding:3px 8px;font-size:9px;font-weight:700}
+      .masthead h1{font-size:14px;margin:8px 0 1px;text-transform:uppercase}
+      .masthead h2{font-size:10px;color:#6b7280;margin:0;font-weight:normal}
+
+      .section-title{background:#f3f4f6;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#374151;padding:5px 14px;border-top:1px solid #d1d5db;border-bottom:1px solid #d1d5db}
+      .fields td{padding:6px 14px;font-size:10px;border-bottom:1px solid #e5e7eb;vertical-align:top}
+      .fields td b{display:block;font-size:8px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.4px;font-weight:600;margin-bottom:2px}
+      .blank{color:#d1d5db}
+
+      .totals td{padding:7px 14px;font-size:10px;border-top:1px solid #e5e7eb}
       .totals td.r{text-align:right}
-      .totals tr.grand td{font-size:13px;font-weight:700;border-top:2px solid #1f2937}
-      .note{padding:10px 14px;font-size:8px;color:#9ca3af}
+      .totals tr.grand td{font-size:12px;font-weight:700;border-top:2px solid #1f2937}
+      .note{padding:8px 14px;font-size:8px;color:#9ca3af}
       @media print { @page { margin: 10mm; size: A4 portrait; } }
     </style></head><body>
       <div class="page">
-        <table class="letterhead"><tr>
-          <td style="width:60%">
-            <div class="co-name">${companyInfo?.company_name ?? 'CDSC Industrial Supply'}</div>
-            <div class="co-sub">
-              ${companyInfo?.address ?? ''}${companyInfo?.address ? '<br/>' : ''}
-              ${companyInfo?.tin ? `TIN: ${companyInfo.tin}` : ''}${companyInfo?.phone ? ` &nbsp;|&nbsp; Tel: ${companyInfo.phone}` : ''}
-            </div>
-          </td>
-          <td style="text-align:right">
-            <h1>BIR Form ${form.form}</h1>
-            <h2>${form.description}</h2>
-          </td>
-        </tr></table>
+        <div class="masthead">
+          <div class="formno">BIR Form No.<br/><span style="font-size:13px">${form.form}</span></div>
+          <div class="republic">Republika ng Pilipinas / Republic of the Philippines</div>
+          <div class="bureau">Kagawaran ng Pananalapi &nbsp;•&nbsp; Kawanihan ng Rentas Internas<br/>Department of Finance &nbsp;•&nbsp; Bureau of Internal Revenue</div>
+          <h1>${officialTitle}</h1>
+          <h2>${form.description}</h2>
+        </div>
 
-        <table class="meta"><tr>
-          <td style="width:50%"><b>Taxable Period</b>${form.period}</td>
-          <td style="width:50%"><b>Due Date</b>${form.due}</td>
-        </tr></table>
+        <div class="section-title">Part I — Background Information</div>
+        <table class="fields">
+          <tr>
+            <td style="width:50%"><b>Taxpayer / Withholding Agent's Name</b>${companyInfo?.company_name ?? '<span class="blank">—</span>'}</td>
+            <td style="width:50%"><b>TIN</b>${companyInfo?.tin ?? '<span class="blank">—</span>'}</td>
+          </tr>
+          <tr>
+            <td colspan="2"><b>Registered Address</b>${companyInfo?.address ?? '<span class="blank">—</span>'}</td>
+          </tr>
+          <tr>
+            <td><b>RDO Code</b><span class="blank">— (fill in manually)</span></td>
+            <td><b>Contact Number</b>${companyInfo?.phone ?? '<span class="blank">—</span>'}</td>
+          </tr>
+          <tr>
+            <td><b>Taxable Period</b>${form.period}</td>
+            <td><b>Due Date</b>${form.due}</td>
+          </tr>
+        </table>
 
         ${formGenManual
-          ? `<div class="note" style="font-size:10px;padding:14px">No source data is tracked in the system for this form yet — amount entered manually below.</div>`
-          : `<div class="section-title">Part II — ${breakdownLabel} Breakdown</div>
+          ? `<div class="note" style="font-size:10px;padding:12px 14px">No source data is tracked in the system for this form yet — the amount below must be entered manually.</div>`
+          : `<div class="section-title">Part II — Schedule of ${breakdownLabel}s</div>
              <table class="rows"><thead><tr><th>${breakdownLabel}</th><th class="r">Amount</th></tr></thead>
              <tbody>${rowsHtml || '<tr><td colspan="2" style="text-align:center;color:#9ca3af">No records for this period</td></tr>'}</tbody></table>`}
 
+        <div class="section-title">Part III — Computation of Tax</div>
         <table class="totals">
-          <tr><td>${formGenBaseLabel}</td><td class="r">₱${formGenBaseAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td></tr>
+          <tr><td>${taxDueLabel}</td><td class="r">₱${formGenBaseAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td></tr>
           ${isPercentageTax ? `<tr><td>Tax Rate</td><td class="r">${rate}%</td></tr>` : ''}
-          <tr class="grand"><td>Amount Due</td><td class="r">₱${(parseFloat(formGenAmount) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td></tr>
+          <tr><td>Less: Tax Credits / Payments</td><td class="r blank">—</td></tr>
+          <tr class="grand"><td>Total Amount Payable</td><td class="r">₱${(parseFloat(formGenAmount) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td></tr>
         </table>
 
-        <div class="note">Generated ${new Date().toLocaleDateString('en-PH')} from CDSC system records. Verify against official BIR Form ${form.form} before filing.</div>
+        <div class="note">Generated ${new Date().toLocaleDateString('en-PH')} from CDSC system records. This is a system-generated working copy — transcribe onto the official BIR Form ${form.form} (see Blank Form download) before filing, and verify all figures.</div>
       </div>
     </body></html>`
   }
@@ -551,6 +571,19 @@ export default function BIRPage() {
     '1601-FQ': 'https://bir-cdn.bir.gov.ph/local/pdf/1601-FQ%202020%20final.pdf',
     '2551Q': 'https://bir-cdn.bir.gov.ph/local/pdf/2551Q%20Jan%202018%20ENCS%20final%20rev%203_copy.pdf',
     '1701Q': 'https://bir-cdn.bir.gov.ph/local/pdf/1701Q%20Jan%202018%20final%20rev2_copy.pdf',
+  }
+
+  // Official titles as they appear on each BIR form, used for the Generate dialog's
+  // masthead so the generated document reads like the real form it stands in for.
+  const BIR_FORM_TITLES: Record<string, string> = {
+    '0619-E': 'Monthly Remittance Form of Creditable Income Taxes Withheld (Expanded)',
+    '0619-F': 'Monthly Remittance Form of Final Income Taxes Withheld',
+    '1601-EQ': 'Quarterly Remittance Return of Creditable Income Taxes Withheld (Expanded)',
+    '1601-FQ': 'Quarterly Remittance Return of Final Income Taxes Withheld',
+    '2551Q': 'Quarterly Percentage Tax Return',
+    '2550Q': 'Quarterly Value-Added Tax Return',
+    '1701Q': 'Quarterly Income Tax Return for Individuals, Estates, and Trusts',
+    '1702Q': 'Quarterly Income Tax Return for Corporations, Partnerships and Other Non-Individual Taxpayers',
   }
 
   return (
