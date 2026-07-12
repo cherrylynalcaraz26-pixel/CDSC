@@ -9,11 +9,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Progress } from '@/components/ui/progress'
 import { Separator } from '@/components/ui/separator'
-import { CheckCircle2, XCircle, AlertTriangle, Download, FileBarChart, Zap, FileText, Loader2, Printer } from 'lucide-react'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { CheckCircle2, XCircle, AlertTriangle, Download, FileBarChart, Zap, FileText, Loader2, Printer, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import { htmlToPdfBase64 } from '@/lib/send-email'
 
-interface BirFormDef { key: string; form: string; description: string; period: string; due: string; amount: number }
+interface BirFormDef { key: string; form: string; description: string; period: string; due: string; amount: number; periodStart: string; periodEnd: string }
 interface BirForm extends BirFormDef { status: 'filed' | 'overdue' | 'due_soon' | 'pending' }
 
 // Generates this cycle's BIR filings relative to "today" instead of hardcoded dates,
@@ -27,12 +30,15 @@ function buildBirForms(today: Date, vatRegistered: boolean, isCorporate: boolean
 
   const prevMonthLabel = new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
   const monthlyDue = new Date(y, m, 10)
+  const monthStart = new Date(y, m - 1, 1)
+  const monthEnd = new Date(y, m, 0)
 
   // Most recently closed quarter relative to today (e.g. in Jul, that's Apr–Jun).
   const currentQuarterEndMonth = Math.floor(m / 3) * 3 + 2
   let qEndMonth = currentQuarterEndMonth - 3
   let qYear = y
   if (qEndMonth < 0) { qEndMonth += 12; qYear -= 1 }
+  const quarterStart = new Date(qYear, qEndMonth - 2, 1)
   const quarterEnd = new Date(qYear, qEndMonth + 1, 0)
   const quarterLabel = `Q${Math.floor(qEndMonth / 3) + 1} ${qYear}`
   const eqDue = new Date(qYear, qEndMonth + 2, 0)
@@ -47,12 +53,12 @@ function buildBirForms(today: Date, vatRegistered: boolean, isCorporate: boolean
     : { form: '1701Q', description: 'Income Tax (Quarterly) — Individual/Sole Prop' }
 
   return [
-    { key: `0619-E_${iso(monthlyDue)}`, form: '0619-E', description: 'Expanded Withholding Tax (Monthly)', period: prevMonthLabel, due: iso(monthlyDue), amount: 12450 },
-    { key: `0619-F_${iso(monthlyDue)}`, form: '0619-F', description: 'Final Withholding Tax (Monthly)', period: prevMonthLabel, due: iso(monthlyDue), amount: 3200 },
-    { key: `1601-EQ_${quarterLabel}`, form: '1601-EQ', description: 'Expanded Withholding Tax (Quarterly)', period: quarterLabel, due: iso(eqDue), amount: 38750 },
-    { key: `1601-FQ_${quarterLabel}`, form: '1601-FQ', description: 'Final Withholding Tax (Quarterly)', period: quarterLabel, due: iso(eqDue), amount: 9600 },
-    { key: `${salesTaxForm.form}_${quarterLabel}`, form: salesTaxForm.form, description: salesTaxForm.description, period: quarterLabel, due: iso(salesTaxDue), amount: 0 },
-    { key: `${incomeTaxForm.form}_${quarterLabel}`, form: incomeTaxForm.form, description: incomeTaxForm.description, period: quarterLabel, due: iso(itDue), amount: 145000 },
+    { key: `0619-E_${iso(monthlyDue)}`, form: '0619-E', description: 'Expanded Withholding Tax (Monthly)', period: prevMonthLabel, due: iso(monthlyDue), amount: 12450, periodStart: iso(monthStart), periodEnd: iso(monthEnd) },
+    { key: `0619-F_${iso(monthlyDue)}`, form: '0619-F', description: 'Final Withholding Tax (Monthly)', period: prevMonthLabel, due: iso(monthlyDue), amount: 3200, periodStart: iso(monthStart), periodEnd: iso(monthEnd) },
+    { key: `1601-EQ_${quarterLabel}`, form: '1601-EQ', description: 'Expanded Withholding Tax (Quarterly)', period: quarterLabel, due: iso(eqDue), amount: 38750, periodStart: iso(quarterStart), periodEnd: iso(quarterEnd) },
+    { key: `1601-FQ_${quarterLabel}`, form: '1601-FQ', description: 'Final Withholding Tax (Quarterly)', period: quarterLabel, due: iso(eqDue), amount: 9600, periodStart: iso(quarterStart), periodEnd: iso(quarterEnd) },
+    { key: `${salesTaxForm.form}_${quarterLabel}`, form: salesTaxForm.form, description: salesTaxForm.description, period: quarterLabel, due: iso(salesTaxDue), amount: 0, periodStart: iso(quarterStart), periodEnd: iso(quarterEnd) },
+    { key: `${incomeTaxForm.form}_${quarterLabel}`, form: incomeTaxForm.form, description: incomeTaxForm.description, period: quarterLabel, due: iso(itDue), amount: 145000, periodStart: iso(quarterStart), periodEnd: iso(quarterEnd) },
   ]
 }
 
@@ -132,6 +138,16 @@ export default function BIRPage() {
   const [filings, setFilings] = useState<{ form_type: string; tax_period: string; status: string }[]>([])
   const [vatRegistered, setVatRegistered] = useState(false)
   const [isCorporate, setIsCorporate] = useState(false)
+  const [companyInfo, setCompanyInfo] = useState<{ company_name: string | null; address: string | null; phone: string | null; tin: string | null } | null>(null)
+  const [formGenOpen, setFormGenOpen] = useState(false)
+  const [formGenTarget, setFormGenTarget] = useState<BirForm | null>(null)
+  const [formGenLoading, setFormGenLoading] = useState(false)
+  const [formGenRows, setFormGenRows] = useState<{ label: string; sub?: string; amount: number }[]>([])
+  const [formGenBaseLabel, setFormGenBaseLabel] = useState('')
+  const [formGenBaseAmount, setFormGenBaseAmount] = useState(0)
+  const [formGenRate, setFormGenRate] = useState('3')
+  const [formGenManual, setFormGenManual] = useState(false)
+  const [formGenAmount, setFormGenAmount] = useState('')
 
   const loadFilings = useCallback(async () => {
     const { data } = await supabase.from('bir_filings').select('form_type, tax_period, status')
@@ -147,9 +163,10 @@ export default function BIRPage() {
           .neq('status', 'cancelled'),
         supabase.from('suppliers').select('id, company_name, tin, atc_code, ewt_rate, address, bir_registered_address'),
         supabase.from('receiving_reports').select('po_number, si_number, dr_number'),
-        supabase.from('system_settings').select('vat_registered, business_type').single(),
+        supabase.from('system_settings').select('vat_registered, business_type, company_name, address, phone, tin').single(),
       ])
       setSuppliers(supData ?? [])
+      if (sysData) setCompanyInfo(sysData)
       setVatRegistered(!!sysData?.vat_registered)
       setIsCorporate((sysData?.business_type ?? '').toLowerCase().includes('corp'))
       await loadFilings()
@@ -250,6 +267,175 @@ export default function BIRPage() {
       return [...others, { form_type: form.form, tax_period: form.period, status: 'filed' }]
     })
     toast.success(`Form ${form.form} marked as filed`)
+  }
+
+  // Pulls the real figures backing a given BIR form for its computed period, so the
+  // generated document reflects actual system data rather than the Filing Calendar's
+  // placeholder amount. Final Withholding Tax (0619-F, 1601-FQ) has no source data
+  // anywhere in the system yet, so those stay a manual entry.
+  async function openFormGenerator(form: BirForm) {
+    setFormGenTarget(form)
+    setFormGenOpen(true)
+    setFormGenLoading(true)
+    setFormGenRows([])
+    setFormGenManual(false)
+    setFormGenRate('3')
+
+    if (form.form === '0619-F' || form.form === '1601-FQ') {
+      setFormGenManual(true)
+      setFormGenBaseLabel('Final Withholding Tax Due')
+      setFormGenBaseAmount(0)
+      setFormGenAmount('')
+      setFormGenLoading(false)
+      return
+    }
+
+    if (form.form === '0619-E' || form.form === '1601-EQ') {
+      const { data: poData } = await supabase.from('purchase_orders')
+        .select('supplier_id, po_date, ewt_amount, total_amount, vat_amount')
+        .neq('status', 'cancelled')
+        .gte('po_date', form.periodStart).lte('po_date', form.periodEnd)
+      const bySupplier = new Map<string, number>()
+      for (const po of poData ?? []) {
+        const ewt = Number(po.ewt_amount) || 0
+        if (ewt <= 0 || !po.supplier_id) continue
+        bySupplier.set(po.supplier_id, (bySupplier.get(po.supplier_id) ?? 0) + ewt)
+      }
+      const supplierById = new Map(suppliers.map((s: any) => [s.id, s]))
+      const rows = [...bySupplier.entries()]
+        .map(([supplierId, ewt]) => ({ label: supplierById.get(supplierId)?.company_name ?? 'Unknown Supplier', sub: supplierById.get(supplierId)?.tin ?? undefined, amount: ewt }))
+        .sort((a, b) => b.amount - a.amount)
+      const total = rows.reduce((s, r) => s + r.amount, 0)
+      setFormGenRows(rows)
+      setFormGenBaseLabel('Total Expanded Withholding Tax')
+      setFormGenBaseAmount(total)
+      setFormGenAmount(total.toFixed(2))
+      setFormGenLoading(false)
+      return
+    }
+
+    if (form.form === '2551Q' || form.form === '2550Q') {
+      const { data: colData } = await supabase.from('collections')
+        .select('client_name, amount, collection_date, status')
+        .eq('status', 'posted')
+        .gte('collection_date', form.periodStart).lte('collection_date', form.periodEnd)
+      const byClient = new Map<string, number>()
+      for (const c of colData ?? []) {
+        const amt = Number(c.amount) || 0
+        byClient.set(c.client_name ?? 'Unknown Client', (byClient.get(c.client_name ?? 'Unknown Client') ?? 0) + amt)
+      }
+      const rows = [...byClient.entries()].map(([client, amount]) => ({ label: client, amount })).sort((a, b) => b.amount - a.amount)
+      const gross = rows.reduce((s, r) => s + r.amount, 0)
+      setFormGenRows(rows)
+      setFormGenBaseLabel('Gross Sales / Receipts Collected')
+      setFormGenBaseAmount(gross)
+      setFormGenAmount(((gross * 3) / 100).toFixed(2))
+      setFormGenLoading(false)
+      return
+    }
+
+    if (form.form === '1701Q' || form.form === '1702Q') {
+      const [{ data: coaData }, { data: jlData }] = await Promise.all([
+        supabase.from('chart_of_accounts').select('account_code,account_name,account_type,normal_balance,is_header').eq('is_active', true),
+        supabase.from('journal_lines').select('account_code, debit, credit, journal_entries(entry_date)'),
+      ])
+      const inPeriod = (jlData ?? []).filter((l: any) => {
+        const d = l.journal_entries?.entry_date
+        return d && d >= form.periodStart && d <= form.periodEnd
+      })
+      const balances: Record<string, number> = {}
+      for (const l of inPeriod as any[]) balances[l.account_code] = (balances[l.account_code] ?? 0) + (Number(l.credit) || 0) - (Number(l.debit) || 0)
+      const revenueAccts = (coaData ?? []).filter((a: any) => a.account_type === 'revenue' && !a.is_header)
+      const expenseAccts = (coaData ?? []).filter((a: any) => a.account_type === 'expense' && !a.is_header)
+      const totalRevenue = revenueAccts.reduce((s: number, a: any) => s + (balances[a.account_code] ?? 0), 0)
+      const totalExpense = expenseAccts.reduce((s: number, a: any) => s + Math.abs(balances[a.account_code] ?? 0), 0)
+      const netIncome = totalRevenue - totalExpense
+      setFormGenRows([
+        { label: 'Total Revenue', amount: totalRevenue },
+        { label: 'Total Expenses', amount: -totalExpense },
+      ])
+      setFormGenBaseLabel('Net Taxable Income')
+      setFormGenBaseAmount(netIncome)
+      setFormGenAmount(netIncome > 0 ? netIncome.toFixed(2) : '0.00')
+      setFormGenLoading(false)
+      return
+    }
+
+    setFormGenLoading(false)
+  }
+
+  function buildFilledFormHtml(form: BirForm) {
+    const rowsHtml = formGenRows.map(r => `<tr>
+      <td>${r.label}${r.sub ? `<br/><span style="color:#9ca3af;font-size:9px">${r.sub}</span>` : ''}</td>
+      <td style="text-align:right">₱${r.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
+    </tr>`).join('')
+    const rate = parseFloat(formGenRate) || 0
+    const isPercentageTax = form.form === '2551Q' || form.form === '2550Q'
+    const isIncomeTax = form.form === '1701Q' || form.form === '1702Q'
+    const breakdownLabel = isIncomeTax ? 'Account' : isPercentageTax ? 'Client' : 'Supplier'
+    return `<!DOCTYPE html><html><head><title>BIR Form ${form.form}</title><style>
+      body{font-family:Arial,sans-serif;padding:24px;color:#111}
+      table{width:100%;border-collapse:collapse;font-size:11px;margin-top:8px}
+      th{background:#1f2937;color:#fff;text-align:left;padding:6px 8px}
+      td{padding:6px 8px;border-bottom:1px solid #e5e7eb}
+      h1{font-size:18px;margin-bottom:2px} h2{font-size:12px;color:#6b7280;margin:0 0 12px}
+      .co{border-bottom:2px solid #1f2937;padding-bottom:10px;margin-bottom:14px}
+      .co-name{font-size:15px;font-weight:700} .co-sub{font-size:10px;color:#6b7280}
+      .meta{display:flex;justify-content:space-between;font-size:11px;margin-bottom:10px}
+      .meta div{line-height:1.6}
+      .total{display:flex;justify-content:space-between;font-size:14px;font-weight:700;border-top:2px solid #1f2937;padding-top:8px;margin-top:8px}
+      @media print { @page { margin: 14mm; size: A4 portrait; } }
+    </style></head><body>
+      <div class="co">
+        <div class="co-name">${companyInfo?.company_name ?? 'CDSC Industrial Supply'}</div>
+        <div class="co-sub">
+          ${companyInfo?.address ? `${companyInfo.address}<br/>` : ''}
+          ${companyInfo?.tin ? `TIN: ${companyInfo.tin}<br/>` : ''}
+          ${companyInfo?.phone ? `Tel: ${companyInfo.phone}` : ''}
+        </div>
+      </div>
+      <h1>BIR Form ${form.form}</h1>
+      <h2>${form.description}</h2>
+      <div class="meta">
+        <div><strong>Taxable Period:</strong> ${form.period}</div>
+        <div><strong>Due Date:</strong> ${form.due}</div>
+      </div>
+      ${formGenManual
+        ? `<p style="font-size:11px;color:#6b7280">No source data is tracked in the system for this form yet — amount entered manually below.</p>`
+        : `<table><thead><tr><th>${breakdownLabel}</th><th style="text-align:right">Amount</th></tr></thead><tbody>${rowsHtml || '<tr><td colspan="2" style="text-align:center;color:#9ca3af">No records for this period</td></tr>'}</tbody></table>`}
+      <div class="total"><span>${formGenBaseLabel}</span><span>₱${formGenBaseAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+      ${isPercentageTax ? `<div class="total" style="font-size:12px;border-top:none;padding-top:2px"><span>Tax Rate</span><span>${rate}%</span></div>` : ''}
+      <div class="total"><span>Amount Due</span><span>₱${(parseFloat(formGenAmount) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+      <p style="margin-top:24px;font-size:9px;color:#9ca3af">Generated ${new Date().toLocaleDateString('en-PH')} from CDSC system records. Verify against official BIR Form ${form.form} before filing.</p>
+    </body></html>`
+  }
+
+  function printFilledForm() {
+    if (!formGenTarget) return
+    const win = window.open('', '_blank', 'width=900,height=800')
+    if (!win) return
+    win.document.write(buildFilledFormHtml(formGenTarget))
+    win.document.close()
+    win.focus()
+    setTimeout(() => win.print(), 400)
+  }
+
+  async function downloadFilledFormPdf() {
+    if (!formGenTarget) return
+    try {
+      const base64 = await htmlToPdfBase64(buildFilledFormHtml(formGenTarget))
+      const bytes = atob(base64)
+      const arr = new Uint8Array(bytes.length)
+      for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i)
+      const blob = new Blob([arr], { type: 'application/pdf' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url; a.download = `BIR_${formGenTarget.form}_${formGenTarget.period.replace(/\s+/g, '_')}.pdf`; a.click()
+      URL.revokeObjectURL(url)
+      toast.success(`Form ${formGenTarget.form} PDF downloaded`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to generate PDF')
+    }
   }
 
   function runFilingReadyCheck() {
@@ -433,7 +619,7 @@ export default function BIRPage() {
                     <TableHead>Due Date</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="w-48">Actions</TableHead>
+                    <TableHead className="w-64">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -454,6 +640,10 @@ export default function BIRPage() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1.5">
+                          <Button size="sm" variant="outline" className="h-7 text-xs"
+                            onClick={() => openFormGenerator(form)}>
+                            <Sparkles className="h-3.5 w-3.5 mr-1" />Generate
+                          </Button>
                           {form.status !== 'filed' && (
                             <Button size="sm" variant="outline" className="h-7 text-xs"
                               onClick={() => markFiled(form)}>
@@ -690,6 +880,96 @@ export default function BIRPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Auto-filled Form Generator */}
+      <Dialog open={formGenOpen} onOpenChange={o => { if (!o) setFormGenOpen(false) }}>
+        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-primary" /> Generate Form {formGenTarget?.form}
+            </DialogTitle>
+          </DialogHeader>
+          {formGenLoading ? (
+            <div className="py-16 text-center">
+              <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
+              <p className="text-sm text-muted-foreground mt-2">Pulling figures from system records…</p>
+            </div>
+          ) : formGenTarget && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 text-sm bg-muted/40 rounded-lg p-3">
+                <div><span className="text-muted-foreground">Description:</span> {formGenTarget.description}</div>
+                <div><span className="text-muted-foreground">Period:</span> {formGenTarget.period}</div>
+                <div><span className="text-muted-foreground">Due Date:</span> {formGenTarget.due}</div>
+                <div><span className="text-muted-foreground">Taxpayer:</span> {companyInfo?.company_name ?? 'CDSC Industrial Supply'}</div>
+              </div>
+
+              {formGenManual ? (
+                <p className="text-sm text-muted-foreground bg-amber-50 border border-amber-200 rounded-lg p-3">
+                  No source data is tracked in the system yet for Final Withholding Tax. Enter the amount manually below — the header and period info is still auto-filled.
+                </p>
+              ) : (
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>{formGenTarget.form === '1701Q' || formGenTarget.form === '1702Q' ? 'Account' : (formGenTarget.form === '2551Q' || formGenTarget.form === '2550Q') ? 'Client' : 'Supplier'}</TableHead>
+                        <TableHead className="text-right">Amount</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {formGenRows.length === 0 ? (
+                        <TableRow><TableCell colSpan={2} className="text-center py-6 text-muted-foreground text-sm">No records found for this period.</TableCell></TableRow>
+                      ) : formGenRows.map((r, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="text-sm">
+                            {r.label}
+                            {r.sub && <div className="text-xs text-muted-foreground font-mono">{r.sub}</div>}
+                          </TableCell>
+                          <TableCell className={`text-right text-sm ${r.amount < 0 ? 'text-red-600' : ''}`}>
+                            ₱{r.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              )}
+
+              <div className="flex items-center justify-between text-sm font-semibold px-1">
+                <span>{formGenBaseLabel}</span>
+                <span>₱{formGenBaseAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
+              </div>
+
+              {(formGenTarget.form === '2551Q' || formGenTarget.form === '2550Q') && (
+                <div className="space-y-1.5">
+                  <Label>Tax Rate (%)</Label>
+                  <Input
+                    type="number" step="0.01" min="0" value={formGenRate}
+                    onChange={e => {
+                      setFormGenRate(e.target.value)
+                      const rate = parseFloat(e.target.value) || 0
+                      setFormGenAmount(((formGenBaseAmount * rate) / 100).toFixed(2))
+                    }}
+                  />
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <Label>Amount Due (₱) <span className="text-muted-foreground text-xs">— editable</span></Label>
+                <Input type="number" step="0.01" min="0" value={formGenAmount} onChange={e => setFormGenAmount(e.target.value)} />
+              </div>
+            </div>
+          )}
+          <DialogFooter className="gap-2 sm:gap-2">
+            <Button variant="outline" onClick={printFilledForm} disabled={formGenLoading}>
+              <Printer className="h-4 w-4 mr-1.5" />Print
+            </Button>
+            <Button onClick={downloadFilledFormPdf} disabled={formGenLoading}>
+              <Download className="h-4 w-4 mr-1.5" />Download PDF
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
