@@ -678,10 +678,9 @@ export default function InventoryPage() {
   const pagedWarehouseRows = filteredWarehouseRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
   const warehouseTotalPages = Math.max(1, Math.ceil(filteredWarehouseRows.length / PAGE_SIZE))
 
-  // Est. Value per warehouse row — quantity × item cost (falls back to selling price
-  // when cost isn't set), same pricing source used elsewhere in this page.
+  // Est. Value per warehouse row — quantity × item Unit Cost.
   const itemPriceMap: Record<string, number> = {}
-  for (const it of itemOptions) itemPriceMap[it.item_name] = it.cost ?? it.selling_price ?? 0
+  for (const it of itemOptions) itemPriceMap[it.item_name] = it.cost ?? 0
   const warehouseEstValue = (r: { item_name: string; quantity: number }) => r.quantity * (itemPriceMap[r.item_name] ?? 0)
   const whTotalEstValue = filteredWarehouseRows.reduce((s, r) => s + warehouseEstValue(r), 0)
 
@@ -1035,6 +1034,7 @@ export default function InventoryPage() {
                     <TableHead className="min-w-[280px]">Item Name</TableHead>
                     <TableHead>Unit</TableHead>
                     <TableHead className="text-right">Qty</TableHead>
+                    <TableHead className="text-right">Unit Cost</TableHead>
                     <TableHead className="text-right">Est. Value</TableHead>
                     <TableHead>Warehouse Note</TableHead>
                     <TableHead>Date Added</TableHead>
@@ -1043,9 +1043,9 @@ export default function InventoryPage() {
                 </TableHeader>
                 <TableBody>
                   {loading ? (
-                    <TableRow><TableCell colSpan={8} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
+                    <TableRow><TableCell colSpan={9} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
                   ) : warehouseRows.length === 0 ? (
-                    <TableRow><TableCell colSpan={8} className="text-center py-12 text-muted-foreground">No warehouse stock records found.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={9} className="text-center py-12 text-muted-foreground">No warehouse stock records found.</TableCell></TableRow>
                   ) : pagedWarehouseRows.map(r => {
                     // client_name is null for general-pool stock by design (that's how
                     // Receiving always adds it) — that alone isn't a red flag. Only warn
@@ -1068,6 +1068,9 @@ export default function InventoryPage() {
                         </TableCell>
                         <TableCell className="text-sm text-muted-foreground">{r.unit ? uomName(r.unit) : '—'}</TableCell>
                         <TableCell className="text-right text-sm font-semibold text-green-700">{r.quantity}</TableCell>
+                        <TableCell className="text-right text-sm text-muted-foreground">
+                          {r.item_name in itemPriceMap ? `₱${itemPriceMap[r.item_name].toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : <span className="text-gray-300">—</span>}
+                        </TableCell>
                         <TableCell className="text-right text-sm font-medium text-gray-700">
                           {r.item_name in itemPriceMap ? `₱${warehouseEstValue(r).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : <span className="text-gray-300">—</span>}
                         </TableCell>
