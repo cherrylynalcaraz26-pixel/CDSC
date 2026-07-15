@@ -174,7 +174,7 @@ export default function ItemsPage() {
     if (imageFile) {
       setUploadingImage(true)
       try {
-        imageUrl = await uploadImageToDrive(imageFile)
+        imageUrl = await uploadImageToDrive(imageFile, { displayName: form.item_name.trim(), folder: 'Items' })
       } catch (err: unknown) {
         toast.error(err instanceof Error ? err.message : 'Failed to upload image')
         setUploadingImage(false)
