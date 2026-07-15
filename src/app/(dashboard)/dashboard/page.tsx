@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns'
+import { DemoVideoButton } from '@/components/live-video-button'
 
 interface KPI {
   totalItems: number
@@ -45,6 +46,9 @@ interface Insight {
   link: string
   linkLabel: string
 }
+
+interface StockByClientRow { clientId: string; clientName: string; avatarUrl: string | null; itemCount: number; totalQty: number }
+interface StockByChannelRow { id: string; name: string; color: string; totalQty: number }
 
 const STATUS_COLORS: Record<string, string> = {
   open:       'bg-blue-100 text-blue-700',
@@ -105,6 +109,9 @@ export default function DashboardPage() {
   const [topClients, setTopClients] = useState<TopClient[]>([])
   const [clientLowStock, setClientLowStock] = useState<{ client_name: string; item_name: string; quantity_on_hand: number; low_stock_threshold: number; unit: string | null }[]>([])
   const [clientLowStockOpen, setClientLowStockOpen] = useState(true)
+  const [stockByClient, setStockByClient] = useState<StockByClientRow[]>([])
+  const [stockByChannel, setStockByChannel] = useState<StockByChannelRow[]>([])
+  const [stockByClientOpen, setStockByClientOpen] = useState(true)
   const [realtimeTick, setRealtimeTick] = useState(0)
 
   useEffect(() => {
@@ -300,7 +307,7 @@ export default function DashboardPage() {
         .from('client_inventory')
         .select('client_id, item_name, unit, quantity_on_hand, low_stock_threshold')
         .filter('quantity_on_hand', 'lte', 'low_stock_threshold')
-      const { data: clientsData } = await supabase.from('clients').select('id, company_name')
+      const { data: clientsData } = await supabase.from('clients').select('id, company_name, avatar_url')
       const clientNameMap: Record<string, string> = {}
       for (const c of clientsData ?? []) clientNameMap[c.id] = c.company_name
       const lowRows = (lowStockData ?? [])
@@ -308,6 +315,38 @@ export default function DashboardPage() {
         .map((r: any) => ({ client_name: clientNameMap[r.client_id] ?? 'Unknown', item_name: r.item_name, quantity_on_hand: r.quantity_on_hand, low_stock_threshold: r.low_stock_threshold, unit: r.unit }))
         .sort((a: any, b: any) => a.quantity_on_hand - b.quantity_on_hand)
       setClientLowStock(lowRows)
+
+      // --- Stock by Client & Stock by Channel ---
+      const [{ data: allClientStock }, { data: channelsData }] = await Promise.all([
+        supabase.from('client_inventory').select('client_id, item_name, quantity_on_hand, channel_id'),
+        supabase.from('sales_channels').select('id, name, color').eq('is_active', true).order('sort_order'),
+      ])
+      const clientAvatarMap: Record<string, string | null> = {}
+      for (const c of clientsData ?? []) clientAvatarMap[c.id] = c.avatar_url
+      const byClientMap: Record<string, { itemCount: number; totalQty: number }> = {}
+      for (const r of allClientStock ?? []) {
+        const cid = r.client_id
+        if (!byClientMap[cid]) byClientMap[cid] = { itemCount: 0, totalQty: 0 }
+        byClientMap[cid].itemCount += 1
+        byClientMap[cid].totalQty += Number(r.quantity_on_hand) || 0
+      }
+      const stockByClientRows: StockByClientRow[] = Object.entries(byClientMap)
+        .map(([clientId, v]) => ({ clientId, clientName: clientNameMap[clientId] ?? 'Unknown', avatarUrl: clientAvatarMap[clientId] ?? null, ...v }))
+        .sort((a, b) => b.totalQty - a.totalQty)
+      setStockByClient(stockByClientRows)
+
+      const channelQtyMap: Record<string, number> = {}
+      let unassignedQty = 0
+      for (const r of allClientStock ?? []) {
+        const qty = Number(r.quantity_on_hand) || 0
+        if (r.channel_id) channelQtyMap[r.channel_id] = (channelQtyMap[r.channel_id] ?? 0) + qty
+        else unassignedQty += qty
+      }
+      const channelRows: StockByChannelRow[] = (channelsData ?? []).map(ch => ({
+        id: ch.id, name: ch.name, color: ch.color, totalQty: channelQtyMap[ch.id] ?? 0,
+      }))
+      if (unassignedQty > 0) channelRows.push({ id: 'unassigned', name: 'Unassigned', color: '#9ca3af', totalQty: unassignedQty })
+      setStockByChannel(channelRows)
 
       setLoading(false)
     }
@@ -375,7 +414,10 @@ export default function DashboardPage() {
           <h2 className="text-2xl font-bold">Dashboard</h2>
           <p className="text-muted-foreground text-sm">{format(new Date(), 'EEEE, MMMM d, yyyy')} — Live overview</p>
         </div>
-        {loading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+        <div className="flex items-center gap-3">
+          {loading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+          <DemoVideoButton />
+        </div>
       </div>
 
       {/* KPI Row */}
@@ -577,6 +619,86 @@ export default function DashboardPage() {
           )}
         </Card>
       )}
+
+      {/* Stock by Client & Stock by Channel */}
+      <Card>
+        <CardHeader className="pb-0 pt-4 px-4">
+          <button className="flex items-center justify-between w-full text-left" onClick={() => setStockByClientOpen(o => !o)}>
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Package className="h-4 w-4 text-teal-600" />
+              Stock by Client
+            </CardTitle>
+            {stockByClientOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+          </button>
+        </CardHeader>
+        {stockByClientOpen && (
+          <CardContent className="pt-4">
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+              {/* Stock by Client table */}
+              <div className="lg:col-span-3">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-xs text-muted-foreground">
+                      <th className="text-left px-2 py-2 font-medium">Client</th>
+                      <th className="text-right px-2 py-2 font-medium">Items</th>
+                      <th className="text-right px-2 py-2 font-medium">Total Stock</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loading ? (
+                      <tr><td colSpan={3} className="text-center py-6 text-muted-foreground text-xs">Loading…</td></tr>
+                    ) : stockByClient.length === 0 ? (
+                      <tr><td colSpan={3} className="text-center py-6 text-muted-foreground text-xs">No client stock records yet</td></tr>
+                    ) : stockByClient.map(r => (
+                      <tr key={r.clientId} className="border-b last:border-0 hover:bg-muted/30">
+                        <td className="px-2 py-2">
+                          <div className="flex items-center gap-2">
+                            <div className="h-6 w-6 rounded-full overflow-hidden flex items-center justify-center bg-teal-100 text-teal-700 text-[10px] font-semibold shrink-0">
+                              {r.avatarUrl
+                                ? <img src={r.avatarUrl} alt={r.clientName} className="h-full w-full object-cover" />
+                                : r.clientName.slice(0, 2).toUpperCase()}
+                            </div>
+                            <span className="font-medium truncate">{r.clientName}</span>
+                          </div>
+                        </td>
+                        <td className="px-2 py-2 text-right text-muted-foreground">{r.itemCount}</td>
+                        <td className="px-2 py-2 text-right font-semibold tabular-nums">{r.totalQty.toLocaleString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Stock by Channel */}
+              <div className="lg:col-span-2 space-y-2">
+                <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground">Stock by Channel</p>
+                {loading ? (
+                  <div className="text-xs text-muted-foreground flex items-center gap-2"><Loader2 className="h-3 w-3 animate-spin" />Loading…</div>
+                ) : stockByChannel.length === 0 ? (
+                  <div className="text-xs text-muted-foreground">No channel data yet</div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    {stockByChannel.map(ch => (
+                      <div key={ch.id} className="flex items-center gap-2 rounded-lg border p-2.5">
+                        <div
+                          className="h-7 w-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
+                          style={{ backgroundColor: ch.color }}
+                        >
+                          {ch.name.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs font-medium truncate">{ch.name}</div>
+                          <div className="text-sm font-bold tabular-nums">{ch.totalQty.toLocaleString()}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        )}
+      </Card>
 
       {/* Decision Maker — Business Intelligence */}
       <Card>
