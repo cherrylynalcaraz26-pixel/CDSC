@@ -4,17 +4,19 @@ import { google } from 'googleapis'
 // Allow reasonably large images (logos, item photos)
 export const maxDuration = 30
 
+// Uploads authenticate as the connected Google account (OAuth) rather than a bare
+// service account — service accounts have no storage quota of their own on a personal
+// (non-Workspace) Drive, so file creation fails with storageQuotaExceeded even when the
+// destination folder is shared with them.
 function getDriveClient() {
-  const clientEmail = process.env.GOOGLE_DRIVE_CLIENT_EMAIL
-  const privateKey = process.env.GOOGLE_DRIVE_PRIVATE_KEY?.replace(/\\n/g, '\n')
+  const clientId = process.env.GOOGLE_DRIVE_OAUTH_CLIENT_ID
+  const clientSecret = process.env.GOOGLE_DRIVE_OAUTH_CLIENT_SECRET
+  const refreshToken = process.env.GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN
   const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID
-  if (!clientEmail || !privateKey || !folderId) return null
+  if (!clientId || !clientSecret || !refreshToken || !folderId) return null
 
-  const auth = new google.auth.JWT({
-    email: clientEmail,
-    key: privateKey,
-    scopes: ['https://www.googleapis.com/auth/drive'],
-  })
+  const auth = new google.auth.OAuth2(clientId, clientSecret)
+  auth.setCredentials({ refresh_token: refreshToken })
   return { drive: google.drive({ version: 'v3', auth }), folderId }
 }
 
@@ -30,7 +32,7 @@ export async function POST(req: NextRequest) {
     const client = getDriveClient()
     if (!client) {
       return NextResponse.json({
-        error: 'Google Drive is not configured on the server. Set GOOGLE_DRIVE_CLIENT_EMAIL, GOOGLE_DRIVE_PRIVATE_KEY, and GOOGLE_DRIVE_FOLDER_ID.',
+        error: 'Google Drive is not configured on the server. Set GOOGLE_DRIVE_OAUTH_CLIENT_ID, GOOGLE_DRIVE_OAUTH_CLIENT_SECRET, GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN, and GOOGLE_DRIVE_FOLDER_ID.',
       }, { status: 500 })
     }
     const { drive, folderId } = client
