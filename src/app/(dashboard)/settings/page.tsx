@@ -1214,7 +1214,7 @@ export default function SettingsPage() {
     setUploading(true)
     let publicUrl: string
     try {
-      publicUrl = await uploadImageToDrive(file)
+      publicUrl = await uploadImageToDrive(file, { displayName: 'Company Logo', folder: 'Company' })
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to upload logo')
       setUploading(false)

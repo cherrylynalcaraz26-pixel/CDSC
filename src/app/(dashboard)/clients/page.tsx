@@ -213,7 +213,7 @@ export default function ClientsPage() {
       let finalAvatarUrl = dialogAvatarUrl
       if (dialogAvatarFile) {
         setUploadingAvatar(true)
-        finalAvatarUrl = await uploadImageToDrive(dialogAvatarFile)
+        finalAvatarUrl = await uploadImageToDrive(dialogAvatarFile, { displayName: form.company_name.trim(), folder: 'Clients' })
         setUploadingAvatar(false)
       }
 

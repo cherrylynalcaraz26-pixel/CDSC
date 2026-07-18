@@ -92,7 +92,7 @@ export default function PortalSettingsPage() {
     if (!userId) return
     setUploadingAvatar(true)
     try {
-      const url = await uploadImageToDrive(file)
+      const url = await uploadImageToDrive(file, { displayName: fullName.trim(), folder: 'Avatars' })
       const { error: dbErr } = await supabase.from('profiles').update({ avatar_url: url }).eq('id', userId)
       if (dbErr) throw dbErr
       setAvatarUrl(url)
@@ -116,7 +116,7 @@ export default function PortalSettingsPage() {
     if (!clientId) return
     setUploadingLogo(true)
     try {
-      const url = await uploadImageToDrive(file)
+      const url = await uploadImageToDrive(file, { displayName: companyName.trim(), folder: 'Clients' })
       const { error: dbErr } = await supabase.from('clients').update({ logo_url: url }).eq('id', clientId)
       if (dbErr) throw dbErr
       setLogoUrl(url)
