@@ -20,7 +20,7 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Plus, Pencil, Trash2, X, MoreHorizontal, LayoutGrid, List, ImagePlus, Loader2, Package } from 'lucide-react'
+import { Plus, Pencil, Trash2, X, MoreHorizontal, LayoutGrid, List, ImagePlus, Loader2, Package, Building2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { uploadImageToDrive } from '@/lib/upload-image'
 
@@ -655,6 +655,7 @@ interface Supplier {
   vat_classification: string | null; supplier_category: string | null
   payment_terms: string | null; lead_time_days: number | null
   atc_code: string | null; ewt_rate: number | null; is_active: boolean
+  logo_url: string | null
 }
 const emptySupplierForm = () => ({
   company_name: '', contact_person: '', mobile_number: '', email: '',
@@ -673,6 +674,9 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
   const [form, setForm] = useState(emptySupplierForm())
   const [saving, setSaving] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
+  const [logoFile, setLogoFile] = useState<File | null>(null)
+  const [logoPreview, setLogoPreview] = useState<string | null>(null)
+  const [uploadingLogo, setUploadingLogo] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -687,7 +691,11 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
     (s.supplier_code ?? '').toLowerCase().includes(search.toLowerCase())
   )
 
-  function openAdd() { setEditing(null); setForm(emptySupplierForm()); setOpen(true) }
+  function openAdd() {
+    setEditing(null); setForm(emptySupplierForm())
+    setLogoFile(null); setLogoPreview(null)
+    setOpen(true)
+  }
   function openEdit(s: Supplier) {
     setEditing(s)
     setForm({
@@ -701,7 +709,13 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
       atc_code: s.atc_code ?? '', ewt_rate: String(s.ewt_rate ?? 2),
       vat_classification: s.vat_classification ?? 'vatable',
     })
+    setLogoFile(null); setLogoPreview(s.logo_url ?? null)
     setOpen(true)
+  }
+
+  function handleLogoSelect(file: File) {
+    setLogoFile(file)
+    setLogoPreview(URL.createObjectURL(file))
   }
 
   const sf = (field: string) => (v: string | null) => setForm(p => ({ ...p, [field]: v ?? p[field as keyof typeof p] }))
@@ -709,6 +723,21 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
   async function save() {
     if (!form.company_name.trim()) { toast.error('Company name required'); return }
     setSaving(true)
+
+    let logoUrl = logoFile ? null : logoPreview
+    if (logoFile) {
+      setUploadingLogo(true)
+      try {
+        logoUrl = await uploadImageToDrive(logoFile, { displayName: form.company_name.trim(), folder: 'Suppliers' })
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : 'Failed to upload logo')
+        setUploadingLogo(false)
+        setSaving(false)
+        return
+      }
+      setUploadingLogo(false)
+    }
+
     const payload = {
       company_name: form.company_name.trim(),
       contact_person: form.contact_person || null,
@@ -723,6 +752,7 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
       lead_time_days: Number(form.lead_time_days) || null,
       atc_code: form.atc_code || null,
       ewt_rate: Number(form.ewt_rate) || null,
+      logo_url: logoUrl,
     }
     const { error } = editing
       ? await supabase.from('suppliers').update(payload).eq('id', editing.id)
@@ -760,6 +790,7 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-12">Logo</TableHead>
               <TableHead>Code</TableHead>
               <TableHead>Company</TableHead>
               <TableHead>Contact</TableHead>
@@ -771,11 +802,21 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={7} className="text-center py-6 text-muted-foreground">Loading…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={8} className="text-center py-6 text-muted-foreground">Loading…</TableCell></TableRow>
             ) : filtered.length === 0 ? (
-              <TableRow><TableCell colSpan={7} className="text-center py-6 text-muted-foreground">No suppliers found</TableCell></TableRow>
+              <TableRow><TableCell colSpan={8} className="text-center py-6 text-muted-foreground">No suppliers found</TableCell></TableRow>
             ) : filtered.map(s => (
               <TableRow key={s.id}>
+                <TableCell>
+                  <div className="h-9 w-9 rounded border bg-muted/40 flex items-center justify-center overflow-hidden shrink-0">
+                    {s.logo_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={s.logo_url} alt={s.company_name} className="h-full w-full object-contain p-0.5" />
+                    ) : (
+                      <Building2 className="h-4 w-4 text-muted-foreground/30" />
+                    )}
+                  </div>
+                </TableCell>
                 <TableCell className="font-mono text-sm">{s.supplier_code}</TableCell>
                 <TableCell>
                   <div className="font-medium text-sm">{s.company_name}</div>
@@ -814,6 +855,37 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
             <DialogTitle>{editing ? 'Edit Supplier' : 'Add Supplier'}</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-2">
+            <div className="col-span-2 space-y-1.5">
+              <Label>Logo</Label>
+              <div className="flex items-center gap-3">
+                <div className="h-16 w-16 rounded-lg border bg-muted/40 flex items-center justify-center overflow-hidden shrink-0">
+                  {logoPreview ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={logoPreview} alt="Supplier logo preview" className="h-full w-full object-contain p-1" />
+                  ) : (
+                    <Building2 className="h-6 w-6 text-muted-foreground/30" />
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button type="button" variant="outline" size="sm" disabled={uploadingLogo} onClick={() => document.getElementById('config-supplier-logo-input')?.click()}>
+                    {uploadingLogo ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5 mr-1.5" />}
+                    {logoPreview ? 'Change Logo' : 'Upload Logo'}
+                  </Button>
+                  {logoPreview && (
+                    <Button type="button" variant="ghost" size="sm" onClick={() => { setLogoFile(null); setLogoPreview(null) }}>
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                  <input
+                    id="config-supplier-logo-input"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handleLogoSelect(f); e.target.value = '' }}
+                  />
+                </div>
+              </div>
+            </div>
             <div className="col-span-2 space-y-1.5">
               <Label>Company Name <span className="text-destructive">*</span></Label>
               <Input value={form.company_name} onChange={e => setForm(p => ({ ...p, company_name: e.target.value }))} />
