@@ -14,11 +14,13 @@ import {
 import {
   Package, ShoppingCart, Truck, FileText, ClipboardList,
   TrendingUp, TrendingDown, Users, ArrowRight, Loader2, ChevronDown, ChevronUp,
-  AlertTriangle, CheckCircle2, Clock, Lightbulb, Bell, HelpCircle,
+  AlertTriangle, CheckCircle2, Clock, Lightbulb, Bell, HelpCircle, ImagePlus,
 } from 'lucide-react'
 import Link from 'next/link'
 import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns'
 import { DemoVideoButton } from '@/components/live-video-button'
+import { uploadImageToDrive } from '@/lib/upload-image'
+import { toast } from 'sonner'
 
 interface KPI {
   totalItems: number
@@ -48,7 +50,7 @@ interface Insight {
 }
 
 interface StockByClientRow { clientId: string; clientName: string; avatarUrl: string | null; itemCount: number; totalQty: number }
-interface StockByChannelRow { id: string; name: string; color: string; totalQty: number }
+interface StockByChannelRow { id: string; name: string; color: string; totalQty: number; logoUrl: string | null }
 
 // Simplified brand-colored marks for the marketplaces we integrate with — not
 // the exact trademarked logo files, but recognizable at a glance. Returns null
@@ -158,6 +160,7 @@ export default function DashboardPage() {
   const [stockByChannel, setStockByChannel] = useState<StockByChannelRow[]>([])
   const [stockByClientOpen, setStockByClientOpen] = useState(true)
   const [realtimeTick, setRealtimeTick] = useState(0)
+  const [uploadingChannelId, setUploadingChannelId] = useState<string | null>(null)
 
   useEffect(() => {
     const channel = supabase
@@ -338,21 +341,24 @@ export default function DashboardPage() {
         }
       })
       setSoMonthlyBars(soBars)
+      const { data: clientsData } = await supabase.from('clients').select('id, company_name, avatar_url')
+      // Seed every client (not just ones with SO history) so clients with no
+      // sales orders yet still show up in the All Clients list, at zero.
       const clientMap: Record<string, { revenue: number; orders: number }> = {}
+      for (const c of clientsData ?? []) clientMap[c.company_name] = { revenue: 0, orders: 0 }
       for (const s of soList) {
         const name = (s as any).client_name?.trim() || 'Unknown'
         if (!clientMap[name]) clientMap[name] = { revenue: 0, orders: 0 }
         clientMap[name].revenue += Number((s as any).total_amount) || 0
         clientMap[name].orders += 1
       }
-      setTopClients(Object.entries(clientMap).map(([client, v]) => ({ client, ...v })).sort((a, b) => b.revenue - a.revenue).slice(0, 5))
+      setTopClients(Object.entries(clientMap).map(([client, v]) => ({ client, ...v })).sort((a, b) => b.revenue - a.revenue || a.client.localeCompare(b.client)))
 
       // --- Client low stock alerts ---
       const { data: lowStockData } = await supabase
         .from('client_inventory')
         .select('client_id, item_name, unit, quantity_on_hand, low_stock_threshold')
         .filter('quantity_on_hand', 'lte', 'low_stock_threshold')
-      const { data: clientsData } = await supabase.from('clients').select('id, company_name, avatar_url')
       const clientNameMap: Record<string, string> = {}
       for (const c of clientsData ?? []) clientNameMap[c.id] = c.company_name
       const lowRows = (lowStockData ?? [])
@@ -364,7 +370,7 @@ export default function DashboardPage() {
       // --- Stock by Client & Stock by Channel ---
       const [{ data: allClientStock }, { data: channelsData }] = await Promise.all([
         supabase.from('client_inventory').select('client_id, item_name, quantity_on_hand, channel_id'),
-        supabase.from('sales_channels').select('id, name, color').eq('is_active', true).order('sort_order'),
+        supabase.from('sales_channels').select('id, name, color, logo_url').eq('is_active', true).order('sort_order'),
       ])
       const clientAvatarMap: Record<string, string | null> = {}
       for (const c of clientsData ?? []) clientAvatarMap[c.id] = c.avatar_url
@@ -391,15 +397,29 @@ export default function DashboardPage() {
         else unassignedQty += qty
       }
       const channelRows: StockByChannelRow[] = (channelsData ?? []).map(ch => ({
-        id: ch.id, name: ch.name, color: ch.color, totalQty: channelQtyMap[ch.id] ?? 0,
+        id: ch.id, name: ch.name, color: ch.color, totalQty: channelQtyMap[ch.id] ?? 0, logoUrl: ch.logo_url ?? null,
       }))
-      if (unassignedQty > 0) channelRows.push({ id: 'unassigned', name: 'Unassigned', color: '#9ca3af', totalQty: unassignedQty })
+      if (unassignedQty > 0) channelRows.push({ id: 'unassigned', name: 'Unassigned', color: '#9ca3af', totalQty: unassignedQty, logoUrl: null })
       setStockByChannel(channelRows)
 
       setLoading(false)
     }
     load()
   }, [realtimeTick])
+
+  async function handleChannelLogoFile(channel: StockByChannelRow, file: File) {
+    setUploadingChannelId(channel.id)
+    try {
+      const url = await uploadImageToDrive(file, { displayName: channel.name, folder: 'Channels' })
+      const { error } = await supabase.from('sales_channels').update({ logo_url: url }).eq('id', channel.id)
+      if (error) throw error
+      toast.success(`${channel.name} logo updated`)
+      setRealtimeTick(t => t + 1)
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to upload logo')
+    }
+    setUploadingChannelId(null)
+  }
 
   // Compute insights for Decision Maker
   const insights: Insight[] = !loading ? (() => {
@@ -728,16 +748,43 @@ export default function DashboardPage() {
                   <div className="grid grid-cols-2 gap-2">
                     {stockByChannel.map(ch => (
                       <div key={ch.id} className="flex items-center gap-2 rounded-lg border p-2.5">
-                        <div
-                          className="h-7 w-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
-                          style={{ backgroundColor: ch.color }}
-                        >
-                          {ch.id === 'unassigned' ? (
+                        {ch.id === 'unassigned' ? (
+                          <div
+                            className="h-7 w-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
+                            style={{ backgroundColor: ch.color }}
+                          >
                             <HelpCircle className="h-4 w-4 text-white/80" />
-                          ) : (
-                            channelIcon(ch.name, 'h-4 w-4') ?? ch.name.slice(0, 2).toUpperCase()
-                          )}
-                        </div>
+                          </div>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              title={`Upload logo for ${ch.name}`}
+                              onClick={() => document.getElementById(`channel-logo-input-${ch.id}`)?.click()}
+                              className="relative h-7 w-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0 overflow-hidden group"
+                              style={{ backgroundColor: ch.color }}
+                            >
+                              {uploadingChannelId === ch.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              ) : ch.logoUrl ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={ch.logoUrl} alt={ch.name} className="h-full w-full object-cover" />
+                              ) : (
+                                channelIcon(ch.name, 'h-4 w-4') ?? ch.name.slice(0, 2).toUpperCase()
+                              )}
+                              <span className="absolute inset-0 hidden group-hover:flex items-center justify-center bg-black/50">
+                                <ImagePlus className="h-3 w-3 text-white" />
+                              </span>
+                            </button>
+                            <input
+                              id={`channel-logo-input-${ch.id}`}
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              onChange={e => { const f = e.target.files?.[0]; if (f) handleChannelLogoFile(ch, f); e.target.value = '' }}
+                            />
+                          </>
+                        )}
                         <div className="min-w-0">
                           <div className="text-xs font-medium truncate">{ch.name}</div>
                           <div className="text-sm font-bold tabular-nums">{ch.totalQty.toLocaleString()}</div>
@@ -833,11 +880,11 @@ export default function DashboardPage() {
                   </ResponsiveContainer>
                 )}
 
-                {/* Top clients */}
+                {/* All clients */}
                 {topClients.length > 0 && (
                   <div className="mt-3">
-                    <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-2">Top Clients by Revenue</p>
-                    <div className="space-y-1.5">
+                    <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-2">All Clients by Revenue</p>
+                    <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
                       {topClients.map((c, i) => {
                         const maxRev = topClients[0]?.revenue || 1
                         return (
