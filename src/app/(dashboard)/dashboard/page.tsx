@@ -14,7 +14,7 @@ import {
 import {
   Package, ShoppingCart, Truck, FileText, ClipboardList,
   TrendingUp, TrendingDown, Users, ArrowRight, Loader2, ChevronDown, ChevronUp,
-  AlertTriangle, CheckCircle2, Clock, Lightbulb, Bell,
+  AlertTriangle, CheckCircle2, Clock, Lightbulb, Bell, HelpCircle,
 } from 'lucide-react'
 import Link from 'next/link'
 import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns'
@@ -49,6 +49,39 @@ interface Insight {
 
 interface StockByClientRow { clientId: string; clientName: string; avatarUrl: string | null; itemCount: number; totalQty: number }
 interface StockByChannelRow { id: string; name: string; color: string; totalQty: number }
+
+// Simplified brand-colored marks for the marketplaces we integrate with — not
+// the exact trademarked logo files, but recognizable at a glance. Returns null
+// (so callers can fall back to initials) for any channel that isn't one of these three.
+function channelIcon(name: string, className: string): React.ReactNode {
+  const n = name.toLowerCase()
+  if (n.includes('shopee')) {
+    return (
+      <svg viewBox="0 0 24 24" className={className} fill="none">
+        <path d="M8 8.5V7a4 4 0 0 1 8 0v1.5" stroke="white" strokeWidth="1.6" strokeLinecap="round" />
+        <path d="M5.5 8.5h13l-1.1 11a2 2 0 0 1-2 1.8H8.6a2 2 0 0 1-2-1.8l-1.1-11z" fill="white" />
+      </svg>
+    )
+  }
+  if (n.includes('lazada')) {
+    return (
+      <svg viewBox="0 0 24 24" className={className} fill="none">
+        <path d="M12 3l7 4v10l-7 4-7-4V7l7-4z" stroke="white" strokeWidth="1.6" strokeLinejoin="round" />
+        <path d="M9 12l2.2 2.2L15.5 9.5" stroke="white" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    )
+  }
+  if (n.includes('tiktok')) {
+    return (
+      <svg viewBox="0 0 24 24" className={className}>
+        <path d="M15 4c.5 2.1 2 3.7 4 4.1v2.6c-1.5-.1-2.9-.6-4-1.5v5.6a5 5 0 1 1-4-4.9v2.7a2.3 2.3 0 1 0 1.6 2.2V4H15z" fill="#25F4EE" transform="translate(-0.5,-0.4)" opacity="0.85" />
+        <path d="M15 4c.5 2.1 2 3.7 4 4.1v2.6c-1.5-.1-2.9-.6-4-1.5v5.6a5 5 0 1 1-4-4.9v2.7a2.3 2.3 0 1 0 1.6 2.2V4H15z" fill="#FE2C55" transform="translate(0.5,0.4)" opacity="0.85" />
+        <path d="M15 4c.5 2.1 2 3.7 4 4.1v2.6c-1.5-.1-2.9-.6-4-1.5v5.6a5 5 0 1 1-4-4.9v2.7a2.3 2.3 0 1 0 1.6 2.2V4H15z" fill="white" />
+      </svg>
+    )
+  }
+  return null
+}
 
 const STATUS_COLORS: Record<string, string> = {
   open:       'bg-blue-100 text-blue-700',
@@ -323,7 +356,10 @@ export default function DashboardPage() {
       ])
       const clientAvatarMap: Record<string, string | null> = {}
       for (const c of clientsData ?? []) clientAvatarMap[c.id] = c.avatar_url
+      // Seed every client (not just ones with existing stock) so clients with no
+      // stock yet still show up in the list, at zero.
       const byClientMap: Record<string, { itemCount: number; totalQty: number }> = {}
+      for (const c of clientsData ?? []) byClientMap[c.id] = { itemCount: 0, totalQty: 0 }
       for (const r of allClientStock ?? []) {
         const cid = r.client_id
         if (!byClientMap[cid]) byClientMap[cid] = { itemCount: 0, totalQty: 0 }
@@ -332,7 +368,7 @@ export default function DashboardPage() {
       }
       const stockByClientRows: StockByClientRow[] = Object.entries(byClientMap)
         .map(([clientId, v]) => ({ clientId, clientName: clientNameMap[clientId] ?? 'Unknown', avatarUrl: clientAvatarMap[clientId] ?? null, ...v }))
-        .sort((a, b) => b.totalQty - a.totalQty)
+        .sort((a, b) => b.totalQty - a.totalQty || a.clientName.localeCompare(b.clientName))
       setStockByClient(stockByClientRows)
 
       const channelQtyMap: Record<string, number> = {}
@@ -635,7 +671,7 @@ export default function DashboardPage() {
           <CardContent className="pt-4">
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
               {/* Stock by Client table */}
-              <div className="lg:col-span-3">
+              <div className="lg:col-span-3 max-h-80 overflow-y-auto">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b text-xs text-muted-foreground">
@@ -648,7 +684,7 @@ export default function DashboardPage() {
                     {loading ? (
                       <tr><td colSpan={3} className="text-center py-6 text-muted-foreground text-xs">Loading…</td></tr>
                     ) : stockByClient.length === 0 ? (
-                      <tr><td colSpan={3} className="text-center py-6 text-muted-foreground text-xs">No client stock records yet</td></tr>
+                      <tr><td colSpan={3} className="text-center py-6 text-muted-foreground text-xs">No clients yet</td></tr>
                     ) : stockByClient.map(r => (
                       <tr key={r.clientId} className="border-b last:border-0 hover:bg-muted/30">
                         <td className="px-2 py-2">
@@ -684,7 +720,11 @@ export default function DashboardPage() {
                           className="h-7 w-7 rounded-full flex items-center justify-center text-white text-[10px] font-bold shrink-0"
                           style={{ backgroundColor: ch.color }}
                         >
-                          {ch.name.slice(0, 2).toUpperCase()}
+                          {ch.id === 'unassigned' ? (
+                            <HelpCircle className="h-4 w-4 text-white/80" />
+                          ) : (
+                            channelIcon(ch.name, 'h-4 w-4') ?? ch.name.slice(0, 2).toUpperCase()
+                          )}
                         </div>
                         <div className="min-w-0">
                           <div className="text-xs font-medium truncate">{ch.name}</div>
