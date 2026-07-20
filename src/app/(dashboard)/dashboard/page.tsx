@@ -83,6 +83,18 @@ function channelIcon(name: string, className: string): React.ReactNode {
   return null
 }
 
+// Segmented "equalizer" style progress bar (ticks instead of one solid fill).
+function SegmentedBar({ pct, count = 28 }: { pct: number; count?: number }) {
+  const filled = Math.round((Math.max(0, Math.min(100, pct)) / 100) * count)
+  return (
+    <div className="flex items-center gap-[3px]">
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} className={`w-[3px] h-3 rounded-full ${i < filled ? 'bg-teal-500' : 'bg-gray-200'}`} />
+      ))}
+    </div>
+  )
+}
+
 const STATUS_COLORS: Record<string, string> = {
   open:       'bg-blue-100 text-blue-700',
   completed:  'bg-green-100 text-green-700',
@@ -814,7 +826,7 @@ export default function DashboardPage() {
                     <BarChart data={soMonthlyBars} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} />
                       <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                      <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `₱${(v / 1000).toFixed(0)}k`} />
+                      <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `₱${Number(v).toLocaleString('en-PH')}`} />
                       <Tooltip formatter={(v: any) => [`₱${(v ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`]} />
                       <Bar dataKey="csiRevenue" name="CSI Revenue" fill="#dc2626" radius={[3, 3, 0, 0]} />
                     </BarChart>
@@ -836,8 +848,8 @@ export default function DashboardPage() {
                                 <span className="text-xs font-medium truncate">{c.client}</span>
                                 <span className="text-xs font-semibold text-indigo-600 tabular-nums shrink-0">₱{c.revenue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
                               </div>
-                              <div className="h-1 bg-gray-100 rounded-full mt-0.5">
-                                <div className="h-1 bg-indigo-400 rounded-full" style={{ width: `${(c.revenue / maxRev) * 100}%` }} />
+                              <div className="mt-1">
+                                <SegmentedBar pct={(c.revenue / maxRev) * 100} />
                               </div>
                             </div>
                           </div>
@@ -895,7 +907,7 @@ export default function DashboardPage() {
                   <ComposedChart data={soMonthlyBars} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `₱${(v / 1000).toFixed(0)}k`} />
+                    <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `₱${Number(v).toLocaleString('en-PH')}`} />
                     <Tooltip formatter={(v: any) => [`₱${(v ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`]} />
                     <Legend wrapperStyle={{ fontSize: 11 }} />
                     <Bar dataKey="collected" name="Sales Orders (Collected)" fill="#2563eb" radius={[3, 3, 0, 0]} />
