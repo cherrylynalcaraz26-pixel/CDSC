@@ -16,6 +16,7 @@ interface InventoryItem {
   unit: string | null
   selling_price: number | null
   description: string | null
+  image_url: string | null
   isMine: boolean
 }
 
@@ -67,7 +68,7 @@ export default function PortalInventoryPage() {
           const [{ data, error }, { data: inventoryRows }] = await Promise.all([
             supabase
               .from('items')
-              .select('id, item_name, item_code, description, unit_of_measure, selling_price, category:categories(category_name)')
+              .select('id, item_name, item_code, description, unit_of_measure, selling_price, image_url, category:categories(category_name)')
               .eq('status', 'active')
               .order('item_name'),
             supabase.from('client_inventory').select('item_name').eq('client_id', clientRow.id),
@@ -80,7 +81,8 @@ export default function PortalInventoryPage() {
 
           setItems((data ?? []).map((r: {
             id: string; item_name: string; item_code: string | null; description: string | null
-            unit_of_measure: string | null; selling_price: number | null; category: { category_name: string }[] | null
+            unit_of_measure: string | null; selling_price: number | null; image_url: string | null
+            category: { category_name: string }[] | null
           }) => ({
             id: r.id,
             item_name: cleanText(r.item_name),
@@ -89,6 +91,7 @@ export default function PortalInventoryPage() {
             unit: r.unit_of_measure,
             selling_price: r.selling_price != null ? Number(r.selling_price) : null,
             description: r.description ? cleanText(r.description) : null,
+            image_url: r.image_url,
             isMine: myNames.has(cleanText(r.item_name).toLowerCase()),
           })))
           // Default to a scoped "My Items" view; fall back to the full catalog
@@ -336,6 +339,14 @@ export default function PortalInventoryPage() {
                 'bg-white rounded-xl border p-5 flex flex-col gap-3 transition-shadow',
                 qty > 0 ? 'border-red-300 shadow-md ring-1 ring-red-200' : 'border-gray-200 hover:shadow-md'
               )}>
+                <div className="h-32 -mx-5 -mt-5 mb-1 rounded-t-xl bg-gray-50 flex items-center justify-center overflow-hidden">
+                  {item.image_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={item.image_url} alt={item.item_name} className="h-full w-full object-contain p-2" />
+                  ) : (
+                    <Package className="h-8 w-8 text-gray-200" />
+                  )}
+                </div>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <h3 className="font-semibold text-gray-900 text-sm leading-tight truncate">{item.item_name}</h3>
@@ -397,6 +408,7 @@ export default function PortalInventoryPage() {
           <table className="w-full text-sm min-w-[500px]">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200">
+                <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase w-14"></th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase">Product</th>
                 <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase hidden sm:table-cell">Category</th>
                 <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase">Unit</th>
@@ -410,6 +422,16 @@ export default function PortalInventoryPage() {
                 const qty = cartQty(item.id)
                 return (
                   <tr key={item.id} className={cn('hover:bg-gray-50 transition-colors', qty > 0 && 'bg-red-50/40')}>
+                    <td className="px-4 py-3">
+                      <div className="h-9 w-9 rounded border border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden shrink-0">
+                        {item.image_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={item.image_url} alt={item.item_name} className="h-full w-full object-contain p-0.5" />
+                        ) : (
+                          <Package className="h-4 w-4 text-gray-200" />
+                        )}
+                      </div>
+                    </td>
                     <td className="px-4 py-3">
                       <div className="font-medium text-gray-900">{item.item_name}</div>
                       {item.item_code && <div className="text-xs text-gray-400">{item.item_code}</div>}
