@@ -922,6 +922,11 @@ interface ItemRow {
   brand: string | null; unit_of_measure: string; cost: number
   selling_price: number | null; attribute: string | null; status: string
   image_url: string | null
+  image_urls: string[] | null
+}
+interface ItemImage { url?: string; file?: File; preview: string }
+function itemImageUrls(r: Pick<ItemRow, 'image_url' | 'image_urls'>): string[] {
+  return r.image_urls?.length ? r.image_urls : (r.image_url ? [r.image_url] : [])
 }
 interface UOMOption { id: string; code: string; name: string }
 interface BrandOption { id: string; name: string }
@@ -955,18 +960,17 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
   const [page, setPage] = useState(1)
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<ItemRow | null>(null)
-  const [form, setForm] = useState({ item_code: '', item_name: '', brand: '', unit_of_measure: '', cost: '', selling_price: '', attribute: '', image_url: '' })
+  const [form, setForm] = useState({ item_code: '', item_name: '', brand: '', unit_of_measure: '', cost: '', selling_price: '', attribute: '' })
   const [saving, setSaving] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<'list' | 'box'>('list')
-  const [imageFile, setImageFile] = useState<File | null>(null)
-  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [images, setImages] = useState<ItemImage[]>([])
   const [uploadingImage, setUploadingImage] = useState(false)
 
   async function load() {
     setLoading(true)
     const [{ data: itemData }, { data: uomData }, { data: brandData }, { data: attrData }] = await Promise.all([
-      supabase.from('items').select('id, item_code, item_name, brand, unit_of_measure, cost, selling_price, attribute, status, image_url').order('item_name'),
+      supabase.from('items').select('id, item_code, item_name, brand, unit_of_measure, cost, selling_price, attribute, status, image_url, image_urls').order('item_name'),
       supabase.from('uom_list').select('id, code, name').eq('is_active', true).order('code'),
       supabase.from('brands').select('id, name').eq('is_active', true).order('name'),
       supabase.from('attributes').select('id, name').eq('is_active', true).order('name'),
@@ -1003,41 +1007,45 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
       const num = parseInt(last.item_code.replace('ITM-', ''), 10)
       if (!isNaN(num)) nextCode = 'ITM-' + String(num + 1).padStart(3, '0')
     }
-    setForm({ item_code: nextCode, item_name: '', brand: '', unit_of_measure: '', cost: '', selling_price: '', attribute: '', image_url: '' })
-    setImageFile(null)
-    setImagePreview(null)
+    setForm({ item_code: nextCode, item_name: '', brand: '', unit_of_measure: '', cost: '', selling_price: '', attribute: '' })
+    setImages([])
     setOpen(true)
   }
   function openEdit(r: ItemRow) {
     setEditing(r)
-    setForm({ item_code: r.item_code, item_name: r.item_name, brand: r.brand ?? '', unit_of_measure: r.unit_of_measure, cost: String(r.cost), selling_price: r.selling_price !== null ? String(r.selling_price) : '', attribute: r.attribute ?? '', image_url: r.image_url ?? '' })
-    setImageFile(null)
-    setImagePreview(r.image_url ?? null)
+    setForm({ item_code: r.item_code, item_name: r.item_name, brand: r.brand ?? '', unit_of_measure: r.unit_of_measure, cost: String(r.cost), selling_price: r.selling_price !== null ? String(r.selling_price) : '', attribute: r.attribute ?? '' })
+    setImages(itemImageUrls(r).map(url => ({ url, preview: url })))
     setOpen(true)
   }
 
-  function handleImageSelect(file: File) {
-    setImageFile(file)
-    setImagePreview(URL.createObjectURL(file))
+  function handleImagesSelect(files: File[]) {
+    setImages(prev => [...prev, ...files.map(file => ({ file, preview: URL.createObjectURL(file) }))])
+  }
+  function removeImage(index: number) {
+    setImages(prev => prev.filter((_, i) => i !== index))
   }
 
   async function save() {
     if (!form.item_name.trim()) { toast.error('Item name required'); return }
     setSaving(true)
 
-    let imageUrl = form.image_url || null
-    if (imageFile) {
-      setUploadingImage(true)
-      try {
-        imageUrl = await uploadImageToDrive(imageFile, { displayName: form.item_name.trim(), folder: 'Items' })
-      } catch (err: unknown) {
-        toast.error(err instanceof Error ? err.message : 'Failed to upload image')
-        setUploadingImage(false)
-        setSaving(false)
-        return
+    const imageUrls: string[] = []
+    if (images.some(img => img.file)) setUploadingImage(true)
+    try {
+      for (const img of images) {
+        if (img.url) { imageUrls.push(img.url); continue }
+        if (img.file) {
+          const uploaded = await uploadImageToDrive(img.file, { displayName: `${form.item_name.trim()}-${imageUrls.length + 1}`, folder: 'Items' })
+          imageUrls.push(uploaded)
+        }
       }
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to upload image')
       setUploadingImage(false)
+      setSaving(false)
+      return
     }
+    setUploadingImage(false)
 
     const payload = {
       item_code: form.item_code.trim() || undefined,
@@ -1047,7 +1055,8 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
       cost: parseFloat(form.cost) || 0,
       selling_price: form.selling_price.trim() ? parseFloat(form.selling_price) : null,
       attribute: form.attribute.trim() || null,
-      image_url: imageUrl,
+      image_urls: imageUrls,
+      image_url: imageUrls[0] ?? null,
     }
     const { error } = editing
       ? await supabase.from('items').update(payload).eq('id', editing.id)
@@ -1096,14 +1105,19 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
             <div className="col-span-full text-center py-6 text-muted-foreground">Loading…</div>
           ) : filtered.length === 0 ? (
             <div className="col-span-full text-center py-6 text-muted-foreground">No items found</div>
-          ) : paged.map(r => (
+          ) : paged.map(r => {
+            const imgs = itemImageUrls(r)
+            return (
             <div key={r.id} className="rounded-lg border bg-card overflow-hidden flex flex-col">
-              <div className="h-28 bg-muted/40 flex items-center justify-center overflow-hidden">
-                {r.image_url ? (
+              <div className="h-28 bg-muted/40 flex items-center justify-center overflow-hidden relative">
+                {imgs[0] ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={r.image_url} alt={r.item_name} className="h-full w-full object-contain p-2" />
+                  <img src={imgs[0]} alt={r.item_name} className="h-full w-full object-contain p-2" />
                 ) : (
                   <Package className="h-7 w-7 text-muted-foreground/30" />
+                )}
+                {imgs.length > 1 && (
+                  <span className="absolute bottom-1 right-1 text-[10px] leading-none bg-black/60 text-white rounded-full px-1.5 py-1">+{imgs.length - 1}</span>
                 )}
               </div>
               <div className="p-3 flex-1 flex flex-col gap-1">
@@ -1131,7 +1145,7 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
                 </DropdownMenu>
               </div>
             </div>
-          ))}
+          )})}
         </div>
       ) : (
       <div className="rounded-lg border bg-card overflow-x-auto">
@@ -1155,15 +1169,20 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
               <TableRow><TableCell colSpan={10} className="text-center py-6 text-muted-foreground">Loading…</TableCell></TableRow>
             ) : filtered.length === 0 ? (
               <TableRow><TableCell colSpan={10} className="text-center py-6 text-muted-foreground">No items found</TableCell></TableRow>
-            ) : paged.map(r => (
+            ) : paged.map(r => {
+              const imgs = itemImageUrls(r)
+              return (
               <TableRow key={r.id}>
                 <TableCell>
-                  <div className="h-9 w-9 rounded border bg-muted/40 flex items-center justify-center overflow-hidden shrink-0">
-                    {r.image_url ? (
+                  <div className="h-9 w-9 rounded border bg-muted/40 flex items-center justify-center overflow-hidden shrink-0 relative">
+                    {imgs[0] ? (
                       // eslint-disable-next-line @next/next/no-img-element
-                      <img src={r.image_url} alt={r.item_name} className="h-full w-full object-contain p-0.5" />
+                      <img src={imgs[0]} alt={r.item_name} className="h-full w-full object-contain p-0.5" />
                     ) : (
                       <Package className="h-4 w-4 text-muted-foreground/30" />
+                    )}
+                    {imgs.length > 1 && (
+                      <span className="absolute bottom-0 right-0 text-[8px] leading-none bg-black/60 text-white rounded-full px-1 py-0.5">+{imgs.length - 1}</span>
                     )}
                   </div>
                 </TableCell>
@@ -1197,7 +1216,7 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
                   </DropdownMenu>
                 </TableCell>
               </TableRow>
-            ))}
+            )})}
           </TableBody>
         </Table>
       </div>
@@ -1235,34 +1254,37 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
           <DialogHeader><DialogTitle>{editing ? 'Edit Item' : 'Add Item'}</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-1.5">
-              <Label>Picture</Label>
-              <div className="flex items-center gap-3">
-                <div className="h-16 w-16 rounded-lg border bg-muted/40 flex items-center justify-center overflow-hidden shrink-0">
-                  {imagePreview ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={imagePreview} alt="Item preview" className="h-full w-full object-contain p-1" />
-                  ) : (
-                    <Package className="h-6 w-6 text-muted-foreground/30" />
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button type="button" variant="outline" size="sm" disabled={uploadingImage} onClick={() => document.getElementById('config-item-picture-input')?.click()}>
-                    {uploadingImage ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5 mr-1.5" />}
-                    {imagePreview ? 'Change Picture' : 'Upload Picture'}
-                  </Button>
-                  {imagePreview && (
-                    <Button type="button" variant="ghost" size="sm" onClick={() => { setImageFile(null); setImagePreview(null); setForm(p => ({ ...p, image_url: '' })) }}>
-                      <X className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                  <input
-                    id="config-item-picture-input"
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={e => { const f = e.target.files?.[0]; if (f) handleImageSelect(f); e.target.value = '' }}
-                  />
-                </div>
+              <Label>Pictures</Label>
+              <div className="flex flex-wrap items-center gap-2">
+                {images.map((img, i) => (
+                  <div key={i} className="relative h-16 w-16 rounded-lg border bg-muted/40 overflow-hidden shrink-0 group">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={img.preview} alt={`Item picture ${i + 1}`} className="h-full w-full object-contain p-1" />
+                    <button
+                      type="button"
+                      onClick={() => removeImage(i)}
+                      className="absolute top-0.5 right-0.5 h-4 w-4 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="h-2.5 w-2.5" />
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  disabled={uploadingImage}
+                  onClick={() => document.getElementById('config-item-picture-input')?.click()}
+                  className="h-16 w-16 rounded-lg border border-dashed flex items-center justify-center text-muted-foreground hover:bg-accent transition-colors shrink-0 disabled:opacity-50"
+                >
+                  {uploadingImage ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
+                </button>
+                <input
+                  id="config-item-picture-input"
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={e => { const files = Array.from(e.target.files ?? []); if (files.length) handleImagesSelect(files); e.target.value = '' }}
+                />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
