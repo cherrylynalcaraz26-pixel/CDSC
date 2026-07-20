@@ -56,6 +56,7 @@ interface InventoryRow {
   dr_details: DrDetail[]
   csi_details: CsiDetail[]
   ws_details: WsDetail[]
+  channelId: string | null
 }
 
 interface ItemOption {
@@ -93,6 +94,10 @@ export default function InventoryPage() {
   const [wsDeliverClientId, setWsDeliverClientId] = useState('')
   const [wsDeliverQty, setWsDeliverQty] = useState('')
   const [clientOptions, setClientOptions] = useState<{ id: string; company_name: string }[]>([])
+  const [channelOptions, setChannelOptions] = useState<{ id: string; name: string; color: string }[]>([])
+  const [assignChannelRow, setAssignChannelRow] = useState<InventoryRow | null>(null)
+  const [assignChannelValue, setAssignChannelValue] = useState('')
+  const [assigningChannel, setAssigningChannel] = useState(false)
 
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [confirmMsg, setConfirmMsg] = useState('')
@@ -265,12 +270,17 @@ export default function InventoryPage() {
       from += PAGE
     }
     setClientOptions(clientOptionsList.sort((a, b) => a.company_name.localeCompare(b.company_name)))
+
+    const { data: channelsData } = await supabase.from('sales_channels').select('id, name, color').eq('is_active', true).order('sort_order')
+    setChannelOptions(channelsData ?? [])
+
     const onHandByClient: Record<string, Record<string, number>> = {}
+    const channelByClient: Record<string, Record<string, string | null>> = {}
     from = 0
     while (true) {
       const { data } = await supabase
         .from('client_inventory')
-        .select('client_id, item_name, quantity_on_hand')
+        .select('client_id, item_name, quantity_on_hand, channel_id')
         .order('id')
         .range(from, from + PAGE - 1)
       if (!data || data.length === 0) break
@@ -279,6 +289,8 @@ export default function InventoryPage() {
         if (!clientName) continue
         if (!onHandByClient[clientName]) onHandByClient[clientName] = {}
         onHandByClient[clientName][rec.item_name] = (onHandByClient[clientName][rec.item_name] ?? 0) + (Number(rec.quantity_on_hand) || 0)
+        if (!channelByClient[clientName]) channelByClient[clientName] = {}
+        if (rec.channel_id) channelByClient[clientName][rec.item_name] = rec.channel_id
       }
       if (data.length < PAGE) break
       from += PAGE
@@ -332,6 +344,7 @@ export default function InventoryPage() {
           ...(wsGeneralEntry?.details ?? []),
         ].sort((a, b) => a.created_at.localeCompare(b.created_at))
         const clientOnHand = onHandByClient[client]?.[itemName] ?? 0
+        const channelId = channelByClient[client]?.[itemName] ?? null
 
         result.push({
           client,
@@ -345,6 +358,7 @@ export default function InventoryPage() {
           dr_details,
           csi_details,
           ws_details,
+          channelId,
         })
       }
     }
@@ -741,6 +755,27 @@ export default function InventoryPage() {
     setEditUnit(row.unit)
   }
 
+  function openAssignChannel(e: React.MouseEvent, row: InventoryRow) {
+    e.stopPropagation()
+    setAssignChannelRow(row)
+    setAssignChannelValue(row.channelId ?? '')
+  }
+
+  async function saveAssignChannel() {
+    if (!assignChannelRow) return
+    const clientId = clientOptions.find(c => c.company_name === assignChannelRow.client)?.id
+    if (!clientId) { toast.error('Could not resolve this client'); return }
+    setAssigningChannel(true)
+    const { error } = await supabase
+      .from('client_inventory')
+      .update({ channel_id: assignChannelValue || null })
+      .eq('client_id', clientId)
+      .eq('item_name', assignChannelRow.item_name)
+    if (error) toast.error(error.message)
+    else { toast.success('Channel updated'); setAssignChannelRow(null); load() }
+    setAssigningChannel(false)
+  }
+
   async function saveEdit() {
     if (!editRow || !editName.trim()) return
     setSaving(true)
@@ -1119,13 +1154,14 @@ export default function InventoryPage() {
                   <TableHead className="text-right">CSI Qty</TableHead>
                   <TableHead className="text-right">Balance</TableHead>
                   <TableHead>Status</TableHead>
+                  {viewMode === 'by_client' && <TableHead className="w-28">Channel</TableHead>}
                   {viewMode === 'by_client' && <TableHead className="w-16">Action</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-10">
+                    <TableCell colSpan={11} className="text-center py-10">
                       <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                     </TableCell>
                   </TableRow>
@@ -1160,7 +1196,7 @@ export default function InventoryPage() {
                   })
                 ) : filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">No inventory data found.</TableCell>
+                    <TableCell colSpan={11} className="text-center py-12 text-muted-foreground">No inventory data found.</TableCell>
                   </TableRow>
                 ) : pagedFiltered.map((row, i) => {
                   const key = rowKey(row)
@@ -1197,6 +1233,20 @@ export default function InventoryPage() {
                         </TableCell>
                         <TableCell>{balanceBadge(row.balance)}</TableCell>
                         <TableCell onClick={e => e.stopPropagation()}>
+                          <button onClick={e => openAssignChannel(e, row)} className="inline-block">
+                            {row.channelId ? (
+                              <Badge
+                                className="text-white"
+                                style={{ backgroundColor: channelOptions.find(c => c.id === row.channelId)?.color ?? '#9ca3af' }}
+                              >
+                                {channelOptions.find(c => c.id === row.channelId)?.name ?? 'Unknown'}
+                              </Badge>
+                            ) : (
+                              <Badge variant="outline" className="text-muted-foreground">Unassigned</Badge>
+                            )}
+                          </button>
+                        </TableCell>
+                        <TableCell onClick={e => e.stopPropagation()}>
                           <DropdownMenu>
                             <DropdownMenuTrigger className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent">
                               <MoreHorizontal className="h-4 w-4" />
@@ -1204,6 +1254,9 @@ export default function InventoryPage() {
                             <DropdownMenuContent align="end">
                               <DropdownMenuItem onClick={e => openEdit(e, row)}>
                                 <Pencil className="h-3.5 w-3.5 mr-2 text-yellow-600" /> Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={e => openAssignChannel(e, row)}>
+                                <Send className="h-3.5 w-3.5 mr-2 text-blue-600" /> Assign Channel
                               </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => deleteRow(row)} className="text-red-600 focus:text-red-600">
                                 <Trash2 className="h-3.5 w-3.5 mr-2" /> Delete
@@ -1715,6 +1768,37 @@ export default function InventoryPage() {
             <Button variant="outline" onClick={() => setEditRow(null)}>Cancel</Button>
             <Button onClick={saveEdit} disabled={saving || !editName.trim()} className="bg-yellow-600 hover:bg-yellow-700 text-white">
               {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : 'Save Changes'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Assign Channel Dialog (By Client view) ─────────────────────────────── */}
+      <Dialog open={!!assignChannelRow} onOpenChange={o => { if (!o) setAssignChannelRow(null) }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="h-4 w-4 text-blue-600" /> Assign Channel
+            </DialogTitle>
+          </DialogHeader>
+          {assignChannelRow && (
+            <p className="text-xs text-muted-foreground">
+              Which sales channel is <strong>{assignChannelRow.client}</strong>&apos;s stock of <strong>{assignChannelRow.item_name}</strong> for?
+            </p>
+          )}
+          <div className="py-2">
+            <Select value={assignChannelValue || 'unassigned'} onValueChange={v => setAssignChannelValue(v === 'unassigned' ? '' : (v ?? ''))}>
+              <SelectTrigger><SelectValue placeholder="Select channel…" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="unassigned">Unassigned</SelectItem>
+                {channelOptions.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssignChannelRow(null)}>Cancel</Button>
+            <Button onClick={saveAssignChannel} disabled={assigningChannel} className="bg-blue-600 hover:bg-blue-700 text-white">
+              {assigningChannel ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : 'Save'}
             </Button>
           </DialogFooter>
         </DialogContent>
