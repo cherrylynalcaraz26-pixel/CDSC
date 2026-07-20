@@ -10,8 +10,97 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   FileText, Package, ShoppingCart, Truck, Cpu, Calculator,
   FileSpreadsheet, Download, Loader2, TrendingUp, Users, BoxesIcon,
+  Database, HardDrive,
 } from 'lucide-react'
 import { toast } from 'sonner'
+
+function formatBytes(bytes: number): string {
+  if (bytes <= 0) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
+  return `${(bytes / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`
+}
+
+interface StorageUsage {
+  supabase: { dbSizeBytes: number; storageBytes: number; storageObjectCount: number } | null
+  drive: { limitBytes: number | null; usageBytes: number; usageInDriveBytes: number; usageInDriveTrashBytes: number } | null
+}
+
+function StorageUsageSection() {
+  const [usage, setUsage] = useState<StorageUsage | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/storage-usage')
+      .then(res => res.json())
+      .then(setUsage)
+      .catch(() => setUsage({ supabase: null, drive: null }))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const drivePct = usage?.drive?.limitBytes ? Math.min(100, (usage.drive.usageBytes / usage.drive.limitBytes) * 100) : null
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2">
+          <HardDrive className="h-4 w-4" />System Storage
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground py-4">
+            <Loader2 className="h-4 w-4 animate-spin" />Loading storage usage…
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-3 border rounded-lg space-y-1.5">
+              <div className="flex items-center gap-1.5 text-sm font-medium">
+                <Database className="h-3.5 w-3.5 text-emerald-600" />Supabase Database
+              </div>
+              {usage?.supabase ? (
+                <>
+                  <div className="text-xl font-bold">{formatBytes(usage.supabase.dbSizeBytes)}</div>
+                  <p className="text-xs text-muted-foreground">
+                    Storage buckets: {usage.supabase.storageObjectCount.toLocaleString()} file(s), {formatBytes(usage.supabase.storageBytes)}
+                    {usage.supabase.storageObjectCount === 0 && ' — item and logo pictures are hosted on Google Drive instead'}
+                  </p>
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground">Unable to load Supabase usage.</p>
+              )}
+            </div>
+            <div className="p-3 border rounded-lg space-y-1.5">
+              <div className="flex items-center gap-1.5 text-sm font-medium">
+                <HardDrive className="h-3.5 w-3.5 text-blue-600" />Google Drive
+              </div>
+              {usage?.drive ? (
+                <>
+                  <div className="text-xl font-bold">
+                    {formatBytes(usage.drive.usageBytes)}
+                    {usage.drive.limitBytes != null && (
+                      <span className="text-sm font-normal text-muted-foreground"> / {formatBytes(usage.drive.limitBytes)}</span>
+                    )}
+                  </div>
+                  {drivePct != null && (
+                    <div className="h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div className="h-full bg-blue-600" style={{ width: `${drivePct}%` }} />
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    {formatBytes(usage.drive.usageInDriveBytes)} in files, {formatBytes(usage.drive.usageInDriveTrashBytes)} in trash
+                  </p>
+                </>
+              ) : (
+                <p className="text-xs text-muted-foreground">Unable to load Google Drive usage.</p>
+              )}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
 
 function exportCSV(filename: string, headers: string[], rows: (string | number | null | undefined)[][]) {
   const escape = (v: string | number | null | undefined) => {
@@ -201,6 +290,8 @@ export default function ReportsPage() {
           </Select>
         </div>
       </div>
+
+      <StorageUsageSection />
 
       {/* Stats summary */}
       {stats && (

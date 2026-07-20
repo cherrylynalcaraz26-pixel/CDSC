@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -1381,8 +1382,12 @@ const CONFIG_TABS = [
   { key: 'attributes', label: 'Attributes' },
 ]
 
-export default function SetupPage() {
-  const [active, setActive] = useState('suppliers')
+function SetupPageContent() {
+  const searchParams = useSearchParams()
+  const [active, setActive] = useState(() => {
+    const tab = searchParams.get('tab')
+    return tab && CONFIG_TABS.some(t => t.key === tab) ? tab : 'suppliers'
+  })
   const [counts, setCounts] = useState<Record<string, number>>({})
 
   useEffect(() => {
@@ -1437,5 +1442,13 @@ export default function SetupPage() {
         {active === 'attributes' && <AttributesTab configSelector={configSelector} />}
       </div>
     </div>
+  )
+}
+
+export default function SetupPage() {
+  return (
+    <Suspense fallback={null}>
+      <SetupPageContent />
+    </Suspense>
   )
 }
