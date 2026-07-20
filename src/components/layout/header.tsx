@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import Image from 'next/image'
 import { Bell, Search, Menu, LogOut, Package, MessageSquare, ShoppingCart, MapPin, Phone, Mail, Globe } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -137,8 +136,9 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
           </Button>
           {sidebarCollapsed && (
             <div className="hidden lg:flex items-center gap-2">
-              <div className="relative h-7 w-7 shrink-0 rounded-md overflow-hidden bg-white">
-                <Image src={logoSrc} alt={companyName} fill className="object-contain p-0.5" priority />
+              <div className="h-7 w-7 shrink-0 rounded-md overflow-hidden bg-white flex items-center justify-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={logoSrc} alt={companyName} className="h-full w-full object-contain p-0.5" />
               </div>
               <span className="text-sm font-semibold leading-tight">{companyName}</span>
             </div>

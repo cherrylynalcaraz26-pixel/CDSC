@@ -1,7 +1,6 @@
 'use client'
 
 import Link from 'next/link'
-import Image from 'next/image'
 import { usePathname, useSearchParams } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
@@ -282,13 +281,15 @@ function SidebarContent({
     <div className="flex flex-col h-full bg-[#111111]">
       <div className={cn('py-4 flex items-center gap-3 transition-all', collapsed ? 'px-3 justify-center' : 'px-4')}>
         {collapsed ? (
-          <button onClick={onToggleCollapse} title="Expand sidebar" className="relative h-10 w-10 shrink-0 rounded-lg overflow-hidden bg-white">
-            <Image src={logoSrc} alt={displayName} fill className="object-contain p-1" priority />
+          <button onClick={onToggleCollapse} title="Expand sidebar" className="h-10 w-10 shrink-0 rounded-lg overflow-hidden bg-white flex items-center justify-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={logoSrc} alt={displayName} className="h-full w-full object-contain p-1" />
           </button>
         ) : (
           <>
-            <div className="relative h-10 w-10 shrink-0 rounded-lg overflow-hidden bg-white">
-              <Image src={logoSrc} alt={displayName} fill className="object-contain p-1" priority />
+            <div className="h-10 w-10 shrink-0 rounded-lg overflow-hidden bg-white flex items-center justify-center">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={logoSrc} alt={displayName} className="h-full w-full object-contain p-1" />
             </div>
             <div className="min-w-0 flex-1">
               <div className="text-white font-semibold text-sm leading-tight truncate">{displayName}</div>
