@@ -1048,44 +1048,46 @@ export default function DashboardPage() {
           <CardTitle className="text-sm font-medium">CSI vs OR Reconciliation by Client</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="bg-red-600 text-white text-xs">
-                <th className="px-3 py-2 text-left w-8">#</th>
-                <th className="px-3 py-2 text-left">CLIENT</th>
-                <th className="px-3 py-2 text-right">CSI BILLED</th>
-                <th className="px-3 py-2 text-right">OR COLLECTED</th>
-                <th className="px-3 py-2 text-right">DIFFERENCE</th>
-                <th className="px-3 py-2 text-left">STATUS</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td colSpan={6} className="text-center py-6 text-muted-foreground text-xs">Loading…</td></tr>
-              ) : reconRows.map((r, i) => (
-                <tr key={r.client} className="border-b last:border-0 hover:bg-muted/30 cursor-pointer" onClick={() => setDetailModal({ type: 'recon', client: r.client })}>
-                  <td className="px-3 py-2 text-xs text-muted-foreground">{i + 1}</td>
-                  <td className="px-3 py-2 text-xs font-medium">{r.client}</td>
-                  <td className="px-3 py-2 text-xs text-right text-blue-600 tabular-nums">
-                    ₱{r.csi_billed.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                  </td>
-                  <td className="px-3 py-2 text-xs text-right text-green-600 tabular-nums">
-                    ₱{r.or_collected.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                  </td>
-                  <td className={`px-3 py-2 text-xs text-right tabular-nums font-medium ${r.diff > 0 ? 'text-orange-600' : r.diff < 0 ? 'text-red-600' : 'text-gray-500'}`}>
-                    {r.diff > 0 ? '+' : ''}₱{r.diff.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                  </td>
-                  <td className="px-3 py-2">
-                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                      r.status === 'Balanced' ? 'bg-green-100 text-green-700' :
-                      r.status === 'Outstanding' ? 'bg-orange-100 text-orange-700' :
-                      'bg-red-100 text-red-700'
-                    }`}>{r.status}</span>
-                  </td>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] text-sm">
+              <thead>
+                <tr className="bg-red-600 text-white text-xs">
+                  <th className="px-3 py-2 text-left w-8">#</th>
+                  <th className="px-3 py-2 text-left whitespace-nowrap">CLIENT</th>
+                  <th className="px-3 py-2 text-right whitespace-nowrap">CSI BILLED</th>
+                  <th className="px-3 py-2 text-right whitespace-nowrap">OR COLLECTED</th>
+                  <th className="px-3 py-2 text-right whitespace-nowrap">DIFFERENCE</th>
+                  <th className="px-3 py-2 text-left whitespace-nowrap">STATUS</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={6} className="text-center py-6 text-muted-foreground text-xs">Loading…</td></tr>
+                ) : reconRows.map((r, i) => (
+                  <tr key={r.client} className="border-b last:border-0 hover:bg-muted/30 cursor-pointer" onClick={() => setDetailModal({ type: 'recon', client: r.client })}>
+                    <td className="px-3 py-2 text-xs text-muted-foreground">{i + 1}</td>
+                    <td className="px-3 py-2 text-xs font-medium whitespace-nowrap">{r.client}</td>
+                    <td className="px-3 py-2 text-xs text-right text-blue-600 tabular-nums whitespace-nowrap">
+                      ₱{r.csi_billed.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="px-3 py-2 text-xs text-right text-green-600 tabular-nums whitespace-nowrap">
+                      ₱{r.or_collected.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className={`px-3 py-2 text-xs text-right tabular-nums font-medium whitespace-nowrap ${r.diff > 0 ? 'text-orange-600' : r.diff < 0 ? 'text-red-600' : 'text-gray-500'}`}>
+                      {r.diff > 0 ? '+' : ''}₱{r.diff.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        r.status === 'Balanced' ? 'bg-green-100 text-green-700' :
+                        r.status === 'Outstanding' ? 'bg-orange-100 text-orange-700' :
+                        'bg-red-100 text-red-700'
+                      }`}>{r.status}</span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </CardContent>
       </Card>
 
