@@ -347,26 +347,67 @@ export default function CSIMonitoringPage() {
     setTimeout(() => { win.focus(); win.print(); win.close() }, 800)
   }
 
-  // Builds a self-contained (no external stylesheet) HTML document for one SI's line
-  // items, used to render the PDF attached to bulk emails — htmlToPdfBase64 rasterizes
-  // this in an isolated iframe, so it can't rely on the Tailwind CDN script printCSI() uses.
-  function buildCsiEmailPdfHtml(group: typeof siGroups[0]) {
+  // Builds a self-contained (no external stylesheet) HTML document combining every
+  // selected SI's line items into one section each, used to render a single PDF
+  // attached to bulk emails — htmlToPdfBase64 rasterizes this in an isolated iframe,
+  // so it can't rely on the Tailwind CDN script printCSI() uses.
+  function buildCsiEmailPdfHtml(groups: typeof siGroups) {
     const co = companyInfo
     const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'
     const fmtAmt = (n: number) => Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 })
-    const rowsHtml = group.items.map((it, i) => `
-      <tr>
-        <td>${i + 1}</td>
-        <td>${it.item_name}</td>
-        <td>${it.unit ?? '—'}</td>
-        <td class="r">${Number(it.quantity)}</td>
-        <td class="r">₱${fmtAmt(it.unit_price)}</td>
-        <td class="r" style="font-weight:600">₱${fmtAmt(it.amount)}</td>
-      </tr>`).join('')
-    const total = group.items.reduce((s, it) => s + (Number(it.amount) || 0), 0)
-    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>SI ${group.si_number}</title><style>
+    const sectionsHtml = groups.map((group, gi) => {
+      const rowsHtml = group.items.map((it, i) => `
+        <tr>
+          <td>${i + 1}</td>
+          <td>${it.item_name}</td>
+          <td>${it.unit ?? '—'}</td>
+          <td class="r">${Number(it.quantity)}</td>
+          <td class="r">₱${fmtAmt(it.unit_price)}</td>
+          <td class="r" style="font-weight:600">₱${fmtAmt(it.amount)}</td>
+        </tr>`).join('')
+      const total = group.items.reduce((s, it) => s + (Number(it.amount) || 0), 0)
+      return `
+      <div class="${gi > 0 ? 'invoice invoice-spaced' : 'invoice'}">
+        <div class="letterhead">
+          <img src="/cdsc-logo.jpg" style="height:48px;width:auto;object-fit:contain;" />
+          <div>
+            <div class="co-name">${co?.company_name ?? 'CDSC Industrial Supply'}</div>
+            ${co?.address ? `<div class="co-sub">${co.address}</div>` : ''}
+            ${co?.phone || co?.email ? `<div class="co-sub">${co?.phone ?? ''}${co?.phone && co?.email ? ' | ' : ''}${co?.email ?? ''}</div>` : ''}
+            ${co?.tin ? `<div class="co-sub">TIN: ${co.tin}</div>` : ''}
+          </div>
+        </div>
+        <div class="party">
+          <div>
+            <div class="label">Bill To</div>
+            <div class="val">${group.client}</div>
+            ${group.po ? `<div class="label" style="margin-top:8px">SO / PO Reference</div><div class="val mono">${group.po}</div>` : ''}
+            ${group.dr ? `<div class="label" style="margin-top:8px">DR Number</div><div class="val mono">${group.dr}</div>` : ''}
+          </div>
+          <div style="display:flex;align-items:center;justify-content:center"><div class="title">Sales Invoice</div></div>
+          <div style="text-align:right">
+            <div class="label">SI Number</div>
+            <div class="val mono">${group.si_number}</div>
+            <div class="label" style="margin-top:8px">Date</div>
+            <div class="val">${fmtDate(group.date)}</div>
+          </div>
+        </div>
+        <table>
+          <thead><tr>
+            <th>#</th><th>Item Description</th><th>Unit</th><th class="r">Qty</th><th class="r">Unit Price</th><th class="r">Amount</th>
+          </tr></thead>
+          <tbody>${rowsHtml}</tbody>
+          <tfoot><tr>
+            <td colspan="5" class="total-label">Total</td>
+            <td class="total-val">₱${fmtAmt(total)}</td>
+          </tr></tfoot>
+        </table>
+      </div>`
+    }).join('')
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>CSI Invoices</title><style>
       * { box-sizing: border-box; margin: 0; padding: 0; }
       body { font-family: Arial, sans-serif; background: #fff; color: #111; padding: 28px; font-size: 11px; }
+      .invoice-spaced { margin-top: 28px; padding-top: 20px; border-top: 2px dashed #d1d5db; }
       .letterhead { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #e5e7eb; padding-bottom: 12px; margin-bottom: 14px; }
       .co-name { font-size: 15px; font-weight: 800; color: #b91c1c; text-align: right; }
       .co-sub { font-size: 9px; color: #6b7280; text-align: right; margin-top: 2px; }
@@ -383,42 +424,15 @@ export default function CSIMonitoringPage() {
       tfoot td { border-top: 2px solid #d1d5db; font-weight: 800; padding-top: 8px; }
       .total-label { text-align: right; color: #374151; }
       .total-val { text-align: right; color: #b91c1c; }
-    </style></head><body>
-      <div class="letterhead">
-        <img src="/cdsc-logo.jpg" style="height:48px;width:auto;object-fit:contain;" />
-        <div>
-          <div class="co-name">${co?.company_name ?? 'CDSC Industrial Supply'}</div>
-          ${co?.address ? `<div class="co-sub">${co.address}</div>` : ''}
-          ${co?.phone || co?.email ? `<div class="co-sub">${co?.phone ?? ''}${co?.phone && co?.email ? ' | ' : ''}${co?.email ?? ''}</div>` : ''}
-          ${co?.tin ? `<div class="co-sub">TIN: ${co.tin}</div>` : ''}
-        </div>
-      </div>
-      <div class="party">
-        <div>
-          <div class="label">Bill To</div>
-          <div class="val">${group.client}</div>
-          ${group.po ? `<div class="label" style="margin-top:8px">SO / PO Reference</div><div class="val mono">${group.po}</div>` : ''}
-          ${group.dr ? `<div class="label" style="margin-top:8px">DR Number</div><div class="val mono">${group.dr}</div>` : ''}
-        </div>
-        <div style="display:flex;align-items:center;justify-content:center"><div class="title">Sales Invoice</div></div>
-        <div style="text-align:right">
-          <div class="label">SI Number</div>
-          <div class="val mono">${group.si_number}</div>
-          <div class="label" style="margin-top:8px">Date</div>
-          <div class="val">${fmtDate(group.date)}</div>
-        </div>
-      </div>
-      <table>
-        <thead><tr>
-          <th>#</th><th>Item Description</th><th>Unit</th><th class="r">Qty</th><th class="r">Unit Price</th><th class="r">Amount</th>
-        </tr></thead>
-        <tbody>${rowsHtml}</tbody>
-        <tfoot><tr>
-          <td colspan="5" class="total-label">Total</td>
-          <td class="total-val">₱${fmtAmt(total)}</td>
-        </tr></tfoot>
-      </table>
-    </body></html>`
+    </style></head><body>${sectionsHtml}</body></html>`
+  }
+
+  // Combined CSI email attachment filename — a short hyphenated SI list when there
+  // are few, otherwise a count, so it doesn't turn into an unreadable wall of numbers.
+  function csiAttachmentFilename(groups: typeof siGroups) {
+    if (groups.length === 1) return `SI-${groups[0].si_number}.pdf`
+    if (groups.length <= 5) return `CSI-Invoices-${groups.map(g => g.si_number).join('-')}.pdf`
+    return `CSI-Invoices-${groups.length}-invoices.pdf`
   }
 
   function toggleSelectSI(si: string) {
@@ -462,18 +476,15 @@ export default function CSIMonitoringPage() {
     if (groups.length === 0) { toast.error('No CSI records selected'); return }
     setSendingBulkEmail(true)
     try {
-      const attachments: { base64: string; filename: string }[] = []
-      for (const group of groups) {
-        const base64 = await htmlToPdfBase64(buildCsiEmailPdfHtml(group))
-        attachments.push({ base64, filename: `SI-${group.si_number}.pdf` })
-      }
+      const base64 = await htmlToPdfBase64(buildCsiEmailPdfHtml(groups))
+      const filename = csiAttachmentFilename(groups)
       await sendEmail({
         to: bulkEmailTo.trim(),
         subject: bulkEmailSubject,
         body: bulkEmailBody,
-        attachments,
+        attachments: [{ base64, filename }],
       })
-      toast.success(`Email sent with ${attachments.length} CSI attachment${attachments.length > 1 ? 's' : ''}`)
+      toast.success(`Email sent with 1 combined CSI attachment (${groups.length} SI${groups.length > 1 ? 's' : ''})`)
       setEmailBulkOpen(false)
       setSelectedSIs(new Set())
     } catch (e: any) {
@@ -1812,7 +1823,7 @@ export default function CSIMonitoringPage() {
               />
             </div>
             <p className="text-xs text-muted-foreground">
-              PDF attachment{selectedSIs.size > 1 ? 's' : ''} (line items per CSI): <span className="font-mono">{siGroups.filter(g => selectedSIs.has(g.si_number)).map(g => `SI-${g.si_number}.pdf`).join(', ')}</span>
+              PDF attachment (line items for {selectedSIs.size} selected CSI{selectedSIs.size > 1 ? 's' : ''}, combined): <span className="font-mono">{csiAttachmentFilename(siGroups.filter(g => selectedSIs.has(g.si_number)))}</span>
             </p>
             <div className="flex justify-end gap-2 pt-1">
               <Button variant="outline" onClick={() => setEmailBulkOpen(false)} disabled={sendingBulkEmail}>Cancel</Button>
