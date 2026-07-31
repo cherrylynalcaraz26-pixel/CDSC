@@ -19,11 +19,13 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Plus, X, Search, MoreHorizontal, Loader2, FileText, LayoutGrid, List, ChevronDown, ChevronUp, Package, Trash2, Printer, SlidersHorizontal, FileOutput } from 'lucide-react'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Plus, X, Search, MoreHorizontal, Loader2, FileText, LayoutGrid, List, ChevronDown, ChevronUp, Package, Trash2, Printer, SlidersHorizontal, FileOutput, Mail } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
 import { usePersistedState } from '@/lib/use-persisted-state'
+import { sendEmail, htmlToPdfBase64 } from '@/lib/send-email'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   Cell, Legend, AreaChart, Area,
@@ -39,6 +41,7 @@ interface ClientOption {
   province: string | null
   tin: string | null
   industry: string | null
+  email: string | null
 }
 interface SOItemOption { item_name: string; unit: string; quantity: number; selling_price: number }
 
@@ -173,6 +176,12 @@ export default function CSIMonitoringPage() {
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false)
   const [calibDraft, setCalibDraft] = useState<BlankFormCalib>(DEFAULT_BLANK_CALIB)
   const printRef = useRef<HTMLDivElement>(null)
+  const [selectedSIs, setSelectedSIs] = useState<Set<string>>(new Set())
+  const [emailBulkOpen, setEmailBulkOpen] = useState(false)
+  const [bulkEmailTo, setBulkEmailTo] = useState('')
+  const [bulkEmailSubject, setBulkEmailSubject] = useState('')
+  const [bulkEmailBody, setBulkEmailBody] = useState('')
+  const [sendingBulkEmail, setSendingBulkEmail] = useState(false)
 
   function saveCalib(next: BlankFormCalib) {
     setBlankCalib(next)
@@ -188,7 +197,7 @@ export default function CSIMonitoringPage() {
     setLoading(true)
     const [{ data: itemOptData }, { data: clientData }, { data: soData }, drItemsData, drLogData] = await Promise.all([
       supabase.from('items').select('item_name, unit_of_measure').order('item_name'),
-      supabase.from('clients').select('id, company_name, show_csi_in_portal, address, city, province, tin, industry').eq('status', 'active').order('company_name'),
+      supabase.from('clients').select('id, company_name, show_csi_in_portal, address, city, province, tin, industry, email').eq('status', 'active').order('company_name'),
       supabase.from('sales_orders').select('id, so_number').not('so_number', 'is', null).order('created_at', { ascending: false }),
       fetchAllRows((from, to) => supabase.from('dr_log_items').select('dr_number, item_name').order('item_name').order('id').range(from, to)),
       fetchAllRows((from, to) => supabase.from('dr_logs').select('id, dr_number, po_number, supplier_name').order('dr_date', { ascending: false }).order('id').range(from, to)),
@@ -338,6 +347,142 @@ export default function CSIMonitoringPage() {
     setTimeout(() => { win.focus(); win.print(); win.close() }, 800)
   }
 
+  // Builds a self-contained (no external stylesheet) HTML document for one SI's line
+  // items, used to render the PDF attached to bulk emails — htmlToPdfBase64 rasterizes
+  // this in an isolated iframe, so it can't rely on the Tailwind CDN script printCSI() uses.
+  function buildCsiEmailPdfHtml(group: typeof siGroups[0]) {
+    const co = companyInfo
+    const fmtDate = (d: string) => d ? new Date(d).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'
+    const fmtAmt = (n: number) => Number(n).toLocaleString('en-PH', { minimumFractionDigits: 2 })
+    const rowsHtml = group.items.map((it, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td>${it.item_name}</td>
+        <td>${it.unit ?? '—'}</td>
+        <td class="r">${Number(it.quantity)}</td>
+        <td class="r">₱${fmtAmt(it.unit_price)}</td>
+        <td class="r" style="font-weight:600">₱${fmtAmt(it.amount)}</td>
+      </tr>`).join('')
+    const total = group.items.reduce((s, it) => s + (Number(it.amount) || 0), 0)
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>SI ${group.si_number}</title><style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: Arial, sans-serif; background: #fff; color: #111; padding: 28px; font-size: 11px; }
+      .letterhead { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #e5e7eb; padding-bottom: 12px; margin-bottom: 14px; }
+      .co-name { font-size: 15px; font-weight: 800; color: #b91c1c; text-align: right; }
+      .co-sub { font-size: 9px; color: #6b7280; text-align: right; margin-top: 2px; }
+      .party { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+      .label { font-size: 9px; font-weight: 700; text-transform: uppercase; color: #9ca3af; margin-bottom: 2px; letter-spacing: 0.4px; }
+      .val { color: #1f2937; font-weight: 600; }
+      .mono { font-family: 'Courier New', monospace; }
+      .title { text-align: center; font-size: 16px; font-weight: 800; color: #b91c1c; text-transform: uppercase; letter-spacing: 2px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+      th { background: #b91c1c; color: #fff; text-align: left; padding: 6px 8px; font-size: 10px; }
+      th.r, td.r { text-align: right; }
+      td { padding: 6px 8px; border-bottom: 1px solid #f3f4f6; }
+      tr:nth-child(even) td { background: #f9fafb; }
+      tfoot td { border-top: 2px solid #d1d5db; font-weight: 800; padding-top: 8px; }
+      .total-label { text-align: right; color: #374151; }
+      .total-val { text-align: right; color: #b91c1c; }
+    </style></head><body>
+      <div class="letterhead">
+        <img src="/cdsc-logo.jpg" style="height:48px;width:auto;object-fit:contain;" />
+        <div>
+          <div class="co-name">${co?.company_name ?? 'CDSC Industrial Supply'}</div>
+          ${co?.address ? `<div class="co-sub">${co.address}</div>` : ''}
+          ${co?.phone || co?.email ? `<div class="co-sub">${co?.phone ?? ''}${co?.phone && co?.email ? ' | ' : ''}${co?.email ?? ''}</div>` : ''}
+          ${co?.tin ? `<div class="co-sub">TIN: ${co.tin}</div>` : ''}
+        </div>
+      </div>
+      <div class="party">
+        <div>
+          <div class="label">Bill To</div>
+          <div class="val">${group.client}</div>
+          ${group.po ? `<div class="label" style="margin-top:8px">SO / PO Reference</div><div class="val mono">${group.po}</div>` : ''}
+          ${group.dr ? `<div class="label" style="margin-top:8px">DR Number</div><div class="val mono">${group.dr}</div>` : ''}
+        </div>
+        <div style="display:flex;align-items:center;justify-content:center"><div class="title">Sales Invoice</div></div>
+        <div style="text-align:right">
+          <div class="label">SI Number</div>
+          <div class="val mono">${group.si_number}</div>
+          <div class="label" style="margin-top:8px">Date</div>
+          <div class="val">${fmtDate(group.date)}</div>
+        </div>
+      </div>
+      <table>
+        <thead><tr>
+          <th>#</th><th>Item Description</th><th>Unit</th><th class="r">Qty</th><th class="r">Unit Price</th><th class="r">Amount</th>
+        </tr></thead>
+        <tbody>${rowsHtml}</tbody>
+        <tfoot><tr>
+          <td colspan="5" class="total-label">Total</td>
+          <td class="total-val">₱${fmtAmt(total)}</td>
+        </tr></tfoot>
+      </table>
+    </body></html>`
+  }
+
+  function toggleSelectSI(si: string) {
+    setSelectedSIs(prev => {
+      const next = new Set(prev)
+      if (next.has(si)) next.delete(si)
+      else next.add(si)
+      return next
+    })
+  }
+
+  function toggleSelectAllOnPage() {
+    const pageSIs = pagedSiGroups.map(g => g.si_number)
+    const allSelected = pageSIs.length > 0 && pageSIs.every(si => selectedSIs.has(si))
+    setSelectedSIs(prev => {
+      const next = new Set(prev)
+      if (allSelected) pageSIs.forEach(si => next.delete(si))
+      else pageSIs.forEach(si => next.add(si))
+      return next
+    })
+  }
+
+  function openBulkEmail() {
+    const groups = siGroups.filter(g => selectedSIs.has(g.si_number))
+    if (groups.length === 0) return
+    const co = companyInfo?.company_name ?? 'CDSC Industrial Supply'
+    const uniqueClients = [...new Set(groups.map(g => g.client).filter(c => c && c !== '—'))]
+    const singleClient = uniqueClients.length === 1 ? uniqueClients[0] : null
+    const clientEmail = singleClient ? clientOptions.find(c => c.company_name === singleClient)?.email : null
+    const siList = groups.map(g => g.si_number).join(', ')
+    const plural = groups.length > 1
+    setBulkEmailTo(clientEmail ?? '')
+    setBulkEmailSubject(`Sales Invoice${plural ? 's' : ''} ${siList} — ${co}`)
+    setBulkEmailBody(`Dear ${singleClient ?? 'Client'},\n\nPlease find attached Sales Invoice${plural ? 's' : ''} ${siList}.\n\nKindly let us know if you have any questions.\n\nBest regards,\n${co}`)
+    setEmailBulkOpen(true)
+  }
+
+  async function handleSendBulkEmail() {
+    if (!bulkEmailTo.trim()) { toast.error('Recipient email required'); return }
+    const groups = siGroups.filter(g => selectedSIs.has(g.si_number))
+    if (groups.length === 0) { toast.error('No CSI records selected'); return }
+    setSendingBulkEmail(true)
+    try {
+      const attachments: { base64: string; filename: string }[] = []
+      for (const group of groups) {
+        const base64 = await htmlToPdfBase64(buildCsiEmailPdfHtml(group))
+        attachments.push({ base64, filename: `SI-${group.si_number}.pdf` })
+      }
+      await sendEmail({
+        to: bulkEmailTo.trim(),
+        subject: bulkEmailSubject,
+        body: bulkEmailBody,
+        attachments,
+      })
+      toast.success(`Email sent with ${attachments.length} CSI attachment${attachments.length > 1 ? 's' : ''}`)
+      setEmailBulkOpen(false)
+      setSelectedSIs(new Set())
+    } catch (e: any) {
+      toast.error(e.message ?? 'Failed to send email')
+    } finally {
+      setSendingBulkEmail(false)
+    }
+  }
+
   // Prints only the field values, absolutely positioned to line up with a pre-printed
   // blank Sales Invoice form — no borders, logo, labels or backgrounds are rendered.
   async function printCSIBlank(group: typeof siGroups[0]) {
@@ -473,6 +618,7 @@ export default function CSIMonitoringPage() {
   const totalPages = Math.max(1, Math.ceil(activeTotal / PAGE_SIZE))
 
   useEffect(() => { setPage(1) }, [search, siFilter, itemFilter, clientFilter, yearFilter, viewMode])
+  useEffect(() => { if (viewMode !== 'by-si') setSelectedSIs(new Set()) }, [viewMode])
 
   function toggleSI(si: string) {
     setExpandedSIs(prev => {
@@ -1235,6 +1381,17 @@ export default function CSIMonitoringPage() {
             <Search className="h-3.5 w-3.5" /> CSI vs DR
           </button>
         </div>
+        {viewMode === 'by-si' && selectedSIs.size > 0 && (
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">{selectedSIs.size} selected</span>
+            <Button size="sm" onClick={openBulkEmail} className="bg-red-600 hover:bg-red-700 h-9">
+              <Mail className="h-3.5 w-3.5 mr-1.5" /> Send Email
+            </Button>
+            <button onClick={() => setSelectedSIs(new Set())} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground border rounded-md px-2 py-1.5">
+              <X className="h-3 w-3" /> Clear
+            </button>
+          </div>
+        )}
       </div>}
 
       {!open && <Card>
@@ -1312,6 +1469,14 @@ export default function CSIMonitoringPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="w-8">
+                      <Checkbox
+                        checked={pagedSiGroups.length > 0 && pagedSiGroups.every(g => selectedSIs.has(g.si_number))}
+                        indeterminate={pagedSiGroups.some(g => selectedSIs.has(g.si_number)) && !pagedSiGroups.every(g => selectedSIs.has(g.si_number))}
+                        onCheckedChange={() => toggleSelectAllOnPage()}
+                        aria-label="Select all on this page"
+                      />
+                    </TableHead>
                     <TableHead className="w-12">No.</TableHead>
                     <TableHead className="w-28">Date</TableHead>
                     <TableHead className="w-32">SI Number</TableHead>
@@ -1327,13 +1492,13 @@ export default function CSIMonitoringPage() {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center py-10">
+                      <TableCell colSpan={10} className="text-center py-10">
                         <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                       </TableCell>
                     </TableRow>
                   ) : siGroups.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
+                      <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
                         No records found. Click <strong>New Record</strong> to add one.
                       </TableCell>
                     </TableRow>
@@ -1343,6 +1508,13 @@ export default function CSIMonitoringPage() {
                         className="cursor-pointer hover:bg-muted/50"
                         onClick={() => toggleSI(group.si_number)}
                       >
+                        <TableCell onClick={e => e.stopPropagation()}>
+                          <Checkbox
+                            checked={selectedSIs.has(group.si_number)}
+                            onCheckedChange={() => toggleSelectSI(group.si_number)}
+                            aria-label={`Select SI ${group.si_number}`}
+                          />
+                        </TableCell>
                         <TableCell className="text-sm text-muted-foreground">{(page - 1) * PAGE_SIZE + i + 1}</TableCell>
                         <TableCell className="text-sm whitespace-nowrap">
                           {format(parseISO(group.date), 'MMM d, yyyy')}
@@ -1379,7 +1551,7 @@ export default function CSIMonitoringPage() {
                       </TableRow>
                       {expandedSIs.has(group.si_number) && (
                         <TableRow key={`${group.si_number}-items`}>
-                          <TableCell colSpan={9} className="p-0 bg-muted/20">
+                          <TableCell colSpan={10} className="p-0 bg-muted/20">
                             <div className="px-8 py-2">
                               <Table>
                                 <TableHeader>
@@ -1585,6 +1757,70 @@ export default function CSIMonitoringPage() {
             <Button variant="outline" onClick={() => setDeleteId(null)}>Cancel</Button>
             <Button variant="destructive" onClick={confirmDelete}>Delete</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Send Email Dialog */}
+      <Dialog open={emailBulkOpen} onOpenChange={o => { if (!o && !sendingBulkEmail) setEmailBulkOpen(false) }}>
+        <DialogContent className="sm:!max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Mail className="h-4 w-4" />Send CSI Invoice(s)</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 pt-2">
+            <div className="flex flex-wrap gap-1.5">
+              {siGroups.filter(g => selectedSIs.has(g.si_number)).map(g => (
+                <span key={g.si_number} className="inline-flex items-center gap-1 text-xs font-mono bg-muted px-2 py-1 rounded-md">
+                  {g.si_number}
+                  <button
+                    type="button"
+                    onClick={() => toggleSelectSI(g.si_number)}
+                    disabled={sendingBulkEmail}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+            <div className="space-y-1.5">
+              <Label>Recipient Email <span className="text-destructive">*</span></Label>
+              <Input
+                type="email"
+                placeholder="client@example.com"
+                value={bulkEmailTo}
+                onChange={e => setBulkEmailTo(e.target.value)}
+                disabled={sendingBulkEmail}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Subject</Label>
+              <Input
+                placeholder="Email subject"
+                value={bulkEmailSubject}
+                onChange={e => setBulkEmailSubject(e.target.value)}
+                disabled={sendingBulkEmail}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Message Body</Label>
+              <textarea
+                className="w-full min-h-[120px] rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                placeholder="Email message…"
+                value={bulkEmailBody}
+                onChange={e => setBulkEmailBody(e.target.value)}
+                disabled={sendingBulkEmail}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              PDF attachment{selectedSIs.size > 1 ? 's' : ''} (line items per CSI): <span className="font-mono">{siGroups.filter(g => selectedSIs.has(g.si_number)).map(g => `SI-${g.si_number}.pdf`).join(', ')}</span>
+            </p>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="outline" onClick={() => setEmailBulkOpen(false)} disabled={sendingBulkEmail}>Cancel</Button>
+              <Button onClick={handleSendBulkEmail} disabled={sendingBulkEmail || selectedSIs.size === 0} className="bg-red-600 hover:bg-red-700">
+                {sendingBulkEmail ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Sending…</> : <><Mail className="h-4 w-4 mr-2" />Send Email</>}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 
