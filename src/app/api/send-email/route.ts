@@ -5,7 +5,7 @@ export const maxDuration = 30
 
 export async function POST(req: NextRequest) {
   try {
-    const { to, subject, body, htmlBody, pdfBase64, pdfFilename } = await req.json()
+    const { to, subject, body, htmlBody, pdfBase64, pdfFilename, attachments: extraAttachments } = await req.json()
 
     if (!to || !subject) {
       return NextResponse.json({ error: 'Missing required fields: to, subject' }, { status: 400 })
@@ -31,6 +31,18 @@ export async function POST(req: NextRequest) {
         encoding: 'base64',
         contentType: 'application/pdf',
       })
+    }
+    if (Array.isArray(extraAttachments)) {
+      for (const a of extraAttachments) {
+        if (a?.base64 && a?.filename) {
+          attachments.push({
+            filename: a.filename,
+            content: a.base64,
+            encoding: 'base64',
+            contentType: 'application/pdf',
+          })
+        }
+      }
     }
 
     await transporter.sendMail({

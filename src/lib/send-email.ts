@@ -70,6 +70,8 @@ export interface SendEmailPayload {
   /** @deprecated pass pdfData/poPdfData instead for faster generation */
   printHtml?: string
   pdfFilename?: string
+  /** Extra PDF attachments beyond the single pdfData/poPdfData/soPdfData/printHtml one, e.g. one per selected record in a bulk send. */
+  attachments?: { base64: string; filename: string }[]
 }
 
 function fmtAmt(n: number) {
@@ -851,7 +853,7 @@ export async function sendEmail(payload: SendEmailPayload): Promise<void> {
   const res = await fetch('/api/send-email', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ to: payload.to, subject: payload.subject, body: payload.body, htmlBody: payload.htmlBody, pdfBase64, pdfFilename }),
+    body: JSON.stringify({ to: payload.to, subject: payload.subject, body: payload.body, htmlBody: payload.htmlBody, pdfBase64, pdfFilename, attachments: payload.attachments }),
   })
 
   if (!res.ok) {
