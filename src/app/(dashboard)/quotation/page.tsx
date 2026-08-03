@@ -11,11 +11,13 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Plus, MoreHorizontal, Loader2, Trash2, X, FileText, Printer, Mail, Send, Package, Search, Pencil, Eye, CheckCircle, XCircle, Clock, CheckCheck } from 'lucide-react'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Plus, MoreHorizontal, Loader2, Trash2, X, FileText, Printer, Mail, Send, Package, Search, Pencil, Eye, CheckCircle, XCircle, Clock, CheckCheck, ClipboardList } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSearchContext } from '@/context/search-context'
 import { sendEmail, QuotationPdfData } from '@/lib/send-email'
 import Image from 'next/image'
+import QuotationRequestsPanel from '@/components/quotation/quotation-requests-panel'
 
 interface Client { id: string; company_name: string; email: string | null }
 interface ItemOption { item_name: string; unit_of_measure: string; cost: number | null; selling_price: number | null }
@@ -94,6 +96,8 @@ export default function QuotationPage() {
   const [emailBodyQ, setEmailBodyQ] = useState('')
   const [itemSearchIdx, setItemSearchIdx] = useState<number | null>(null)
   const [itemQuery, setItemQuery] = useState('')
+  const [activeTab, setActiveTab] = useState('quotations')
+  const [rfqPendingCount, setRfqPendingCount] = useState(0)
 
   // Edit
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -149,16 +153,18 @@ export default function QuotationPage() {
 
   async function load() {
     setLoading(true)
-    const [{ data: quoData }, { data: clientData }, { data: itemData }, { data: sysData }] = await Promise.all([
+    const [{ data: quoData }, { data: clientData }, { data: itemData }, { data: sysData }, { count: rfqCount }] = await Promise.all([
       supabase.from('quotations').select('*').order('created_at', { ascending: false }),
       supabase.from('clients').select('id, company_name, email').eq('status', 'active').order('company_name'),
       supabase.from('items').select('item_name, unit_of_measure, cost, selling_price').eq('status', 'active').order('item_name'),
       supabase.from('system_settings').select('company_name, address, phone, email, tin, logo_url').single(),
+      supabase.from('quotation_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
     ])
     setQuotations((quoData ?? []) as Quotation[])
     setClients(clientData ?? [])
     setItems((itemData ?? []) as ItemOption[])
     if (sysData) setCompanyInfo(sysData as SystemSettings)
+    setRfqPendingCount(rfqCount ?? 0)
     setLoading(false)
   }
 
@@ -566,22 +572,39 @@ export default function QuotationPage() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold">Quotation</h2>
-          <p className="text-muted-foreground text-sm">Create and manage client quotations</p>
+          <p className="text-muted-foreground text-sm">Create and manage client quotations and requests</p>
         </div>
-        {open ? (
-          <Button variant="outline" onClick={() => {
-            const hasData = clientId || quoteNumber || lines.some(l => l.item_name)
-            if (hasData) { setDiscardCallback(() => () => { setOpen(false); resetForm() }); setDiscardOpen(true); return }
-            setOpen(false); resetForm()
-          }}>
-            <X className="h-4 w-4 mr-2" />Cancel
-          </Button>
-        ) : (
-          <Button onClick={() => { resetForm(); setOpen(true) }} className="bg-red-600 hover:bg-red-700">
-            <Plus className="h-4 w-4 mr-2" />New Quotation
-          </Button>
+        {activeTab === 'quotations' && (
+          open ? (
+            <Button variant="outline" onClick={() => {
+              const hasData = clientId || quoteNumber || lines.some(l => l.item_name)
+              if (hasData) { setDiscardCallback(() => () => { setOpen(false); resetForm() }); setDiscardOpen(true); return }
+              setOpen(false); resetForm()
+            }}>
+              <X className="h-4 w-4 mr-2" />Cancel
+            </Button>
+          ) : (
+            <Button onClick={() => { resetForm(); setOpen(true) }} className="bg-red-600 hover:bg-red-700">
+              <Plus className="h-4 w-4 mr-2" />New Quotation
+            </Button>
+          )
         )}
       </div>
+
+      <Tabs value={activeTab} onValueChange={v => setActiveTab(v ?? 'quotations')}>
+        <TabsList>
+          <TabsTrigger value="quotations" className="flex items-center gap-1.5">
+            <FileText className="h-3.5 w-3.5" />Quotations
+          </TabsTrigger>
+          <TabsTrigger value="requests" className="flex items-center gap-1.5">
+            <ClipboardList className="h-3.5 w-3.5" />Requests for Quotation
+            {rfqPendingCount > 0 && (
+              <span className="ml-1 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{rfqPendingCount}</span>
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="quotations" className="space-y-6 mt-4">
 
       {!open && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -945,6 +968,12 @@ export default function QuotationPage() {
           </CardContent>
         </Card>
       )}
+        </TabsContent>
+
+        <TabsContent value="requests" className="mt-4">
+          <QuotationRequestsPanel onAccepted={load} />
+        </TabsContent>
+      </Tabs>
 
       {/* Email Dialog */}
       <Dialog open={showEmailQ} onOpenChange={setShowEmailQ}>

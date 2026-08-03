@@ -1,12 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { format } from 'date-fns'
-import { Loader2, FileText, ChevronDown, ChevronUp, Package, CheckCircle, Clock, XCircle, Send } from 'lucide-react'
+import { Loader2, FileText, ChevronDown, ChevronUp, Package, CheckCircle, Clock, XCircle, Send, Plus, ClipboardList, Eye } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { useSearchContext } from '@/context/search-context'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 
 interface QuoteItem {
   id: string
@@ -35,6 +37,27 @@ interface Quotation {
   quotation_items: QuoteItem[]
 }
 
+interface RequestItem {
+  id: string
+  item_name: string
+  quantity: number
+  unit: string | null
+  unit_price: number | null
+  remarks: string | null
+}
+
+interface QuotationRequest {
+  id: string
+  request_number: string
+  subject: string
+  notes: string | null
+  status: string
+  so_number: string | null
+  created_at: string
+  reviewed_at: string | null
+  quotation_request_items: RequestItem[]
+}
+
 const STATUS: Record<string, { label: string; cls: string; icon: React.ReactNode }> = {
   sent:     { label: 'Pending Review', cls: 'bg-blue-100 text-blue-700 border-blue-200',   icon: <Send className="h-3 w-3" /> },
   accepted: { label: 'Accepted',       cls: 'bg-green-100 text-green-700 border-green-200', icon: <CheckCircle className="h-3 w-3" /> },
@@ -50,13 +73,23 @@ const FILTERS = [
   { value: 'expired',  label: 'Expired' },
 ]
 
+const RFQ_STATUS: Record<string, { label: string; cls: string; icon: React.ReactNode }> = {
+  pending:   { label: 'Pending Review', cls: 'bg-yellow-100 text-yellow-700 border-yellow-200', icon: <Clock className="h-3 w-3" /> },
+  reviewing: { label: 'Under Review',   cls: 'bg-blue-100 text-blue-700 border-blue-200',       icon: <Eye className="h-3 w-3" /> },
+  accepted:  { label: 'Accepted',       cls: 'bg-green-100 text-green-700 border-green-200',    icon: <CheckCircle className="h-3 w-3" /> },
+  declined:  { label: 'Declined',       cls: 'bg-red-100 text-red-600 border-red-200',           icon: <XCircle className="h-3 w-3" /> },
+}
+
 export default function PortalQuotations() {
   const supabase = createClient()
   const [quotations, setQuotations] = useState<Quotation[]>([])
+  const [requests, setRequests] = useState<QuotationRequest[]>([])
   const [loading, setLoading] = useState(true)
   const { query: search } = useSearchContext()
   const [filter, setFilter] = useState('')
+  const [rfqFilter, setRfqFilter] = useState('')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [expandedReq, setExpandedReq] = useState<Set<string>>(new Set())
   const [updatingId, setUpdatingId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -64,15 +97,23 @@ export default function PortalQuotations() {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return
       const { data: clientRow } = await supabase
-        .from('clients').select('company_name').eq('auth_user_id', session.user.id).single()
+        .from('clients').select('id, company_name').eq('auth_user_id', session.user.id).single()
       if (clientRow) {
-        const { data } = await supabase
-          .from('quotations')
-          .select('id, quote_number, quote_date, valid_until, client_name, subject, subtotal, vat_amount, ewt_amount, total_amount, notes, status, created_at, quotation_items(id, item_name, quantity, unit, unit_price, selling_price, total_amount)')
-          .eq('client_name', clientRow.company_name)
-          .neq('status', 'draft')
-          .order('created_at', { ascending: false })
+        const [{ data }, { data: reqData }] = await Promise.all([
+          supabase
+            .from('quotations')
+            .select('id, quote_number, quote_date, valid_until, client_name, subject, subtotal, vat_amount, ewt_amount, total_amount, notes, status, created_at, quotation_items(id, item_name, quantity, unit, unit_price, selling_price, total_amount)')
+            .eq('client_name', clientRow.company_name)
+            .neq('status', 'draft')
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('quotation_requests')
+            .select('id, request_number, subject, notes, status, so_number, created_at, reviewed_at, quotation_request_items(id, item_name, quantity, unit, unit_price, remarks)')
+            .eq('client_id', clientRow.id)
+            .order('created_at', { ascending: false }),
+        ])
         setQuotations((data ?? []) as unknown as Quotation[])
+        setRequests((reqData ?? []) as unknown as QuotationRequest[])
       }
       setLoading(false)
     }
@@ -81,6 +122,14 @@ export default function PortalQuotations() {
 
   function toggleExpand(id: string) {
     setExpanded(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  function toggleExpandReq(id: string) {
+    setExpandedReq(prev => {
       const next = new Set(prev)
       next.has(id) ? next.delete(id) : next.add(id)
       return next
@@ -111,13 +160,45 @@ export default function PortalQuotations() {
     return matchSearch && matchFilter
   })
 
+  const filteredRequests = requests.filter(r => {
+    const s = search.toLowerCase()
+    const matchSearch = !s ||
+      r.request_number.toLowerCase().includes(s) ||
+      r.subject.toLowerCase().includes(s) ||
+      (r.notes ?? '').toLowerCase().includes(s) ||
+      (RFQ_STATUS[r.status]?.label ?? r.status).toLowerCase().includes(s) ||
+      r.quotation_request_items.some(i => i.item_name.toLowerCase().includes(s))
+    const matchFilter = !rfqFilter || r.status === rfqFilter
+    return matchSearch && matchFilter
+  })
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Quotations</h1>
-        <p className="text-sm text-gray-500 mt-0.5">Quotations issued to you by CDSC Industrial Supply</p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Quotations</h1>
+          <p className="text-sm text-gray-500 mt-0.5">Quotations issued to you, and your requests for pricing</p>
+        </div>
+        <Link href="/portal/quotations/new"
+          className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
+          <Plus className="h-4 w-4" /> Request a Quotation
+        </Link>
       </div>
 
+      <Tabs defaultValue="quotations">
+        <TabsList>
+          <TabsTrigger value="quotations" className="flex items-center gap-1.5">
+            <FileText className="h-3.5 w-3.5" />Quotations
+          </TabsTrigger>
+          <TabsTrigger value="requests" className="flex items-center gap-1.5">
+            <ClipboardList className="h-3.5 w-3.5" />My Requests
+            {!loading && requests.length > 0 && (
+              <span className="ml-1 text-[10px] opacity-70">{requests.length}</span>
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="quotations" className="space-y-6 mt-4">
       {/* Filter tabs */}
       <div className="flex gap-1.5 flex-wrap">
         {FILTERS.map(f => (
@@ -296,6 +377,138 @@ export default function PortalQuotations() {
           })}
         </div>
       )}
+        </TabsContent>
+
+        <TabsContent value="requests" className="space-y-6 mt-4">
+          {/* RFQ Filter tabs */}
+          <div className="flex gap-1.5 flex-wrap">
+            {[{ value: '', label: 'All' }, ...Object.entries(RFQ_STATUS).map(([value, cfg]) => ({ value, label: cfg.label }))].map(f => (
+              <button key={f.value} onClick={() => setRfqFilter(f.value)}
+                className={cn(
+                  'px-3.5 py-1.5 text-sm rounded-lg font-medium transition-colors',
+                  rfqFilter === f.value
+                    ? 'bg-red-600 text-white'
+                    : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
+                )}>
+                {f.label}
+                {f.value === '' && !loading && (
+                  <span className="ml-1.5 text-xs opacity-70">{requests.length}</span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {loading ? (
+            <div className="flex justify-center py-16">
+              <Loader2 className="h-6 w-6 animate-spin text-gray-400" />
+            </div>
+          ) : filteredRequests.length === 0 ? (
+            <div className="bg-white rounded-xl border border-gray-200 py-16 text-center">
+              <ClipboardList className="h-9 w-9 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-500 text-sm font-medium">
+                {rfqFilter ? 'No requests with this status.' : 'No requests for quotation yet.'}
+              </p>
+              {!rfqFilter && (
+                <Link href="/portal/quotations/new"
+                  className="mt-4 inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+                  <Plus className="h-4 w-4" /> Submit your first request
+                </Link>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredRequests.map(r => {
+                const st = RFQ_STATUS[r.status] ?? { label: r.status, cls: 'bg-gray-100 text-gray-600 border-gray-200', icon: null }
+                const isOpen = expandedReq.has(r.id)
+                const hasItems = r.quotation_request_items?.length > 0
+                const hasPricing = r.quotation_request_items?.some(i => i.unit_price != null)
+
+                return (
+                  <div key={r.id} className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                    <div className="px-5 py-4">
+                      <div className="flex items-start gap-4">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-semibold text-gray-900 text-sm font-mono">
+                              {r.request_number}
+                            </span>
+                            <span className={cn('text-xs px-2.5 py-0.5 rounded-full font-medium border flex items-center gap-1', st.cls)}>
+                              {st.icon}{st.label}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                            <span className="text-xs text-gray-400">
+                              Submitted {format(new Date(r.created_at), 'MMM d, yyyy')}
+                            </span>
+                            {r.status === 'accepted' && r.so_number && (
+                              <span className="text-xs font-semibold text-green-700">
+                                Purchase Order {r.so_number} created
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-600 mt-1 font-medium">{r.subject}</p>
+                          {r.notes && (
+                            <p className="text-xs text-gray-500 mt-1 line-clamp-2">{r.notes}</p>
+                          )}
+                        </div>
+                        {hasItems && (
+                          <button
+                            onClick={() => toggleExpandReq(r.id)}
+                            className="shrink-0 flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 px-2.5 py-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+                            {isOpen ? (
+                              <><ChevronUp className="h-3.5 w-3.5" />Hide items</>
+                            ) : (
+                              <><ChevronDown className="h-3.5 w-3.5" />View items</>
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {isOpen && hasItems && (
+                      <div className="border-t border-gray-100 bg-gray-50">
+                        <div className="px-5 py-3">
+                          <div className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                            <Package className="h-3 w-3" />Items Requested
+                          </div>
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="text-xs text-gray-400">
+                                  <th className="text-left pb-2 font-medium pr-4">Item</th>
+                                  <th className="text-right pb-2 font-medium pr-4">Qty</th>
+                                  <th className="text-left pb-2 font-medium pr-4">Unit</th>
+                                  {hasPricing && <th className="text-right pb-2 font-medium pr-4">Quoted Price</th>}
+                                  <th className="text-left pb-2 font-medium">Remarks</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-100">
+                                {r.quotation_request_items.map(item => (
+                                  <tr key={item.id}>
+                                    <td className="py-2 pr-4 font-medium text-gray-800">{item.item_name}</td>
+                                    <td className="py-2 pr-4 text-right text-gray-600">{item.quantity}</td>
+                                    <td className="py-2 pr-4 text-gray-500">{item.unit ?? '—'}</td>
+                                    {hasPricing && (
+                                      <td className="py-2 pr-4 text-right text-gray-600">
+                                        {item.unit_price != null ? `₱${item.unit_price.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}
+                                      </td>
+                                    )}
+                                    <td className="py-2 text-gray-500">{item.remarks ?? '—'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
