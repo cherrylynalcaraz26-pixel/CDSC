@@ -7,8 +7,10 @@ import { format } from 'date-fns'
 import { Loader2, FileText, ChevronDown, ChevronUp, Package, CheckCircle, Clock, XCircle, Send, Plus, ClipboardList, Eye } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
+import { undoToast } from '@/lib/undo-toast'
 import { useSearchContext } from '@/context/search-context'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { RfqFlowStepper } from '@/components/quotation/rfq-flow'
 
 interface QuoteItem {
   id: string
@@ -52,7 +54,8 @@ interface QuotationRequest {
   subject: string
   notes: string | null
   status: string
-  so_number: string | null
+  quotation_id: string | null
+  quote_number: string | null
   created_at: string
   reviewed_at: string | null
   quotation_request_items: RequestItem[]
@@ -74,10 +77,11 @@ const FILTERS = [
 ]
 
 const RFQ_STATUS: Record<string, { label: string; cls: string; icon: React.ReactNode }> = {
-  pending:   { label: 'Pending Review', cls: 'bg-yellow-100 text-yellow-700 border-yellow-200', icon: <Clock className="h-3 w-3" /> },
-  reviewing: { label: 'Under Review',   cls: 'bg-blue-100 text-blue-700 border-blue-200',       icon: <Eye className="h-3 w-3" /> },
-  accepted:  { label: 'Accepted',       cls: 'bg-green-100 text-green-700 border-green-200',    icon: <CheckCircle className="h-3 w-3" /> },
-  declined:  { label: 'Declined',       cls: 'bg-red-100 text-red-600 border-red-200',           icon: <XCircle className="h-3 w-3" /> },
+  pending:    { label: 'Request',          cls: 'bg-yellow-100 text-yellow-700 border-yellow-200', icon: <Clock className="h-3 w-3" /> },
+  processing: { label: 'Reviewing',        cls: 'bg-blue-100 text-blue-700 border-blue-200',       icon: <Eye className="h-3 w-3" /> },
+  quoted:     { label: 'Sending Quotation', cls: 'bg-indigo-100 text-indigo-700 border-indigo-200', icon: <Send className="h-3 w-3" /> },
+  done:       { label: 'Done',             cls: 'bg-green-100 text-green-700 border-green-200',    icon: <CheckCircle className="h-3 w-3" /> },
+  declined:   { label: 'Declined',         cls: 'bg-red-100 text-red-600 border-red-200',           icon: <XCircle className="h-3 w-3" /> },
 }
 
 export default function PortalQuotations() {
@@ -108,7 +112,7 @@ export default function PortalQuotations() {
             .order('created_at', { ascending: false }),
           supabase
             .from('quotation_requests')
-            .select('id, request_number, subject, notes, status, so_number, created_at, reviewed_at, quotation_request_items(id, item_name, quantity, unit, unit_price, remarks)')
+            .select('id, request_number, subject, notes, status, quotation_id, quote_number, created_at, reviewed_at, quotation_request_items(id, item_name, quantity, unit, unit_price, remarks)')
             .eq('client_id', clientRow.id)
             .order('created_at', { ascending: false }),
         ])
@@ -138,11 +142,16 @@ export default function PortalQuotations() {
 
   async function updateStatus(id: string, status: 'accepted' | 'declined') {
     setUpdatingId(id)
+    const prevStatus = quotations.find(q => q.id === id)?.status
     const { error } = await supabase.from('quotations').update({ status }).eq('id', id)
     if (error) toast.error(error.message)
     else {
       setQuotations(prev => prev.map(q => q.id === id ? { ...q, status } : q))
-      toast.success(status === 'accepted' ? 'Quotation accepted' : 'Quotation declined')
+      undoToast(status === 'accepted' ? 'Quotation accepted' : 'Quotation declined', async () => {
+        if (!prevStatus) return
+        await supabase.from('quotations').update({ status: prevStatus }).eq('id', id)
+        setQuotations(prev => prev.map(q => q.id === id ? { ...q, status: prevStatus } : q))
+      })
     }
     setUpdatingId(null)
   }
@@ -418,7 +427,6 @@ export default function PortalQuotations() {
           ) : (
             <div className="space-y-3">
               {filteredRequests.map(r => {
-                const st = RFQ_STATUS[r.status] ?? { label: r.status, cls: 'bg-gray-100 text-gray-600 border-gray-200', icon: null }
                 const isOpen = expandedReq.has(r.id)
                 const hasItems = r.quotation_request_items?.length > 0
                 const hasPricing = r.quotation_request_items?.some(i => i.unit_price != null)
@@ -432,17 +440,17 @@ export default function PortalQuotations() {
                             <span className="font-semibold text-gray-900 text-sm font-mono">
                               {r.request_number}
                             </span>
-                            <span className={cn('text-xs px-2.5 py-0.5 rounded-full font-medium border flex items-center gap-1', st.cls)}>
-                              {st.icon}{st.label}
-                            </span>
+                          </div>
+                          <div className="mt-2">
+                            <RfqFlowStepper status={r.status} variant="client" compact />
                           </div>
                           <div className="flex items-center gap-3 mt-1.5 flex-wrap">
                             <span className="text-xs text-gray-400">
                               Submitted {format(new Date(r.created_at), 'MMM d, yyyy')}
                             </span>
-                            {r.status === 'accepted' && r.so_number && (
-                              <span className="text-xs font-semibold text-green-700">
-                                Purchase Order {r.so_number} created
+                            {r.quote_number && (
+                              <span className="text-xs font-semibold text-indigo-700">
+                                Quotation {r.quote_number} sent — see it in the Quotations tab
                               </span>
                             )}
                           </div>

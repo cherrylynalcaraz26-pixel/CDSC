@@ -4,9 +4,10 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
+import { undoToast } from '@/lib/undo-toast'
 import {
   Loader2, ClipboardList, ChevronLeft, Trash2, Plus, Package,
-  CheckCircle2, XCircle, Clock, Eye, ShoppingCart,
+  XCircle, ShoppingCart, Star, Truck, Globe2,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
@@ -15,8 +16,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useSearchContext } from '@/context/search-context'
+import { RfqFlowStepper } from '@/components/quotation/rfq-flow'
 
 interface ItemOption { item_name: string; unit_of_measure: string; cost: number | null; selling_price: number | null }
+interface SupplierOption { id: string; company_name: string; payment_terms: string | null; lead_time_days: number | null }
 
 interface RequestItemRow {
   id: string
@@ -27,6 +30,19 @@ interface RequestItemRow {
   remarks: string | null
 }
 
+interface SupplierComparisonRow {
+  id: string
+  supplier_id: string | null
+  supplier_name: string
+  terms_of_payment: string | null
+  delivery_time: string | null
+  origin: string | null
+  response_speed: string | null
+  estimated_income: number | null
+  notes: string | null
+  is_selected: boolean
+}
+
 interface QuotationRequest {
   id: string
   request_number: string
@@ -35,12 +51,13 @@ interface QuotationRequest {
   subject: string
   notes: string | null
   status: string
-  sales_order_id: string | null
-  so_number: string | null
+  quotation_id: string | null
+  quote_number: string | null
   reviewed_by: string | null
   reviewed_at: string | null
   created_at: string
   quotation_request_items: RequestItemRow[]
+  quotation_request_suppliers: SupplierComparisonRow[]
 }
 
 interface EditLine {
@@ -51,39 +68,60 @@ interface EditLine {
   remarks: string
 }
 
-const STATUS_CFG: Record<string, { label: string; cls: string; icon: React.ReactNode }> = {
-  pending:   { label: 'Pending Review', cls: 'bg-yellow-100 text-yellow-700', icon: <Clock className="h-3.5 w-3.5" /> },
-  reviewing: { label: 'Reviewing',      cls: 'bg-blue-100 text-blue-700',     icon: <Eye className="h-3.5 w-3.5" /> },
-  accepted:  { label: 'Accepted',       cls: 'bg-green-100 text-green-700',   icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
-  declined:  { label: 'Declined',       cls: 'bg-red-100 text-red-700',       icon: <XCircle className="h-3.5 w-3.5" /> },
+interface SupplierColumn {
+  supplier_id: string | null
+  supplier_name: string
+  terms_of_payment: string
+  delivery_time: string
+  origin: '' | 'local' | 'overseas'
+  response_speed: '' | 'fast' | 'average' | 'slow'
+  estimated_income: string
+  notes: string
+  is_selected: boolean
 }
 
-const emptyLine = (): EditLine => ({ item_name: '', quantity: '1', unit: '', unit_price: '', remarks: '' })
+const FLOW_STAGES = [
+  { value: 'pending', label: 'Request' },
+  { value: 'processing', label: 'Processing' },
+  { value: 'quoted', label: 'Sending Quotation' },
+  { value: 'done', label: 'Done' },
+] as const
 
-export default function QuotationRequestsPanel({ onAccepted }: { onAccepted?: () => void }) {
+const emptyLine = (): EditLine => ({ item_name: '', quantity: '1', unit: '', unit_price: '', remarks: '' })
+const emptySupplier = (): SupplierColumn => ({
+  supplier_id: null, supplier_name: '', terms_of_payment: '', delivery_time: '',
+  origin: '', response_speed: '', estimated_income: '', notes: '', is_selected: false,
+})
+
+export default function QuotationRequestsPanel({ onQuotationCreated }: { onQuotationCreated?: (quotationId: string) => void }) {
   const supabase = createClient()
   const { query } = useSearchContext()
   const [requests, setRequests] = useState<QuotationRequest[]>([])
   const [items, setItems] = useState<ItemOption[]>([])
+  const [suppliers, setSuppliers] = useState<SupplierOption[]>([])
   const [loading, setLoading] = useState(true)
   const [filterStatus, setFilterStatus] = useState('')
   const [reviewingId, setReviewingId] = useState<string | null>(null)
   const [editLines, setEditLines] = useState<EditLine[]>([])
+  const [supplierCols, setSupplierCols] = useState<SupplierColumn[]>([])
   const [saving, setSaving] = useState(false)
+  const [savingComparison, setSavingComparison] = useState(false)
   const [staffName, setStaffName] = useState('')
 
   async function load() {
     setLoading(true)
-    const [{ data }, { data: itemData }, { data: { user } }] = await Promise.all([
+    const [{ data }, { data: itemData }, { data: supplierData }, { data: { user } }] = await Promise.all([
       supabase
         .from('quotation_requests')
-        .select('id, request_number, client_id, client_name, subject, notes, status, sales_order_id, so_number, reviewed_by, reviewed_at, created_at, quotation_request_items(id, item_name, quantity, unit, unit_price, remarks)')
+        .select('id, request_number, client_id, client_name, subject, notes, status, quotation_id, quote_number, reviewed_by, reviewed_at, created_at, quotation_request_items(id, item_name, quantity, unit, unit_price, remarks), quotation_request_suppliers(id, supplier_id, supplier_name, terms_of_payment, delivery_time, origin, response_speed, estimated_income, notes, is_selected)')
         .order('created_at', { ascending: false }),
       supabase.from('items').select('item_name, unit_of_measure, cost, selling_price').eq('status', 'active').order('item_name'),
+      supabase.from('suppliers').select('id, company_name, payment_terms, lead_time_days').eq('is_active', true).order('company_name'),
       supabase.auth.getUser(),
     ])
     setRequests((data ?? []) as unknown as QuotationRequest[])
     setItems((itemData ?? []) as ItemOption[])
+    setSuppliers((supplierData ?? []) as SupplierOption[])
     setStaffName(user?.email ?? '')
     setLoading(false)
   }
@@ -92,7 +130,7 @@ export default function QuotationRequestsPanel({ onAccepted }: { onAccepted?: ()
 
   const reviewing = requests.find(r => r.id === reviewingId) ?? null
 
-  function openReview(r: QuotationRequest) {
+  async function openReview(r: QuotationRequest) {
     setReviewingId(r.id)
     setEditLines(
       r.quotation_request_items.length > 0
@@ -105,6 +143,28 @@ export default function QuotationRequestsPanel({ onAccepted }: { onAccepted?: ()
           }))
         : [emptyLine()]
     )
+    setSupplierCols(
+      r.quotation_request_suppliers.length > 0
+        ? r.quotation_request_suppliers.map(c => ({
+            supplier_id: c.supplier_id,
+            supplier_name: c.supplier_name,
+            terms_of_payment: c.terms_of_payment ?? '',
+            delivery_time: c.delivery_time ?? '',
+            origin: (c.origin as SupplierColumn['origin']) ?? '',
+            response_speed: (c.response_speed as SupplierColumn['response_speed']) ?? '',
+            estimated_income: c.estimated_income != null ? String(c.estimated_income) : '',
+            notes: c.notes ?? '',
+            is_selected: c.is_selected,
+          }))
+        : [emptySupplier()]
+    )
+    // Opening a request for review is the moment it moves from "Request" to "Processing".
+    if (r.status === 'pending') {
+      const { error } = await supabase.from('quotation_requests').update({ status: 'processing' }).eq('id', r.id)
+      if (!error) {
+        setRequests(prev => prev.map(x => x.id === r.id ? { ...x, status: 'processing' } : x))
+      }
+    }
   }
 
   function updateLine(idx: number, field: keyof EditLine, value: string) {
@@ -123,27 +183,85 @@ export default function QuotationRequestsPanel({ onAccepted }: { onAccepted?: ()
     }))
   }
 
-  async function updateStatus(id: string, status: 'reviewing' | 'declined') {
+  function updateSupplierCol(idx: number, patch: Partial<SupplierColumn>) {
+    setSupplierCols(prev => prev.map((c, i) => {
+      if (i !== idx) return c
+      if (patch.supplier_id !== undefined) {
+        const found = suppliers.find(s => s.id === patch.supplier_id)
+        return {
+          ...c, ...patch,
+          supplier_name: found?.company_name ?? c.supplier_name,
+          terms_of_payment: c.terms_of_payment || found?.payment_terms || '',
+          delivery_time: c.delivery_time || (found?.lead_time_days != null ? `${found.lead_time_days} days` : ''),
+        }
+      }
+      return { ...c, ...patch }
+    }))
+  }
+
+  async function markDeclined() {
+    if (!reviewing) return
+    const prevStatus = reviewing.status
     setSaving(true)
     const { error } = await supabase.from('quotation_requests').update({
-      status,
-      reviewed_by: staffName || null,
-      reviewed_at: new Date().toISOString(),
-    }).eq('id', id)
+      status: 'declined', reviewed_by: staffName || null, reviewed_at: new Date().toISOString(),
+    }).eq('id', reviewing.id)
     if (error) { toast.error(error.message); setSaving(false); return }
-    toast.success(status === 'reviewing' ? 'Marked as reviewing' : 'Request declined')
-    if (status === 'declined') setReviewingId(null)
+    undoToast('Request declined', async () => {
+      await supabase.from('quotation_requests').update({ status: prevStatus }).eq('id', reviewing.id)
+      await load()
+    })
+    setReviewingId(null)
     await load()
     setSaving(false)
   }
 
-  async function acceptToPurchaseOrder() {
+  async function saveSupplierComparison() {
+    if (!reviewing) return
+    const prevRows = reviewing.quotation_request_suppliers
+    const valid = supplierCols.filter(c => c.supplier_name.trim())
+    setSavingComparison(true)
+    const { error: delErr } = await supabase.from('quotation_request_suppliers').delete().eq('request_id', reviewing.id)
+    if (delErr) { toast.error(delErr.message); setSavingComparison(false); return }
+    if (valid.length > 0) {
+      const { error: insErr } = await supabase.from('quotation_request_suppliers').insert(valid.map(c => ({
+        request_id: reviewing.id,
+        supplier_id: c.supplier_id,
+        supplier_name: c.supplier_name,
+        terms_of_payment: c.terms_of_payment || null,
+        delivery_time: c.delivery_time || null,
+        origin: c.origin || null,
+        response_speed: c.response_speed || null,
+        estimated_income: c.estimated_income ? parseFloat(c.estimated_income) : null,
+        notes: c.notes || null,
+        is_selected: c.is_selected,
+      })))
+      if (insErr) { toast.error(insErr.message); setSavingComparison(false); return }
+    }
+    undoToast('Supplier comparison saved', async () => {
+      await supabase.from('quotation_request_suppliers').delete().eq('request_id', reviewing.id)
+      if (prevRows.length > 0) {
+        await supabase.from('quotation_request_suppliers').insert(prevRows.map(c => ({
+          request_id: reviewing.id, supplier_id: c.supplier_id, supplier_name: c.supplier_name,
+          terms_of_payment: c.terms_of_payment, delivery_time: c.delivery_time, origin: c.origin,
+          response_speed: c.response_speed, estimated_income: c.estimated_income, notes: c.notes,
+          is_selected: c.is_selected,
+        })))
+      }
+      await load()
+    })
+    await load()
+    setSavingComparison(false)
+  }
+
+  async function handleSendToQuotation() {
     if (!reviewing) return
     const validLines = editLines.filter(l => l.item_name.trim())
     if (validLines.length === 0) { toast.error('Add at least one item'); return }
     setSaving(true)
+    const prevItems = reviewing.quotation_request_items
+    const prevStatus = reviewing.status
     try {
-      // Persist the reviewed line items back onto the request first.
       await supabase.from('quotation_request_items').delete().eq('request_id', reviewing.id)
       await supabase.from('quotation_request_items').insert(validLines.map(l => ({
         request_id: reviewing.id,
@@ -154,26 +272,35 @@ export default function QuotationRequestsPanel({ onAccepted }: { onAccepted?: ()
         remarks: l.remarks || null,
       })))
 
-      const totalAmount = validLines.reduce((s, l) => s + (parseFloat(l.unit_price) || 0) * (parseFloat(l.quantity) || 1), 0)
+      const subtotal = validLines.reduce((s, l) => s + (parseFloat(l.unit_price) || 0) * (parseFloat(l.quantity) || 1), 0)
+      const vatAmount = subtotal * 0.12
+      const totalAmount = subtotal + vatAmount
+      const quoteNumber = `QT-${Date.now().toString().slice(-8)}`
       const today = new Date().toISOString().split('T')[0]
 
-      const { data: soData, error: soErr } = await supabase
-        .from('sales_orders')
+      const { data: quoData, error: quoErr } = await supabase
+        .from('quotations')
         .insert({
-          so_date: today,
+          quote_number: quoteNumber,
+          quote_date: today,
           client_id: reviewing.client_id,
           client_name: reviewing.client_name,
-          client_po_number: reviewing.subject,
-          remarks: reviewing.notes,
-          status: 'confirmed',
+          subject: reviewing.subject,
+          subtotal,
+          vat_type: 'exclusive',
+          vat_amount: vatAmount,
+          ewt_amount: 0,
           total_amount: totalAmount,
+          notes: reviewing.notes,
+          prepared_by: staffName || null,
+          status: 'draft',
         })
-        .select('id, so_number')
+        .select('id')
         .single()
-      if (soErr) throw soErr
+      if (quoErr) throw quoErr
 
-      await supabase.from('so_items').insert(validLines.map(l => ({
-        so_id: soData.id,
+      await supabase.from('quotation_items').insert(validLines.map(l => ({
+        quotation_id: quoData.id,
         item_name: l.item_name,
         quantity: parseFloat(l.quantity) || 1,
         unit: l.unit || null,
@@ -183,20 +310,35 @@ export default function QuotationRequestsPanel({ onAccepted }: { onAccepted?: ()
       })))
 
       const { error: updErr } = await supabase.from('quotation_requests').update({
-        status: 'accepted',
-        sales_order_id: soData.id,
-        so_number: soData.so_number,
+        status: 'quoted',
+        quotation_id: quoData.id,
+        quote_number: quoteNumber,
         reviewed_by: staffName || null,
         reviewed_at: new Date().toISOString(),
       }).eq('id', reviewing.id)
       if (updErr) throw updErr
 
-      toast.success(`Accepted — Purchase Order ${soData.so_number ?? ''} created`)
+      undoToast(`Quotation ${quoteNumber} created`, async () => {
+        await supabase.from('quotation_items').delete().eq('quotation_id', quoData.id)
+        await supabase.from('quotations').delete().eq('id', quoData.id)
+        await supabase.from('quotation_requests').update({
+          status: prevStatus, quotation_id: null, quote_number: null,
+        }).eq('id', reviewing.id)
+        await supabase.from('quotation_request_items').delete().eq('request_id', reviewing.id)
+        if (prevItems.length > 0) {
+          await supabase.from('quotation_request_items').insert(prevItems.map(i => ({
+            request_id: reviewing.id, item_name: i.item_name, quantity: i.quantity,
+            unit: i.unit, unit_price: i.unit_price, remarks: i.remarks,
+          })))
+        }
+        await load()
+      })
+
       setReviewingId(null)
       await load()
-      onAccepted?.()
+      onQuotationCreated?.(quoData.id)
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create purchase order')
+      toast.error(err instanceof Error ? err.message : 'Failed to create quotation')
     }
     setSaving(false)
   }
@@ -206,23 +348,22 @@ export default function QuotationRequestsPanel({ onAccepted }: { onAccepted?: ()
     const matchSearch = !s ||
       r.request_number.toLowerCase().includes(s) ||
       r.client_name.toLowerCase().includes(s) ||
-      r.subject.toLowerCase().includes(s) ||
-      (STATUS_CFG[r.status]?.label ?? r.status).toLowerCase().includes(s)
+      r.subject.toLowerCase().includes(s)
     const matchFilter = !filterStatus || r.status === filterStatus
     return matchSearch && matchFilter
   })
 
-  const counts = {
-    pending: requests.filter(r => r.status === 'pending').length,
-    reviewing: requests.filter(r => r.status === 'reviewing').length,
-    accepted: requests.filter(r => r.status === 'accepted').length,
-    declined: requests.filter(r => r.status === 'declined').length,
-  }
+  const stageCounts = FLOW_STAGES.reduce((acc, s) => {
+    acc[s.value] = requests.filter(r => r.status === s.value).length
+    return acc
+  }, {} as Record<string, number>)
+  const declinedCount = requests.filter(r => r.status === 'declined').length
 
   const total = editLines.reduce((s, l) => s + (parseFloat(l.unit_price) || 0) * (parseFloat(l.quantity) || 0), 0)
   const fmt = (n: number) => `₱${n.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
 
   if (reviewing) {
+    const isOpenForEditing = reviewing.status === 'pending' || reviewing.status === 'processing'
     return (
       <div className="space-y-4">
         <Button variant="outline" size="sm" onClick={() => setReviewingId(null)}>
@@ -231,13 +372,11 @@ export default function QuotationRequestsPanel({ onAccepted }: { onAccepted?: ()
 
         <Card>
           <CardHeader className="pb-3">
-            <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center justify-between flex-wrap gap-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <ClipboardList className="h-4 w-4" />{reviewing.request_number}
               </CardTitle>
-              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_CFG[reviewing.status]?.cls ?? 'bg-gray-100 text-gray-700'}`}>
-                {STATUS_CFG[reviewing.status]?.icon}{STATUS_CFG[reviewing.status]?.label ?? reviewing.status}
-              </span>
+              <RfqFlowStepper status={reviewing.status} variant="admin" />
             </div>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -262,10 +401,98 @@ export default function QuotationRequestsPanel({ onAccepted }: { onAccepted?: ()
               )}
             </div>
 
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>Requested Items <span className="text-muted-foreground font-normal">(fill in pricing before accepting)</span></Label>
+            {isOpenForEditing && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <Label className="flex items-center gap-1.5">Supplier Comparison
+                    <span className="text-muted-foreground font-normal">(compare up to 3 suppliers before quoting)</span>
+                  </Label>
+                  {supplierCols.length < 3 && (
+                    <Button variant="outline" size="sm" onClick={() => setSupplierCols(prev => [...prev, emptySupplier()])}>
+                      <Plus className="h-3.5 w-3.5 mr-1.5" />Add Supplier
+                    </Button>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {supplierCols.map((col, idx) => (
+                    <div key={idx} className={`rounded-lg border p-3 space-y-2 ${col.is_selected ? 'border-green-400 bg-green-50/50' : 'border-input'}`}>
+                      <div className="flex items-center gap-1.5">
+                        <Select value={col.supplier_id ?? ''} onValueChange={v => updateSupplierCol(idx, { supplier_id: v || null })}>
+                          <SelectTrigger className="h-8 text-xs flex-1"><SelectValue placeholder="Select supplier…" /></SelectTrigger>
+                          <SelectContent>
+                            {suppliers.map(s => (
+                              <SelectItem key={s.id} value={s.id}>{s.company_name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {supplierCols.length > 1 && (
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0"
+                            onClick={() => setSupplierCols(prev => prev.filter((_, i) => i !== idx))}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                      <Input className="h-8 text-xs" placeholder="Or type a custom supplier name…" value={col.supplier_name}
+                        onChange={e => updateSupplierCol(idx, { supplier_id: null, supplier_name: e.target.value })} />
+
+                      <div className="space-y-1">
+                        <Label className="text-[10px] text-muted-foreground uppercase">Terms of Payment</Label>
+                        <Input className="h-8 text-xs" placeholder="e.g. 30 days" value={col.terms_of_payment}
+                          onChange={e => updateSupplierCol(idx, { terms_of_payment: e.target.value })} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[10px] text-muted-foreground uppercase flex items-center gap-1"><Truck className="h-3 w-3" />Delivery Time</Label>
+                        <Input className="h-8 text-xs" placeholder="e.g. 5 days" value={col.delivery_time}
+                          onChange={e => updateSupplierCol(idx, { delivery_time: e.target.value })} />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[10px] text-muted-foreground uppercase flex items-center gap-1"><Globe2 className="h-3 w-3" />Local / Overseas</Label>
+                        <Select value={col.origin || undefined} onValueChange={v => updateSupplierCol(idx, { origin: (v as SupplierColumn['origin']) ?? '' })}>
+                          <SelectTrigger className="h-8 text-xs w-full"><SelectValue placeholder="Select…" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="local">Local</SelectItem>
+                            <SelectItem value="overseas">Overseas</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[10px] text-muted-foreground uppercase">Response Speed</Label>
+                        <Select value={col.response_speed || undefined} onValueChange={v => updateSupplierCol(idx, { response_speed: (v as SupplierColumn['response_speed']) ?? '' })}>
+                          <SelectTrigger className="h-8 text-xs w-full"><SelectValue placeholder="Select…" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="fast">Fast</SelectItem>
+                            <SelectItem value="average">Average</SelectItem>
+                            <SelectItem value="slow">Slow</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[10px] text-muted-foreground uppercase">Estimated Income</Label>
+                        <Input type="number" min="0" step="0.01" className="h-8 text-xs" placeholder="₱ estimated profit"
+                          value={col.estimated_income} onChange={e => updateSupplierCol(idx, { estimated_income: e.target.value })} />
+                      </div>
+                      <Button
+                        variant={col.is_selected ? 'default' : 'outline'}
+                        size="sm"
+                        className={`w-full h-7 text-xs ${col.is_selected ? 'bg-green-600 hover:bg-green-700' : ''}`}
+                        onClick={() => setSupplierCols(prev => prev.map((c, i) => ({ ...c, is_selected: i === idx ? !c.is_selected : false })))}
+                      >
+                        <Star className="h-3.5 w-3.5 mr-1.5" />{col.is_selected ? 'Recommended' : 'Mark as Recommended'}
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex justify-end">
+                  <Button variant="outline" size="sm" disabled={savingComparison} onClick={saveSupplierComparison}>
+                    {savingComparison ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : null}
+                    Save Comparison
+                  </Button>
+                </div>
               </div>
+            )}
+
+            <div className="space-y-2">
+              <Label>Requested Items {isOpenForEditing && <span className="text-muted-foreground font-normal">(fill in pricing before sending the quotation)</span>}</Label>
               <div className="border rounded-lg overflow-hidden">
                 <Table>
                   <TableHeader>
@@ -276,87 +503,109 @@ export default function QuotationRequestsPanel({ onAccepted }: { onAccepted?: ()
                       <TableHead className="w-28">Unit Price</TableHead>
                       <TableHead className="min-w-[120px]">Remarks</TableHead>
                       <TableHead className="w-28 text-right">Amount</TableHead>
-                      <TableHead className="w-10"></TableHead>
+                      {isOpenForEditing && <TableHead className="w-10"></TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {editLines.map((line, idx) => (
                       <TableRow key={idx}>
                         <TableCell className="py-1.5">
-                          <Select value={line.item_name} onValueChange={v => updateLine(idx, 'item_name', v ?? '')}>
-                            <SelectTrigger className="h-8 text-xs w-full"><SelectValue placeholder="Select item…" /></SelectTrigger>
-                            <SelectContent>
-                              {items.map(it => (
-                                <SelectItem key={it.item_name} value={it.item_name}>{it.item_name}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <Input
-                            className="h-7 text-xs mt-1"
-                            placeholder="Or type a custom item name…"
-                            value={line.item_name}
-                            onChange={e => updateLine(idx, 'item_name', e.target.value)}
-                          />
+                          {isOpenForEditing ? (
+                            <>
+                              <Select value={line.item_name} onValueChange={v => updateLine(idx, 'item_name', v ?? '')}>
+                                <SelectTrigger className="h-8 text-xs w-full"><SelectValue placeholder="Select item…" /></SelectTrigger>
+                                <SelectContent>
+                                  {items.map(it => (
+                                    <SelectItem key={it.item_name} value={it.item_name}>{it.item_name}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Input
+                                className="h-7 text-xs mt-1"
+                                placeholder="Or type a custom item name…"
+                                value={line.item_name}
+                                onChange={e => updateLine(idx, 'item_name', e.target.value)}
+                              />
+                            </>
+                          ) : (
+                            <span className="text-sm">{line.item_name}</span>
+                          )}
                         </TableCell>
                         <TableCell className="py-1.5">
-                          <Input type="number" min="0" className="h-8 text-xs w-14" value={line.quantity} onChange={e => updateLine(idx, 'quantity', e.target.value)} />
+                          {isOpenForEditing
+                            ? <Input type="number" min="0" className="h-8 text-xs w-14" value={line.quantity} onChange={e => updateLine(idx, 'quantity', e.target.value)} />
+                            : <span className="text-sm">{line.quantity}</span>}
                         </TableCell>
                         <TableCell className="py-1.5">
-                          <Input className="h-8 text-xs w-full" value={line.unit} onChange={e => updateLine(idx, 'unit', e.target.value)} />
+                          {isOpenForEditing
+                            ? <Input className="h-8 text-xs w-full" value={line.unit} onChange={e => updateLine(idx, 'unit', e.target.value)} />
+                            : <span className="text-sm text-muted-foreground">{line.unit || '—'}</span>}
                         </TableCell>
                         <TableCell className="py-1.5">
-                          <Input type="number" min="0" step="0.01" className="h-8 text-xs w-full" value={line.unit_price} onChange={e => updateLine(idx, 'unit_price', e.target.value)} />
+                          {isOpenForEditing
+                            ? <Input type="number" min="0" step="0.01" className="h-8 text-xs w-full" value={line.unit_price} onChange={e => updateLine(idx, 'unit_price', e.target.value)} />
+                            : <span className="text-sm">{line.unit_price ? fmt(parseFloat(line.unit_price)) : '—'}</span>}
                         </TableCell>
                         <TableCell className="py-1.5">
-                          <Input className="h-8 text-xs w-full" value={line.remarks} onChange={e => updateLine(idx, 'remarks', e.target.value)} />
+                          {isOpenForEditing
+                            ? <Input className="h-8 text-xs w-full" value={line.remarks} onChange={e => updateLine(idx, 'remarks', e.target.value)} />
+                            : <span className="text-sm text-muted-foreground">{line.remarks || '—'}</span>}
                         </TableCell>
                         <TableCell className="py-1.5 text-right text-xs font-medium">
                           {fmt((parseFloat(line.quantity) || 0) * (parseFloat(line.unit_price) || 0))}
                         </TableCell>
-                        <TableCell className="py-1.5">
-                          {editLines.length > 1 && (
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                              onClick={() => setEditLines(prev => prev.filter((_, i) => i !== idx))}>
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          )}
-                        </TableCell>
+                        {isOpenForEditing && (
+                          <TableCell className="py-1.5">
+                            {editLines.length > 1 && (
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                onClick={() => setEditLines(prev => prev.filter((_, i) => i !== idx))}>
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
               </div>
-              <Button variant="outline" size="sm" onClick={() => setEditLines(prev => [...prev, emptyLine()])}>
-                <Plus className="h-3.5 w-3.5 mr-1.5" />Add Item
-              </Button>
+              {isOpenForEditing && (
+                <Button variant="outline" size="sm" onClick={() => setEditLines(prev => [...prev, emptyLine()])}>
+                  <Plus className="h-3.5 w-3.5 mr-1.5" />Add Item
+                </Button>
+              )}
             </div>
 
             <div className="rounded-lg bg-muted/30 p-4 flex justify-between text-sm font-bold">
-              <span>Total</span><span className="text-red-600">{fmt(total)}</span>
+              <span>Total (VAT-exclusive subtotal)</span><span className="text-red-600">{fmt(total)}</span>
             </div>
 
-            {reviewing.status === 'accepted' ? (
-              <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-3">
-                <CheckCircle2 className="h-4 w-4" />
-                Accepted — Purchase Order <span className="font-mono font-semibold">{reviewing.so_number}</span> created.
+            {reviewing.status === 'quoted' && (
+              <div className="flex items-center gap-2 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
+                <ShoppingCart className="h-4 w-4" />
+                Sent as Quotation <span className="font-mono font-semibold">{reviewing.quote_number}</span> — finish and send it from the Quotations tab. Awaiting client response.
               </div>
-            ) : reviewing.status === 'declined' ? (
+            )}
+            {reviewing.status === 'done' && (
+              <div className="flex items-center gap-2 text-sm text-green-700 bg-green-50 border border-green-200 rounded-lg px-4 py-3">
+                <ShoppingCart className="h-4 w-4" />
+                Done — Quotation <span className="font-mono font-semibold">{reviewing.quote_number}</span> was accepted by the client.
+              </div>
+            )}
+            {reviewing.status === 'declined' && (
               <div className="flex items-center gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-4 py-3">
                 <XCircle className="h-4 w-4" />This request was declined.
               </div>
-            ) : (
+            )}
+
+            {isOpenForEditing && (
               <div className="flex flex-wrap justify-end gap-2 pt-2">
-                {reviewing.status === 'pending' && (
-                  <Button variant="outline" disabled={saving} onClick={() => updateStatus(reviewing.id, 'reviewing')}>
-                    <Eye className="h-4 w-4 mr-1.5" />Mark Reviewing
-                  </Button>
-                )}
-                <Button variant="outline" disabled={saving} className="text-destructive hover:text-destructive" onClick={() => updateStatus(reviewing.id, 'declined')}>
+                <Button variant="outline" disabled={saving} className="text-destructive hover:text-destructive" onClick={markDeclined}>
                   <XCircle className="h-4 w-4 mr-1.5" />Decline
                 </Button>
-                <Button disabled={saving} className="bg-red-600 hover:bg-red-700" onClick={acceptToPurchaseOrder}>
+                <Button disabled={saving} className="bg-red-600 hover:bg-red-700" onClick={handleSendToQuotation}>
                   {saving ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <ShoppingCart className="h-4 w-4 mr-1.5" />}
-                  Accept → Create Purchase Order
+                  Send Quotation →
                 </Button>
               </div>
             )}
@@ -368,18 +617,33 @@ export default function QuotationRequestsPanel({ onAccepted }: { onAccepted?: ()
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {([
-          ['pending', 'Pending'], ['reviewing', 'Reviewing'], ['accepted', 'Accepted'], ['declined', 'Declined'],
-        ] as const).map(([key, label]) => (
-          <Card key={key} className="cursor-pointer" onClick={() => setFilterStatus(prev => prev === key ? '' : key)}>
-            <CardContent className="pt-5 pb-4">
-              <div className="text-2xl font-bold">{loading ? '—' : counts[key]}</div>
-              <div className="text-sm text-muted-foreground">{label}</div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      <Card>
+        <CardContent className="pt-5 pb-5">
+          <div className="flex items-center justify-between flex-wrap gap-4">
+            <div className="flex items-center flex-wrap gap-1">
+              {FLOW_STAGES.map((stage, i) => (
+                <div key={stage.value} className="flex items-center">
+                  <button
+                    onClick={() => setFilterStatus(prev => prev === stage.value ? '' : stage.value)}
+                    className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-lg transition-colors ${filterStatus === stage.value ? 'bg-red-50 ring-1 ring-red-200' : 'hover:bg-muted/60'}`}
+                  >
+                    <span className="text-2xl font-bold">{loading ? '—' : stageCounts[stage.value] ?? 0}</span>
+                    <span className="text-[11px] font-medium text-muted-foreground whitespace-nowrap">{stage.label}</span>
+                  </button>
+                  {i < FLOW_STAGES.length - 1 && <div className="w-6 sm:w-10 h-0.5 bg-gray-200 mx-1" />}
+                </div>
+              ))}
+            </div>
+            <button
+              onClick={() => setFilterStatus(prev => prev === 'declined' ? '' : 'declined')}
+              className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-lg transition-colors ${filterStatus === 'declined' ? 'bg-red-50 ring-1 ring-red-200' : 'hover:bg-muted/60'}`}
+            >
+              <span className="text-2xl font-bold text-red-600">{loading ? '—' : declinedCount}</span>
+              <span className="text-[11px] font-medium text-muted-foreground">Declined</span>
+            </button>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader className="pb-3">
@@ -393,7 +657,7 @@ export default function QuotationRequestsPanel({ onAccepted }: { onAccepted?: ()
                 <TableHead>Client</TableHead>
                 <TableHead>Subject</TableHead>
                 <TableHead>Items</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>Flow</TableHead>
                 <TableHead>Submitted</TableHead>
                 <TableHead className="w-10"></TableHead>
               </TableRow>
@@ -411,16 +675,12 @@ export default function QuotationRequestsPanel({ onAccepted }: { onAccepted?: ()
                 <TableRow key={r.id} className="cursor-pointer hover:bg-muted/40" onClick={() => openReview(r)}>
                   <TableCell className="font-mono text-xs font-semibold text-red-600">{r.request_number}</TableCell>
                   <TableCell className="text-sm font-medium">{r.client_name}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">{r.subject}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground max-w-[180px] truncate">{r.subject}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     <span className="inline-flex items-center gap-1"><Package className="h-3 w-3" />{r.quotation_request_items?.length ?? 0}</span>
                   </TableCell>
-                  <TableCell>
-                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_CFG[r.status]?.cls ?? 'bg-gray-100 text-gray-700'}`}>
-                      {STATUS_CFG[r.status]?.icon}{STATUS_CFG[r.status]?.label ?? r.status}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-sm">{format(new Date(r.created_at), 'MMM d, yyyy')}</TableCell>
+                  <TableCell><RfqFlowStepper status={r.status} variant="admin" compact /></TableCell>
+                  <TableCell className="text-sm whitespace-nowrap">{format(new Date(r.created_at), 'MMM d, yyyy')}</TableCell>
                   <TableCell>
                     <Button variant="ghost" size="sm" onClick={e => { e.stopPropagation(); openReview(r) }}>Review</Button>
                   </TableCell>

@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Plus, MoreHorizontal, Loader2, Trash2, X, FileText, Printer, Mail, Send, Package, Search, Pencil, Eye, CheckCircle, XCircle, Clock, CheckCheck, ClipboardList } from 'lucide-react'
 import { toast } from 'sonner'
+import { undoToast } from '@/lib/undo-toast'
 import { useSearchContext } from '@/context/search-context'
 import { sendEmail, QuotationPdfData } from '@/lib/send-email'
 import Image from 'next/image'
@@ -210,10 +211,35 @@ export default function QuotationPage() {
     setMobileTab('form')
   }
 
+  async function handleQuotationCreated(quotationId: string) {
+    await load()
+    const { data } = await supabase.from('quotations').select('*').eq('id', quotationId).single()
+    if (data) {
+      setActiveTab('quotations')
+      openEdit(data as Quotation)
+    }
+  }
+
   async function deleteQuotation(id: string) {
+    const snapshot = quotations.find(q => q.id === id)
+    const { data: itemSnapshot } = await supabase
+      .from('quotation_items')
+      .select('item_name, quantity, unit, unit_price, selling_price, total_amount')
+      .eq('quotation_id', id)
+      .order('created_at')
     const { error } = await supabase.from('quotations').delete().eq('id', id)
     if (error) { toast.error(error.message); return }
-    toast.success('Quotation deleted')
+    undoToast('Quotation deleted', async () => {
+      if (!snapshot) return
+      const { status: _status, id: _id, ...rest } = snapshot
+      void _status; void _id
+      const { data: restored, error: restoreErr } = await supabase.from('quotations').insert({ ...rest, status: snapshot.status }).select('id').single()
+      if (restoreErr || !restored) { toast.error(restoreErr?.message ?? 'Failed to restore quotation'); return }
+      if (itemSnapshot && itemSnapshot.length > 0) {
+        await supabase.from('quotation_items').insert(itemSnapshot.map(i => ({ ...i, quotation_id: restored.id })))
+      }
+      load()
+    })
     load()
   }
 
@@ -252,6 +278,10 @@ export default function QuotationPage() {
   async function handleSave() {
     if (!clientId) { toast.error('Select a client'); return }
     setSaving(true)
+    const prevSnapshot = editingId ? quotations.find(q => q.id === editingId) : null
+    const { data: prevItemSnapshot } = editingId
+      ? await supabase.from('quotation_items').select('item_name, quantity, unit, unit_price, selling_price, total_amount').eq('quotation_id', editingId).order('created_at')
+      : { data: null }
     const payload = {
       quote_number: quoteNumber || null,
       quote_date: quoteDate,
@@ -297,7 +327,26 @@ export default function QuotationPage() {
       }
     }
 
-    toast.success(editingId ? 'Quotation updated.' : 'Quotation saved.')
+    if (editingId && prevSnapshot) {
+      const idToRestore = editingId
+      const { id: _id, ...prevRest } = prevSnapshot
+      void _id
+      undoToast('Quotation updated', async () => {
+        await supabase.from('quotations').update(prevRest).eq('id', idToRestore)
+        await supabase.from('quotation_items').delete().eq('quotation_id', idToRestore)
+        if (prevItemSnapshot && prevItemSnapshot.length > 0) {
+          await supabase.from('quotation_items').insert(prevItemSnapshot.map(i => ({ ...i, quotation_id: idToRestore })))
+        }
+        load()
+      })
+    } else if (!editingId && savedId) {
+      const idToRemove = savedId
+      undoToast('Quotation saved', async () => {
+        await supabase.from('quotation_items').delete().eq('quotation_id', idToRemove)
+        await supabase.from('quotations').delete().eq('id', idToRemove)
+        load()
+      })
+    }
     resetForm()
     setOpen(false)
     load()
@@ -424,9 +473,14 @@ export default function QuotationPage() {
   }
 
   async function updateStatus(id: string, status: string) {
+    const prevStatus = quotations.find(q => q.id === id)?.status
     const { error } = await supabase.from('quotations').update({ status }).eq('id', id)
     if (error) { toast.error(error.message); return }
-    toast.success(`Status updated to ${STATUS_CFG[status]?.label ?? status}`)
+    undoToast(`Status updated to ${STATUS_CFG[status]?.label ?? status}`, async () => {
+      if (!prevStatus) return
+      await supabase.from('quotations').update({ status: prevStatus }).eq('id', id)
+      load()
+    })
     load()
   }
 
@@ -971,7 +1025,7 @@ export default function QuotationPage() {
         </TabsContent>
 
         <TabsContent value="requests" className="mt-4">
-          <QuotationRequestsPanel onAccepted={load} />
+          <QuotationRequestsPanel onQuotationCreated={handleQuotationCreated} />
         </TabsContent>
       </Tabs>
 
