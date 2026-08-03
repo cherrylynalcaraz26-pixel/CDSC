@@ -105,32 +105,52 @@ function hasActiveChild(pathname: string, search: URLSearchParams, children: Nav
   return children.some(c => itemMatches(pathname, search, c))
 }
 
+// Sums badge counts for an item's own href plus, for group items, every
+// descendant's href — so a collapsed "Purchasing" icon still surfaces a
+// count even though its badge actually lives on the nested "Quotation" link.
+function sumBadge(item: NavItem, badges: Record<string, number>): number {
+  if (item.href) return badges[item.href] ?? 0
+  if (item.children) return item.children.reduce((sum, c) => sum + sumBadge(c, badges), 0)
+  return 0
+}
+
+function BadgePill({ count }: { count: number }) {
+  if (!count) return null
+  return (
+    <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[10px] font-bold flex items-center justify-center shrink-0">
+      {count > 99 ? '99+' : count}
+    </span>
+  )
+}
+
 function NavLink({
-  item, collapsed, onNavigate, badge,
+  item, collapsed, onNavigate, badges,
 }: {
   item: NavItem
   collapsed: boolean
   onNavigate?: () => void
-  badge?: number
+  badges: Record<string, number>
 }) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const active = item.href ? checkActive(pathname, item.href, searchParams) : false
   const childActive = item.children ? hasActiveChild(pathname, searchParams, item.children) : false
   const [open, setOpen] = useState(() => childActive)
+  const badge = sumBadge(item, badges)
 
   if (item.children) {
     if (collapsed) {
       return (
         <div className="relative group">
           <button
-            title={item.label}
+            title={badge ? `${item.label} (${badge} new)` : item.label}
             className={cn(
-              'w-full flex items-center justify-center h-9 rounded-md transition-colors',
+              'relative w-full flex items-center justify-center h-9 rounded-md transition-colors',
               childActive ? 'text-red-400' : 'text-white/40 hover:text-white/80 hover:bg-white/10',
             )}
           >
             <item.icon className="h-[16px] w-[16px] shrink-0" />
+            {!!badge && <span className="absolute top-1 right-1.5 h-1.5 w-1.5 rounded-full bg-red-500" />}
           </button>
           <div className="absolute left-full top-0 ml-1 hidden group-hover:block z-50 min-w-[180px] max-h-[80vh] overflow-y-auto bg-[#1a1a1a] border border-white/10 rounded-lg py-1 shadow-xl">
             <p className="text-[11px] font-semibold text-white/30 px-3 py-1.5 uppercase tracking-wider">{item.label}</p>
@@ -141,6 +161,7 @@ function NavLink({
                     <p className="text-[10px] font-semibold text-white/25 px-3 pt-2 pb-1 uppercase tracking-wider border-t border-white/5 mt-1">{child.label}</p>
                     {child.children.map(grandchild => {
                       const gActive = grandchild.href ? checkActive(pathname, grandchild.href, searchParams) : false
+                      const gBadge = sumBadge(grandchild, badges)
                       return (
                         <Link
                           key={grandchild.label}
@@ -152,7 +173,8 @@ function NavLink({
                           )}
                         >
                           <grandchild.icon className="h-3.5 w-3.5 shrink-0" />
-                          {grandchild.label}
+                          <span className="flex-1">{grandchild.label}</span>
+                          <BadgePill count={gBadge} />
                         </Link>
                       )
                     })}
@@ -160,6 +182,7 @@ function NavLink({
                 )
               }
               const cActive = child.href ? checkActive(pathname, child.href, searchParams) : false
+              const cBadge = sumBadge(child, badges)
               return (
                 <Link
                   key={child.label}
@@ -171,7 +194,8 @@ function NavLink({
                   )}
                 >
                   <child.icon className="h-3.5 w-3.5 shrink-0" />
-                  {child.label}
+                  <span className="flex-1">{child.label}</span>
+                  <BadgePill count={cBadge} />
                 </Link>
               )
             })}
@@ -191,6 +215,7 @@ function NavLink({
         >
           <item.icon className="h-[15px] w-[15px] shrink-0" />
           <span className="flex-1 text-left">{item.label}</span>
+          <BadgePill count={badge} />
           {open
             ? <ChevronDown className="h-3 w-3 opacity-40" />
             : <ChevronRight className="h-3 w-3 opacity-40" />}
@@ -198,7 +223,7 @@ function NavLink({
         {open && (
           <div className="mt-0.5 ml-3 pl-3 border-l border-white/10 space-y-0.5">
             {item.children.map(child => (
-              <NavLink key={child.label} item={child} collapsed={false} onNavigate={onNavigate} />
+              <NavLink key={child.label} item={child} collapsed={false} onNavigate={onNavigate} badges={badges} />
             ))}
           </div>
         )}
@@ -211,7 +236,7 @@ function NavLink({
       <Link
         href={item.href!}
         onClick={onNavigate}
-        title={badge ? `${item.label} (${badge} unread)` : item.label}
+        title={badge ? `${item.label} (${badge} new)` : item.label}
         className={cn(
           'relative flex items-center justify-center h-9 rounded-md transition-colors',
           active
@@ -238,11 +263,7 @@ function NavLink({
     >
       <item.icon className={cn('h-[15px] w-[15px] shrink-0', active ? 'text-red-400' : '')} />
       <span className="flex-1">{item.label}</span>
-      {!!badge && (
-        <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-red-600 text-white text-[10px] font-bold flex items-center justify-center">
-          {badge > 99 ? '99+' : badge}
-        </span>
-      )}
+      <BadgePill count={badge} />
     </Link>
   )
 }
@@ -258,16 +279,26 @@ function SidebarContent({
   const { company } = useCompany()
   const logoSrc = company.logo_url || '/cdsc-logo.jpg'
   const displayName = company.company_name || 'CDSC Industrial Supply'
-  const [unreadMessages, setUnreadMessages] = useState(0)
+  const [badges, setBadges] = useState<Record<string, number>>({})
 
   useEffect(() => {
     const supabase = createClient()
-    async function loadUnread() {
-      const { count } = await supabase.from('client_messages').select('id', { count: 'exact', head: true }).eq('status', 'unread')
-      setUnreadMessages(count ?? 0)
+    async function loadBadges() {
+      const [messages, quotationRequests, draftOrders, newLeads] = await Promise.all([
+        supabase.from('client_messages').select('id', { count: 'exact', head: true }).eq('status', 'unread'),
+        supabase.from('quotation_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+        supabase.from('sales_orders').select('id', { count: 'exact', head: true }).eq('status', 'draft'),
+        supabase.from('crm_leads').select('id', { count: 'exact', head: true }).eq('stage', 'new_lead'),
+      ])
+      setBadges({
+        '/messages': messages.count ?? 0,
+        '/quotation': quotationRequests.count ?? 0,
+        '/sales-orders': draftOrders.count ?? 0,
+        '/crm': newLeads.count ?? 0,
+      })
     }
-    loadUnread()
-    const interval = setInterval(loadUnread, 30000)
+    loadBadges()
+    const interval = setInterval(loadBadges, 30000)
     return () => clearInterval(interval)
   }, [])
 
@@ -310,7 +341,7 @@ function SidebarContent({
 
       <nav className={cn('flex-1 overflow-y-auto pb-2 space-y-0.5 scrollbar-thin', collapsed ? 'px-1.5' : 'px-2')}>
         {navigation.map(item => (
-          <NavLink key={item.label} item={item} collapsed={collapsed} onNavigate={onNavigate} badge={item.href === '/messages' ? unreadMessages : undefined} />
+          <NavLink key={item.label} item={item} collapsed={collapsed} onNavigate={onNavigate} badges={badges} />
         ))}
       </nav>
 
