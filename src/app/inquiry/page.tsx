@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import Image from 'next/image'
 import { createClient } from '@/lib/supabase/client'
+import { toast } from 'sonner'
 import { Loader2, CheckCircle2, Send, ArrowRight, Building2, Truck, Zap, Lock, Package } from 'lucide-react'
 
 type ContactType = 'client' | 'supplier'
@@ -40,7 +41,7 @@ export default function InquiryPage() {
     const typeLabel = form.contact_type === 'client' ? 'Client' : form.contact_type === 'supplier' ? 'Supplier' : ''
 
     // Always save to CRM leads
-    await supabase.from('crm_leads').insert({
+    const { error: leadError } = await supabase.from('crm_leads').insert({
       company_name: form.company_name.trim(),
       contact_person: form.contact_person.trim() || null,
       contact_email: form.contact_email.trim() || null,
@@ -54,10 +55,15 @@ export default function InquiryPage() {
       priority: 'medium',
       source: 'Online Inquiry Form',
     })
+    if (leadError) {
+      toast.error(leadError.message || 'Failed to submit inquiry. Please try again.')
+      setSending(false)
+      return
+    }
 
     // Also save into clients or suppliers table
     if (form.contact_type === 'client') {
-      await supabase.from('clients').insert({
+      const { error } = await supabase.from('clients').insert({
         company_name: form.company_name.trim(),
         contact_person: form.contact_person.trim() || null,
         mobile_number: form.contact_phone.trim() || null,
@@ -66,13 +72,14 @@ export default function InquiryPage() {
         notes: form.notes.trim() || null,
         status: 'active',
       })
+      if (error) toast.error(error.message)
     } else if (form.contact_type === 'supplier') {
       const now = new Date()
       const mm = String(now.getMonth() + 1).padStart(2, '0')
       const dd = String(now.getDate()).padStart(2, '0')
       const yyyy = now.getFullYear()
       const code = `INQ-${mm}-${dd}-${yyyy}`
-      await supabase.from('suppliers').insert({
+      const { error } = await supabase.from('suppliers').insert({
         supplier_code: code,
         company_name: form.company_name.trim(),
         contact_person: form.contact_person.trim() || null,
@@ -84,6 +91,7 @@ export default function InquiryPage() {
         status: 'active',
         is_active: true,
       })
+      if (error) toast.error(error.message)
     }
 
     setSending(false)
