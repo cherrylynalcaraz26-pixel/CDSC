@@ -12,7 +12,7 @@ export interface QuotationPdfData {
   validUntil?: string
   clientName?: string
   subject?: string
-  items: { item_name: string; quantity: number; unit?: string | null; unit_price: number; selling_price?: number | null; total_amount: number }[]
+  items: { item_name: string; quantity: number; unit?: string | null; unit_price: number; selling_price?: number | null; total_amount: number; imageDataUrl?: string }[]
   subtotal: number
   vatAmount: number
   ewtAmount: number
@@ -76,6 +76,11 @@ export interface SendEmailPayload {
 
 function fmtAmt(n: number) {
   return (n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })
+}
+
+function imgFormatFromDataUrl(dataUrl: string): string {
+  const ext = /^data:image\/(\w+);/.exec(dataUrl)?.[1]?.toUpperCase() ?? 'JPEG'
+  return ext === 'JPG' ? 'JPEG' : ext
 }
 
 async function buildQuotePdf(data: QuotationPdfData): Promise<string> {
@@ -335,6 +340,53 @@ async function buildQuotePdf(data: QuotationPdfData): Promise<string> {
   pdf.setFontSize(8)
   pdf.setTextColor(156, 163, 175)
   pdf.text('Signature over Printed Name / Date', sig2X + sigW / 2, y + 19, { align: 'center' })
+
+  // ── Item Images (page 2) ────────────────────────────────────────────────
+  const imageItems = data.items.filter(i => i.imageDataUrl)
+  if (imageItems.length > 0) {
+    const cols3 = 3
+    const gap = 12
+    const cellW = (contentW - gap * (cols3 - 1)) / cols3
+    const cellImgH = cellW * 0.75
+    const cellH = cellImgH + 22
+    const pageH = pdf.internal.pageSize.getHeight()
+
+    let iy = margin
+    let colIdx = 0
+
+    const newImagePage = () => {
+      pdf.addPage()
+      iy = margin
+      setFont('bold')
+      pdf.setFontSize(14)
+      pdf.setTextColor(185, 28, 28)
+      pdf.text('Item Images', margin, iy + 10)
+      iy += 24
+      pdf.setDrawColor(229, 231, 235)
+      pdf.line(margin, iy, W - margin, iy)
+      iy += 16
+      colIdx = 0
+    }
+    newImagePage()
+
+    imageItems.forEach(item => {
+      if (iy + cellH > pageH - margin) newImagePage()
+      const cx = margin + colIdx * (cellW + gap)
+      try {
+        pdf.addImage(item.imageDataUrl!, imgFormatFromDataUrl(item.imageDataUrl!), cx, iy, cellW, cellImgH)
+      } catch { /* skip broken image */ }
+      pdf.setDrawColor(229, 231, 235)
+      pdf.rect(cx, iy, cellW, cellImgH)
+      setFont()
+      pdf.setFontSize(8)
+      pdf.setTextColor(55, 65, 81)
+      const nameLine = pdf.splitTextToSize(item.item_name ?? '-', cellW)[0]
+      pdf.text(nameLine, cx + cellW / 2, iy + cellImgH + 12, { align: 'center' })
+
+      colIdx++
+      if (colIdx >= cols3) { colIdx = 0; iy += cellH + gap }
+    })
+  }
 
   return pdf.output('datauristring').split(',')[1]
 }

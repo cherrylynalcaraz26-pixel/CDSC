@@ -357,6 +357,18 @@ export default function QuotationPage() {
     setSaving(false)
   }
 
+  async function fetchImageDataUrl(url: string): Promise<string | undefined> {
+    try {
+      const resp = await fetch(url)
+      const blob = await resp.blob()
+      return await new Promise<string>(resolve => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result as string)
+        reader.readAsDataURL(blob)
+      })
+    } catch { return undefined }
+  }
+
   async function buildQuotePdfData(q: Quotation, items: { item_name: string; quantity: number; unit: string | null; unit_price: number; selling_price: number | null; total_amount: number }[]): Promise<QuotationPdfData> {
     let logoDataUrl: string | undefined
     try {
@@ -369,6 +381,10 @@ export default function QuotationPage() {
         reader.readAsDataURL(blob)
       })
     } catch { /* skip logo */ }
+    const itemsWithImages = await Promise.all(items.map(async i => {
+      const src = i.item_name ? itemImage(i.item_name) : null
+      return { ...i, imageDataUrl: src ? await fetchImageDataUrl(src) : undefined }
+    }))
     return {
       companyName: companyInfo?.company_name ?? 'CDSC INDUSTRIAL SUPPLY',
       companyAddress: companyInfo?.address ?? undefined,
@@ -381,7 +397,7 @@ export default function QuotationPage() {
       validUntil: q.valid_until ?? undefined,
       clientName: q.client_name ?? undefined,
       subject: q.subject ?? undefined,
-      items,
+      items: itemsWithImages,
       subtotal: q.subtotal ?? 0,
       vatAmount: q.vat_amount ?? 0,
       ewtAmount: q.ewt_amount ?? 0,
