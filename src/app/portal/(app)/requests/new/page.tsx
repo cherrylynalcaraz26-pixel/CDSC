@@ -88,13 +88,10 @@ export default function NewRequestPage() {
     })
   }
 
-  function setCustomDescription(i: number, val: string) {
-    const inCatalog = catalog.some(c => c.item_name === val)
-    if (inCatalog) {
-      selectCatalogItem(i, val)
-    } else {
-      updateItem(i, { description: val, unit: items[i].unit, unit_price: '', is_custom: val.trim().length > 0 })
-    }
+  function toggleCustom(i: number) {
+    updateItem(i, items[i].is_custom
+      ? { is_custom: false, description: '', unit: '', unit_price: '' }
+      : { is_custom: true, description: '', unit: '', unit_price: '' })
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -117,6 +114,7 @@ export default function NewRequestPage() {
           client_po_number: subject.trim(),
           remarks: notes.trim() || null,
           status: 'draft',
+          show_in_portal: true,
           total_amount: filledItems.reduce((s, it) => s + (parseFloat(it.unit_price) || 0) * (parseFloat(it.quantity) || 1), 0),
         })
         .select('id')
@@ -281,96 +279,98 @@ export default function NewRequestPage() {
               </button>
             </div>
 
-            <div className="space-y-4">
-              {items.map((item, i) => {
-                const isCatalog = !item.is_custom && !!item.description
-                return (
-                  <div key={i} className={`rounded-xl border p-4 space-y-3 ${item.is_custom ? 'border-amber-300 bg-amber-50/40' : 'border-gray-100 bg-gray-50'}`}>
-                    {item.is_custom && (
-                      <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-700">
-                        <AlertTriangle className="h-3.5 w-3.5" />
-                        Custom item — not found in catalog. Unit and pricing to be confirmed by CDSC.
-                      </div>
-                    )}
-
-                    <div className="space-y-1.5">
+            <div className="space-y-3 overflow-x-auto">
+              {items.map((item, i) => (
+                <div key={i} className={`min-w-[640px] rounded-xl border p-3 ${item.is_custom ? 'border-amber-300 bg-amber-50/40' : 'border-gray-100 bg-gray-50'}`}>
+                  {item.is_custom && (
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 mb-2">
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                      Custom item — not in our catalog. Pricing to be confirmed by CDSC.
+                    </div>
+                  )}
+                  <div className="flex gap-2 items-end">
+                    <div className="flex-1 min-w-[200px] space-y-1">
                       <label className="text-xs font-medium text-gray-500">Item Description</label>
-                      <select
-                        value={isCatalog ? item.description : ''}
-                        onChange={e => selectCatalogItem(i, e.target.value)}
-                        className="w-full h-9 px-2.5 rounded-md border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-red-500">
-                        <option value="">— Select from catalog —</option>
-                        {catalog.map(c => (
-                          <option key={c.item_name} value={c.item_name}>{c.item_name}</option>
-                        ))}
-                      </select>
+                      <div className="flex gap-1.5">
+                        {item.is_custom ? (
+                          <input
+                            autoFocus
+                            value={item.description}
+                            onChange={e => updateItem(i, { description: e.target.value })}
+                            placeholder="Type a custom item name…"
+                            className="flex-1 min-w-0 h-9 px-2.5 rounded-md border border-amber-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                          />
+                        ) : (
+                          <select
+                            value={item.description}
+                            onChange={e => selectCatalogItem(i, e.target.value)}
+                            className="flex-1 min-w-0 h-9 px-2.5 rounded-md border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-red-500">
+                            <option value="">— Select from catalog —</option>
+                            {catalog.map(c => (
+                              <option key={c.item_name} value={c.item_name}>{c.item_name}</option>
+                            ))}
+                          </select>
+                        )}
+                        <button type="button"
+                          onClick={() => toggleCustom(i)}
+                          className={`h-9 px-3 rounded-md border text-xs font-medium shrink-0 transition-colors ${item.is_custom ? 'border-amber-400 bg-amber-100 text-amber-800 hover:bg-amber-200' : 'border-gray-300 text-gray-600 hover:bg-gray-100'}`}>
+                          {item.is_custom ? 'Cancel' : 'Custom'}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="w-20 shrink-0 space-y-1">
+                      <label className="text-xs font-medium text-gray-500">Qty</label>
                       <input
-                        value={item.description}
-                        onChange={e => setCustomDescription(i, e.target.value)}
-                        placeholder="Or type a custom item name…"
-                        className={`w-full h-8 px-2.5 rounded-md border text-xs focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-transparent ${item.is_custom ? 'border-amber-300 bg-white text-amber-900' : 'border-gray-200 text-gray-600 bg-white'}`}
+                        type="number"
+                        min="1"
+                        value={item.quantity}
+                        onChange={e => updateItem(i, { quantity: e.target.value })}
+                        className="w-full h-9 px-2.5 rounded-md border border-gray-300 text-sm text-center focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
                       />
                     </div>
 
-                    <div className="grid grid-cols-[80px_1fr_1fr_36px] gap-2 items-end">
-                      <div className="space-y-1">
-                        <label className="text-xs font-medium text-gray-500">Qty</label>
+                    <div className="w-24 shrink-0 space-y-1">
+                      <label className="text-xs font-medium text-gray-500">Unit</label>
+                      {item.is_custom ? (
                         <input
-                          type="number"
-                          min="1"
-                          value={item.quantity}
-                          onChange={e => updateItem(i, { quantity: e.target.value })}
-                          className="w-full h-9 px-2.5 rounded-md border border-gray-300 text-sm text-center focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                          value={item.unit}
+                          onChange={e => updateItem(i, { unit: e.target.value })}
+                          placeholder="e.g. pcs"
+                          className="w-full h-9 px-2.5 rounded-md border border-amber-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
                         />
-                      </div>
+                      ) : (
+                        <div className={`h-9 flex items-center px-2.5 rounded-md border text-sm ${item.unit ? 'border-gray-200 bg-gray-100 text-gray-700' : 'border-dashed border-gray-200 text-gray-400 bg-white'}`}>
+                          {item.unit || '—'}
+                        </div>
+                      )}
+                    </div>
 
-                      <div className="space-y-1">
-                        <label className="text-xs font-medium text-gray-500">
-                          Unit {isCatalog && <span className="text-gray-400 font-normal">(auto)</span>}
-                        </label>
-                        {item.is_custom ? (
-                          <input
-                            value={item.unit}
-                            onChange={e => updateItem(i, { unit: e.target.value })}
-                            placeholder="e.g. pcs"
-                            className="w-full h-9 px-2.5 rounded-md border border-amber-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
-                          />
-                        ) : (
-                          <div className={`h-9 flex items-center px-2.5 rounded-md border text-sm ${item.unit ? 'border-gray-200 bg-gray-100 text-gray-700' : 'border-dashed border-gray-200 text-gray-400 bg-white'}`}>
-                            {item.unit || '—'}
-                          </div>
-                        )}
-                      </div>
+                    <div className="w-32 shrink-0 space-y-1">
+                      <label className="text-xs font-medium text-gray-500">Selling Price</label>
+                      {item.is_custom ? (
+                        <div className="h-9 flex items-center px-2.5 rounded-md border border-dashed border-amber-200 text-xs text-amber-600 bg-amber-50">
+                          To be confirmed
+                        </div>
+                      ) : (
+                        <div className={`h-9 flex items-center px-2.5 rounded-md border text-sm font-medium ${item.unit_price ? 'border-gray-200 bg-gray-100 text-gray-800' : 'border-dashed border-gray-200 text-gray-400 bg-white'}`}>
+                          {item.unit_price ? `₱${parseFloat(item.unit_price).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}
+                        </div>
+                      )}
+                    </div>
 
-                      <div className="space-y-1">
-                        <label className="text-xs font-medium text-gray-500">
-                          Unit Price {isCatalog && <span className="text-gray-400 font-normal">(selling price)</span>}
-                          {item.is_custom && <span className="text-amber-600 font-normal"> (TBD)</span>}
-                        </label>
-                        {item.is_custom ? (
-                          <div className="h-9 flex items-center px-2.5 rounded-md border border-dashed border-amber-200 text-sm text-amber-600 bg-amber-50">
-                            To be confirmed
-                          </div>
-                        ) : (
-                          <div className={`h-9 flex items-center px-2.5 rounded-md border text-sm font-medium ${item.unit_price ? 'border-gray-200 bg-gray-100 text-gray-800' : 'border-dashed border-gray-200 text-gray-400 bg-white'}`}>
-                            {item.unit_price ? `₱${parseFloat(item.unit_price).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}
-                          </div>
-                        )}
-                      </div>
-
-                      <div>
-                        {items.length > 1 ? (
-                          <button type="button"
-                            onClick={() => setItems(p => p.filter((_, idx) => idx !== i))}
-                            className="h-9 w-9 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors">
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        ) : <div className="h-9 w-9" />}
-                      </div>
+                    <div className="shrink-0">
+                      {items.length > 1 ? (
+                        <button type="button"
+                          onClick={() => setItems(p => p.filter((_, idx) => idx !== i))}
+                          className="h-9 w-9 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      ) : <div className="h-9 w-9" />}
                     </div>
                   </div>
-                )
-              })}
+                </div>
+              ))}
             </div>
 
             {orderTotal > 0 && (

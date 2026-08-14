@@ -991,7 +991,7 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
 
 /* ─── Item List Tab ───────────────────────────────────── */
 interface ItemRow {
-  id: string; item_code: string; item_name: string
+  id: string; item_code: string; item_name: string; description: string | null
   brand: string | null; unit_of_measure: string; cost: number
   selling_price: number | null; attribute: string | null; status: string
   image_url: string | null
@@ -1033,7 +1033,7 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
   const [page, setPage] = useState(1)
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<ItemRow | null>(null)
-  const [form, setForm] = useState({ item_code: '', item_name: '', brand: '', unit_of_measure: '', cost: '', selling_price: '', attribute: '' })
+  const [form, setForm] = useState({ item_code: '', item_name: '', description: '', brand: '', unit_of_measure: '', cost: '', selling_price: '', attribute: '' })
   const [saving, setSaving] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<'list' | 'box'>('list')
@@ -1043,7 +1043,7 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
   async function load() {
     setLoading(true)
     const [{ data: itemData }, { data: uomData }, { data: brandData }, { data: attrData }] = await Promise.all([
-      supabase.from('items').select('id, item_code, item_name, brand, unit_of_measure, cost, selling_price, attribute, status, image_url, image_urls').order('item_name'),
+      supabase.from('items').select('id, item_code, item_name, description, brand, unit_of_measure, cost, selling_price, attribute, status, image_url, image_urls').order('item_name'),
       supabase.from('uom_list').select('id, code, name').eq('is_active', true).order('code'),
       supabase.from('brands').select('id, name').eq('is_active', true).order('name'),
       supabase.from('attributes').select('id, name').eq('is_active', true).order('name'),
@@ -1080,13 +1080,13 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
       const num = parseInt(last.item_code.replace('ITM-', ''), 10)
       if (!isNaN(num)) nextCode = 'ITM-' + String(num + 1).padStart(3, '0')
     }
-    setForm({ item_code: nextCode, item_name: '', brand: '', unit_of_measure: '', cost: '', selling_price: '', attribute: '' })
+    setForm({ item_code: nextCode, item_name: '', description: '', brand: '', unit_of_measure: '', cost: '', selling_price: '', attribute: '' })
     setImages([])
     setOpen(true)
   }
   function openEdit(r: ItemRow) {
     setEditing(r)
-    setForm({ item_code: r.item_code, item_name: r.item_name, brand: r.brand ?? '', unit_of_measure: r.unit_of_measure, cost: String(r.cost), selling_price: r.selling_price !== null ? String(r.selling_price) : '', attribute: r.attribute ?? '' })
+    setForm({ item_code: r.item_code, item_name: r.item_name, description: r.description ?? '', brand: r.brand ?? '', unit_of_measure: r.unit_of_measure, cost: String(r.cost), selling_price: r.selling_price !== null ? String(r.selling_price) : '', attribute: r.attribute ?? '' })
     setImages(itemImageUrls(r).map(url => ({ url, preview: url })))
     setOpen(true)
   }
@@ -1123,6 +1123,7 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
     const payload = {
       item_code: form.item_code.trim() || undefined,
       item_name: form.item_name.trim(),
+      description: form.description.trim() || null,
       brand: form.brand.trim() || null,
       unit_of_measure: form.unit_of_measure.trim(),
       cost: parseFloat(form.cost) || 0,
@@ -1196,6 +1197,7 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
               <div className="p-3 flex-1 flex flex-col gap-1">
                 <div className="font-mono text-xs text-muted-foreground">{r.item_code}</div>
                 <div className="font-medium text-sm leading-tight line-clamp-2">{r.item_name}</div>
+                {r.description && <div className="text-xs text-muted-foreground line-clamp-2">{r.description}</div>}
                 <div className="text-xs text-muted-foreground">{r.brand ?? '—'}</div>
                 <div className="mt-auto flex items-center justify-between pt-2">
                   <span className="font-semibold text-sm">₱{r.cost.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
@@ -1228,6 +1230,7 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
               <TableHead className="w-14">Image</TableHead>
               <TableHead>Code</TableHead>
               <TableHead>Name</TableHead>
+              <TableHead>Description</TableHead>
               <TableHead>Brand</TableHead>
               <TableHead>Attribute</TableHead>
               <TableHead>Unit</TableHead>
@@ -1239,9 +1242,9 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={10} className="text-center py-6 text-muted-foreground">Loading…</TableCell></TableRow>
+              <TableRow><TableCell colSpan={11} className="text-center py-6 text-muted-foreground">Loading…</TableCell></TableRow>
             ) : filtered.length === 0 ? (
-              <TableRow><TableCell colSpan={10} className="text-center py-6 text-muted-foreground">No items found</TableCell></TableRow>
+              <TableRow><TableCell colSpan={11} className="text-center py-6 text-muted-foreground">No items found</TableCell></TableRow>
             ) : paged.map(r => {
               const imgs = itemImageUrls(r)
               return (
@@ -1261,6 +1264,7 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
                 </TableCell>
                 <TableCell className="font-mono text-sm">{r.item_code}</TableCell>
                 <TableCell className="font-medium text-sm">{r.item_name}</TableCell>
+                <TableCell className="text-sm text-muted-foreground max-w-[220px] truncate" title={r.description ?? undefined}>{r.description ?? '—'}</TableCell>
                 <TableCell className="text-sm text-muted-foreground">{r.brand ?? '—'}</TableCell>
                 <TableCell className="text-sm text-muted-foreground">{r.attribute ?? '—'}</TableCell>
                 <TableCell className="text-sm">{r.unit_of_measure}</TableCell>
@@ -1388,6 +1392,10 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
             <div className="space-y-1.5">
               <Label>Item Name <span className="text-destructive">*</span></Label>
               <Input placeholder="Item name" value={form.item_name} onChange={e => setForm(p => ({ ...p, item_name: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Description</Label>
+              <Textarea rows={2} placeholder="Additional details about this item…" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">

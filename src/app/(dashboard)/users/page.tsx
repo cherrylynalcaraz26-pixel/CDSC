@@ -117,7 +117,19 @@ export default function UsersPage() {
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Failed to invite user')
-      toast.success(`User account created for ${inviteForm.email}`)
+      if (json.emailSent) {
+        toast.success(`Invite email sent to ${inviteForm.email}`)
+      } else if (json.actionLink) {
+        toast.warning('Invite email could not be sent — copy this link and send it manually.', {
+          action: {
+            label: 'Copy Link',
+            onClick: () => { navigator.clipboard.writeText(json.actionLink) },
+          },
+          duration: 15000,
+        })
+      } else {
+        toast.success(`User account created for ${inviteForm.email}`)
+      }
       setInviteOpen(false)
       setInviteForm({ email: '', full_name: '', role: 'employee', department: '', company: '', employee_id: '' })
       load()
