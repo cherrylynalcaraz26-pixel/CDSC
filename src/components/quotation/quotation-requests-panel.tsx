@@ -260,7 +260,6 @@ export default function QuotationRequestsPanel({ onQuotationCreated }: { onQuota
     if (validLines.length === 0) { toast.error('Add at least one item'); return }
     setSaving(true)
     const prevItems = reviewing.quotation_request_items
-    const prevStatus = reviewing.status
     try {
       await supabase.from('quotation_request_items').delete().eq('request_id', reviewing.id)
       await supabase.from('quotation_request_items').insert(validLines.map(l => ({
@@ -309,8 +308,10 @@ export default function QuotationRequestsPanel({ onQuotationCreated }: { onQuota
         total_amount: (parseFloat(l.unit_price) || 0) * (parseFloat(l.quantity) || 1),
       })))
 
+      // Status stays "processing" — the RFQ only advances to "quoted" (Sending
+      // Quotation) once this draft is actually sent, via the DB trigger on
+      // quotations.status changing to 'sent'.
       const { error: updErr } = await supabase.from('quotation_requests').update({
-        status: 'quoted',
         quotation_id: quoData.id,
         quote_number: quoteNumber,
         reviewed_by: staffName || null,
@@ -322,7 +323,7 @@ export default function QuotationRequestsPanel({ onQuotationCreated }: { onQuota
         await supabase.from('quotation_items').delete().eq('quotation_id', quoData.id)
         await supabase.from('quotations').delete().eq('id', quoData.id)
         await supabase.from('quotation_requests').update({
-          status: prevStatus, quotation_id: null, quote_number: null,
+          quotation_id: null, quote_number: null,
         }).eq('id', reviewing.id)
         await supabase.from('quotation_request_items').delete().eq('request_id', reviewing.id)
         if (prevItems.length > 0) {
@@ -363,7 +364,8 @@ export default function QuotationRequestsPanel({ onQuotationCreated }: { onQuota
   const fmt = (n: number) => `₱${n.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
 
   if (reviewing) {
-    const isOpenForEditing = reviewing.status === 'pending' || reviewing.status === 'processing'
+    const hasQuotation = !!reviewing.quotation_id
+    const isOpenForEditing = (reviewing.status === 'pending' || reviewing.status === 'processing') && !hasQuotation
     return (
       <div className="space-y-4">
         <Button variant="outline" size="sm" onClick={() => setReviewingId(null)}>
@@ -592,10 +594,16 @@ export default function QuotationRequestsPanel({ onQuotationCreated }: { onQuota
               <span>Total (VAT-exclusive subtotal)</span><span className="text-red-600">{fmt(total)}</span>
             </div>
 
+            {hasQuotation && reviewing.status === 'processing' && (
+              <div className="flex items-center gap-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+                <ShoppingCart className="h-4 w-4" />
+                Draft Quotation <span className="font-mono font-semibold">{reviewing.quote_number}</span> created — not yet sent. Finish and send it from the Quotations tab.
+              </div>
+            )}
             {reviewing.status === 'quoted' && (
               <div className="flex items-center gap-2 text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
                 <ShoppingCart className="h-4 w-4" />
-                Sent as Quotation <span className="font-mono font-semibold">{reviewing.quote_number}</span> — finish and send it from the Quotations tab. Awaiting client response.
+                Quotation <span className="font-mono font-semibold">{reviewing.quote_number}</span> sent — awaiting client response.
               </div>
             )}
             {reviewing.status === 'done' && (

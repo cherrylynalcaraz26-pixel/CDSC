@@ -160,17 +160,16 @@ export default function PortalInventoryPage() {
     setSubmitting(true)
     try {
       const today = new Date().toISOString().split('T')[0]
-      const soNumber = `SO-P-${Date.now().toString().slice(-8)}`
       const { data: soData, error: soErr } = await supabase
         .from('sales_orders')
         .insert({
-          so_number: soNumber,
           so_date: today,
           client_id: clientId,
           client_name: clientName,
           client_po_number: poRef.trim(),
           remarks: notes.trim() || null,
           status: 'draft',
+          show_in_portal: true,
           total_amount: cartTotal,
         })
         .select('id')

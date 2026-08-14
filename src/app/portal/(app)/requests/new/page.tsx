@@ -200,11 +200,9 @@ export default function NewRequestPage() {
     setSubmitting(true)
     try {
       const today = new Date().toISOString().split('T')[0]
-      const soNumber = `SO-P-${Date.now().toString().slice(-8)}`
       const { data: soData, error: soErr } = await supabase
         .from('sales_orders')
         .insert({
-          so_number: soNumber,
           so_date: today,
           client_id: clientId,
           client_name: clientName,

@@ -448,7 +448,7 @@ export default function PortalQuotations() {
                             <span className="text-xs text-gray-400">
                               Submitted {format(new Date(r.created_at), 'MMM d, yyyy')}
                             </span>
-                            {r.quote_number && (
+                            {r.quote_number && r.status !== 'pending' && r.status !== 'processing' && (
                               <span className="text-xs font-semibold text-indigo-700">
                                 Quotation {r.quote_number} sent — see it in the Quotations tab
                               </span>
