@@ -21,7 +21,7 @@ import Image from 'next/image'
 import QuotationRequestsPanel from '@/components/quotation/quotation-requests-panel'
 
 interface Client { id: string; company_name: string; email: string | null }
-interface ItemOption { item_name: string; unit_of_measure: string; cost: number | null; selling_price: number | null }
+interface ItemOption { item_name: string; unit_of_measure: string; cost: number | null; selling_price: number | null; image_url: string | null; image_urls: string[] | null }
 interface SystemSettings {
   company_name: string
   address: string
@@ -135,6 +135,10 @@ export default function QuotationPage() {
   const totalAmount = (vatType === 'inclusive' ? subtotal : subtotal + vatAmount) - ewtAmount
 
   const fmt = (n: number) => `₱${n.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
+  const itemImage = (name: string) => {
+    const found = items.find(i => i.item_name === name)
+    return found?.image_urls?.[0] || found?.image_url || null
+  }
 
   function handlePrint() {
     const el = printRef.current
@@ -157,7 +161,7 @@ export default function QuotationPage() {
     const [{ data: quoData }, { data: clientData }, { data: itemData }, { data: sysData }, { count: rfqCount }] = await Promise.all([
       supabase.from('quotations').select('*').order('created_at', { ascending: false }),
       supabase.from('clients').select('id, company_name, email').eq('status', 'active').order('company_name'),
-      supabase.from('items').select('item_name, unit_of_measure, cost, selling_price').eq('status', 'active').order('item_name'),
+      supabase.from('items').select('item_name, unit_of_measure, cost, selling_price, image_url, image_urls').eq('status', 'active').order('item_name'),
       supabase.from('system_settings').select('company_name, address, phone, email, tin, logo_url').single(),
       supabase.from('quotation_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
     ])
@@ -501,8 +505,11 @@ export default function QuotationPage() {
     accepted: quotations.filter(q => q.status === 'accepted').length,
   }
 
-  const PreviewDoc = () => (
-    <div ref={printRef} className="border rounded-lg bg-white text-[11px] p-5 shadow-sm space-y-3 font-sans">
+  const PreviewDoc = () => {
+    const imageLines = lines.filter(l => l.item_name.trim() && itemImage(l.item_name))
+    return (
+    <div ref={printRef} className="space-y-4">
+    <div className="border rounded-lg bg-white text-[11px] p-5 shadow-sm space-y-3 font-sans">
       {/* Header: Logo (left) | Company Name + Address (right) */}
       <div className="flex justify-between items-start border-b pb-3">
         <div>
@@ -574,7 +581,15 @@ export default function QuotationPage() {
             return (
               <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                 <td className="px-1.5 py-1 text-gray-400">{i + 1}</td>
-                <td className="px-1.5 py-1">{line.item_name || <span className="text-gray-300 italic">—</span>}</td>
+                <td className="px-1.5 py-1">
+                  <div className="flex items-center gap-1.5">
+                    {line.item_name && itemImage(line.item_name) && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={itemImage(line.item_name)!} alt="" className="h-6 w-6 rounded object-cover shrink-0" />
+                    )}
+                    {line.item_name || <span className="text-gray-300 italic">—</span>}
+                  </div>
+                </td>
                 <td className="px-1.5 py-1 text-right font-bold text-gray-800">{line.quantity || '—'}</td>
                 <td className="px-1.5 py-1 text-gray-500">{line.unit || '—'}</td>
                 <td className="px-1.5 py-1 text-right font-medium">₱{effectivePrice.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</td>
@@ -619,7 +634,27 @@ export default function QuotationPage() {
         </div>
       </div>
     </div>
-  )
+
+    {imageLines.length > 0 && (
+      <div className="border rounded-lg bg-white text-[11px] p-5 shadow-sm space-y-3 font-sans" style={{ pageBreakBefore: 'always' }}>
+        <div className="flex justify-between items-center border-b pb-2">
+          <div className="text-[13px] font-bold text-red-700">Item Images</div>
+          <div className="text-[9px] text-gray-400">Page 2</div>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          {imageLines.map((line, i) => (
+            <div key={i} className="border rounded p-2 text-center space-y-1.5">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={itemImage(line.item_name)!} alt={line.item_name} className="w-full h-28 object-cover rounded" />
+              <div className="text-[9px] text-gray-700 truncate">{line.item_name}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+    </div>
+    )
+  }
 
   return (
     <div className="space-y-6">

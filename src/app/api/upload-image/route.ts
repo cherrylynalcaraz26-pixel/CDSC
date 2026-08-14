@@ -40,7 +40,7 @@ async function findOrCreateSubfolder(drive: ReturnType<typeof google.drive>, par
 }
 
 // Every image in the app (item pictures, client logos) is uploaded here and stored in a
-// shared Google Drive folder via a service account, rather than Supabase storage.
+// shared Google Drive folder via the OAuth2 client above, rather than Supabase storage.
 export async function POST(req: NextRequest) {
   try {
     const { fileBase64, fileName, mimeType, folder } = await req.json()
@@ -86,6 +86,9 @@ export async function POST(req: NextRequest) {
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Failed to upload image'
     console.error('[upload-image]', message)
-    return NextResponse.json({ error: message }, { status: 500 })
+    const friendly = /invalid_grant/i.test(message)
+      ? 'Google Drive connection has expired or was revoked. An admin needs to generate a new Google Drive refresh token (GOOGLE_DRIVE_OAUTH_REFRESH_TOKEN) to re-enable image uploads.'
+      : message
+    return NextResponse.json({ error: friendly }, { status: 500 })
   }
 }
