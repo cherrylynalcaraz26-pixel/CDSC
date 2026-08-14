@@ -3,9 +3,11 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import { Plus, Trash2, Loader2, ChevronLeft, Send, AlertTriangle, X } from 'lucide-react'
+import { Trash2, Loader2, ChevronLeft, Send, AlertTriangle, X, Search, Package } from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
+
+const MAX_LINE_ITEMS = 50
 
 interface Item {
   description: string
@@ -20,6 +22,7 @@ interface CatalogItem {
   item_code: string | null
   unit_of_measure: string | null
   selling_price: number | null
+  image_url: string | null
 }
 
 interface SysInfo {
@@ -53,6 +56,8 @@ export default function NewRequestPage() {
   const [showCancelConfirm, setShowCancelConfirm] = useState(false)
   const [catalog, setCatalog] = useState<CatalogItem[]>([])
   const [sysInfo, setSysInfo] = useState<SysInfo | null>(null)
+  const [itemSearchIdx, setItemSearchIdx] = useState<number | null>(null)
+  const [itemQuery, setItemQuery] = useState('')
 
   useEffect(() => {
     async function init() {
@@ -61,7 +66,7 @@ export default function NewRequestPage() {
       const [{ data: clientRow }, { data: sys }, { data: itemData }] = await Promise.all([
         supabase.from('clients').select('id, company_name').eq('auth_user_id', session.user.id).single(),
         supabase.from('system_settings').select('company_name, address, phone, email, logo_url, tin').single(),
-        supabase.from('items').select('item_name, item_code, unit_of_measure, selling_price').eq('status', 'active').order('item_name'),
+        supabase.from('items').select('item_name, item_code, unit_of_measure, selling_price, image_url').eq('status', 'active').order('item_name'),
       ])
       if (clientRow) { setClientId(clientRow.id); setClientName(clientRow.company_name) }
       if (sys) setSysInfo(sys as SysInfo)
@@ -92,6 +97,15 @@ export default function NewRequestPage() {
     updateItem(i, items[i].is_custom
       ? { is_custom: false, description: '', unit: '', unit_price: '' }
       : { is_custom: true, description: '', unit: '', unit_price: '' })
+  }
+
+  function handleLineCountChange(value: string) {
+    const n = parseInt(value, 10)
+    if (!n || n < 1) return
+    const capped = Math.min(n, MAX_LINE_ITEMS)
+    setItems(prev => capped > prev.length
+      ? [...prev, ...Array.from({ length: capped - prev.length }, blankItem)]
+      : prev.slice(0, capped))
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -145,6 +159,9 @@ export default function NewRequestPage() {
   const fmt = (n: number) => `₱${n.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
   const orderTotal = items.reduce((s, it) => s + (parseFloat(it.unit_price) || 0) * (parseFloat(it.quantity) || 0), 0)
   const customCount = items.filter(it => it.is_custom && it.description.trim()).length
+  const filteredCatalog = itemQuery.trim()
+    ? catalog.filter(c => c.item_name.toLowerCase().includes(itemQuery.toLowerCase()))
+    : catalog
 
   function buildPreviewHtml(): string {
     const fmtN = (n: number) => n.toLocaleString('en-PH', { minimumFractionDigits: 2 })
@@ -266,41 +283,54 @@ export default function NewRequestPage() {
 
           {/* Items */}
           <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
               <div>
                 <h2 className="text-sm font-semibold text-gray-700">Items Requested</h2>
-                <p className="text-xs text-gray-400 mt-0.5">Select from catalog — or type a custom item name below the dropdown</p>
+                <p className="text-xs text-gray-400 mt-0.5">Select from catalog, search inventory, or mark as custom</p>
                 <p className="text-xs text-amber-600 mt-0.5">Selling prices shown are indicative and may change upon order confirmation.</p>
               </div>
-              <button type="button"
-                onClick={() => setItems(p => [...p, blankItem()])}
-                className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-600 border border-gray-300 hover:bg-gray-50 px-3 py-1.5 rounded-lg transition-colors">
-                <Plus className="h-3.5 w-3.5" /> Add Item
-              </button>
+              <div className="flex items-center gap-2">
+                <label className="text-xs font-medium text-gray-600 whitespace-nowrap">No. of Line Items</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={MAX_LINE_ITEMS}
+                  value={items.length}
+                  onChange={e => handleLineCountChange(e.target.value)}
+                  className="w-16 h-8 px-2 rounded-md border border-gray-300 text-sm text-center focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                />
+              </div>
             </div>
 
-            <div className="space-y-3 overflow-x-auto">
+            <div className="space-y-3">
               {items.map((item, i) => (
-                <div key={i} className={`min-w-[640px] rounded-xl border p-3 ${item.is_custom ? 'border-amber-300 bg-amber-50/40' : 'border-gray-100 bg-gray-50'}`}>
+                <div key={i} className={`rounded-xl border p-3 ${item.is_custom ? 'border-amber-300 bg-amber-50/40' : 'border-gray-100 bg-gray-50'}`}>
                   {item.is_custom && (
                     <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 mb-2">
                       <AlertTriangle className="h-3.5 w-3.5" />
                       Custom item — not in our catalog. Pricing to be confirmed by CDSC.
                     </div>
                   )}
-                  <div className="flex gap-2 items-end">
-                    <div className="flex-1 min-w-[200px] space-y-1">
-                      <label className="text-xs font-medium text-gray-500">Item Description</label>
-                      <div className="flex gap-1.5">
-                        {item.is_custom ? (
-                          <input
-                            autoFocus
-                            value={item.description}
-                            onChange={e => updateItem(i, { description: e.target.value })}
-                            placeholder="Type a custom item name…"
-                            className="flex-1 min-w-0 h-9 px-2.5 rounded-md border border-amber-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
-                          />
-                        ) : (
+                  <div className="flex flex-wrap gap-2 items-end">
+                    <div className="flex-1 min-w-[160px] space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <label className="text-xs font-medium text-gray-500">Item Description</label>
+                        <button type="button"
+                          onClick={() => toggleCustom(i)}
+                          className={`text-[11px] font-medium px-2 py-0.5 rounded-md border shrink-0 transition-colors ${item.is_custom ? 'border-amber-400 bg-amber-100 text-amber-800 hover:bg-amber-200' : 'border-gray-300 text-gray-600 hover:bg-gray-100'}`}>
+                          {item.is_custom ? 'Cancel' : 'Custom'}
+                        </button>
+                      </div>
+                      {item.is_custom ? (
+                        <input
+                          autoFocus
+                          value={item.description}
+                          onChange={e => updateItem(i, { description: e.target.value })}
+                          placeholder="Type a custom item name…"
+                          className="w-full h-9 px-2.5 rounded-md border border-amber-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                        />
+                      ) : (
+                        <div className="flex gap-1.5">
                           <select
                             value={item.description}
                             onChange={e => selectCatalogItem(i, e.target.value)}
@@ -310,16 +340,17 @@ export default function NewRequestPage() {
                               <option key={c.item_name} value={c.item_name}>{c.item_name}</option>
                             ))}
                           </select>
-                        )}
-                        <button type="button"
-                          onClick={() => toggleCustom(i)}
-                          className={`h-9 px-3 rounded-md border text-xs font-medium shrink-0 transition-colors ${item.is_custom ? 'border-amber-400 bg-amber-100 text-amber-800 hover:bg-amber-200' : 'border-gray-300 text-gray-600 hover:bg-gray-100'}`}>
-                          {item.is_custom ? 'Cancel' : 'Custom'}
-                        </button>
-                      </div>
+                          <button type="button"
+                            onClick={() => { setItemSearchIdx(i); setItemQuery('') }}
+                            title="Search inventory"
+                            className="h-9 w-9 shrink-0 flex items-center justify-center rounded-md border border-gray-300 text-gray-500 hover:bg-gray-100 transition-colors">
+                            <Search className="h-4 w-4" />
+                          </button>
+                        </div>
+                      )}
                     </div>
 
-                    <div className="w-20 shrink-0 space-y-1">
+                    <div className="w-16 shrink-0 space-y-1">
                       <label className="text-xs font-medium text-gray-500">Qty</label>
                       <input
                         type="number"
@@ -330,7 +361,7 @@ export default function NewRequestPage() {
                       />
                     </div>
 
-                    <div className="w-24 shrink-0 space-y-1">
+                    <div className="w-20 shrink-0 space-y-1">
                       <label className="text-xs font-medium text-gray-500">Unit</label>
                       {item.is_custom ? (
                         <input
@@ -346,7 +377,7 @@ export default function NewRequestPage() {
                       )}
                     </div>
 
-                    <div className="w-32 shrink-0 space-y-1">
+                    <div className="w-28 shrink-0 space-y-1">
                       <label className="text-xs font-medium text-gray-500">Selling Price</label>
                       {item.is_custom ? (
                         <div className="h-9 flex items-center px-2.5 rounded-md border border-dashed border-amber-200 text-xs text-amber-600 bg-amber-50">
@@ -439,6 +470,59 @@ export default function NewRequestPage() {
                 className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors">
                 Discard
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Item search modal */}
+      {itemSearchIdx !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={e => { if (e.target === e.currentTarget) setItemSearchIdx(null) }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col" style={{ maxHeight: '80vh' }}>
+            <div className="flex items-center justify-between px-5 py-4 border-b shrink-0">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                <Package className="h-4 w-4 text-red-600" /> Choose an Item
+              </h3>
+              <button onClick={() => setItemSearchIdx(null)} className="text-gray-400 hover:text-gray-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="px-5 py-3 border-b shrink-0">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                  autoFocus
+                  value={itemQuery}
+                  onChange={e => setItemQuery(e.target.value)}
+                  placeholder="Search items…"
+                  className="w-full h-10 pl-9 pr-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto divide-y">
+              {filteredCatalog.length === 0 ? (
+                <div className="py-10 text-center text-sm text-gray-400">No items found</div>
+              ) : filteredCatalog.map(c => (
+                <button key={c.item_name} type="button"
+                  onClick={() => { selectCatalogItem(itemSearchIdx, c.item_name); setItemSearchIdx(null) }}
+                  className="w-full flex items-center gap-3 px-5 py-3 hover:bg-gray-50 text-left transition-colors">
+                  <div className="h-10 w-10 rounded-lg border bg-gray-50 flex items-center justify-center overflow-hidden shrink-0">
+                    {c.image_url ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={c.image_url} alt={c.item_name} className="h-full w-full object-contain p-1" />
+                    ) : (
+                      <Package className="h-4 w-4 text-gray-300" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-gray-900 truncate">{c.item_name}</div>
+                    <div className="text-xs text-gray-400">{c.unit_of_measure || '—'}</div>
+                  </div>
+                  <div className="text-sm font-semibold text-red-600 shrink-0">
+                    {c.selling_price != null ? fmt(c.selling_price) : '—'}
+                  </div>
+                </button>
+              ))}
             </div>
           </div>
         </div>
