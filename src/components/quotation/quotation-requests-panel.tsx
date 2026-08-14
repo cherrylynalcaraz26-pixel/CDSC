@@ -418,7 +418,11 @@ export default function QuotationRequestsPanel({ onQuotationCreated }: { onQuota
                     <div key={idx} className={`rounded-lg border p-3 space-y-2 ${col.is_selected ? 'border-green-400 bg-green-50/50' : 'border-input'}`}>
                       <div className="flex items-center gap-1.5">
                         <Select value={col.supplier_id ?? ''} onValueChange={v => updateSupplierCol(idx, { supplier_id: v || null })}>
-                          <SelectTrigger className="h-8 text-xs flex-1"><SelectValue placeholder="Select supplier…" /></SelectTrigger>
+                          <SelectTrigger className="h-8 text-xs flex-1">
+                            {col.supplier_id
+                              ? <span className="truncate">{suppliers.find(s => s.id === col.supplier_id)?.company_name}</span>
+                              : <span className="text-muted-foreground">Select supplier…</span>}
+                          </SelectTrigger>
                           <SelectContent>
                             {suppliers.map(s => (
                               <SelectItem key={s.id} value={s.id}>{s.company_name}</SelectItem>
@@ -448,7 +452,11 @@ export default function QuotationRequestsPanel({ onQuotationCreated }: { onQuota
                       <div className="space-y-1">
                         <Label className="text-[10px] text-muted-foreground uppercase flex items-center gap-1"><Globe2 className="h-3 w-3" />Local / Overseas</Label>
                         <Select value={col.origin || undefined} onValueChange={v => updateSupplierCol(idx, { origin: (v as SupplierColumn['origin']) ?? '' })}>
-                          <SelectTrigger className="h-8 text-xs w-full"><SelectValue placeholder="Select…" /></SelectTrigger>
+                          <SelectTrigger className="h-8 text-xs w-full">
+                            {col.origin
+                              ? <span>{col.origin === 'local' ? 'Local' : 'Overseas'}</span>
+                              : <span className="text-muted-foreground">Select…</span>}
+                          </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="local">Local</SelectItem>
                             <SelectItem value="overseas">Overseas</SelectItem>
@@ -458,7 +466,11 @@ export default function QuotationRequestsPanel({ onQuotationCreated }: { onQuota
                       <div className="space-y-1">
                         <Label className="text-[10px] text-muted-foreground uppercase">Response Speed</Label>
                         <Select value={col.response_speed || undefined} onValueChange={v => updateSupplierCol(idx, { response_speed: (v as SupplierColumn['response_speed']) ?? '' })}>
-                          <SelectTrigger className="h-8 text-xs w-full"><SelectValue placeholder="Select…" /></SelectTrigger>
+                          <SelectTrigger className="h-8 text-xs w-full">
+                            {col.response_speed
+                              ? <span className="capitalize">{col.response_speed}</span>
+                              : <span className="text-muted-foreground">Select…</span>}
+                          </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="fast">Fast</SelectItem>
                             <SelectItem value="average">Average</SelectItem>

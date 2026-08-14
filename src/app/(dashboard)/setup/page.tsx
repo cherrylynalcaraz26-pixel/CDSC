@@ -1055,13 +1055,60 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
   const [suggestions, setSuggestions] = useState<ItemSuggestion[]>([])
   const [pendingSuggestionId, setPendingSuggestionId] = useState<string | null>(null)
   const [suggestionsOpen, setSuggestionsOpen] = useState(true)
+  const [addingBrand, setAddingBrand] = useState(false)
+  const [newBrandName, setNewBrandName] = useState('')
+  const [addingAttribute, setAddingAttribute] = useState(false)
+  const [newAttributeName, setNewAttributeName] = useState('')
+  const [addingAttrValue, setAddingAttrValue] = useState(false)
+  const [newAttrValue, setNewAttrValue] = useState('')
 
   const selectedAttrType = attributeList.find(a => a.id === attributeTypeId) ?? null
-  const attrHasOptions = selectedAttrType?.data_type === 'select' && (selectedAttrType.options?.length ?? 0) > 0
+  const attrIsSelectType = selectedAttrType?.data_type === 'select'
 
   function handleAttributeTypeChange(id: string) {
     setAttributeTypeId(id)
     setForm(p => ({ ...p, attribute: '' }))
+  }
+
+  // Quick-add so common lookups can be created without leaving the Add Item dialog.
+  async function quickAddBrand() {
+    const name = newBrandName.trim()
+    if (!name) return
+    const { data, error } = await supabase.from('brands').insert({ name, is_active: true }).select('id, name').single()
+    if (error) { toast.error(error.message); return }
+    setBrandList(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
+    setForm(p => ({ ...p, brand: data.name }))
+    setNewBrandName('')
+    setAddingBrand(false)
+    toast.success('Brand added')
+  }
+
+  async function quickAddAttribute() {
+    const name = newAttributeName.trim()
+    if (!name) return
+    const { data, error } = await supabase.from('attributes').insert({ name, data_type: 'select', options: [], is_active: true }).select('id, name, data_type, options').single()
+    if (error) { toast.error(error.message); return }
+    const created = data as AttributeOption
+    setAttributeList(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)))
+    setAttributeTypeId(created.id)
+    setForm(p => ({ ...p, attribute: '' }))
+    setNewAttributeName('')
+    setAddingAttribute(false)
+    toast.success('Attribute added — add its values below')
+  }
+
+  async function quickAddAttrValue() {
+    if (!selectedAttrType) return
+    const value = newAttrValue.trim()
+    if (!value || selectedAttrType.options?.includes(value)) return
+    const updatedOptions = [...(selectedAttrType.options ?? []), value]
+    const { error } = await supabase.from('attributes').update({ options: updatedOptions, data_type: 'select' }).eq('id', selectedAttrType.id)
+    if (error) { toast.error(error.message); return }
+    setAttributeList(prev => prev.map(a => a.id === selectedAttrType.id ? { ...a, options: updatedOptions, data_type: 'select' } : a))
+    setForm(p => ({ ...p, attribute: value }))
+    setNewAttrValue('')
+    setAddingAttrValue(false)
+    toast.success('Value added')
   }
 
   // Generates a code related to the item name (e.g. "Laptop Stand" -> "LAP-001"),
@@ -1483,122 +1530,187 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
         </div>
       )}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="w-[98vw] sm:!max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editing ? 'Edit Item' : 'Add Item'}</DialogTitle></DialogHeader>
-          <div className="space-y-3 py-2">
-            <div className="space-y-1.5">
-              <Label>Pictures</Label>
-              <div className="flex flex-wrap items-center gap-2">
-                {images.map((img, i) => (
-                  <div key={i} className="relative h-16 w-16 rounded-lg border bg-muted/40 overflow-hidden shrink-0 group">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={img.preview} alt={`Item picture ${i + 1}`} className="h-full w-full object-contain p-1" />
-                    <button
-                      type="button"
-                      onClick={() => removeImage(i)}
-                      className="absolute top-0.5 right-0.5 h-4 w-4 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <X className="h-2.5 w-2.5" />
-                    </button>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 py-2">
+            {/* LEFT column */}
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <Label>Pictures</Label>
+                <div className="flex flex-wrap items-center gap-2">
+                  {images.map((img, i) => (
+                    <div key={i} className="relative h-16 w-16 rounded-lg border bg-muted/40 overflow-hidden shrink-0 group">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={img.preview} alt={`Item picture ${i + 1}`} className="h-full w-full object-contain p-1" />
+                      <button
+                        type="button"
+                        onClick={() => removeImage(i)}
+                        className="absolute top-0.5 right-0.5 h-4 w-4 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="h-2.5 w-2.5" />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    disabled={uploadingImage}
+                    onClick={() => document.getElementById('config-item-picture-input')?.click()}
+                    className="h-16 w-16 rounded-lg border border-dashed flex items-center justify-center text-muted-foreground hover:bg-accent transition-colors shrink-0 disabled:opacity-50"
+                  >
+                    {uploadingImage ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
+                  </button>
+                  <input
+                    id="config-item-picture-input"
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={e => { const files = Array.from(e.target.files ?? []); if (files.length) handleImagesSelect(files); e.target.value = '' }}
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5">
+                    Item Code
+                    {!editing && codeAutoGenerated && <span className="text-[10px] text-muted-foreground font-normal">auto</span>}
+                  </Label>
+                  <Input
+                    placeholder={!editing ? 'From item name…' : 'ITM-001'}
+                    value={form.item_code}
+                    onChange={e => { setCodeAutoGenerated(false); setForm(p => ({ ...p, item_code: e.target.value })) }}
+                    className={!editing && codeAutoGenerated ? 'bg-muted/50 font-mono' : 'font-mono'}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Unit of Measure</Label>
+                  <Select value={form.unit_of_measure} onValueChange={v => setForm(p => ({ ...p, unit_of_measure: v ?? '' }))}>
+                    <SelectTrigger className="w-full">
+                      {form.unit_of_measure
+                        ? <span className="truncate text-sm">{uomList.find(u => u.code === form.unit_of_measure)?.name ?? form.unit_of_measure}</span>
+                        : <span className="text-muted-foreground text-sm">Select UOM…</span>}
+                    </SelectTrigger>
+                    <SelectContent>
+                      {uomList.map(u => (
+                        <SelectItem key={u.id} value={u.code}>{u.code} – {u.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Item Name <span className="text-destructive">*</span></Label>
+                <Input placeholder="Item name" value={form.item_name} onChange={e => setForm(p => ({ ...p, item_name: e.target.value }))} onBlur={handleItemNameBlur} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Description</Label>
+                <Textarea rows={3} placeholder="Additional details about this item…" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} />
+              </div>
+            </div>
+
+            {/* RIGHT column */}
+            <div className="space-y-4">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label>Brand</Label>
+                  <button type="button" onClick={() => setAddingBrand(v => !v)} className="text-xs font-medium text-red-600 hover:text-red-700 flex items-center gap-0.5">
+                    <Plus className="h-3 w-3" />Add New
+                  </button>
+                </div>
+                {addingBrand && (
+                  <div className="flex gap-1.5">
+                    <Input autoFocus placeholder="New brand name" value={newBrandName} onChange={e => setNewBrandName(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); quickAddBrand() } }} className="h-8 text-sm" />
+                    <Button type="button" size="icon" className="h-8 w-8 shrink-0 bg-red-600 hover:bg-red-700" onClick={quickAddBrand}><Check className="h-3.5 w-3.5" /></Button>
+                    <Button type="button" size="icon" variant="outline" className="h-8 w-8 shrink-0" onClick={() => { setAddingBrand(false); setNewBrandName('') }}><X className="h-3.5 w-3.5" /></Button>
                   </div>
-                ))}
-                <button
-                  type="button"
-                  disabled={uploadingImage}
-                  onClick={() => document.getElementById('config-item-picture-input')?.click()}
-                  className="h-16 w-16 rounded-lg border border-dashed flex items-center justify-center text-muted-foreground hover:bg-accent transition-colors shrink-0 disabled:opacity-50"
-                >
-                  {uploadingImage ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
-                </button>
-                <input
-                  id="config-item-picture-input"
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={e => { const files = Array.from(e.target.files ?? []); if (files.length) handleImagesSelect(files); e.target.value = '' }}
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="flex items-center gap-1.5">
-                  Item Code
-                  {!editing && codeAutoGenerated && <span className="text-[10px] text-muted-foreground font-normal">auto-generated from name</span>}
-                </Label>
-                <Input
-                  placeholder={!editing ? 'Type the item name below…' : 'ITM-001'}
-                  value={form.item_code}
-                  onChange={e => { setCodeAutoGenerated(false); setForm(p => ({ ...p, item_code: e.target.value })) }}
-                  className={!editing && codeAutoGenerated ? 'bg-muted/50 font-mono' : 'font-mono'}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Unit of Measure</Label>
-                <Select value={form.unit_of_measure} onValueChange={v => setForm(p => ({ ...p, unit_of_measure: v ?? '' }))}>
-                  <SelectTrigger><SelectValue placeholder="Select UOM…" /></SelectTrigger>
-                  <SelectContent>
-                    {uomList.map(u => (
-                      <SelectItem key={u.id} value={u.code}>{u.code} – {u.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Item Name <span className="text-destructive">*</span></Label>
-              <Input placeholder="Item name" value={form.item_name} onChange={e => setForm(p => ({ ...p, item_name: e.target.value }))} onBlur={handleItemNameBlur} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Description</Label>
-              <Textarea rows={2} placeholder="Additional details about this item…" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Brand</Label>
+                )}
                 <Select value={form.brand} onValueChange={v => setForm(p => ({ ...p, brand: v ?? '' }))}>
-                  <SelectTrigger><SelectValue placeholder="Select brand…" /></SelectTrigger>
+                  <SelectTrigger className="w-full">
+                    {form.brand
+                      ? <span className="truncate text-sm">{form.brand}</span>
+                      : <span className="text-muted-foreground text-sm">Select brand…</span>}
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">— None —</SelectItem>
                     {brandList.map(b => <SelectItem key={b.id} value={b.name}>{b.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
+
               <div className="space-y-1.5">
-                <Label>Attribute</Label>
+                <div className="flex items-center justify-between">
+                  <Label>Attribute</Label>
+                  <button type="button" onClick={() => setAddingAttribute(v => !v)} className="text-xs font-medium text-red-600 hover:text-red-700 flex items-center gap-0.5">
+                    <Plus className="h-3 w-3" />Add New
+                  </button>
+                </div>
+                {addingAttribute && (
+                  <div className="flex gap-1.5">
+                    <Input autoFocus placeholder="New attribute name (e.g. Color)" value={newAttributeName} onChange={e => setNewAttributeName(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); quickAddAttribute() } }} className="h-8 text-sm" />
+                    <Button type="button" size="icon" className="h-8 w-8 shrink-0 bg-red-600 hover:bg-red-700" onClick={quickAddAttribute}><Check className="h-3.5 w-3.5" /></Button>
+                    <Button type="button" size="icon" variant="outline" className="h-8 w-8 shrink-0" onClick={() => { setAddingAttribute(false); setNewAttributeName('') }}><X className="h-3.5 w-3.5" /></Button>
+                  </div>
+                )}
                 <Select value={attributeTypeId} onValueChange={v => handleAttributeTypeChange(v ?? '')}>
-                  <SelectTrigger><SelectValue placeholder="Select attribute…" /></SelectTrigger>
+                  <SelectTrigger className="w-full">
+                    {attributeTypeId
+                      ? <span className="truncate text-sm">{selectedAttrType?.name}</span>
+                      : <span className="text-muted-foreground text-sm">Select attribute…</span>}
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">— None —</SelectItem>
                     {attributeList.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-            {attributeTypeId && (
-              <div className="space-y-1.5">
-                <Label>{selectedAttrType?.name} Value</Label>
-                {attrHasOptions ? (
-                  <Select value={form.attribute} onValueChange={v => setForm(p => ({ ...p, attribute: v ?? '' }))}>
-                    <SelectTrigger><SelectValue placeholder={`Select ${selectedAttrType?.name}…`} /></SelectTrigger>
-                    <SelectContent>
-                      {selectedAttrType?.options?.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <Input placeholder={`Enter ${selectedAttrType?.name ?? 'value'}…`} value={form.attribute} onChange={e => setForm(p => ({ ...p, attribute: e.target.value }))} />
-                )}
-              </div>
-            )}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Unit Cost (₱)</Label>
-                <Input type="number" min={0} step="0.01" placeholder="0.00" value={form.cost} onChange={e => setForm(p => ({ ...p, cost: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Selling Price (₱)</Label>
-                <Input type="number" min={0} step="0.01" placeholder="0.00" value={form.selling_price} onChange={e => setForm(p => ({ ...p, selling_price: e.target.value }))} />
-                <p className="text-[11px] text-muted-foreground">Won't affect past records</p>
+
+              {attributeTypeId && (
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label>{selectedAttrType?.name} Value</Label>
+                    {attrIsSelectType && (
+                      <button type="button" onClick={() => setAddingAttrValue(v => !v)} className="text-xs font-medium text-red-600 hover:text-red-700 flex items-center gap-0.5">
+                        <Plus className="h-3 w-3" />Add New
+                      </button>
+                    )}
+                  </div>
+                  {addingAttrValue && (
+                    <div className="flex gap-1.5">
+                      <Input autoFocus placeholder={`New ${selectedAttrType?.name} value`} value={newAttrValue} onChange={e => setNewAttrValue(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); quickAddAttrValue() } }} className="h-8 text-sm" />
+                      <Button type="button" size="icon" className="h-8 w-8 shrink-0 bg-red-600 hover:bg-red-700" onClick={quickAddAttrValue}><Check className="h-3.5 w-3.5" /></Button>
+                      <Button type="button" size="icon" variant="outline" className="h-8 w-8 shrink-0" onClick={() => { setAddingAttrValue(false); setNewAttrValue('') }}><X className="h-3.5 w-3.5" /></Button>
+                    </div>
+                  )}
+                  {attrIsSelectType ? (
+                    <Select value={form.attribute} onValueChange={v => setForm(p => ({ ...p, attribute: v ?? '' }))}>
+                      <SelectTrigger className="w-full">
+                        {form.attribute
+                          ? <span className="truncate text-sm">{form.attribute}</span>
+                          : <span className="text-muted-foreground text-sm">{selectedAttrType?.options?.length ? `Select ${selectedAttrType?.name}…` : 'No values yet — add one above'}</span>}
+                      </SelectTrigger>
+                      <SelectContent>
+                        {selectedAttrType?.options?.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input placeholder={`Enter ${selectedAttrType?.name ?? 'value'}…`} value={form.attribute} onChange={e => setForm(p => ({ ...p, attribute: e.target.value }))} />
+                  )}
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label>Unit Cost (₱)</Label>
+                  <Input type="number" min={0} step="0.01" placeholder="0.00" value={form.cost} onChange={e => setForm(p => ({ ...p, cost: e.target.value }))} />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Selling Price (₱)</Label>
+                  <Input type="number" min={0} step="0.01" placeholder="0.00" value={form.selling_price} onChange={e => setForm(p => ({ ...p, selling_price: e.target.value }))} />
+                  <p className="text-[11px] text-muted-foreground">Won&apos;t affect past records</p>
+                </div>
               </div>
             </div>
           </div>
