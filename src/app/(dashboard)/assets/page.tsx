@@ -18,6 +18,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
+import { useSearchContext } from '@/context/search-context'
 
 type AssetStatus = 'active' | 'transferred' | 'returned' | 'disposed'
 
@@ -63,10 +64,10 @@ const emptyForm = () => ({
 
 export default function AssetsPage() {
   const supabase = createClient()
+  const { query: search } = useSearchContext()
   const [assets, setAssets] = useState<Asset[]>([])
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
-  const [search, setSearch] = useState('')
 
   // Dialogs
   const [issueOpen, setIssueOpen] = useState(false)
@@ -213,7 +214,6 @@ export default function AssetsPage() {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2"><Cpu className="h-4 w-4" />Asset List</CardTitle>
-            <Input placeholder="Search assets…" value={search} onChange={e => setSearch(e.target.value)} className="w-56 h-8 text-sm" />
           </div>
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">

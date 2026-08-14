@@ -42,6 +42,7 @@ const DATA_PAGES = [
   '/crm', '/purchase-orders', '/quotation', '/sales-orders',
   '/receiving', '/inventory', '/dr-logs', '/csi-monitoring',
   '/users', '/clients', '/accounting', '/dashboard', '/messages',
+  '/setup', '/assets',
 ]
 
 interface Notif { id: string; type: 'message' | 'order' | 'stock'; message: string; read: boolean; time: string; href: string }
