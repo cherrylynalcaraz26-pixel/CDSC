@@ -3,9 +3,10 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-import { Trash2, Loader2, ChevronLeft, Send, AlertTriangle, X, Search, Package } from 'lucide-react'
+import { Trash2, Loader2, ChevronLeft, Send, AlertTriangle, X, Search, Package, ImagePlus, Sparkles } from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
+import { uploadImageToDrive } from '@/lib/upload-image'
 
 const MAX_LINE_ITEMS = 50
 
@@ -25,6 +26,11 @@ interface CatalogItem {
   image_url: string | null
 }
 
+interface BrandOption { id: string; name: string }
+interface UOMOption { id: string; code: string; name: string }
+interface AttributeOption { id: string; name: string; data_type: string; options: string[] | null }
+interface SuggestionImage { file: File; preview: string }
+
 interface SysInfo {
   company_name: string
   address: string | null
@@ -36,6 +42,10 @@ interface SysInfo {
 
 function blankItem(): Item {
   return { description: '', quantity: '1', unit: '', unit_price: '', is_custom: false }
+}
+
+function blankCustomForm() {
+  return { item_name: '', description: '', brand: '', unit_of_measure: '', selling_price: '', notes: '' }
 }
 
 // Catalog item names sometimes carry double spaces from data entry —
@@ -59,18 +69,35 @@ export default function NewRequestPage() {
   const [itemSearchIdx, setItemSearchIdx] = useState<number | null>(null)
   const [itemQuery, setItemQuery] = useState('')
 
+  // Custom item suggestion modal
+  const [brandList, setBrandList] = useState<BrandOption[]>([])
+  const [uomList, setUomList] = useState<UOMOption[]>([])
+  const [attributeList, setAttributeList] = useState<AttributeOption[]>([])
+  const [customModalIdx, setCustomModalIdx] = useState<number | null>(null)
+  const [customForm, setCustomForm] = useState(blankCustomForm())
+  const [customAttrTypeId, setCustomAttrTypeId] = useState('')
+  const [customAttrValue, setCustomAttrValue] = useState('')
+  const [customImages, setCustomImages] = useState<SuggestionImage[]>([])
+  const [submittingCustom, setSubmittingCustom] = useState(false)
+
   useEffect(() => {
     async function init() {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) { router.push('/login'); return }
-      const [{ data: clientRow }, { data: sys }, { data: itemData }] = await Promise.all([
+      const [{ data: clientRow }, { data: sys }, { data: itemData }, { data: brandData }, { data: uomData }, { data: attrData }] = await Promise.all([
         supabase.from('clients').select('id, company_name').eq('auth_user_id', session.user.id).single(),
         supabase.from('system_settings').select('company_name, address, phone, email, logo_url, tin').single(),
         supabase.from('items').select('item_name, item_code, unit_of_measure, selling_price, image_url').eq('status', 'active').order('item_name'),
+        supabase.from('brands').select('id, name').eq('is_active', true).order('name'),
+        supabase.from('uom_list').select('id, code, name').eq('is_active', true).order('code'),
+        supabase.from('attributes').select('id, name, data_type, options').eq('is_active', true).order('name'),
       ])
       if (clientRow) { setClientId(clientRow.id); setClientName(clientRow.company_name) }
       if (sys) setSysInfo(sys as SysInfo)
       setCatalog((itemData ?? []).map((c: CatalogItem) => ({ ...c, item_name: cleanText(c.item_name) })))
+      setBrandList(brandData ?? [])
+      setUomList(uomData ?? [])
+      setAttributeList((attrData ?? []) as AttributeOption[])
     }
     init()
   }, [])
@@ -93,10 +120,66 @@ export default function NewRequestPage() {
     })
   }
 
-  function toggleCustom(i: number) {
-    updateItem(i, items[i].is_custom
-      ? { is_custom: false, description: '', unit: '', unit_price: '' }
-      : { is_custom: true, description: '', unit: '', unit_price: '' })
+  function clearCustom(i: number) {
+    updateItem(i, { is_custom: false, description: '', unit: '', unit_price: '' })
+  }
+
+  function openCustomModal(i: number) {
+    setCustomModalIdx(i)
+    setCustomForm(blankCustomForm())
+    setCustomAttrTypeId('')
+    setCustomAttrValue('')
+    setCustomImages([])
+  }
+
+  function handleCustomImagesSelect(files: File[]) {
+    setCustomImages(prev => [...prev, ...files.map(file => ({ file, preview: URL.createObjectURL(file) }))].slice(0, 3))
+  }
+
+  function removeCustomImage(idx: number) {
+    setCustomImages(prev => prev.filter((_, i) => i !== idx))
+  }
+
+  const customAttrType = attributeList.find(a => a.id === customAttrTypeId) ?? null
+  const customAttrHasOptions = customAttrType?.data_type === 'select' && (customAttrType.options?.length ?? 0) > 0
+
+  async function submitCustomModal() {
+    if (customModalIdx === null) return
+    if (!customForm.item_name.trim()) { toast.error('Item name is required'); return }
+    if (!clientId) { toast.error('Client account not linked'); return }
+    setSubmittingCustom(true)
+    try {
+      const imageUrls: string[] = []
+      for (const img of customImages) {
+        const uploaded = await uploadImageToDrive(img.file, { displayName: `${customForm.item_name.trim()}-${imageUrls.length + 1}`, folder: 'ItemSuggestions' })
+        imageUrls.push(uploaded)
+      }
+      const { error } = await supabase.from('item_suggestions').insert({
+        client_id: clientId,
+        client_name: clientName,
+        item_name: customForm.item_name.trim(),
+        description: customForm.description.trim() || null,
+        brand: customForm.brand || null,
+        unit_of_measure: customForm.unit_of_measure || null,
+        attribute: customAttrValue || null,
+        selling_price: customForm.selling_price ? parseFloat(customForm.selling_price) : null,
+        image_urls: imageUrls,
+        notes: customForm.notes.trim() || null,
+        status: 'pending',
+      })
+      if (error) throw error
+      updateItem(customModalIdx, {
+        is_custom: true,
+        description: customForm.item_name.trim(),
+        unit: customForm.unit_of_measure || '',
+        unit_price: '',
+      })
+      toast.success('Item suggestion sent to CDSC for review')
+      setCustomModalIdx(null)
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to submit item suggestion')
+    }
+    setSubmittingCustom(false)
   }
 
   function handleLineCountChange(value: string) {
@@ -276,7 +359,7 @@ export default function NewRequestPage() {
               <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
               <div className="text-sm text-amber-800">
                 <span className="font-semibold">{customCount} custom item{customCount !== 1 ? 's' : ''}</span> in this order.
-                Custom items are not in our catalog — our team will review pricing and availability before confirming.
+                Custom items aren&apos;t in our catalog yet — details were sent to CDSC for review, and pricing will be confirmed before this order is processed.
               </div>
             </div>
           )}
@@ -308,27 +391,23 @@ export default function NewRequestPage() {
                   {item.is_custom && (
                     <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-700 mb-2">
                       <AlertTriangle className="h-3.5 w-3.5" />
-                      Custom item — not in our catalog. Pricing to be confirmed by CDSC.
+                      Custom item — submitted to CDSC for review. Pricing and availability to be confirmed.
                     </div>
                   )}
                   <div className="flex flex-wrap gap-2 items-end">
-                    <div className="flex-1 min-w-[160px] space-y-1">
+                    <div className="flex-1 min-w-[280px] space-y-1">
                       <div className="flex items-center justify-between gap-2">
                         <label className="text-xs font-medium text-gray-500">Item Description</label>
                         <button type="button"
-                          onClick={() => toggleCustom(i)}
+                          onClick={() => item.is_custom ? clearCustom(i) : openCustomModal(i)}
                           className={`text-[11px] font-medium px-2 py-0.5 rounded-md border shrink-0 transition-colors ${item.is_custom ? 'border-amber-400 bg-amber-100 text-amber-800 hover:bg-amber-200' : 'border-gray-300 text-gray-600 hover:bg-gray-100'}`}>
-                          {item.is_custom ? 'Cancel' : 'Custom'}
+                          {item.is_custom ? 'Remove' : 'Custom'}
                         </button>
                       </div>
                       {item.is_custom ? (
-                        <input
-                          autoFocus
-                          value={item.description}
-                          onChange={e => updateItem(i, { description: e.target.value })}
-                          placeholder="Type a custom item name…"
-                          className="w-full h-9 px-2.5 rounded-md border border-amber-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
-                        />
+                        <div className="h-9 flex items-center px-2.5 rounded-md border border-amber-300 bg-white text-sm text-amber-900 truncate">
+                          {item.description}
+                        </div>
                       ) : (
                         <div className="flex gap-1.5">
                           <select
@@ -363,18 +442,9 @@ export default function NewRequestPage() {
 
                     <div className="w-20 shrink-0 space-y-1">
                       <label className="text-xs font-medium text-gray-500">Unit</label>
-                      {item.is_custom ? (
-                        <input
-                          value={item.unit}
-                          onChange={e => updateItem(i, { unit: e.target.value })}
-                          placeholder="e.g. pcs"
-                          className="w-full h-9 px-2.5 rounded-md border border-amber-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
-                        />
-                      ) : (
-                        <div className={`h-9 flex items-center px-2.5 rounded-md border text-sm ${item.unit ? 'border-gray-200 bg-gray-100 text-gray-700' : 'border-dashed border-gray-200 text-gray-400 bg-white'}`}>
-                          {item.unit || '—'}
-                        </div>
-                      )}
+                      <div className={`h-9 flex items-center px-2.5 rounded-md border text-sm ${item.unit ? 'border-gray-200 bg-gray-100 text-gray-700' : 'border-dashed border-gray-200 text-gray-400 bg-white'}`}>
+                        {item.unit || '—'}
+                      </div>
                     </div>
 
                     <div className="w-28 shrink-0 space-y-1">
@@ -523,6 +593,175 @@ export default function NewRequestPage() {
                   </div>
                 </button>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom item suggestion modal */}
+      {customModalIdx !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={e => { if (e.target === e.currentTarget && !submittingCustom) setCustomModalIdx(null) }}>
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col" style={{ maxHeight: '90vh' }}>
+            <div className="flex items-center justify-between px-5 py-4 border-b shrink-0">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-red-600" /> Suggest a Custom Item
+              </h3>
+              <button onClick={() => setCustomModalIdx(null)} disabled={submittingCustom} className="text-gray-400 hover:text-gray-600 disabled:opacity-40">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+              <p className="text-xs text-gray-500">
+                Not in our catalog? Tell us what you need and our team will review it — accepted items get added to our catalog for future orders.
+              </p>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-gray-700">Item Name <span className="text-red-500">*</span></label>
+                <input
+                  autoFocus
+                  value={customForm.item_name}
+                  onChange={e => setCustomForm(p => ({ ...p, item_name: e.target.value }))}
+                  placeholder="e.g. Industrial Safety Helmet"
+                  className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-gray-700">Description</label>
+                <textarea
+                  rows={2}
+                  value={customForm.description}
+                  onChange={e => setCustomForm(p => ({ ...p, description: e.target.value }))}
+                  placeholder="Specs, size, color, model number, etc."
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-gray-700">Brand</label>
+                  <select
+                    value={customForm.brand}
+                    onChange={e => setCustomForm(p => ({ ...p, brand: e.target.value }))}
+                    className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-red-500">
+                    <option value="">— None —</option>
+                    {brandList.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-gray-700">Unit of Measure</label>
+                  <select
+                    value={customForm.unit_of_measure}
+                    onChange={e => setCustomForm(p => ({ ...p, unit_of_measure: e.target.value }))}
+                    className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-red-500">
+                    <option value="">— Select —</option>
+                    {uomList.map(u => <option key={u.id} value={u.code}>{u.code} – {u.name}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium text-gray-700">Attribute</label>
+                  <select
+                    value={customAttrTypeId}
+                    onChange={e => { setCustomAttrTypeId(e.target.value); setCustomAttrValue('') }}
+                    className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-red-500">
+                    <option value="">— None —</option>
+                    {attributeList.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                  </select>
+                </div>
+                {customAttrTypeId && (
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-medium text-gray-700">{customAttrType?.name} Value</label>
+                    {customAttrHasOptions ? (
+                      <select
+                        value={customAttrValue}
+                        onChange={e => setCustomAttrValue(e.target.value)}
+                        className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-red-500">
+                        <option value="">— Select —</option>
+                        {customAttrType?.options?.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                      </select>
+                    ) : (
+                      <input
+                        value={customAttrValue}
+                        onChange={e => setCustomAttrValue(e.target.value)}
+                        placeholder={`Enter ${customAttrType?.name ?? 'value'}…`}
+                        className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-gray-700">Suggested Selling Price (₱)</label>
+                <input
+                  type="number" min="0" step="0.01"
+                  value={customForm.selling_price}
+                  onChange={e => setCustomForm(p => ({ ...p, selling_price: e.target.value }))}
+                  placeholder="Optional — your expected price"
+                  className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-gray-700">Pictures</label>
+                <div className="flex flex-wrap items-center gap-2">
+                  {customImages.map((img, idx) => (
+                    <div key={idx} className="relative h-16 w-16 rounded-lg border bg-gray-50 overflow-hidden shrink-0 group">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={img.preview} alt={`Picture ${idx + 1}`} className="h-full w-full object-contain p-1" />
+                      <button
+                        type="button"
+                        onClick={() => removeCustomImage(idx)}
+                        className="absolute top-0.5 right-0.5 h-4 w-4 rounded-full bg-black/60 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="h-2.5 w-2.5" />
+                      </button>
+                    </div>
+                  ))}
+                  {customImages.length < 3 && (
+                    <button
+                      type="button"
+                      onClick={() => document.getElementById('custom-item-picture-input')?.click()}
+                      className="h-16 w-16 rounded-lg border border-dashed flex items-center justify-center text-gray-400 hover:bg-gray-50 transition-colors shrink-0"
+                    >
+                      <ImagePlus className="h-4 w-4" />
+                    </button>
+                  )}
+                  <input
+                    id="custom-item-picture-input"
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={e => { const files = Array.from(e.target.files ?? []); if (files.length) handleCustomImagesSelect(files); e.target.value = '' }}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-gray-700">Notes for CDSC</label>
+                <textarea
+                  rows={2}
+                  value={customForm.notes}
+                  onChange={e => setCustomForm(p => ({ ...p, notes: e.target.value }))}
+                  placeholder="Urgency, sourcing hints, or anything else we should know"
+                  className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+            <div className="px-5 py-4 border-t shrink-0 flex justify-end gap-2">
+              <button type="button" onClick={() => setCustomModalIdx(null)} disabled={submittingCustom}
+                className="px-4 py-2 text-sm font-medium text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-40">
+                Cancel
+              </button>
+              <button type="button" onClick={submitCustomModal} disabled={submittingCustom}
+                className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors">
+                {submittingCustom ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                Submit for Review
+              </button>
             </div>
           </div>
         </div>
