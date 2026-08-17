@@ -330,6 +330,15 @@ function LivePreview({ s }: { s: Settings }) {
         <Eye className="h-4 w-4 text-muted-foreground" />
         <span className="text-sm font-medium text-muted-foreground">Live Preview</span>
         <span className="ml-auto flex items-center gap-1.5">
+          <a
+            href="/company-profile"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="View Public Page"
+            className="flex items-center gap-1 text-xs px-2 py-1 rounded-md border border-green-200 text-green-700 hover:bg-green-50 transition-colors"
+          >
+            <Globe className="h-3 w-3" /> Public Page
+          </a>
           <button
             onClick={openEmailDialog}
             title="Send via Email"
