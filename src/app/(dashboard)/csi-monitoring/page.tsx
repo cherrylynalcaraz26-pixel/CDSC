@@ -168,6 +168,8 @@ export default function CSIMonitoringPage() {
   const [page, setPage] = useState(1)
   const [inventoryItem, setInventoryItem] = useState<string>('')
   const [inventoryOpen, setInventoryOpen] = useState(false)
+  const [itemSearchIdx, setItemSearchIdx] = useState<number | null>(null)
+  const [itemQuery, setItemQuery] = useState('')
   const [activeTab, setActiveTab] = useState<'form' | 'preview'>('form')
   const [siNumberOptions, setSiNumberOptions] = useState<{ value: string; tag: 'current' | 'next' | 'missing' }[]>([])
   const [companyInfo, setCompanyInfo] = useState<{ company_name: string; address: string; phone: string; email: string; tin: string } | null>(null)
@@ -765,6 +767,9 @@ export default function CSIMonitoringPage() {
   }
 
   const totalItems = items.reduce((s, it) => s + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0), 0)
+  const filteredSearchItems = itemQuery.trim()
+    ? itemOptions.filter(it => it.item_name.toLowerCase().includes(itemQuery.toLowerCase()))
+    : itemOptions
 
   return (
     <div className="space-y-6">
@@ -883,82 +888,6 @@ export default function CSIMonitoringPage() {
                     </div>
                   </div>
                 </div>
-
-                {/* Items */}
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">Line Items</p>
-                  <div className="border rounded-lg overflow-hidden">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-muted/40">
-                          <TableHead className="min-w-[200px]">Item Description</TableHead>
-                          <TableHead className="w-8"></TableHead>
-                          <TableHead className="w-20">Unit</TableHead>
-                          <TableHead className="w-20">Qty</TableHead>
-                          <TableHead className="w-28">Unit Price (₱)</TableHead>
-                          <TableHead className="w-28 text-right">Amount</TableHead>
-                          <TableHead className="w-8"></TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {items.map((item, i) => {
-                          const amt = (Number(item.quantity) || 0) * (Number(item.unit_price) || 0)
-                          return (
-                            <TableRow key={i}>
-                              <TableCell className="py-1.5">
-                                <Select value={item.item_name} onValueChange={val => {
-                                  const opt = itemOptions.find(o => o.item_name === (val ?? ''))
-                                  setItems(prev => prev.map((it, idx) => idx === i ? { ...it, item_name: val ?? '', unit: opt?.unit_of_measure ?? it.unit } : it))
-                                }}>
-                                  <SelectTrigger className="h-8 text-sm w-full"><SelectValue placeholder="Select item…" /></SelectTrigger>
-                                  <SelectContent>
-                                    {itemOptions.map(opt => (
-                                      <SelectItem key={opt.item_name} value={opt.item_name}>
-                                        {opt.item_name} <span className="text-xs text-muted-foreground ml-1">({opt.unit_of_measure})</span>
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </TableCell>
-                              <TableCell className="py-1.5">
-                                <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-blue-600"
-                                  title="View inventory" onClick={() => { setInventoryItem(item.item_name); setInventoryOpen(true) }}>
-                                  <Package className="h-3.5 w-3.5" />
-                                </Button>
-                              </TableCell>
-                              <TableCell className="py-1.5">
-                                <div className="h-8 flex items-center px-2 text-sm bg-muted/30 rounded border text-muted-foreground">{item.unit || '—'}</div>
-                              </TableCell>
-                              <TableCell className="py-1.5">
-                                <Input type="number" min={0} className="h-8 text-sm" placeholder="0" value={item.quantity}
-                                  onChange={e => setItems(prev => prev.map((it, idx) => idx === i ? { ...it, quantity: e.target.value } : it))} />
-                              </TableCell>
-                              <TableCell className="py-1.5">
-                                <Input type="number" min={0} step="0.01" className="h-8 text-sm" placeholder="0.00" value={item.unit_price}
-                                  onChange={e => setItems(prev => prev.map((it, idx) => idx === i ? { ...it, unit_price: e.target.value } : it))} />
-                              </TableCell>
-                              <TableCell className="py-1.5 text-right text-sm font-medium tabular-nums">
-                                ₱{amt.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
-                              </TableCell>
-                              <TableCell className="py-1.5">
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
-                                  onClick={() => setItems(prev => prev.filter((_, idx) => idx !== i))} disabled={items.length === 1}>
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </TableCell>
-                            </TableRow>
-                          )
-                        })}
-                      </TableBody>
-                    </Table>
-                    <div className="flex items-center justify-between px-3 py-2 bg-muted/20 border-t">
-                      <Button type="button" variant="outline" size="sm" onClick={() => setItems(prev => [...prev, emptyItem()])}>
-                        <Plus className="h-3.5 w-3.5 mr-1" />Add Item
-                      </Button>
-                      <span className="text-sm font-semibold">Total: ₱{totalItems.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
-                    </div>
-                  </div>
-                </div>
               </div>
 
               {/* RIGHT: live preview */}
@@ -1062,6 +991,85 @@ export default function CSIMonitoringPage() {
                       </tfoot>
                     </table>
                   </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Items — full width so all columns are visible */}
+            <div className={`space-y-2 mt-6 ${activeTab === 'preview' ? 'hidden lg:block' : 'block'}`}>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">Line Items</p>
+              <div className="border rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/40">
+                      <TableHead className="min-w-[260px]">Item Description</TableHead>
+                      <TableHead className="w-24">Unit</TableHead>
+                      <TableHead className="w-24">Qty</TableHead>
+                      <TableHead className="w-32">Unit Price (₱)</TableHead>
+                      <TableHead className="w-32 text-right">Amount</TableHead>
+                      <TableHead className="w-10"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {items.map((item, i) => {
+                      const amt = (Number(item.quantity) || 0) * (Number(item.unit_price) || 0)
+                      return (
+                        <TableRow key={i}>
+                          <TableCell className="py-1.5">
+                            <div className="flex items-center gap-1">
+                              <Select value={item.item_name} onValueChange={val => {
+                                const opt = itemOptions.find(o => o.item_name === (val ?? ''))
+                                setItems(prev => prev.map((it, idx) => idx === i ? { ...it, item_name: val ?? '', unit: opt?.unit_of_measure ?? it.unit } : it))
+                              }}>
+                                <SelectTrigger className="h-8 text-sm flex-1"><SelectValue placeholder="Select item…" /></SelectTrigger>
+                                <SelectContent>
+                                  {itemOptions.map(opt => (
+                                    <SelectItem key={opt.item_name} value={opt.item_name}>
+                                      {opt.item_name} <span className="text-xs text-muted-foreground ml-1">({opt.unit_of_measure})</span>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" title="Search items"
+                                onClick={() => { setItemSearchIdx(i); setItemQuery('') }}>
+                                <Search className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-muted-foreground hover:text-blue-600"
+                                title="View inventory" onClick={() => { setInventoryItem(item.item_name); setInventoryOpen(true) }}>
+                                <Package className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-1.5">
+                            <div className="h-8 flex items-center px-2 text-sm bg-muted/30 rounded border text-muted-foreground">{item.unit || '—'}</div>
+                          </TableCell>
+                          <TableCell className="py-1.5">
+                            <Input type="number" min={0} className="h-8 text-sm" placeholder="0" value={item.quantity}
+                              onChange={e => setItems(prev => prev.map((it, idx) => idx === i ? { ...it, quantity: e.target.value } : it))} />
+                          </TableCell>
+                          <TableCell className="py-1.5">
+                            <Input type="number" min={0} step="0.01" className="h-8 text-sm" placeholder="0.00" value={item.unit_price}
+                              onChange={e => setItems(prev => prev.map((it, idx) => idx === i ? { ...it, unit_price: e.target.value } : it))} />
+                          </TableCell>
+                          <TableCell className="py-1.5 text-right text-sm font-medium tabular-nums">
+                            ₱{amt.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
+                          </TableCell>
+                          <TableCell className="py-1.5">
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
+                              onClick={() => setItems(prev => prev.filter((_, idx) => idx !== i))} disabled={items.length === 1}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+                <div className="flex items-center justify-between px-3 py-2 bg-muted/20 border-t">
+                  <Button type="button" variant="outline" size="sm" onClick={() => setItems(prev => [...prev, emptyItem()])}>
+                    <Plus className="h-3.5 w-3.5 mr-1" />Add Item
+                  </Button>
+                  <span className="text-sm font-semibold">Total: ₱{totalItems.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
                 </div>
               </div>
             </div>
@@ -1694,6 +1702,47 @@ export default function CSIMonitoringPage() {
         </CardContent>
       </Card>
       }
+
+      {/* Item Search Dialog */}
+      <Dialog open={itemSearchIdx !== null} onOpenChange={o => { if (!o) setItemSearchIdx(null) }}>
+        <DialogContent className="w-[98vw] sm:!max-w-lg max-h-[80vh] flex flex-col overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Search className="h-4 w-4" />Search Item
+            </DialogTitle>
+          </DialogHeader>
+          <div className="relative mb-2">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              autoFocus
+              placeholder="Search item name…"
+              className="pl-9"
+              value={itemQuery}
+              onChange={e => setItemQuery(e.target.value)}
+            />
+          </div>
+          <div className="flex-1 overflow-y-auto border rounded-lg divide-y">
+            {filteredSearchItems.length === 0 ? (
+              <p className="text-center py-6 text-muted-foreground text-sm">No items found.</p>
+            ) : filteredSearchItems.map(opt => (
+              <button
+                key={opt.item_name}
+                type="button"
+                className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-muted/50 transition-colors text-left"
+                onClick={() => {
+                  if (itemSearchIdx !== null) {
+                    setItems(prev => prev.map((it, idx) => idx === itemSearchIdx ? { ...it, item_name: opt.item_name, unit: opt.unit_of_measure } : it))
+                  }
+                  setItemSearchIdx(null)
+                }}
+              >
+                <span className="font-medium">{opt.item_name}</span>
+                <span className="text-xs text-muted-foreground">{opt.unit_of_measure}</span>
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Inventory Lookup Modal */}
       <Dialog open={inventoryOpen} onOpenChange={setInventoryOpen}>

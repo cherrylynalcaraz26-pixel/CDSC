@@ -101,6 +101,7 @@ export default function ReceivingPage() {
   const [salesDetailRow, setSalesDetailRow] = useState<SalesDelivery | null>(null)
   const [salesDetailItems, setSalesDetailItems] = useState<{ item_name: string; unit: string | null; quantity: number }[]>([])
   const [salesDetailLoading, setSalesDetailLoading] = useState(false)
+  const [poDetail, setPoDetail] = useState<PO | null>(null)
 
   const selectedPOData = pos.find(p => p.po_number === selectedPO)
   const selectedSupplier = suppliers.find(s => s.id === returnSupplierId)
@@ -562,7 +563,10 @@ export default function ReceivingPage() {
                           <div className="text-sm">{(po.supplier as any)?.company_name ?? '—'}</div>
                           <div className="text-xs text-muted-foreground">Expected: {po.delivery_date ?? 'TBD'}</div>
                         </div>
-                        <Button size="sm" variant="outline" onClick={() => { resetRRForm(); setSelectedPO(po.po_number); setRrOpen(true) }}>Receive</Button>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Button size="sm" variant="ghost" onClick={() => setPoDetail(po)}>View</Button>
+                          <Button size="sm" variant="outline" onClick={() => { resetRRForm(); setSelectedPO(po.po_number); setRrOpen(true) }}>Receive</Button>
+                        </div>
                       </div>
                     )
                   })}
@@ -1162,6 +1166,56 @@ export default function ReceivingPage() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setSalesDetailOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Pending Delivery Detail */}
+      <Dialog open={!!poDetail} onOpenChange={o => { if (!o) setPoDetail(null) }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Package className="h-4 w-4" />Pending Delivery Details</DialogTitle>
+          </DialogHeader>
+          {poDetail && (
+            <div className="space-y-4 py-1">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div><span className="text-xs text-muted-foreground block">PO Number</span><span className="font-mono font-semibold text-red-600">{poDetail.po_number}</span></div>
+                <div><span className="text-xs text-muted-foreground block">Status</span><span className="capitalize">{poDetail.status.replace(/_/g, ' ')}</span></div>
+                <div><span className="text-xs text-muted-foreground block">Supplier</span><span className="font-medium">{poDetail.supplier?.company_name ?? '—'}</span></div>
+                <div><span className="text-xs text-muted-foreground block">Expected Delivery</span><span>{poDetail.delivery_date ?? 'TBD'}</span></div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Items</Label>
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/40">
+                        <TableHead>Item</TableHead>
+                        <TableHead className="w-24">Unit</TableHead>
+                        <TableHead className="w-20 text-right">Qty</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(poItemsByNumber[poDetail.po_number] ?? []).length === 0 ? (
+                        <TableRow><TableCell colSpan={3} className="text-center py-6 text-muted-foreground text-sm">No items recorded for this PO.</TableCell></TableRow>
+                      ) : (poItemsByNumber[poDetail.po_number] ?? []).map((it, idx) => (
+                        <TableRow key={idx}>
+                          <TableCell className="text-sm">{it.item_name}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{it.unit_of_measure ?? '—'}</TableCell>
+                          <TableCell className="text-sm text-right font-medium">{it.quantity}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPoDetail(null)}>Close</Button>
+            {poDetail && (
+              <Button className="bg-red-600 hover:bg-red-700" onClick={() => { const po = poDetail; setPoDetail(null); resetRRForm(); setSelectedPO(po.po_number); setRrOpen(true) }}>Receive</Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

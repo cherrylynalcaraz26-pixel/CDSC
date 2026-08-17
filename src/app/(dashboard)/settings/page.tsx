@@ -18,9 +18,9 @@ import {
   Building2, Upload, RotateCcw, Save, Shield,
   FileText, Database, User, Globe, Phone, Mail, MapPin,
   CheckCircle2, Eye, EyeOff, Loader2, Plus, Trash2, X, Send,
-  ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp, Download,
 } from 'lucide-react'
-import { sendEmail } from '@/lib/send-email'
+import { sendEmail, htmlToPdfBase64 } from '@/lib/send-email'
 import { uploadImageToDrive } from '@/lib/upload-image'
 
 const BUSINESS_TYPES = [
@@ -177,6 +177,7 @@ function LivePreview({ s }: { s: Settings }) {
   const [emailSubject, setEmailSubject] = useState('')
   const [emailBody, setEmailBody] = useState('')
   const [sendingEmail, setSendingEmail] = useState(false)
+  const [downloadingPdf, setDownloadingPdf] = useState(false)
 
   function buildProfileHtml() {
     const services = (s.core_services ?? []).filter(svc => svc.name || svc.description)
@@ -269,6 +270,24 @@ function LivePreview({ s }: { s: Settings }) {
     setTimeout(() => { win.print() }, 400)
   }
 
+  async function downloadProfilePdf() {
+    setDownloadingPdf(true)
+    try {
+      const base64 = await htmlToPdfBase64(buildProfileHtml())
+      const bytes = atob(base64)
+      const arr = new Uint8Array(bytes.length)
+      for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i)
+      const blob = new Blob([arr], { type: 'application/pdf' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url; a.download = `${fullName} - Company Profile.pdf`; a.click()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to generate PDF')
+    }
+    setDownloadingPdf(false)
+  }
+
   function openEmailDialog() {
     setEmailTo('')
     setEmailSubject(`Company & Business Profile – ${fullName}`)
@@ -324,6 +343,14 @@ function LivePreview({ s }: { s: Settings }) {
             className="flex items-center gap-1 text-xs px-2 py-1 rounded-md border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
           >
             <FileText className="h-3 w-3" /> Print
+          </button>
+          <button
+            onClick={downloadProfilePdf}
+            disabled={downloadingPdf}
+            title="Download PDF"
+            className="flex items-center gap-1 text-xs px-2 py-1 rounded-md border border-red-200 text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+          >
+            {downloadingPdf ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />} PDF
           </button>
           <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">● LIVE</span>
         </span>
