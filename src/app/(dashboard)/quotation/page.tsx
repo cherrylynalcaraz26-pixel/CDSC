@@ -22,7 +22,7 @@ import Image from 'next/image'
 import QuotationRequestsPanel from '@/components/quotation/quotation-requests-panel'
 
 interface Client { id: string; company_name: string; email: string | null }
-interface ItemOption { item_name: string; unit_of_measure: string; cost: number | null; selling_price: number | null; image_url: string | null; image_urls: string[] | null }
+interface ItemOption { item_name: string; description: string | null; unit_of_measure: string; cost: number | null; selling_price: number | null; image_url: string | null; image_urls: string[] | null }
 interface UOMOption { id: string; code: string; name: string }
 interface AttributeOption { id: string; name: string; data_type: string; options: string[] | null }
 interface SystemSettings {
@@ -175,7 +175,7 @@ export default function QuotationPage() {
     const [{ data: quoData }, { data: clientData }, { data: itemData }, { data: sysData }, { count: rfqCount }, { data: uomData }, { data: attrData }] = await Promise.all([
       supabase.from('quotations').select('*').order('created_at', { ascending: false }),
       supabase.from('clients').select('id, company_name, email').eq('status', 'active').order('company_name'),
-      supabase.from('items').select('item_name, unit_of_measure, cost, selling_price, image_url, image_urls').eq('status', 'active').order('item_name'),
+      supabase.from('items').select('item_name, description, unit_of_measure, cost, selling_price, image_url, image_urls').eq('status', 'active').order('item_name'),
       supabase.from('system_settings').select('company_name, address, phone, email, tin, logo_url').single(),
       supabase.from('quotation_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
       supabase.from('uom_list').select('id, code, name').eq('is_active', true).order('code'),
@@ -284,6 +284,7 @@ export default function QuotationPage() {
         return {
           ...line,
           item_name: value,
+          description: found?.description ?? line.description,
           quantity: line.quantity || '1',
           unit: found?.unit_of_measure ?? line.unit,
           unit_price: autoPrice !== null ? String(autoPrice) : line.unit_price,
@@ -364,7 +365,7 @@ export default function QuotationPage() {
     })
     if (error) { toast.error(error.message); setSavingNewItem(false); return }
 
-    const newOption: ItemOption = { item_name: name, unit_of_measure, cost, selling_price: sellingPrice, image_url: imageUrl, image_urls: imageUrl ? [imageUrl] : [] }
+    const newOption: ItemOption = { item_name: name, description: null, unit_of_measure, cost, selling_price: sellingPrice, image_url: imageUrl, image_urls: imageUrl ? [imageUrl] : [] }
     setItems(prev => [...prev, newOption].sort((a, b) => a.item_name.localeCompare(b.item_name)))
     if (itemSearchIdx !== null) {
       setLines(prev => prev.map((l, idx) => idx === itemSearchIdx ? {
@@ -484,13 +485,13 @@ export default function QuotationPage() {
     } catch { return undefined }
   }
 
+  // Item photos used to be embedded on a second PDF page, but that routinely pushed the
+  // emailed attachment over the provider's size limit ("attached PDF is too large to
+  // email"). The PDF now carries only the item's text Description (already shown under
+  // its name); only the company logo still needs fetching as a data URL.
   async function buildQuotePdfData(q: Quotation, items: { item_name: string; description?: string | null; quantity: number; unit: string | null; unit_price: number; selling_price: number | null; total_amount: number }[]): Promise<QuotationPdfData> {
     const logoSrc = companyInfo?.logo_url || '/cdsc-logo.jpg'
     const logoDataUrl = await fetchImageDataUrl(logoSrc)
-    const itemsWithImages = await Promise.all(items.map(async i => {
-      const src = i.item_name ? itemImage(i.item_name) : null
-      return { ...i, imageDataUrl: src ? await fetchImageDataUrl(src) : undefined }
-    }))
     return {
       companyName: companyInfo?.company_name ?? 'CDSC INDUSTRIAL SUPPLY',
       companyAddress: companyInfo?.address ?? undefined,
@@ -503,7 +504,7 @@ export default function QuotationPage() {
       validUntil: q.valid_until ?? undefined,
       clientName: q.client_name ?? undefined,
       subject: q.subject ?? undefined,
-      items: itemsWithImages,
+      items,
       subtotal: q.subtotal ?? 0,
       vatAmount: q.vat_amount ?? 0,
       ewtAmount: q.ewt_amount ?? 0,
@@ -1466,6 +1467,7 @@ ${listEmailBody.replace(/\n/g, '<br/>')}
                     setLines(p => p.map((l, i) => i === itemSearchIdx ? {
                       ...l,
                       item_name: it.item_name,
+                      description: it.description ?? l.description,
                       quantity: l.quantity || '1',
                       unit: it.unit_of_measure || l.unit,
                       unit_price: it.cost != null ? String(it.cost) : l.unit_price,
