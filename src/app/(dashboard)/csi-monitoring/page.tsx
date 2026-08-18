@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Checkbox } from '@/components/ui/checkbox'
 import { PaginationBar } from '@/components/ui/pagination-bar'
-import { Plus, X, Search, MoreHorizontal, Loader2, FileText, LayoutGrid, List, ChevronDown, ChevronUp, Trash2, Printer, SlidersHorizontal, FileOutput, Mail, Camera, Image as ImageIcon, GripVertical } from 'lucide-react'
+import { Plus, X, Search, MoreHorizontal, Loader2, FileText, LayoutGrid, List, ChevronDown, ChevronUp, Trash2, Printer, SlidersHorizontal, FileOutput, Mail, Camera, Image as ImageIcon, GripVertical, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
@@ -819,6 +819,17 @@ export default function CSIMonitoringPage() {
     setItemSearchIdx(null)
   }
 
+  async function updateSellingPriceInConfig(i: number) {
+    const it = items[i]
+    const price = Number(it.unit_price)
+    if (!it.item_name) { toast.error('Select an item first'); return }
+    if (!price || price <= 0) { toast.error('Enter a Unit Price first'); return }
+    const { error } = await supabase.from('items').update({ selling_price: price }).eq('item_name', it.item_name)
+    if (error) { toast.error(error.message); return }
+    setItemOptions(prev => prev.map(o => o.item_name === it.item_name ? { ...o, selling_price: price } : o))
+    toast.success(`Selling price for "${it.item_name}" updated to ${formatPeso(price)} in Configuration`)
+  }
+
   async function save() {
     if (!header.si_number.trim()) { toast.error('SI Number is required'); return }
     if (!header.si_date) { toast.error('Date is required'); return }
@@ -1100,6 +1111,7 @@ export default function CSIMonitoringPage() {
                       <TableHead className="w-12">No.</TableHead>
                       <TableHead className="min-w-[260px]">Item Description</TableHead>
                       <TableHead className="w-24">Unit</TableHead>
+                      <TableHead className="w-36">Selling Price (₱)</TableHead>
                       <TableHead className="w-24">Qty</TableHead>
                       <TableHead className="w-32">Unit Price (₱)</TableHead>
                       <TableHead className="w-32 text-right">Amount</TableHead>
@@ -1166,6 +1178,21 @@ export default function CSIMonitoringPage() {
                           </TableCell>
                           <TableCell className="py-1.5">
                             <div className="h-8 flex items-center px-2 text-sm bg-muted/30 rounded border text-muted-foreground">{item.unit || '—'}</div>
+                          </TableCell>
+                          <TableCell className="py-1.5">
+                            <div className="flex items-center gap-1">
+                              <div className="h-8 flex-1 flex items-center px-2 text-sm bg-muted/30 rounded border text-muted-foreground tabular-nums" title="Current Configuration selling price (for reference)">
+                                {(() => {
+                                  const sp = itemOptions.find(o => o.item_name === item.item_name)?.selling_price
+                                  return sp != null ? formatPeso(sp) : '—'
+                                })()}
+                              </div>
+                              <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-muted-foreground hover:text-blue-600"
+                                title="Update this item's selling price in Configuration to match Unit Price"
+                                onClick={() => updateSellingPriceInConfig(i)}>
+                                <RefreshCw className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
                           </TableCell>
                           <TableCell className="py-1.5">
                             <Input type="number" min={0} className="h-8 text-sm" placeholder="0" value={item.quantity}
