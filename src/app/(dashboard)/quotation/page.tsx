@@ -737,10 +737,8 @@ export default function QuotationPage() {
       {/* Totals */}
       <div className="flex justify-end">
         <div className="w-52 space-y-0.5 text-[10px]">
-          <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span>₱{subtotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
-          {vatType !== 'exempt' && <div className="flex justify-between"><span className="text-gray-500">VAT {vatType === 'inclusive' ? '(incl. 12%)' : '(12%)'}</span><span className="text-blue-600">₱{vatAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
           {ewtType !== 'none' && <div className="flex justify-between"><span className="text-gray-500">{ewtLabel} ({ewtCfg.rate * 100}%)</span><span className="text-red-700">−₱{ewtAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
-          <div className="flex justify-between border-t pt-0.5 font-bold text-[11px]"><span>Total</span><span className="text-red-700">₱{totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+          <div className="flex justify-between border-t pt-0.5 font-bold text-[11px]"><span>Total</span><span className="text-red-700">₱{subtotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
         </div>
       </div>
 

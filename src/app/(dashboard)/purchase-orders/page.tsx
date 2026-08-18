@@ -430,7 +430,7 @@ export default function PurchaseOrdersPage() {
       <div>
         <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1px solid #e5e7eb;padding-bottom:12px;margin-bottom:12px;">
           <div>
-            <img src="${logoUrl}" alt="CDSC" style="width:56px;height:56px;border-radius:4px;object-fit:cover;" crossorigin="anonymous" />
+            <img src="${logoUrl}" alt="CDSC" style="width:56px;height:56px;border-radius:4px;object-fit:cover;" />
           </div>
           <div style="text-align:right;">
             <div style="font-size:13px;font-weight:700;color:#b91c1c;line-height:1.25;margin-bottom:2px;">${companyInfo?.company_name ?? 'CDSC Industrial Supply'}</div>
@@ -456,11 +456,9 @@ export default function PurchaseOrdersPage() {
         ${itemsHtml}
         <div style="display:flex;justify-content:flex-end;margin-top:20px;">
           <div style="width:220px;font-size:10px;">
-            <div style="display:flex;justify-content:space-between;padding-bottom:4px;"><span style="color:#6b7280;">Subtotal</span><span>${fmtAmt(po.subtotal)}</span></div>
-            ${hasDiscount ? `<div style="display:flex;justify-content:space-between;border-top:1px solid #e5e7eb;padding-top:4px;"><span style="color:#6b7280;">Discount (${po.discount_rate}%)</span><span style="color:#ea580c;">-${fmtAmt(po.discount_amount)}</span></div><div style="display:flex;justify-content:space-between;"><span style="color:#6b7280;">Net Subtotal</span><span>${fmtAmt(vNetSub)}</span></div>` : ''}
-            <div style="display:flex;justify-content:space-between;border-top:1px solid #e5e7eb;padding-top:4px;"><span style="color:#6b7280;">VAT (12%)</span><span style="color:#2563eb;">${fmtAmt(po.vat_amount)}</span></div>
-            ${hasEwt ? `<div style="display:flex;justify-content:space-between;border-top:1px solid #e5e7eb;padding-top:4px;"><span style="color:#6b7280;">EWT</span><span style="color:#b91c1c;">-${fmtAmt(po.ewt_amount)}</span></div>` : ''}
-            <div style="display:flex;justify-content:space-between;border-top:1px solid #e5e7eb;padding-top:4px;font-weight:700;font-size:11px;"><span>Net Payable</span><span style="color:#b91c1c;">${fmtAmt(po.net_payable)}</span></div>
+            ${hasDiscount ? `<div style="display:flex;justify-content:space-between;padding-bottom:4px;"><span style="color:#6b7280;">Discount (${po.discount_rate}%)</span><span style="color:#ea580c;">-${fmtAmt(po.discount_amount)}</span></div>` : ''}
+            ${hasEwt ? `<div style="display:flex;justify-content:space-between;${hasDiscount ? 'border-top:1px solid #e5e7eb;padding-top:4px;' : 'padding-bottom:4px;'}"><span style="color:#6b7280;">EWT</span><span style="color:#b91c1c;">-${fmtAmt(po.ewt_amount)}</span></div>` : ''}
+            <div style="display:flex;justify-content:space-between;border-top:1px solid #e5e7eb;padding-top:4px;font-weight:700;font-size:11px;"><span>Total</span><span style="color:#b91c1c;">${fmtAmt(vNetSub)}</span></div>
           </div>
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:48px;">
@@ -1289,12 +1287,9 @@ export default function PurchaseOrdersPage() {
                     {/* Totals */}
                     <div className="flex justify-end">
                       <div className="w-52 space-y-0.5 text-[10px]">
-                        <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span>₱{subtotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
                         {discountRate > 0 && <div className="flex justify-between"><span className="text-gray-500">Discount ({discountRate}%)</span><span className="text-orange-600">−₱{discountAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
-                        {discountRate > 0 && <div className="flex justify-between"><span className="text-gray-500">Net Subtotal</span><span>₱{netSubtotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
-                        <div className="flex justify-between"><span className="text-gray-500">VAT {vatInclusive ? '(12% incl.)' : '(12%)'}</span><span className="text-blue-600">₱{vatAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
                         {ewtType !== 'none' && <div className="flex justify-between"><span className="text-gray-500">{taxLabel}</span><span className="text-red-700">−₱{taxAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
-                        <div className="flex justify-between border-t pt-0.5 font-bold text-[11px]"><span>Net Payable</span><span className="text-red-700">₱{netPayable.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+                        <div className="flex justify-between border-t pt-0.5 font-bold text-[11px]"><span>Total</span><span className="text-red-700">₱{netSubtotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
                       </div>
                     </div>
 
