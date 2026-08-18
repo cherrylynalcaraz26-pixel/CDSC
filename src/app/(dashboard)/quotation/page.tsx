@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { Plus, MoreHorizontal, Loader2, Trash2, X, FileText, Printer, Mail, Send, Package, Search, Pencil, Eye, CheckCircle, XCircle, Clock, CheckCheck, ClipboardList } from 'lucide-react'
+import { Plus, MoreHorizontal, Loader2, Trash2, X, FileText, Printer, Mail, Send, Package, Search, Pencil, Eye, CheckCircle, XCircle, Clock, CheckCheck, ClipboardList, GripVertical } from 'lucide-react'
 import { toast } from 'sonner'
 import { undoToast } from '@/lib/undo-toast'
 import { useSearchContext } from '@/context/search-context'
@@ -33,6 +33,7 @@ interface SystemSettings {
 
 interface QuoteLine {
   item_name: string
+  description: string
   quantity: string
   unit: string
   unit_price: string
@@ -55,7 +56,7 @@ interface Quotation {
   created_at: string
 }
 
-const emptyLine = (): QuoteLine => ({ item_name: '', quantity: '', unit: '', unit_price: '', selling_price: '' })
+const emptyLine = (): QuoteLine => ({ item_name: '', description: '', quantity: '', unit: '', unit_price: '', selling_price: '' })
 const today = () => new Date().toISOString().split('T')[0]
 
 type EWTType = 'none' | 'goods' | 'services' | 'rental'
@@ -96,6 +97,7 @@ export default function QuotationPage() {
   const [emailSubjectQ, setEmailSubjectQ] = useState('')
   const [emailBodyQ, setEmailBodyQ] = useState('')
   const [itemSearchIdx, setItemSearchIdx] = useState<number | null>(null)
+  const [dragLineIndex, setDragLineIndex] = useState<number | null>(null)
   const [itemQuery, setItemQuery] = useState('')
   const [activeTab, setActiveTab] = useState('quotations')
   const [rfqPendingCount, setRfqPendingCount] = useState(0)
@@ -105,7 +107,7 @@ export default function QuotationPage() {
 
   // View
   const [viewingQ, setViewingQ] = useState<Quotation | null>(null)
-  const [viewingQItems, setViewingQItems] = useState<{ item_name: string; quantity: number; unit: string | null; selling_price: number | null; unit_price: number; total_amount: number }[]>([])
+  const [viewingQItems, setViewingQItems] = useState<{ item_name: string; description?: string | null; quantity: number; unit: string | null; selling_price: number | null; unit_price: number; total_amount: number }[]>([])
 
   // List email
   const [listEmailQ, setListEmailQ] = useState<Quotation | null>(null)
@@ -198,12 +200,13 @@ export default function QuotationPage() {
     // Load saved line items
     const { data: qItems } = await supabase
       .from('quotation_items')
-      .select('item_name, quantity, unit, unit_price, selling_price')
+      .select('item_name, description, quantity, unit, unit_price, selling_price')
       .eq('quotation_id', q.id)
       .order('created_at')
     setLines(qItems && qItems.length > 0
       ? qItems.map(r => ({
           item_name: r.item_name ?? '',
+          description: r.description ?? '',
           quantity: String(r.quantity ?? 1),
           unit: r.unit ?? '',
           unit_price: String(r.unit_price ?? ''),
@@ -228,7 +231,7 @@ export default function QuotationPage() {
     const snapshot = quotations.find(q => q.id === id)
     const { data: itemSnapshot } = await supabase
       .from('quotation_items')
-      .select('item_name, quantity, unit, unit_price, selling_price, total_amount')
+      .select('item_name, description, quantity, unit, unit_price, selling_price, total_amount')
       .eq('quotation_id', id)
       .order('created_at')
     const { error } = await supabase.from('quotations').delete().eq('id', id)
@@ -284,7 +287,7 @@ export default function QuotationPage() {
     setSaving(true)
     const prevSnapshot = editingId ? quotations.find(q => q.id === editingId) : null
     const { data: prevItemSnapshot } = editingId
-      ? await supabase.from('quotation_items').select('item_name, quantity, unit, unit_price, selling_price, total_amount').eq('quotation_id', editingId).order('created_at')
+      ? await supabase.from('quotation_items').select('item_name, description, quantity, unit, unit_price, selling_price, total_amount').eq('quotation_id', editingId).order('created_at')
       : { data: null }
     const payload = {
       quote_number: quoteNumber || null,
@@ -322,6 +325,7 @@ export default function QuotationPage() {
         await supabase.from('quotation_items').insert(validLines.map(l => ({
           quotation_id: savedId,
           item_name: l.item_name,
+          description: l.description || null,
           quantity: parseFloat(l.quantity) || 1,
           unit: l.unit || null,
           unit_price: parseFloat(l.unit_price) || 0,
@@ -369,7 +373,7 @@ export default function QuotationPage() {
     } catch { return undefined }
   }
 
-  async function buildQuotePdfData(q: Quotation, items: { item_name: string; quantity: number; unit: string | null; unit_price: number; selling_price: number | null; total_amount: number }[]): Promise<QuotationPdfData> {
+  async function buildQuotePdfData(q: Quotation, items: { item_name: string; description?: string | null; quantity: number; unit: string | null; unit_price: number; selling_price: number | null; total_amount: number }[]): Promise<QuotationPdfData> {
     let logoDataUrl: string | undefined
     try {
       const logoSrc = companyInfo?.logo_url || '/cdsc-logo.jpg'
@@ -406,7 +410,7 @@ export default function QuotationPage() {
     }
   }
 
-  function buildQuoteHtml(q: Quotation, items: { item_name: string; quantity: number; unit: string | null; unit_price: number; selling_price: number | null; total_amount: number }[] = []) {
+  function buildQuoteHtml(q: Quotation, items: { item_name: string; description?: string | null; quantity: number; unit: string | null; unit_price: number; selling_price: number | null; total_amount: number }[] = []) {
     const fmtAmt = (n: number) => `₱${(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
     const hasVat = (q.vat_amount ?? 0) > 0
     const hasEwt = (q.ewt_amount ?? 0) > 0
@@ -428,7 +432,7 @@ export default function QuotationPage() {
             const total = it.total_amount ?? price * it.quantity
             return `<tr style="background:${i % 2 === 0 ? '#fff' : '#f9fafb'};">
               <td style="padding:4px 6px;color:#9ca3af;">${i + 1}</td>
-              <td style="padding:4px 6px;">${it.item_name ?? '—'}</td>
+              <td style="padding:4px 6px;">${it.item_name ?? '—'}${it.description ? `<div style="font-size:9px;color:#6b7280;margin-top:2px;">${it.description}</div>` : ''}</td>
               <td style="padding:4px 6px;text-align:right;font-weight:700;">${it.quantity}</td>
               <td style="padding:4px 6px;color:#6b7280;">${it.unit ?? '—'}</td>
               <td style="padding:4px 6px;text-align:right;">${fmtAmt(price)}</td>
@@ -603,7 +607,10 @@ export default function QuotationPage() {
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={itemImage(line.item_name)!} alt="" className="h-6 w-6 rounded object-cover shrink-0" />
                     )}
-                    {line.item_name || <span className="text-gray-300 italic">—</span>}
+                    <div>
+                      <div>{line.item_name || <span className="text-gray-300 italic">—</span>}</div>
+                      {line.description && <div className="text-[9px] text-gray-500">{line.description}</div>}
+                    </div>
                   </div>
                 </td>
                 <td className="px-1.5 py-1 text-right font-bold text-gray-800">{line.quantity || '—'}</td>
@@ -733,6 +740,7 @@ export default function QuotationPage() {
       )}
 
       {open ? (
+        <div className="space-y-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left: Form */}
           <div className="space-y-1">
@@ -795,164 +803,6 @@ export default function QuotationPage() {
                     <Input placeholder="e.g. Supply of Industrial Equipment" value={subject} onChange={e => setSubject(e.target.value)} />
                   </div>
 
-                  {/* Line items */}
-                  <div className="space-y-2">
-                    <Label>Line Items</Label>
-                    <div className="border rounded-lg overflow-hidden">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="bg-muted/40">
-                            <TableHead className="min-w-[180px]">Item Description</TableHead>
-                            <TableHead className="w-16">Qty</TableHead>
-                            <TableHead className="w-20">Unit</TableHead>
-                            <TableHead className="w-28">Unit Price <span className="font-normal text-muted-foreground text-[10px]">(cost)</span></TableHead>
-                            <TableHead className="w-28">Selling Price</TableHead>
-                            <TableHead className="w-28 text-right">Amount</TableHead>
-                            <TableHead className="w-10"></TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {lines.map((line, idx) => (
-                            <TableRow key={idx}>
-                              <TableCell className="py-1.5">
-                                <div className="flex gap-1 min-w-0">
-                                  <Select value={line.item_name} onValueChange={v => updateLine(idx, 'item_name', v ?? '')}>
-                                    <SelectTrigger className="h-8 text-xs flex-1"><SelectValue placeholder="Select item…" /></SelectTrigger>
-                                    <SelectContent>
-                                      {items.map(it => (
-                                        <SelectItem key={it.item_name} value={it.item_name}>{it.item_name}</SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                  <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" title="Search inventory"
-                                    onClick={() => { setItemSearchIdx(idx); setItemQuery('') }}>
-                                    <Package className="h-3.5 w-3.5" />
-                                  </Button>
-                                </div>
-                              </TableCell>
-                              <TableCell className="py-1.5">
-                                <Input type="number" min="0" className="h-8 text-xs w-14" value={line.quantity} onChange={e => updateLine(idx, 'quantity', e.target.value)} />
-                              </TableCell>
-                              <TableCell className="py-1.5">
-                                <div className="h-8 flex items-center px-2 text-xs bg-muted/40 rounded border text-muted-foreground">{line.unit || '—'}</div>
-                              </TableCell>
-                              <TableCell className="py-1.5">
-                                <Input type="number" min="0" step="0.01" className="h-8 text-xs w-full" value={line.unit_price} onChange={e => updateLine(idx, 'unit_price', e.target.value)} />
-                              </TableCell>
-                              <TableCell className="py-1.5">
-                                <Input type="number" min="0" step="0.01" className="h-8 text-xs w-full" value={line.selling_price} onChange={e => updateLine(idx, 'selling_price', e.target.value)} />
-                              </TableCell>
-                              <TableCell className="py-1.5 text-right text-xs font-medium">{fmt((parseFloat(line.quantity)||0)*(parseFloat(line.selling_price)||parseFloat(line.unit_price)||0))}</TableCell>
-                              <TableCell className="py-1.5">
-                                {lines.length > 1 && (
-                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                    onClick={() => setLines(prev => prev.filter((_, i) => i !== idx))}>
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </Button>
-                                )}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={() => setLines(prev => [...prev, emptyLine()])}>
-                      <Plus className="h-3.5 w-3.5 mr-1.5" />Add Item
-                    </Button>
-                  </div>
-
-                  {/* Notes */}
-                  <div className="space-y-1.5">
-                    <Label>Notes / Terms</Label>
-                    <textarea
-                      className="w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
-                      placeholder="Payment terms, delivery notes, etc."
-                      value={notes}
-                      onChange={e => setNotes(e.target.value)}
-                    />
-                  </div>
-
-                  {/* Prepared By / Accepted By */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1.5">
-                      <Label>Prepared By</Label>
-                      <textarea
-                        className="w-full min-h-[60px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
-                        rows={2}
-                        placeholder="Name / Position"
-                        value={preparedBy}
-                        onChange={e => setPreparedBy(e.target.value)}
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>Accepted By</Label>
-                      <textarea
-                        className="w-full min-h-[60px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
-                        rows={2}
-                        placeholder="Name / Position"
-                        value={acceptedBy}
-                        onChange={e => setAcceptedBy(e.target.value)}
-                      />
-                    </div>
-                  </div>
-
-                  {/* VAT Type */}
-                  <div className="space-y-1.5">
-                    <Label>VAT Type</Label>
-                    <div className="flex gap-2 flex-wrap">
-                      {([
-                        { value: 'exclusive', label: 'VAT Exclusive' },
-                        { value: 'inclusive', label: 'VAT Inclusive' },
-                        { value: 'exempt',    label: 'VAT Exempt' },
-                      ] as const).map(opt => (
-                        <button key={opt.value} type="button" onClick={() => setVatType(opt.value)}
-                          className={`px-3 py-1.5 text-sm rounded-md border font-medium transition-colors ${vatType === opt.value ? 'bg-red-600 text-white border-red-600' : 'bg-background text-muted-foreground hover:bg-muted border-input'}`}>
-                          {opt.label}
-                        </button>
-                      ))}
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {vatType === 'exclusive' ? 'VAT (12%) added on top of subtotal' : vatType === 'inclusive' ? 'VAT already included in price (extracted at 12/112)' : 'No VAT applied'}
-                    </p>
-                  </div>
-
-                  {/* EWT */}
-                  <div className="space-y-1.5">
-                    <Label>EWT (Expanded Withholding Tax)</Label>
-                    <div className="flex gap-2 flex-wrap">
-                      {(['none', 'goods', 'services', 'rental'] as EWTType[]).map(opt => (
-                        <button key={opt} type="button" onClick={() => setEwtType(opt)}
-                          className={`px-3 py-1.5 text-sm rounded-md border font-medium transition-colors ${ewtType === opt ? 'bg-red-600 text-white border-red-600' : 'bg-background text-muted-foreground hover:bg-muted border-input'}`}>
-                          {opt === 'none' ? 'None' : `${EWT_CFG[opt].label} (${EWT_CFG[opt].rate * 100}%)`}
-                        </button>
-                      ))}
-                    </div>
-                    {ewtType !== 'none' && (
-                      <p className="text-xs text-muted-foreground">
-                        ATC: <span className="font-semibold text-foreground">{ewtCfg.atc}</span> — {ewtCfg.desc} @ {ewtCfg.rate * 100}%
-                      </p>
-                    )}
-                  </div>
-
-                  {/* Totals summary */}
-                  <div className="rounded-lg bg-muted/30 p-4 space-y-1 text-sm">
-                    <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{fmt(subtotal)}</span></div>
-                    {vatType !== 'exempt' && <div className="flex justify-between"><span className="text-muted-foreground">VAT {vatType === 'inclusive' ? '(incl. 12%)' : '12%'}</span><span>{fmt(vatAmount)}</span></div>}
-                    {ewtType !== 'none' && <div className="flex justify-between"><span className="text-muted-foreground">{ewtLabel} ({ewtCfg.rate * 100}%)</span><span className="text-red-700">− {fmt(ewtAmount)}</span></div>}
-                    <div className="h-px bg-border my-1" />
-                    <div className="flex justify-between font-bold"><span>Total</span><span className="text-red-600">{fmt(totalAmount)}</span></div>
-                  </div>
-
-                  <div className="flex justify-end gap-2 pt-2">
-                    <Button variant="outline" onClick={() => {
-                      const hasData = clientId || quoteNumber || lines.some(l => l.item_name)
-                      if (hasData) { setDiscardCallback(() => () => { setOpen(false); resetForm() }); setDiscardOpen(true); return }
-                      setOpen(false); resetForm()
-                    }}>Cancel</Button>
-                    <Button onClick={handleSave} disabled={saving} className="bg-red-600 hover:bg-red-700">
-                      {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />{editingId ? 'Updating…' : 'Saving…'}</> : editingId ? 'Update Quotation' : 'Save Quotation'}
-                    </Button>
-                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -981,6 +831,200 @@ export default function QuotationPage() {
               <PreviewDoc />
             </div>
           </div>
+        </div>
+
+        {/* Line Items — full width */}
+        <Card>
+          <CardContent className="pt-5 space-y-2">
+            <Label>Line Items</Label>
+            <div className="border rounded-lg overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/40">
+                    <TableHead className="w-12">No.</TableHead>
+                    <TableHead className="w-16">Qty</TableHead>
+                    <TableHead className="w-20">Unit</TableHead>
+                    <TableHead className="min-w-[220px]">Item Description</TableHead>
+                    <TableHead className="w-28">Unit Price <span className="font-normal text-muted-foreground text-[10px]">(cost)</span></TableHead>
+                    <TableHead className="w-28">Selling Price</TableHead>
+                    <TableHead className="w-28 text-right">Amount</TableHead>
+                    <TableHead className="w-10"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {lines.map((line, idx) => (
+                    <TableRow
+                      key={idx}
+                      className={dragLineIndex === idx ? 'bg-red-50/60' : undefined}
+                      onDragOver={e => { if (dragLineIndex !== null) e.preventDefault() }}
+                      onDrop={e => {
+                        e.preventDefault()
+                        if (dragLineIndex === null || dragLineIndex === idx) return
+                        setLines(prev => {
+                          const next = [...prev]
+                          const [moved] = next.splice(dragLineIndex, 1)
+                          next.splice(idx, 0, moved)
+                          return next
+                        })
+                        setDragLineIndex(null)
+                      }}
+                    >
+                      <TableCell className="py-1.5">
+                        <div
+                          className="flex items-center gap-1 text-sm text-muted-foreground cursor-grab active:cursor-grabbing"
+                          draggable
+                          onDragStart={() => setDragLineIndex(idx)}
+                          onDragEnd={() => setDragLineIndex(null)}
+                          title="Drag to reorder"
+                        >
+                          <GripVertical className="h-3.5 w-3.5 shrink-0" />
+                          {idx + 1}
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-1.5">
+                        <Input type="number" min="0" className="h-8 text-xs w-14" value={line.quantity} onChange={e => updateLine(idx, 'quantity', e.target.value)} />
+                      </TableCell>
+                      <TableCell className="py-1.5">
+                        <div className="h-8 flex items-center px-2 text-xs bg-muted/40 rounded border text-muted-foreground">{line.unit || '—'}</div>
+                      </TableCell>
+                      <TableCell className="py-1.5">
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex gap-1 min-w-0">
+                            <Select value={line.item_name} onValueChange={v => updateLine(idx, 'item_name', v ?? '')}>
+                              <SelectTrigger className="h-8 text-xs flex-1"><SelectValue placeholder="Select item…" /></SelectTrigger>
+                              <SelectContent>
+                                {items.map(it => (
+                                  <SelectItem key={it.item_name} value={it.item_name}>{it.item_name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" title="Search inventory"
+                              onClick={() => { setItemSearchIdx(idx); setItemQuery('') }}>
+                              <Search className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                          <Input placeholder="Description (optional)" className="h-7 text-xs" value={line.description}
+                            onChange={e => updateLine(idx, 'description', e.target.value)} />
+                        </div>
+                      </TableCell>
+                      <TableCell className="py-1.5">
+                        <Input type="number" min="0" step="0.01" className="h-8 text-xs w-full" value={line.unit_price} onChange={e => updateLine(idx, 'unit_price', e.target.value)} />
+                      </TableCell>
+                      <TableCell className="py-1.5">
+                        <Input type="number" min="0" step="0.01" className="h-8 text-xs w-full" value={line.selling_price} onChange={e => updateLine(idx, 'selling_price', e.target.value)} />
+                      </TableCell>
+                      <TableCell className="py-1.5 text-right text-xs font-medium">{fmt((parseFloat(line.quantity)||0)*(parseFloat(line.selling_price)||parseFloat(line.unit_price)||0))}</TableCell>
+                      <TableCell className="py-1.5">
+                        {lines.length > 1 && (
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            onClick={() => setLines(prev => prev.filter((_, i) => i !== idx))}>
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => setLines(prev => [...prev, emptyLine()])}>
+              <Plus className="h-3.5 w-3.5 mr-1.5" />Add Item
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Notes, signatures, tax settings, totals — full width */}
+        <Card>
+          <CardContent className="pt-5 space-y-4">
+            <div className="space-y-1.5">
+              <Label>Notes / Terms</Label>
+              <textarea
+                className="w-full min-h-[80px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                placeholder="Payment terms, delivery notes, etc."
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Prepared By</Label>
+                <textarea
+                  className="w-full min-h-[60px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                  rows={2}
+                  placeholder="Name / Position"
+                  value={preparedBy}
+                  onChange={e => setPreparedBy(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Accepted By</Label>
+                <textarea
+                  className="w-full min-h-[60px] rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                  rows={2}
+                  placeholder="Name / Position"
+                  value={acceptedBy}
+                  onChange={e => setAcceptedBy(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>VAT Type</Label>
+              <div className="flex gap-2 flex-wrap">
+                {([
+                  { value: 'exclusive', label: 'VAT Exclusive' },
+                  { value: 'inclusive', label: 'VAT Inclusive' },
+                  { value: 'exempt',    label: 'VAT Exempt' },
+                ] as const).map(opt => (
+                  <button key={opt.value} type="button" onClick={() => setVatType(opt.value)}
+                    className={`px-3 py-1.5 text-sm rounded-md border font-medium transition-colors ${vatType === opt.value ? 'bg-red-600 text-white border-red-600' : 'bg-background text-muted-foreground hover:bg-muted border-input'}`}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {vatType === 'exclusive' ? 'VAT (12%) added on top of subtotal' : vatType === 'inclusive' ? 'VAT already included in price (extracted at 12/112)' : 'No VAT applied'}
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>EWT (Expanded Withholding Tax)</Label>
+              <div className="flex gap-2 flex-wrap">
+                {(['none', 'goods', 'services', 'rental'] as EWTType[]).map(opt => (
+                  <button key={opt} type="button" onClick={() => setEwtType(opt)}
+                    className={`px-3 py-1.5 text-sm rounded-md border font-medium transition-colors ${ewtType === opt ? 'bg-red-600 text-white border-red-600' : 'bg-background text-muted-foreground hover:bg-muted border-input'}`}>
+                    {opt === 'none' ? 'None' : `${EWT_CFG[opt].label} (${EWT_CFG[opt].rate * 100}%)`}
+                  </button>
+                ))}
+              </div>
+              {ewtType !== 'none' && (
+                <p className="text-xs text-muted-foreground">
+                  ATC: <span className="font-semibold text-foreground">{ewtCfg.atc}</span> — {ewtCfg.desc} @ {ewtCfg.rate * 100}%
+                </p>
+              )}
+            </div>
+
+            <div className="rounded-lg bg-muted/30 p-4 space-y-1 text-sm max-w-sm ml-auto">
+              <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{fmt(subtotal)}</span></div>
+              {vatType !== 'exempt' && <div className="flex justify-between"><span className="text-muted-foreground">VAT {vatType === 'inclusive' ? '(incl. 12%)' : '12%'}</span><span>{fmt(vatAmount)}</span></div>}
+              {ewtType !== 'none' && <div className="flex justify-between"><span className="text-muted-foreground">{ewtLabel} ({ewtCfg.rate * 100}%)</span><span className="text-red-700">− {fmt(ewtAmount)}</span></div>}
+              <div className="h-px bg-border my-1" />
+              <div className="flex justify-between font-bold"><span>Total</span><span className="text-red-600">{fmt(totalAmount)}</span></div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t mt-4">
+              <Button variant="outline" onClick={() => {
+                const hasData = clientId || quoteNumber || lines.some(l => l.item_name)
+                if (hasData) { setDiscardCallback(() => () => { setOpen(false); resetForm() }); setDiscardOpen(true); return }
+                setOpen(false); resetForm()
+              }}>Cancel</Button>
+              <Button onClick={handleSave} disabled={saving} className="bg-red-600 hover:bg-red-700">
+                {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />{editingId ? 'Updating…' : 'Saving…'}</> : editingId ? 'Update Quotation' : 'Save Quotation'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
         </div>
       ) : (
         <Card>
@@ -1033,7 +1077,7 @@ export default function QuotationPage() {
                           <DropdownMenuContent align="end" className="w-52">
                             <DropdownMenuItem onClick={async () => {
                               setViewingQ(q)
-                              const { data } = await supabase.from('quotation_items').select('item_name,quantity,unit,unit_price,selling_price,total_amount').eq('quotation_id', q.id).order('created_at')
+                              const { data } = await supabase.from('quotation_items').select('item_name,description,quantity,unit,unit_price,selling_price,total_amount').eq('quotation_id', q.id).order('created_at')
                               setViewingQItems(data ?? [])
                             }}>
                               <Eye className="mr-2 h-4 w-4" />View
@@ -1144,6 +1188,7 @@ export default function QuotationPage() {
                   }
                   const formItems = lines.filter(l => l.item_name.trim()).map(l => ({
                     item_name: l.item_name,
+                    description: l.description || null,
                     quantity: parseFloat(l.quantity) || 1,
                     unit: l.unit || null,
                     unit_price: parseFloat(l.unit_price) || 0,
@@ -1242,7 +1287,7 @@ ${emailBodyQ.replace(/\n/g, '<br/>')}
                   const q = listEmailQ!
                   setSendingListEmail(true)
                   try {
-                    const { data: qItemsForEmail } = await supabase.from('quotation_items').select('item_name,quantity,unit,unit_price,selling_price,total_amount').eq('quotation_id', q.id).order('created_at')
+                    const { data: qItemsForEmail } = await supabase.from('quotation_items').select('item_name,description,quantity,unit,unit_price,selling_price,total_amount').eq('quotation_id', q.id).order('created_at')
                     const appUrlList = process.env.NEXT_PUBLIC_APP_URL ?? window.location.origin
                     const confirmUrlList = `${appUrlList}/api/confirm/quote/${q.id}`
                     const htmlBodyList = `<div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:24px">
