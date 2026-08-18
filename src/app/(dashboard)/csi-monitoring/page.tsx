@@ -842,7 +842,7 @@ export default function CSIMonitoringPage() {
     const it = items[i]
     const price = Number(it.unit_price)
     if (!it.item_name) { toast.error('Select an item first'); return }
-    if (!price || price <= 0) { toast.error('Enter a Unit Price first'); return }
+    if (!price || price <= 0) { toast.error('Enter a Selling Price first'); return }
     const { error } = await supabase.from('items').update({ selling_price: price }).eq('item_name', it.item_name)
     if (error) { toast.error(error.message); return }
     setItemOptions(prev => prev.map(o => o.item_name === it.item_name ? { ...o, selling_price: price } : o))
@@ -892,14 +892,6 @@ export default function CSIMonitoringPage() {
   }
 
   const totalItems = items.reduce((s, it) => s + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0), 0)
-  // The Live Preview mirrors what actually prints on the Sales Invoice, so it shows
-  // each item's current Configuration selling price rather than a possibly-overridden
-  // Unit Price — falling back to Unit Price only when the item has no selling price on file.
-  function previewUnitPrice(it: CSIItem): number {
-    const sp = itemOptions.find(o => o.item_name === it.item_name)?.selling_price
-    return sp != null ? sp : (Number(it.unit_price) || 0)
-  }
-  const previewTotal = items.reduce((s, it) => s + (Number(it.quantity) || 0) * previewUnitPrice(it), 0)
   const filteredSearchItems = itemQuery.trim()
     ? itemOptions.filter(it => it.item_name.toLowerCase().includes(itemQuery.toLowerCase()))
     : itemOptions
@@ -1103,7 +1095,7 @@ export default function CSIMonitoringPage() {
                         {items.filter(it => it.item_name).length === 0 ? (
                           <tr><td colSpan={6} className="px-1.5 py-3 text-center text-gray-300 italic">No items added yet</td></tr>
                         ) : items.map((item, i) => {
-                          const unitPrice = previewUnitPrice(item)
+                          const unitPrice = Number(item.unit_price) || 0
                           const amt = (Number(item.quantity) || 0) * unitPrice
                           return item.item_name ? (
                             <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
@@ -1120,7 +1112,7 @@ export default function CSIMonitoringPage() {
                       <tfoot>
                         <tr className="border-t-2 border-gray-300">
                           <td colSpan={5} className="px-1.5 py-1 text-right font-bold text-gray-700">Total</td>
-                          <td className="px-1.5 py-1 text-right font-bold text-red-700">{formatPeso(previewTotal)}</td>
+                          <td className="px-1.5 py-1 text-right font-bold text-red-700">{formatPeso(totalItems)}</td>
                         </tr>
                       </tfoot>
                     </table>
@@ -1212,19 +1204,19 @@ export default function CSIMonitoringPage() {
                             </div>
                           </TableCell>
                           <TableCell className="py-1.5">
-                            <Input type="number" min={0} step="0.01" className="h-8 text-sm" placeholder="0.00" value={item.unit_price}
-                              onChange={e => setItems(prev => prev.map((it, idx) => idx === i ? { ...it, unit_price: e.target.value } : it))} />
+                            <div className="h-8 flex items-center px-2 text-sm bg-muted/30 rounded border text-muted-foreground tabular-nums" title="Current Configuration selling price (for reference)">
+                              {(() => {
+                                const sp = itemOptions.find(o => o.item_name === item.item_name)?.selling_price
+                                return sp != null ? formatPeso(sp) : '—'
+                              })()}
+                            </div>
                           </TableCell>
                           <TableCell className="py-1.5">
                             <div className="flex items-center gap-1">
-                              <div className="h-8 flex-1 flex items-center px-2 text-sm bg-muted/30 rounded border text-muted-foreground tabular-nums" title="Current Configuration selling price (for reference)">
-                                {(() => {
-                                  const sp = itemOptions.find(o => o.item_name === item.item_name)?.selling_price
-                                  return sp != null ? formatPeso(sp) : '—'
-                                })()}
-                              </div>
+                              <Input type="number" min={0} step="0.01" className="h-8 text-sm flex-1" placeholder="0.00" value={item.unit_price}
+                                onChange={e => setItems(prev => prev.map((it, idx) => idx === i ? { ...it, unit_price: e.target.value } : it))} />
                               <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-muted-foreground hover:text-blue-600"
-                                title="Update this item's selling price in Configuration to match Unit Price"
+                                title="Update this item's selling price in Configuration to match this Selling Price"
                                 onClick={() => updateSellingPriceInConfig(i)}>
                                 <RefreshCw className="h-3.5 w-3.5" />
                               </Button>
