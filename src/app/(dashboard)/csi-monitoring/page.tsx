@@ -46,6 +46,8 @@ interface ClientOption {
   email: string | null
 }
 interface SOItemOption { item_name: string; unit: string; quantity: number; selling_price: number }
+interface UOMOption { id: string; code: string; name: string }
+interface AttributeOption { id: string; name: string; data_type: string; options: string[] | null }
 
 interface BlankFormCalib {
   pageWidthMm: number
@@ -171,11 +173,14 @@ export default function CSIMonitoringPage() {
   const [itemSearchIdx, setItemSearchIdx] = useState<number | null>(null)
   const [itemQuery, setItemQuery] = useState('')
   const [addItemOpen, setAddItemOpen] = useState(false)
-  const [newItemForm, setNewItemForm] = useState({ item_name: '', unit_of_measure: '', selling_price: '' })
+  const [newItemForm, setNewItemForm] = useState({ item_name: '', unit_of_measure: '', selling_price: '', attribute: '' })
   const [newItemImageFile, setNewItemImageFile] = useState<File | null>(null)
   const [newItemImageUrl, setNewItemImageUrl] = useState<string | null>(null)
   const newItemImageInputRef = useRef<HTMLInputElement>(null)
   const [savingNewItem, setSavingNewItem] = useState(false)
+  const [uomList, setUomList] = useState<UOMOption[]>([])
+  const [attributeList, setAttributeList] = useState<AttributeOption[]>([])
+  const [newItemAttributeTypeId, setNewItemAttributeTypeId] = useState('')
   const [activeTab, setActiveTab] = useState<'form' | 'preview'>('form')
   const [siNumberOptions, setSiNumberOptions] = useState<{ value: string; tag: 'current' | 'next' | 'missing' }[]>([])
   const [companyInfo, setCompanyInfo] = useState<{ company_name: string; address: string; phone: string; email: string; tin: string } | null>(null)
@@ -203,13 +208,17 @@ export default function CSIMonitoringPage() {
 
   async function load() {
     setLoading(true)
-    const [{ data: itemOptData }, { data: clientData }, { data: soData }, drItemsData, drLogData] = await Promise.all([
+    const [{ data: itemOptData }, { data: clientData }, { data: soData }, drItemsData, drLogData, { data: uomData }, { data: attrData }] = await Promise.all([
       supabase.from('items').select('item_name, unit_of_measure').order('item_name'),
       supabase.from('clients').select('id, company_name, show_csi_in_portal, address, city, province, tin, industry, email').eq('status', 'active').order('company_name'),
       supabase.from('sales_orders').select('id, so_number').not('so_number', 'is', null).order('created_at', { ascending: false }),
       fetchAllRows((from, to) => supabase.from('dr_log_items').select('dr_number, item_name').order('item_name').order('id').range(from, to)),
       fetchAllRows((from, to) => supabase.from('dr_logs').select('id, dr_number, po_number, supplier_name').order('dr_date', { ascending: false }).order('id').range(from, to)),
+      supabase.from('uom_list').select('id, code, name').eq('is_active', true).order('code'),
+      supabase.from('attributes').select('id, name, data_type, options').order('name'),
     ])
+    setUomList((uomData ?? []) as UOMOption[])
+    setAttributeList((attrData ?? []) as AttributeOption[])
     // On DR logs the "supplier" field holds the delivered-to client.
     const drClientMap = new Map((drLogData as any[]).map(d => [d.dr_number, d.supplier_name ?? null]))
     setDrItemsForCrossRef((drItemsData as any[]).map(d => ({ dr_number: d.dr_number, item_name: d.item_name, client_name: drClientMap.get(d.dr_number) ?? null })))
@@ -731,10 +740,16 @@ export default function CSIMonitoringPage() {
   }
 
   function openAddItem() {
-    setNewItemForm({ item_name: itemQuery.trim(), unit_of_measure: '', selling_price: '' })
+    setNewItemForm({ item_name: itemQuery.trim(), unit_of_measure: '', selling_price: '', attribute: '' })
     setNewItemImageFile(null)
     setNewItemImageUrl(null)
+    setNewItemAttributeTypeId('')
     setAddItemOpen(true)
+  }
+
+  function handleNewItemAttributeTypeChange(id: string) {
+    setNewItemAttributeTypeId(id)
+    setNewItemForm(f => ({ ...f, attribute: '' }))
   }
 
   // Derives a short letters-only prefix from the item name (e.g. "Laptop Stand" -> "LAP")
@@ -780,6 +795,7 @@ export default function CSIMonitoringPage() {
       item_name: name,
       unit_of_measure,
       selling_price: newItemForm.selling_price.trim() ? parseFloat(newItemForm.selling_price) : null,
+      attribute: newItemForm.attribute.trim() || null,
       image_url: imageUrl,
       image_urls: imageUrl ? [imageUrl] : [],
       status: 'active',
@@ -1867,12 +1883,56 @@ export default function CSIMonitoringPage() {
             </div>
             <div className="space-y-1.5">
               <Label>Unit of Measure</Label>
-              <Input
-                placeholder="piece"
-                value={newItemForm.unit_of_measure}
-                onChange={e => setNewItemForm(f => ({ ...f, unit_of_measure: e.target.value }))}
-              />
+              <Select value={newItemForm.unit_of_measure} onValueChange={v => setNewItemForm(f => ({ ...f, unit_of_measure: v ?? '' }))}>
+                <SelectTrigger className="w-full">
+                  {newItemForm.unit_of_measure
+                    ? <span className="truncate text-sm">{uomList.find(u => u.code === newItemForm.unit_of_measure)?.name ?? newItemForm.unit_of_measure}</span>
+                    : <span className="text-muted-foreground text-sm">Select UOM…</span>}
+                </SelectTrigger>
+                <SelectContent>
+                  {uomList.map(u => (
+                    <SelectItem key={u.id} value={u.code}>{u.code} – {u.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
+            <div className="space-y-1.5">
+              <Label>Attribute</Label>
+              <Select value={newItemAttributeTypeId} onValueChange={v => handleNewItemAttributeTypeChange(v ?? '')}>
+                <SelectTrigger className="w-full">
+                  {newItemAttributeTypeId
+                    ? <span className="truncate text-sm">{attributeList.find(a => a.id === newItemAttributeTypeId)?.name}</span>
+                    : <span className="text-muted-foreground text-sm">Select attribute…</span>}
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">— None —</SelectItem>
+                  {attributeList.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {newItemAttributeTypeId && (() => {
+              const attrType = attributeList.find(a => a.id === newItemAttributeTypeId)
+              return (
+                <div className="space-y-1.5">
+                  <Label>{attrType?.name} Value</Label>
+                  {attrType?.data_type === 'select' ? (
+                    <Select value={newItemForm.attribute} onValueChange={v => setNewItemForm(f => ({ ...f, attribute: v ?? '' }))}>
+                      <SelectTrigger className="w-full">
+                        {newItemForm.attribute
+                          ? <span className="truncate text-sm">{newItemForm.attribute}</span>
+                          : <span className="text-muted-foreground text-sm">{attrType?.options?.length ? `Select ${attrType?.name}…` : 'No values yet'}</span>}
+                      </SelectTrigger>
+                      <SelectContent>
+                        {attrType?.options?.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input placeholder={`Enter ${attrType?.name ?? 'value'}…`} value={newItemForm.attribute}
+                      onChange={e => setNewItemForm(f => ({ ...f, attribute: e.target.value }))} />
+                  )}
+                </div>
+              )
+            })()}
             <div className="space-y-1.5">
               <Label>Selling Price (₱)</Label>
               <Input
