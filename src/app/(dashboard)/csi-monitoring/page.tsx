@@ -120,6 +120,7 @@ interface CSIRecord {
   dr_number: string | null
   created_at: string
   show_in_portal: boolean
+  attachment_url: string | null
 }
 
 interface CSIItem {
@@ -172,6 +173,8 @@ export default function CSIMonitoringPage() {
   const [page, setPage] = useState(1)
   const [itemSearchIdx, setItemSearchIdx] = useState<number | null>(null)
   const [dragItemIndex, setDragItemIndex] = useState<number | null>(null)
+  const [uploadingAttachmentSi, setUploadingAttachmentSi] = useState<string | null>(null)
+  const [previewAttachmentUrl, setPreviewAttachmentUrl] = useState<string | null>(null)
   const [itemQuery, setItemQuery] = useState('')
   const [addItemOpen, setAddItemOpen] = useState(false)
   const [newItemForm, setNewItemForm] = useState({ item_name: '', unit_of_measure: '', selling_price: '', attribute: '' })
@@ -272,6 +275,21 @@ export default function CSIMonitoringPage() {
     if (error) { toast.error('Failed to update'); return }
     setRecords(prev => prev.map(r => r.si_number === siNumber ? { ...r, show_in_portal: next } : r))
     toast.success(next ? `SI ${siNumber} visible in portal` : `SI ${siNumber} hidden from portal`)
+  }
+
+  async function uploadSiAttachment(siNumber: string, file: File) {
+    setUploadingAttachmentSi(siNumber)
+    try {
+      const url = await uploadImageToDrive(file, { displayName: `SI-${siNumber}`, folder: 'CSI Attachments' })
+      const { error } = await supabase.from('csi_records').update({ attachment_url: url }).eq('si_number', siNumber)
+      if (error) { toast.error(error.message); return }
+      setRecords(prev => prev.map(r => r.si_number === siNumber ? { ...r, attachment_url: url } : r))
+      toast.success(`Photo attached to SI ${siNumber}`)
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to upload image')
+    } finally {
+      setUploadingAttachmentSi(null)
+    }
   }
 
   async function toggleCsiPortalVisibility(clientId: string, current: boolean) {
@@ -621,7 +639,7 @@ export default function CSIMonitoringPage() {
   const totalAmount = filtered.reduce((s, r) => s + (Number(r.amount) || 0), 0)
   const uniqueSIs = new Set(filtered.map(r => r.si_number)).size
 
-  const siGroups: { si_number: string; date: string; client: string; po: string | null; dr: string | null; items: CSIRecord[]; total: number; show_in_portal: boolean }[] = []
+  const siGroups: { si_number: string; date: string; client: string; po: string | null; dr: string | null; items: CSIRecord[]; total: number; show_in_portal: boolean; attachment_url: string | null }[] = []
   const siSeen = new Set<string>()
   for (const rec of filtered) {
     if (!siSeen.has(rec.si_number)) {
@@ -636,6 +654,7 @@ export default function CSIMonitoringPage() {
         items: siItems,
         total: siItems.reduce((s, r) => s + (Number(r.amount) || 0), 0),
         show_in_portal: rec.show_in_portal !== false,
+        attachment_url: rec.attachment_url ?? null,
       })
     }
   }
@@ -1655,6 +1674,7 @@ export default function CSIMonitoringPage() {
                     <TableHead className="w-28">DR Number</TableHead>
                     <TableHead className="text-right w-16">Items</TableHead>
                     <TableHead className="text-right w-32">Total Amount</TableHead>
+                    <TableHead className="w-16 text-center">Photo</TableHead>
                     <TableHead className="w-24 text-center">Portal</TableHead>
                     <TableHead className="w-10" />
                   </TableRow>
@@ -1662,13 +1682,13 @@ export default function CSIMonitoringPage() {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={10} className="text-center py-10">
+                      <TableCell colSpan={11} className="text-center py-10">
                         <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                       </TableCell>
                     </TableRow>
                   ) : siGroups.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
+                      <TableCell colSpan={11} className="text-center py-12 text-muted-foreground">
                         No records found. Click <strong>New Record</strong> to add one.
                       </TableCell>
                     </TableRow>
@@ -1696,6 +1716,37 @@ export default function CSIMonitoringPage() {
                         <TableCell className="text-right text-sm">{group.items.length}</TableCell>
                         <TableCell className="text-right text-sm font-medium">{formatPeso(group.total)}</TableCell>
                         <TableCell className="text-center" onClick={e => e.stopPropagation()}>
+                          {group.attachment_url ? (
+                            <button
+                              type="button"
+                              onClick={() => setPreviewAttachmentUrl(group.attachment_url)}
+                              className="h-9 w-9 mx-auto rounded border overflow-hidden block"
+                              title="View attached photo"
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={group.attachment_url} alt={`SI ${group.si_number} attachment`} className="h-full w-full object-cover" />
+                            </button>
+                          ) : (
+                            <label className="h-9 w-9 mx-auto rounded border border-dashed flex items-center justify-center text-muted-foreground hover:text-blue-600 hover:border-blue-400 cursor-pointer transition-colors"
+                              title="Upload photo">
+                              {uploadingAttachmentSi === group.si_number
+                                ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                : <Camera className="h-3.5 w-3.5" />}
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                disabled={uploadingAttachmentSi !== null}
+                                onChange={e => {
+                                  const f = e.target.files?.[0]
+                                  if (f) uploadSiAttachment(group.si_number, f)
+                                  e.target.value = ''
+                                }}
+                              />
+                            </label>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center" onClick={e => e.stopPropagation()}>
                           <button
                             onClick={() => toggleSIPortalVisibility(group.si_number, group.show_in_portal)}
                             className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full border transition-colors ${group.show_in_portal ? 'bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100' : 'bg-gray-100 border-gray-200 text-gray-400 hover:bg-gray-200'}`}
@@ -1721,7 +1772,7 @@ export default function CSIMonitoringPage() {
                       </TableRow>
                       {expandedSIs.has(group.si_number) && (
                         <TableRow key={`${group.si_number}-items`}>
-                          <TableCell colSpan={10} className="p-0 bg-muted/20">
+                          <TableCell colSpan={11} className="p-0 bg-muted/20">
                             <div className="px-8 py-2">
                               <Table>
                                 <TableHeader>
@@ -2023,6 +2074,19 @@ export default function CSIMonitoringPage() {
               {savingNewItem ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : 'Save'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Attachment Preview */}
+      <Dialog open={previewAttachmentUrl !== null} onOpenChange={o => { if (!o) setPreviewAttachmentUrl(null) }}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>SI Attachment</DialogTitle>
+          </DialogHeader>
+          {previewAttachmentUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={previewAttachmentUrl} alt="SI attachment" className="w-full max-h-[70vh] object-contain rounded-lg border" />
+          )}
         </DialogContent>
       </Dialog>
 
