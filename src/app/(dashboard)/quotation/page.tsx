@@ -361,8 +361,19 @@ export default function QuotationPage() {
     setSaving(false)
   }
 
+  // Google Drive's image URLs (item photos, uploaded logos) don't send CORS headers, so a
+  // direct browser fetch() to read the bytes for embedding in the PDF gets blocked even
+  // though the same URL displays fine in an <img> tag. Route those through our own
+  // same-origin proxy (which fetches server-side, where CORS doesn't apply) instead.
   async function fetchImageDataUrl(url: string): Promise<string | undefined> {
     try {
+      const isDrive = /(^|\.)(drive\.google\.com|googleusercontent\.com)$/.test(new URL(url, window.location.origin).hostname)
+      if (isDrive) {
+        const res = await fetch(`/api/fetch-image?url=${encodeURIComponent(url)}`)
+        if (!res.ok) return undefined
+        const data = await res.json()
+        return data.dataUrl as string
+      }
       const resp = await fetch(url)
       const blob = await resp.blob()
       return await new Promise<string>(resolve => {
@@ -374,17 +385,8 @@ export default function QuotationPage() {
   }
 
   async function buildQuotePdfData(q: Quotation, items: { item_name: string; description?: string | null; quantity: number; unit: string | null; unit_price: number; selling_price: number | null; total_amount: number }[]): Promise<QuotationPdfData> {
-    let logoDataUrl: string | undefined
-    try {
-      const logoSrc = companyInfo?.logo_url || '/cdsc-logo.jpg'
-      const resp = await fetch(logoSrc)
-      const blob = await resp.blob()
-      logoDataUrl = await new Promise<string>(resolve => {
-        const reader = new FileReader()
-        reader.onload = () => resolve(reader.result as string)
-        reader.readAsDataURL(blob)
-      })
-    } catch { /* skip logo */ }
+    const logoSrc = companyInfo?.logo_url || '/cdsc-logo.jpg'
+    const logoDataUrl = await fetchImageDataUrl(logoSrc)
     const itemsWithImages = await Promise.all(items.map(async i => {
       const src = i.item_name ? itemImage(i.item_name) : null
       return { ...i, imageDataUrl: src ? await fetchImageDataUrl(src) : undefined }
