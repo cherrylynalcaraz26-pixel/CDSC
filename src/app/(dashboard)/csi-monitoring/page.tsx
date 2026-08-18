@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Checkbox } from '@/components/ui/checkbox'
 import { PaginationBar } from '@/components/ui/pagination-bar'
-import { Plus, X, Search, MoreHorizontal, Loader2, FileText, LayoutGrid, List, ChevronDown, ChevronUp, Trash2, Printer, SlidersHorizontal, FileOutput, Mail, Camera, Image as ImageIcon } from 'lucide-react'
+import { Plus, X, Search, MoreHorizontal, Loader2, FileText, LayoutGrid, List, ChevronDown, ChevronUp, Trash2, Printer, SlidersHorizontal, FileOutput, Mail, Camera, Image as ImageIcon, GripVertical } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
@@ -171,6 +171,7 @@ export default function CSIMonitoringPage() {
   const [expandedSIs, setExpandedSIs] = useState<Set<string>>(new Set())
   const [page, setPage] = useState(1)
   const [itemSearchIdx, setItemSearchIdx] = useState<number | null>(null)
+  const [dragItemIndex, setDragItemIndex] = useState<number | null>(null)
   const [itemQuery, setItemQuery] = useState('')
   const [addItemOpen, setAddItemOpen] = useState(false)
   const [newItemForm, setNewItemForm] = useState({ item_name: '', unit_of_measure: '', selling_price: '', attribute: '' })
@@ -1096,6 +1097,7 @@ export default function CSIMonitoringPage() {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/40">
+                      <TableHead className="w-12">No.</TableHead>
                       <TableHead className="min-w-[260px]">Item Description</TableHead>
                       <TableHead className="w-24">Unit</TableHead>
                       <TableHead className="w-24">Qty</TableHead>
@@ -1108,7 +1110,34 @@ export default function CSIMonitoringPage() {
                     {items.map((item, i) => {
                       const amt = (Number(item.quantity) || 0) * (Number(item.unit_price) || 0)
                       return (
-                        <TableRow key={i}>
+                        <TableRow
+                          key={i}
+                          className={dragItemIndex === i ? 'bg-red-50/60' : undefined}
+                          onDragOver={e => { if (dragItemIndex !== null) e.preventDefault() }}
+                          onDrop={e => {
+                            e.preventDefault()
+                            if (dragItemIndex === null || dragItemIndex === i) return
+                            setItems(prev => {
+                              const next = [...prev]
+                              const [moved] = next.splice(dragItemIndex, 1)
+                              next.splice(i, 0, moved)
+                              return next
+                            })
+                            setDragItemIndex(null)
+                          }}
+                        >
+                          <TableCell className="py-1.5">
+                            <div
+                              className="flex items-center gap-1 text-sm text-muted-foreground cursor-grab active:cursor-grabbing"
+                              draggable
+                              onDragStart={() => setDragItemIndex(i)}
+                              onDragEnd={() => setDragItemIndex(null)}
+                              title="Drag to reorder"
+                            >
+                              <GripVertical className="h-3.5 w-3.5 shrink-0" />
+                              {i + 1}
+                            </div>
+                          </TableCell>
                           <TableCell className="py-1.5">
                             <div className="flex items-center gap-1">
                               <Select value={item.item_name} onValueChange={val => {
@@ -1828,7 +1857,10 @@ export default function CSIMonitoringPage() {
                 }}
               >
                 <span className="font-medium">{opt.item_name}</span>
-                <span className="text-xs text-muted-foreground">{opt.unit_of_measure}</span>
+                <span className="flex items-center gap-3 text-xs text-muted-foreground shrink-0">
+                  <span>{opt.unit_of_measure}</span>
+                  <span className="font-semibold text-foreground tabular-nums">{opt.selling_price != null ? formatPeso(opt.selling_price) : '—'}</span>
+                </span>
               </button>
             ))}
           </div>
