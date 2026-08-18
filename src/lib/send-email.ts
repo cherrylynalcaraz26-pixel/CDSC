@@ -1,25 +1,5 @@
 import jsPDF from 'jspdf'
 
-export interface QuotationPdfData {
-  companyName: string
-  companyAddress?: string
-  companyPhone?: string
-  companyEmail?: string
-  companyTin?: string
-  logoDataUrl?: string
-  quoteNumber: string
-  quoteDate: string
-  validUntil?: string
-  clientName?: string
-  subject?: string
-  items: { item_name: string; description?: string | null; quantity: number; unit?: string | null; unit_price: number; selling_price?: number | null; total_amount: number }[]
-  subtotal: number
-  vatAmount: number
-  ewtAmount: number
-  totalAmount: number
-  notes?: string | null
-}
-
 export interface POPdfData {
   companyName: string
   companyAddress?: string
@@ -64,13 +44,14 @@ export interface SendEmailPayload {
   subject: string
   body: string
   htmlBody?: string
-  pdfData?: QuotationPdfData
   poPdfData?: POPdfData
   soPdfData?: SOPdfData
-  /** @deprecated pass pdfData/poPdfData instead for faster generation */
+  /** Rasterized via html2canvas + jsPDF so the attachment is a pixel-faithful copy of
+   *  whatever HTML preview the user already saw (e.g. Quotation's print/view HTML) —
+   *  prefer poPdfData/soPdfData for PO/SO, which draw a lighter native PDF directly. */
   printHtml?: string
   pdfFilename?: string
-  /** Extra PDF attachments beyond the single pdfData/poPdfData/soPdfData/printHtml one, e.g. one per selected record in a bulk send. */
+  /** Extra PDF attachments beyond the single poPdfData/soPdfData/printHtml one, e.g. one per selected record in a bulk send. */
   attachments?: { base64: string; filename: string }[]
 }
 
@@ -101,268 +82,6 @@ function makeSetFont(pdf: jsPDF) {
   return (weight: 'normal' | 'bold' = 'normal') => {
     try { pdf.setFont('Questrial', weight) } catch { pdf.setFont('helvetica', weight) }
   }
-}
-
-async function buildQuotePdf(data: QuotationPdfData): Promise<string> {
-  const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' })
-  const W = pdf.internal.pageSize.getWidth()
-  const margin = 36
-  const contentW = W - margin * 2
-  let y = margin
-
-  // Load Questrial font
-  await loadQuestrialFont(pdf)
-  const setFont = makeSetFont(pdf)
-
-  // ── Header ──────────────────────────────────────────────────────────────
-  const logoSize = 80
-
-  if (data.logoDataUrl) {
-    try { pdf.addImage(data.logoDataUrl, imgFormatFromDataUrl(data.logoDataUrl), margin, y, logoSize, logoSize) }
-    catch { /* skip logo on error */ }
-  }
-
-  // Right: company name then address/phone/tin
-  setFont('bold')
-  pdf.setFontSize(14)
-  pdf.setTextColor(185, 28, 28)
-  pdf.text(data.companyName, W - margin, y + 14, { align: 'right' })
-
-  setFont()
-  pdf.setFontSize(8)
-  pdf.setTextColor(107, 114, 128)
-  const rightLines = [
-    data.companyAddress,
-    data.companyPhone,
-    data.companyEmail,
-    data.companyTin ? `TIN: ${data.companyTin}` : undefined,
-  ].filter(Boolean) as string[]
-  rightLines.forEach((line, i) => {
-    pdf.text(line, W - margin, y + 26 + i * 10, { align: 'right' })
-  })
-
-  y += Math.max(logoSize, 26 + rightLines.length * 10) + 6
-  pdf.setDrawColor(229, 231, 235)
-  pdf.line(margin, y, W - margin, y)
-  y += 12
-
-  // ── Bill To / Quote# ─────────────────────────────────────────────────────
-  pdf.setFontSize(8)
-  setFont('bold')
-  pdf.setTextColor(156, 163, 175)
-  pdf.text('QUOTE TO', margin, y)
-  setFont('bold')
-  pdf.setFontSize(10)
-  pdf.setTextColor(31, 41, 55)
-  pdf.text(data.clientName ?? '-', margin, y + 11)
-  if (data.subject) {
-    setFont()
-    pdf.setFontSize(8)
-    pdf.setTextColor(156, 163, 175)
-    pdf.text('SUBJECT', margin, y + 23)
-    pdf.setTextColor(55, 65, 81)
-    pdf.text(data.subject, margin, y + 32)
-  }
-
-  // Right: Quote#, Date, Valid Until
-  const rx = W - margin
-  pdf.setFontSize(8)
-  setFont('bold')
-  pdf.setTextColor(156, 163, 175)
-  pdf.text('QUOTE NUMBER', rx, y, { align: 'right' })
-  setFont('bold')
-  pdf.setFontSize(10)
-  pdf.setTextColor(31, 41, 55)
-  pdf.text(data.quoteNumber, rx, y + 11, { align: 'right' })
-  pdf.setFontSize(8)
-  pdf.setTextColor(156, 163, 175)
-  pdf.text('DATE', rx, y + 23, { align: 'right' })
-  setFont()
-  pdf.setFontSize(9)
-  pdf.setTextColor(31, 41, 55)
-  pdf.text(data.quoteDate, rx, y + 32, { align: 'right' })
-  if (data.validUntil) {
-    setFont()
-    pdf.setFontSize(8)
-    pdf.setTextColor(156, 163, 175)
-    pdf.text('VALID UNTIL', rx, y + 44, { align: 'right' })
-    setFont()
-    pdf.setFontSize(9)
-    pdf.setTextColor(31, 41, 55)
-    pdf.text(data.validUntil, rx, y + 53, { align: 'right' })
-  }
-
-  y += 60
-  pdf.setDrawColor(229, 231, 235)
-  pdf.line(margin, y, W - margin, y)
-  y += 14
-
-  // ── QUOTATION title ───────────────────────────────────────────────────────
-  setFont('bold')
-  pdf.setFontSize(16)
-  pdf.setTextColor(185, 28, 28)
-  pdf.text('QUOTATION', W / 2, y, { align: 'center' })
-  y += 14
-
-  // ── Items Table ───────────────────────────────────────────────────────────
-  if (data.items.length > 0) {
-    const cols = { num: 20, desc: contentW - 20 - 50 - 60 - 80 - 70, qty: 50, unit: 60, price: 80, total: 70 }
-    const rowH = 16
-    const headerY = y
-
-    pdf.setFillColor(185, 28, 28)
-    pdf.rect(margin, headerY, contentW, rowH, 'F')
-
-    setFont()
-    pdf.setFontSize(8)
-    pdf.setTextColor(255, 255, 255)
-
-    let cx = margin + 4
-    pdf.text('#', cx + cols.num / 2, headerY + 11, { align: 'center' }); cx += cols.num
-    pdf.text('Item Description', cx + 4, headerY + 11); cx += cols.desc
-    pdf.text('QTY', cx + cols.qty / 2, headerY + 11, { align: 'center' }); cx += cols.qty
-    pdf.text('Unit', cx + cols.unit / 2, headerY + 11, { align: 'center' }); cx += cols.unit
-    pdf.text('Unit Price', cx + cols.price / 2, headerY + 11, { align: 'center' }); cx += cols.price
-    pdf.text('Total', cx + cols.total / 2, headerY + 11, { align: 'center' })
-
-    y += rowH
-
-    data.items.forEach((item, i) => {
-      const thisRowH = item.description ? rowH + 9 : rowH
-      const rowBg = i % 2 === 0 ? [255, 255, 255] : [249, 250, 251]
-      pdf.setFillColor(rowBg[0], rowBg[1], rowBg[2])
-      pdf.rect(margin, y, contentW, thisRowH, 'F')
-
-      setFont()
-      pdf.setFontSize(8)
-      pdf.setTextColor(156, 163, 175)
-
-      let rx2 = margin + 4
-      pdf.text(String(i + 1), rx2 + cols.num / 2, y + 11, { align: 'center' }); rx2 += cols.num
-
-      pdf.setTextColor(31, 41, 55)
-      const maxDescW = cols.desc - 8
-      const descText = pdf.splitTextToSize(item.item_name ?? '-', maxDescW)[0]
-      pdf.text(descText, rx2 + 4, y + 11)
-      if (item.description) {
-        setFont()
-        pdf.setFontSize(7)
-        pdf.setTextColor(107, 114, 128)
-        const subText = pdf.splitTextToSize(item.description, maxDescW)[0]
-        pdf.text(subText, rx2 + 4, y + 20)
-        pdf.setFontSize(8)
-      }
-      rx2 += cols.desc
-
-      pdf.setTextColor(31, 41, 55)
-      pdf.text(String(item.quantity), rx2 + cols.qty / 2, y + 11, { align: 'center' }); rx2 += cols.qty
-
-      pdf.setTextColor(107, 114, 128)
-      pdf.text(item.unit ?? '-', rx2 + cols.unit / 2, y + 11, { align: 'center' }); rx2 += cols.unit
-
-      pdf.setTextColor(31, 41, 55)
-      const price = item.selling_price ?? item.unit_price ?? 0
-      pdf.text(fmtAmt(price), rx2 + cols.price - 2, y + 11, { align: 'right' }); rx2 += cols.price
-      pdf.text(fmtAmt(item.total_amount), rx2 + cols.total - 2, y + 11, { align: 'right' })
-
-      y += thisRowH
-    })
-
-    y += 8
-  }
-
-  // ── Totals ────────────────────────────────────────────────────────────────
-  const totW = 180
-  const totX = W - margin - totW
-  const hasVat = (data.vatAmount ?? 0) > 0
-  const hasEwt = (data.ewtAmount ?? 0) > 0
-
-  y += 26 // 2 row space before subtotal
-
-  setFont()
-  pdf.setFontSize(9)
-  pdf.setTextColor(107, 114, 128)
-  pdf.text('Subtotal', totX, y)
-  pdf.setTextColor(31, 41, 55)
-  pdf.text(fmtAmt(data.subtotal), W - margin, y, { align: 'right' })
-  y += 13
-
-  if (hasVat) {
-    pdf.setDrawColor(229, 231, 235)
-    pdf.line(totX, y - 3, W - margin, y - 3)
-    pdf.setTextColor(107, 114, 128)
-    pdf.text('VAT (12%)', totX, y)
-    pdf.setTextColor(37, 99, 235)
-    pdf.text(fmtAmt(data.vatAmount), W - margin, y, { align: 'right' })
-    y += 13
-  }
-
-  if (hasEwt) {
-    pdf.setDrawColor(229, 231, 235)
-    pdf.line(totX, y - 3, W - margin, y - 3)
-    pdf.setTextColor(107, 114, 128)
-    pdf.text('EWT', totX, y)
-    pdf.setTextColor(185, 28, 28)
-    pdf.text(`-${fmtAmt(data.ewtAmount)}`, W - margin, y, { align: 'right' })
-    y += 13
-  }
-
-  pdf.setDrawColor(229, 231, 235)
-  pdf.line(totX, y - 3, W - margin, y - 3)
-  setFont()
-  pdf.setFontSize(10)
-  pdf.setTextColor(31, 41, 55)
-  pdf.text('Total', totX, y)
-  pdf.setTextColor(185, 28, 28)
-  pdf.text(fmtAmt(data.totalAmount), W - margin, y, { align: 'right' })
-  y += 16
-
-  // ── Notes ─────────────────────────────────────────────────────────────────
-  if (data.notes) {
-    y += 4
-    pdf.setDrawColor(229, 231, 235)
-    pdf.line(margin, y, W - margin, y)
-    y += 10
-    setFont()
-    pdf.setFontSize(8)
-    pdf.setTextColor(156, 163, 175)
-    pdf.text('NOTES / TERMS', margin, y)
-    y += 10
-    setFont()
-    pdf.setFontSize(9)
-    pdf.setTextColor(55, 65, 81)
-    const noteLines = pdf.splitTextToSize(data.notes, contentW)
-    pdf.text(noteLines, margin, y)
-    y += noteLines.length * 11
-  }
-
-  // ── Signatures ────────────────────────────────────────────────────────────
-  y += 40
-  const sigW = (contentW - 40) / 2
-  pdf.setDrawColor(55, 65, 81)
-  pdf.line(margin, y, margin + sigW, y)
-  setFont('bold')
-  pdf.setFontSize(9)
-  pdf.setTextColor(55, 65, 81)
-  pdf.text('PREPARED BY', margin + sigW / 2, y + 10, { align: 'center' })
-  setFont()
-  pdf.setFontSize(8)
-  pdf.setTextColor(156, 163, 175)
-  pdf.text('Signature over Printed Name', margin + sigW / 2, y + 19, { align: 'center' })
-
-  const sig2X = W - margin - sigW
-  pdf.setDrawColor(55, 65, 81)
-  pdf.line(sig2X, y, W - margin, y)
-  setFont('bold')
-  pdf.setFontSize(9)
-  pdf.setTextColor(55, 65, 81)
-  pdf.text('ACCEPTED BY', sig2X + sigW / 2, y + 10, { align: 'center' })
-  setFont()
-  pdf.setFontSize(8)
-  pdf.setTextColor(156, 163, 175)
-  pdf.text('Signature over Printed Name / Date', sig2X + sigW / 2, y + 19, { align: 'center' })
-
-  return pdf.output('datauristring').split(',')[1]
 }
 
 async function buildPOPdf(data: POPdfData): Promise<string> {
@@ -846,9 +565,7 @@ export async function htmlToPdfBase64(html: string): Promise<string> {
 export async function sendEmail(payload: SendEmailPayload): Promise<void> {
   const pdfFilename = payload.pdfFilename ?? 'attachment.pdf'
   let pdfBase64: string | undefined
-  if (payload.pdfData) {
-    pdfBase64 = await buildQuotePdf(payload.pdfData)
-  } else if (payload.poPdfData) {
+  if (payload.poPdfData) {
     pdfBase64 = await buildPOPdf(payload.poPdfData)
   } else if (payload.soPdfData) {
     pdfBase64 = await buildSOPdf(payload.soPdfData)
