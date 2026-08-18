@@ -16,7 +16,7 @@ import { Plus, MoreHorizontal, Loader2, Trash2, X, FileText, Printer, Mail, Send
 import { toast } from 'sonner'
 import { undoToast } from '@/lib/undo-toast'
 import { useSearchContext } from '@/context/search-context'
-import { sendEmail, QuotationPdfData } from '@/lib/send-email'
+import { sendEmail } from '@/lib/send-email'
 import { uploadImageToDrive } from '@/lib/upload-image'
 import Image from 'next/image'
 import QuotationRequestsPanel from '@/components/quotation/quotation-requests-panel'
@@ -462,57 +462,6 @@ export default function QuotationPage() {
     setSaving(false)
   }
 
-  // Google Drive's image URLs (item photos, uploaded logos) don't send CORS headers, so a
-  // direct browser fetch() to read the bytes for embedding in the PDF gets blocked even
-  // though the same URL displays fine in an <img> tag. Route those through our own
-  // same-origin proxy (which fetches server-side, where CORS doesn't apply) instead.
-  async function fetchImageDataUrl(url: string): Promise<string | undefined> {
-    try {
-      const isDrive = /(^|\.)(drive\.google\.com|googleusercontent\.com)$/.test(new URL(url, window.location.origin).hostname)
-      if (isDrive) {
-        const res = await fetch(`/api/fetch-image?url=${encodeURIComponent(url)}`)
-        if (!res.ok) return undefined
-        const data = await res.json()
-        return data.dataUrl as string
-      }
-      const resp = await fetch(url)
-      const blob = await resp.blob()
-      return await new Promise<string>(resolve => {
-        const reader = new FileReader()
-        reader.onload = () => resolve(reader.result as string)
-        reader.readAsDataURL(blob)
-      })
-    } catch { return undefined }
-  }
-
-  // Item photos used to be embedded on a second PDF page, but that routinely pushed the
-  // emailed attachment over the provider's size limit ("attached PDF is too large to
-  // email"). The PDF now carries only the item's text Description (already shown under
-  // its name); only the company logo still needs fetching as a data URL.
-  async function buildQuotePdfData(q: Quotation, items: { item_name: string; description?: string | null; quantity: number; unit: string | null; unit_price: number; selling_price: number | null; total_amount: number }[]): Promise<QuotationPdfData> {
-    const logoSrc = companyInfo?.logo_url || '/cdsc-logo.jpg'
-    const logoDataUrl = await fetchImageDataUrl(logoSrc)
-    return {
-      companyName: companyInfo?.company_name ?? 'CDSC INDUSTRIAL SUPPLY',
-      companyAddress: companyInfo?.address ?? undefined,
-      companyPhone: companyInfo?.phone ?? undefined,
-      companyEmail: companyInfo?.email ?? undefined,
-      companyTin: companyInfo?.tin ?? undefined,
-      logoDataUrl,
-      quoteNumber: q.quote_number ?? '-',
-      quoteDate: q.quote_date ?? '-',
-      validUntil: q.valid_until ?? undefined,
-      clientName: q.client_name ?? undefined,
-      subject: q.subject ?? undefined,
-      items,
-      subtotal: q.subtotal ?? 0,
-      vatAmount: q.vat_amount ?? 0,
-      ewtAmount: q.ewt_amount ?? 0,
-      totalAmount: q.total_amount ?? 0,
-      notes: q.notes ?? undefined,
-    }
-  }
-
   function buildQuoteHtml(q: Quotation, items: { item_name: string; description?: string | null; quantity: number; unit: string | null; unit_price: number; selling_price: number | null; total_amount: number }[] = []) {
     const fmtAmt = (n: number) => `₱${(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
     const hasVat = (q.vat_amount ?? 0) > 0
@@ -538,7 +487,7 @@ export default function QuotationPage() {
             return `<tr style="background:${i % 2 === 0 ? '#fff' : '#f9fafb'};">
               <td style="padding:4px 6px;color:#9ca3af;">${i + 1}</td>
               <td style="padding:4px 6px;">${img
-                ? `<div style="display:flex;align-items:center;gap:6px;"><img src="${img}" alt="" style="width:24px;height:24px;border-radius:4px;object-fit:cover;flex-shrink:0;" crossorigin="anonymous" />${nameCell}</div>`
+                ? `<div style="display:flex;align-items:center;gap:6px;"><img src="${img}" alt="" style="width:24px;height:24px;border-radius:4px;object-fit:cover;flex-shrink:0;" />${nameCell}</div>`
                 : nameCell}</td>
               <td style="padding:4px 6px;text-align:right;font-weight:700;">${it.quantity}</td>
               <td style="padding:4px 6px;color:#6b7280;">${it.unit ?? '—'}</td>
@@ -1319,7 +1268,7 @@ ${emailBodyQ.replace(/\n/g, '<br/>')}
                       subject: emailSubjectQ,
                       body: emailBodyQ,
                       htmlBody: htmlBodyQ,
-                      pdfData: await buildQuotePdfData(formQ, formItems),
+                      printHtml: buildQuoteHtml(formQ, formItems),
                       pdfFilename: `Quotation-${quoteNumber || 'draft'}.pdf`,
                     })
                     toast.success('Email sent successfully!')
@@ -1410,7 +1359,7 @@ ${listEmailBody.replace(/\n/g, '<br/>')}
                       subject: listEmailSubject,
                       body: listEmailBody,
                       htmlBody: htmlBodyList,
-                      pdfData: await buildQuotePdfData(q, qItemsForEmail ?? []),
+                      printHtml: buildQuoteHtml(q, qItemsForEmail ?? []),
                       pdfFilename: `Quotation-${q.quote_number ?? 'draft'}.pdf`,
                     })
                     toast.success('Email sent successfully!')
