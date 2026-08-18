@@ -83,6 +83,26 @@ function imgFormatFromDataUrl(dataUrl: string): string {
   return ext === 'JPG' ? 'JPEG' : ext
 }
 
+// Loads CDSC's brand font (Questrial) into the PDF and registers it under both the
+// 'normal' and 'bold' style keys — there's no separate bold weight file, so bold text
+// reuses the same glyphs rather than silently falling back to Helvetica.
+async function loadQuestrialFont(pdf: jsPDF): Promise<void> {
+  try {
+    const fontResp = await fetch('/fonts/Questrial-Regular.ttf')
+    const fontBuf = await fontResp.arrayBuffer()
+    const fontBase64 = btoa(String.fromCharCode(...new Uint8Array(fontBuf)))
+    pdf.addFileToVFS('Questrial-Regular.ttf', fontBase64)
+    pdf.addFont('Questrial-Regular.ttf', 'Questrial', 'normal')
+    pdf.addFont('Questrial-Regular.ttf', 'Questrial', 'bold')
+  } catch { /* fall back to helvetica */ }
+}
+
+function makeSetFont(pdf: jsPDF) {
+  return (weight: 'normal' | 'bold' = 'normal') => {
+    try { pdf.setFont('Questrial', weight) } catch { pdf.setFont('helvetica', weight) }
+  }
+}
+
 async function buildQuotePdf(data: QuotationPdfData): Promise<string> {
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' })
   const W = pdf.internal.pageSize.getWidth()
@@ -91,24 +111,14 @@ async function buildQuotePdf(data: QuotationPdfData): Promise<string> {
   let y = margin
 
   // Load Questrial font
-  try {
-    const fontResp = await fetch('/fonts/Questrial-Regular.ttf')
-    const fontBuf = await fontResp.arrayBuffer()
-    const fontBase64 = btoa(String.fromCharCode(...new Uint8Array(fontBuf)))
-    pdf.addFileToVFS('Questrial-Regular.ttf', fontBase64)
-    pdf.addFont('Questrial-Regular.ttf', 'Questrial', 'normal')
-  } catch { /* fall back to helvetica */ }
-
-  const setFont = (weight: 'normal' | 'bold' = 'normal') => {
-    if (weight === 'bold') { pdf.setFont('helvetica', 'bold') }
-    else { try { pdf.setFont('Questrial', 'normal') } catch { pdf.setFont('helvetica', 'normal') } }
-  }
+  await loadQuestrialFont(pdf)
+  const setFont = makeSetFont(pdf)
 
   // ── Header ──────────────────────────────────────────────────────────────
   const logoSize = 80
 
   if (data.logoDataUrl) {
-    try { pdf.addImage(data.logoDataUrl, 'JPEG', margin, y, logoSize, logoSize) }
+    try { pdf.addImage(data.logoDataUrl, imgFormatFromDataUrl(data.logoDataUrl), margin, y, logoSize, logoSize) }
     catch { /* skip logo on error */ }
   }
 
@@ -410,23 +420,13 @@ async function buildPOPdf(data: POPdfData): Promise<string> {
   let y = margin
 
   // Load Questrial font
-  try {
-    const fontResp = await fetch('/fonts/Questrial-Regular.ttf')
-    const fontBuf = await fontResp.arrayBuffer()
-    const fontBase64 = btoa(String.fromCharCode(...new Uint8Array(fontBuf)))
-    pdf.addFileToVFS('Questrial-Regular.ttf', fontBase64)
-    pdf.addFont('Questrial-Regular.ttf', 'Questrial', 'normal')
-  } catch { /* fall back to helvetica */ }
-
-  const setFont = (weight: 'normal' | 'bold' = 'normal') => {
-    if (weight === 'bold') { pdf.setFont('helvetica', 'bold') }
-    else { try { pdf.setFont('Questrial', 'normal') } catch { pdf.setFont('helvetica', 'normal') } }
-  }
+  await loadQuestrialFont(pdf)
+  const setFont = makeSetFont(pdf)
 
   // ── Header ────────────────────────────────────────────────────────────────
   const logoSize = 80
   if (data.logoDataUrl) {
-    try { pdf.addImage(data.logoDataUrl, 'JPEG', margin, y, logoSize, logoSize) }
+    try { pdf.addImage(data.logoDataUrl, imgFormatFromDataUrl(data.logoDataUrl), margin, y, logoSize, logoSize) }
     catch { /* skip */ }
   }
   setFont('bold')
@@ -645,22 +645,12 @@ async function buildSOPdf(data: SOPdfData): Promise<string> {
   const contentW = W - margin * 2
   let y = margin
 
-  try {
-    const fontResp = await fetch('/fonts/Questrial-Regular.ttf')
-    const fontBuf = await fontResp.arrayBuffer()
-    const fontBase64 = btoa(String.fromCharCode(...new Uint8Array(fontBuf)))
-    pdf.addFileToVFS('Questrial-Regular.ttf', fontBase64)
-    pdf.addFont('Questrial-Regular.ttf', 'Questrial', 'normal')
-  } catch { /* fall back to helvetica */ }
-
-  const setFont = (weight: 'normal' | 'bold' = 'normal') => {
-    if (weight === 'bold') { pdf.setFont('helvetica', 'bold') }
-    else { try { pdf.setFont('Questrial', 'normal') } catch { pdf.setFont('helvetica', 'normal') } }
-  }
+  await loadQuestrialFont(pdf)
+  const setFont = makeSetFont(pdf)
 
   const logoSize = 80
   if (data.logoDataUrl) {
-    try { pdf.addImage(data.logoDataUrl, 'JPEG', margin, y, logoSize, logoSize) }
+    try { pdf.addImage(data.logoDataUrl, imgFormatFromDataUrl(data.logoDataUrl), margin, y, logoSize, logoSize) }
     catch { /* skip */ }
   }
   setFont('bold')
