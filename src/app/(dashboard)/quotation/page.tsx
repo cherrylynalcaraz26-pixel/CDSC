@@ -533,9 +533,13 @@ export default function QuotationPage() {
           ${items.map((it, i) => {
             const price = it.selling_price ?? it.unit_price ?? 0
             const total = it.total_amount ?? price * it.quantity
+            const img = it.item_name ? itemImage(it.item_name) : null
+            const nameCell = `<div>${it.item_name ?? '—'}</div>${it.description ? `<div style="font-size:9px;color:#6b7280;margin-top:2px;">${it.description}</div>` : ''}`
             return `<tr style="background:${i % 2 === 0 ? '#fff' : '#f9fafb'};">
               <td style="padding:4px 6px;color:#9ca3af;">${i + 1}</td>
-              <td style="padding:4px 6px;">${it.item_name ?? '—'}${it.description ? `<div style="font-size:9px;color:#6b7280;margin-top:2px;">${it.description}</div>` : ''}</td>
+              <td style="padding:4px 6px;">${img
+                ? `<div style="display:flex;align-items:center;gap:6px;"><img src="${img}" alt="" style="width:24px;height:24px;border-radius:4px;object-fit:cover;flex-shrink:0;" crossorigin="anonymous" />${nameCell}</div>`
+                : nameCell}</td>
               <td style="padding:4px 6px;text-align:right;font-weight:700;">${it.quantity}</td>
               <td style="padding:4px 6px;color:#6b7280;">${it.unit ?? '—'}</td>
               <td style="padding:4px 6px;text-align:right;">${fmtAmt(price)}</td>
