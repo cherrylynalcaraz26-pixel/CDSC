@@ -1317,7 +1317,7 @@ export default function PurchaseOrdersPage() {
 
       {/* View PO Dialog */}
       <Dialog open={!!viewPO} onOpenChange={o => { if (!o) { setViewPO(null); setViewPOItems([]) } }}>
-        <DialogContent className="w-[98vw] sm:!max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[98vw] sm:!max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileText className="h-4 w-4" />Purchase Order Preview
@@ -1335,7 +1335,7 @@ export default function PurchaseOrdersPage() {
 
       {/* Item Search Dialog */}
       <Dialog open={itemSearchIdx !== null} onOpenChange={o => { if (!o) setItemSearchIdx(null) }}>
-        <DialogContent className="w-[98vw] sm:!max-w-5xl max-h-[85vh] flex flex-col overflow-hidden">
+        <DialogContent className="w-[98vw] sm:!max-w-6xl max-h-[85vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Package className="h-4 w-4" />Item Inventory
@@ -1419,7 +1419,7 @@ export default function PurchaseOrdersPage() {
 
       {/* Send Email Dialog */}
       <Dialog open={showEmail} onOpenChange={setShowEmail}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Mail className="h-4 w-4" />Send Purchase Order by Email
@@ -1467,7 +1467,7 @@ export default function PurchaseOrdersPage() {
 
       {/* Discard Confirmation */}
       <Dialog open={discardConfirmOpen} onOpenChange={setDiscardConfirmOpen}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Unsaved Changes</DialogTitle>
           </DialogHeader>

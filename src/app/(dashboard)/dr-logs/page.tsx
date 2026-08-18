@@ -1484,7 +1484,7 @@ export default function DRLogsPage() {
       )}
 
       <Dialog open={discardConfirmOpen} onOpenChange={setDiscardConfirmOpen}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Unsaved Changes</DialogTitle>
           </DialogHeader>
@@ -1508,7 +1508,7 @@ export default function DRLogsPage() {
       </Dialog>
 
       <Dialog open={calibOpen} onOpenChange={setCalibOpen}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Calibrate Blank Form Print</DialogTitle>
           </DialogHeader>

@@ -345,7 +345,7 @@ export default function PurchaseRequestsPage() {
 
       {/* ── New PR Dialog ── */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold">New Purchase Request</DialogTitle>
           </DialogHeader>
@@ -506,7 +506,7 @@ export default function PurchaseRequestsPage() {
 
       {/* ── Send Email Dialog ── */}
       <Dialog open={!!emailId} onOpenChange={() => setEmailId(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Mail className="h-5 w-5 text-red-600" />Send PR by Email

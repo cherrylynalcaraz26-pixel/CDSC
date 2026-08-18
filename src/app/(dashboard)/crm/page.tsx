@@ -553,7 +553,7 @@ export default function CRMPage() {
 
       {/* Add/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {editingLead ? <><Pencil className="w-4 h-4" /> Edit Lead</> : <><Plus className="w-4 h-4" /> New Lead</>}
@@ -637,7 +637,7 @@ export default function CRMPage() {
 
       {/* Confirm Delete */}
       <Dialog open={confirmOpen} onOpenChange={o => { if (!o) { setConfirmOpen(false); setConfirmLead(null) } }}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Delete Lead</DialogTitle>
           </DialogHeader>

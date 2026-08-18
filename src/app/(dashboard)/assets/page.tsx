@@ -309,7 +309,7 @@ export default function AssetsPage() {
 
       {/* ── Issue Asset Dialog ── */}
       <Dialog open={issueOpen} onOpenChange={setIssueOpen}>
-        <DialogContent className="max-w-xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Issue Asset</DialogTitle></DialogHeader>
           <div className="grid grid-cols-2 gap-4 py-2">
             <div className="col-span-2 space-y-1.5">
@@ -373,7 +373,7 @@ export default function AssetsPage() {
 
       {/* ── View Details Dialog ── */}
       <Dialog open={!!viewAsset} onOpenChange={() => setViewAsset(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl">
           <DialogHeader><DialogTitle>Asset Details</DialogTitle></DialogHeader>
           {viewAsset && (
             <div className="space-y-3 py-2 text-sm">
@@ -413,7 +413,7 @@ export default function AssetsPage() {
 
       {/* ── Transfer Asset Dialog ── */}
       <Dialog open={!!transferAsset} onOpenChange={() => setTransferAsset(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-xl">
           <DialogHeader><DialogTitle className="flex items-center gap-2"><ArrowRightLeft className="h-4 w-4" />Transfer Asset</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <p className="text-sm text-muted-foreground">Reassign <strong>{transferAsset?.item_name}</strong> to a new holder.</p>
@@ -446,7 +446,7 @@ export default function AssetsPage() {
 
       {/* ── Return Asset Dialog ── */}
       <Dialog open={!!returnAsset} onOpenChange={() => setReturnAsset(null)}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle className="flex items-center gap-2"><RotateCcw className="h-4 w-4" />Return Asset</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <p className="text-sm text-muted-foreground">Mark <strong>{returnAsset?.item_name}</strong> as returned.</p>
@@ -466,7 +466,7 @@ export default function AssetsPage() {
 
       {/* ── Asset History Dialog ── */}
       <Dialog open={!!historyAsset} onOpenChange={() => setHistoryAsset(null)}>
-        <DialogContent className="max-w-lg max-h-[70vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[70vh] overflow-y-auto">
           <DialogHeader><DialogTitle className="flex items-center gap-2"><History className="h-4 w-4" />Asset History — {historyAsset?.item_name}</DialogTitle></DialogHeader>
           {historyLoading ? (
             <div className="py-8 text-center"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></div>

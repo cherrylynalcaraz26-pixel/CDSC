@@ -1235,7 +1235,7 @@ export default function QuotationPage() {
 
       {/* Email Dialog */}
       <Dialog open={showEmailQ} onOpenChange={setShowEmailQ}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Mail className="h-4 w-4" />Send Quotation by Email
@@ -1345,7 +1345,7 @@ ${emailBodyQ.replace(/\n/g, '<br/>')}
 
       {/* View Quotation Dialog */}
       <Dialog open={!!viewingQ} onOpenChange={o => { if (!o) { setViewingQ(null); setViewingQItems([]) } }}>
-        <DialogContent className="w-[98vw] sm:!max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[98vw] sm:!max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Eye className="h-4 w-4" />Quotation Preview
@@ -1364,7 +1364,7 @@ ${emailBodyQ.replace(/\n/g, '<br/>')}
 
       {/* List Send Email Dialog */}
       <Dialog open={!!listEmailQ} onOpenChange={o => { if (!o) setListEmailQ(null) }}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Mail className="h-4 w-4" />Send Quotation by Email
@@ -1440,7 +1440,7 @@ ${listEmailBody.replace(/\n/g, '<br/>')}
 
       {/* Item Search Dialog */}
       <Dialog open={itemSearchIdx !== null} onOpenChange={o => { if (!o) setItemSearchIdx(null) }}>
-        <DialogContent className="w-[98vw] sm:!max-w-3xl max-h-[80vh] flex flex-col overflow-hidden">
+        <DialogContent className="w-[98vw] sm:!max-w-4xl max-h-[80vh] flex flex-col overflow-hidden">
           <DialogHeader className="flex flex-row items-center justify-between gap-2 pr-6">
             <DialogTitle className="flex items-center gap-2"><Package className="h-4 w-4" />Item Inventory</DialogTitle>
             <Button type="button" size="sm" variant="outline" className="h-7 px-2 text-xs gap-1" onClick={openAddItem}>
@@ -1502,7 +1502,7 @@ ${listEmailBody.replace(/\n/g, '<br/>')}
 
       {/* Add Item Modal */}
       <Dialog open={addItemOpen} onOpenChange={setAddItemOpen}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Add Item</DialogTitle>
           </DialogHeader>
@@ -1644,7 +1644,7 @@ ${listEmailBody.replace(/\n/g, '<br/>')}
 
       {/* Discard Unsaved Changes Dialog */}
       <Dialog open={discardOpen} onOpenChange={setDiscardOpen}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Discard Changes?</DialogTitle>
           </DialogHeader>

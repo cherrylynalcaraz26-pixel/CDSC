@@ -1434,7 +1434,7 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
 
       {/* View SO Dialog */}
       <Dialog open={!!viewSO} onOpenChange={o => { if (!o) { setViewSO(null); setViewSODeliveries([]); setViewSOCSIs([]) } }}>
-        <DialogContent className="w-[98vw] sm:!max-w-3xl max-h-[90vh] flex flex-col overflow-hidden p-0">
+        <DialogContent className="w-[98vw] sm:!max-w-4xl max-h-[90vh] flex flex-col overflow-hidden p-0">
           <DialogHeader className="px-6 pt-6 pb-3 shrink-0">
             <DialogTitle className="flex items-center gap-2"><Eye className="h-4 w-4" />Sales Order — {viewSO?.so_number ?? '—'}</DialogTitle>
           </DialogHeader>
@@ -1609,7 +1609,7 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
 
       {/* Email SO Dialog */}
       <Dialog open={!!emailSO} onOpenChange={o => { if (!o && !sendingEmailSO) setEmailSO(null) }}>
-        <DialogContent className="sm:!max-w-lg">
+        <DialogContent className="sm:!max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Mail className="h-4 w-4" />Send Sales Order</DialogTitle>
           </DialogHeader>
@@ -1656,7 +1656,7 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
 
       {/* Item Search Dialog */}
       <Dialog open={itemSearchIdx !== null} onOpenChange={o => { if (!o) setItemSearchIdx(null) }}>
-        <DialogContent className="w-[98vw] sm:!max-w-3xl max-h-[80vh] flex flex-col overflow-hidden">
+        <DialogContent className="w-[98vw] sm:!max-w-4xl max-h-[80vh] flex flex-col overflow-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Package className="h-4 w-4" />Item Inventory</DialogTitle>
           </DialogHeader>
@@ -1711,7 +1711,7 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
 
       {/* Quick Create PO (from a warehouse-short line) */}
       <Dialog open={quickPOOpen} onOpenChange={setQuickPOOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>Create Purchase Order</DialogTitle>
           </DialogHeader>
@@ -1765,7 +1765,7 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
 
       {/* Discard Confirmation */}
       <Dialog open={discardConfirmOpen} onOpenChange={setDiscardConfirmOpen}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Unsaved Changes</DialogTitle>
           </DialogHeader>

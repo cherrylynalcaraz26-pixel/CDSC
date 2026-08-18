@@ -1852,7 +1852,7 @@ export default function CSIMonitoringPage() {
 
       {/* Item Search Dialog */}
       <Dialog open={itemSearchIdx !== null} onOpenChange={o => { if (!o) setItemSearchIdx(null) }}>
-        <DialogContent className="w-[98vw] sm:!max-w-lg max-h-[80vh] flex flex-col overflow-hidden">
+        <DialogContent className="w-[98vw] sm:!max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
           <DialogHeader className="flex flex-row items-center justify-between gap-2 pr-6">
             <DialogTitle className="flex items-center gap-2">
               <Search className="h-4 w-4" />Search Item
@@ -1910,7 +1910,7 @@ export default function CSIMonitoringPage() {
 
       {/* Add Item Modal */}
       <Dialog open={addItemOpen} onOpenChange={setAddItemOpen}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Add Item</DialogTitle>
           </DialogHeader>
@@ -2042,7 +2042,7 @@ export default function CSIMonitoringPage() {
 
       {/* Attachment Preview */}
       <Dialog open={previewAttachmentUrl !== null} onOpenChange={o => { if (!o) setPreviewAttachmentUrl(null) }}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>SI Attachment</DialogTitle>
           </DialogHeader>
@@ -2055,7 +2055,7 @@ export default function CSIMonitoringPage() {
 
       {/* Discard Confirmation */}
       <Dialog open={discardConfirmOpen} onOpenChange={setDiscardConfirmOpen}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Unsaved Changes</DialogTitle>
           </DialogHeader>
@@ -2081,7 +2081,7 @@ export default function CSIMonitoringPage() {
 
       {/* Bulk Send Email Dialog */}
       <Dialog open={emailBulkOpen} onOpenChange={o => { if (!o && !sendingBulkEmail) setEmailBulkOpen(false) }}>
-        <DialogContent className="sm:!max-w-lg">
+        <DialogContent className="sm:!max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Mail className="h-4 w-4" />Send CSI Invoice(s)</DialogTitle>
           </DialogHeader>
@@ -2144,7 +2144,7 @@ export default function CSIMonitoringPage() {
       </Dialog>
 
       <Dialog open={calibOpen} onOpenChange={setCalibOpen}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Calibrate Blank Form Print</DialogTitle>
           </DialogHeader>

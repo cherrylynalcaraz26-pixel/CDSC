@@ -1578,7 +1578,7 @@ export default function InventoryPage() {
 
           {/* Email Client Dialog */}
           <Dialog open={emailReportOpen} onOpenChange={setEmailReportOpen}>
-            <DialogContent className="max-w-lg">
+            <DialogContent className="max-w-2xl">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <Mail className="h-4 w-4 text-blue-600" />
@@ -1626,7 +1626,7 @@ export default function InventoryPage() {
       })()}
 
       <Dialog open={warehouseUpdateOpen} onOpenChange={o => { if (!o) setWarehouseUpdateOpen(false) }}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Pencil className="h-4 w-4 text-blue-600" /> Update Warehouse Stock
@@ -1699,7 +1699,7 @@ export default function InventoryPage() {
       </Dialog>
 
       <Dialog open={!!editRow} onOpenChange={o => { if (!o) setEditRow(null) }}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Pencil className="h-4 w-4 text-yellow-600" /> Edit Item
@@ -1729,7 +1729,7 @@ export default function InventoryPage() {
 
       {/* ── Assign Channel Dialog (By Client view) ─────────────────────────────── */}
       <Dialog open={!!assignChannelRow} onOpenChange={o => { if (!o) setAssignChannelRow(null) }}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Send className="h-4 w-4 text-blue-600" /> Assign Channel
@@ -1760,7 +1760,7 @@ export default function InventoryPage() {
 
       {/* ── Product Detail Dialog (By Item view) ──────────────────────────────── */}
       <Dialog open={!!detailItem} onOpenChange={o => { if (!o) setDetailItem(null) }}>
-        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Product Details — {detailItem?.item_name}</DialogTitle>
           </DialogHeader>
@@ -1888,7 +1888,7 @@ export default function InventoryPage() {
 
       {/* ── Client Row Detail Dialog (By Client view) ──────────────────────────── */}
       <Dialog open={!!clientDetailRow} onOpenChange={o => { if (!o) setClientDetailRow(null) }}>
-        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{clientDetailRow?.client} — {clientDetailRow?.item_name}</DialogTitle>
           </DialogHeader>
@@ -1999,7 +1999,7 @@ export default function InventoryPage() {
       </Dialog>
 
       <Dialog open={addOpen} onOpenChange={o => { if (!o) setAddOpen(false) }}>
-        <DialogContent className="w-[95vw] max-w-lg sm:max-w-lg">
+        <DialogContent className="w-[95vw] max-w-2xl sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {addPoId ? <Truck className="h-4 w-4 text-red-600" /> : <Plus className="h-4 w-4 text-red-600" />}
@@ -2127,7 +2127,7 @@ export default function InventoryPage() {
 
       {/* ── Item Picker Dialog (Add Stock — box icon) ──────────────────────────── */}
       <Dialog open={itemPickerRowIdx !== null} onOpenChange={o => { if (!o) { setItemPickerRowIdx(null); setItemPickerSearch('') } }}>
-        <DialogContent className="sm:max-w-lg max-h-[80vh] flex flex-col">
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Package className="h-4 w-4 text-muted-foreground" /> Select Item
@@ -2180,7 +2180,7 @@ export default function InventoryPage() {
 
       {/* Confirm Dialog */}
       <Dialog open={confirmOpen} onOpenChange={o => { if (!o) setConfirmOpen(false) }}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-base">Confirm Delete</DialogTitle>
           </DialogHeader>
