@@ -127,6 +127,20 @@ export default function SalesOrdersPage() {
     ? items.filter(it => it.item_name.toLowerCase().includes(itemQuery.toLowerCase()))
     : items
 
+  // Reference-only warehouse on-hand quantity per item, so Sales Order can show what's
+  // already in CDSC's own unassigned stock pool vs. what a line would need to be
+  // purchased from a Supplier for. Called on page load and again whenever the New/Edit
+  // Sales Order form opens, since receiving stock elsewhere while this page stays open
+  // wouldn't otherwise be reflected until a full page refresh.
+  async function loadWarehouseQty() {
+    const whRows = await fetchAllRows<{ item_name: string; quantity: number }>(
+      (from, to) => supabase.from('warehouse_stock').select('item_name,quantity').is('client_name', null).order('id').range(from, to)
+    )
+    const whMap: Record<string, number> = {}
+    for (const r of whRows) whMap[r.item_name] = (whMap[r.item_name] ?? 0) + (Number(r.quantity) || 0)
+    setWarehouseQty(whMap)
+  }
+
   async function load() {
     setLoading(true)
     const [{ data: soData }, { data: itemData }, { data: cliData }, { data: sysData }] = await Promise.all([
@@ -141,15 +155,7 @@ export default function SalesOrdersPage() {
     setClients((cliData ?? []) as ClientOption[])
     if (sysData) setCompanyInfo(sysData as SystemSettings)
 
-    // Reference-only warehouse on-hand quantity per item, so Sales Order can
-    // show what's already in CDSC's own unassigned stock pool vs. what a
-    // Sales Order line would need to have purchased from a Supplier instead.
-    const whRows = await fetchAllRows<{ item_name: string; quantity: number }>(
-      (from, to) => supabase.from('warehouse_stock').select('item_name,quantity').is('client_name', null).order('id').range(from, to)
-    )
-    const whMap: Record<string, number> = {}
-    for (const r of whRows) whMap[r.item_name] = (whMap[r.item_name] ?? 0) + (Number(r.quantity) || 0)
-    setWarehouseQty(whMap)
+    await loadWarehouseQty()
 
     // Load delivery summary — query dr_logs (source of truth) + sales_deliveries
     const soNums = soList.map(s => s.so_number).filter(Boolean) as string[]
@@ -300,6 +306,7 @@ export default function SalesOrdersPage() {
     setEditingSOId(so.id)
     setMobileTab('form')
     setOpen(true)
+    loadWarehouseQty()
   }
 
   async function updateStatus(id: string, status: SOStatus) {
@@ -707,7 +714,7 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
             <X className="h-4 w-4 mr-2" />Cancel
           </Button>
         ) : (
-          <Button onClick={() => { resetForm(); setOpen(true) }} className="bg-red-600 hover:bg-red-700">
+          <Button onClick={() => { resetForm(); setOpen(true); loadWarehouseQty() }} className="bg-red-600 hover:bg-red-700">
             <Plus className="h-4 w-4 mr-2" />New Sales Order
           </Button>
         )}
