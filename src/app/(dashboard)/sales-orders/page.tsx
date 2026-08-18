@@ -20,6 +20,7 @@ import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
 import { sendEmail, SOPdfData } from '@/lib/send-email'
+import { fetchAllRows } from '@/lib/supabase/fetch-all'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { subMonths, startOfMonth, endOfMonth, format as fmtDate } from 'date-fns'
 
@@ -65,6 +66,9 @@ export default function SalesOrdersPage() {
   const [mobileTab, setMobileTab] = useState<'form' | 'preview'>('form')
   const [itemSearchIdx, setItemSearchIdx] = useState<number | null>(null)
   const [itemQuery, setItemQuery] = useState('')
+  // CDSC's own unassigned warehouse stock per item — reference only, so staff can
+  // see what's on hand vs. what still needs to be purchased from a Supplier.
+  const [warehouseQty, setWarehouseQty] = useState<Record<string, number>>({})
 
   // View SO
   const [viewSO, setViewSO] = useState<SO | null>(null)
@@ -136,6 +140,16 @@ export default function SalesOrdersPage() {
     setItems((itemData ?? []) as ItemOption[])
     setClients((cliData ?? []) as ClientOption[])
     if (sysData) setCompanyInfo(sysData as SystemSettings)
+
+    // Reference-only warehouse on-hand quantity per item, so Sales Order can
+    // show what's already in CDSC's own unassigned stock pool vs. what a
+    // Sales Order line would need to have purchased from a Supplier instead.
+    const whRows = await fetchAllRows<{ item_name: string; quantity: number }>(
+      (from, to) => supabase.from('warehouse_stock').select('item_name,quantity').is('client_name', null).order('id').range(from, to)
+    )
+    const whMap: Record<string, number> = {}
+    for (const r of whRows) whMap[r.item_name] = (whMap[r.item_name] ?? 0) + (Number(r.quantity) || 0)
+    setWarehouseQty(whMap)
 
     // Load delivery summary — query dr_logs (source of truth) + sales_deliveries
     const soNums = soList.map(s => s.so_number).filter(Boolean) as string[]
@@ -844,6 +858,17 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
                                       <Package className="h-3.5 w-3.5" />
                                     </Button>
                                   </div>
+                                  {line.item_name && (() => {
+                                    const inStock = warehouseQty[line.item_name] ?? 0
+                                    const needed = parseFloat(line.quantity) || 0
+                                    const short = needed > inStock
+                                    return (
+                                      <p className={`mt-1 text-[11px] ${short ? 'text-amber-600' : 'text-muted-foreground'}`}>
+                                        Warehouse stock: {inStock.toLocaleString('en-PH')} {line.unit || ''}
+                                        {short && ` — short ${(needed - inStock).toLocaleString('en-PH')}, purchase from Supplier`}
+                                      </p>
+                                    )
+                                  })()}
                                 </TableCell>
                                 <TableCell className="py-1.5">
                                   <Input type="number" min={1} className="h-8 text-xs w-full min-w-[64px]" placeholder="1" value={line.quantity}
@@ -1494,19 +1519,22 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
             <Input autoFocus placeholder="Search by item name…" className="pl-9" value={itemQuery} onChange={e => setItemQuery(e.target.value)} />
           </div>
           <div className="flex-1 overflow-y-auto overflow-x-auto border rounded-lg">
-            <table className="w-full text-sm min-w-[500px]">
+            <table className="w-full text-sm min-w-[620px]">
               <thead className="sticky top-0 bg-muted">
                 <tr>
-                  <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-[45%]">Item Name</th>
+                  <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-[35%]">Item Name</th>
                   <th className="text-left px-3 py-2 text-xs font-medium text-muted-foreground w-[10%]">Unit</th>
+                  <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground w-[15%]">In Warehouse</th>
                   <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground w-[20%]">Cost</th>
-                  <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground w-[25%]">Selling Price</th>
+                  <th className="text-right px-3 py-2 text-xs font-medium text-muted-foreground w-[20%]">Selling Price</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {filteredSearchItems.length === 0 ? (
-                  <tr><td colSpan={4} className="text-center py-6 text-muted-foreground text-sm">No items found.</td></tr>
-                ) : filteredSearchItems.map(it => (
+                  <tr><td colSpan={5} className="text-center py-6 text-muted-foreground text-sm">No items found.</td></tr>
+                ) : filteredSearchItems.map(it => {
+                  const inStock = warehouseQty[it.item_name] ?? 0
+                  return (
                   <tr key={it.item_name} className="hover:bg-muted/40 cursor-pointer" onClick={() => {
                     if (itemSearchIdx === null) return
                     setLines(p => p.map((l, i) => i === itemSearchIdx ? {
@@ -1521,10 +1549,14 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
                   }}>
                     <td className="px-3 py-2 font-medium">{it.item_name}</td>
                     <td className="px-3 py-2 text-muted-foreground">{it.unit_of_measure || '—'}</td>
+                    <td className={`px-3 py-2 text-right ${inStock <= 0 ? 'text-amber-600' : 'text-muted-foreground'}`}>
+                      {inStock > 0 ? inStock.toLocaleString('en-PH') : 'Out of stock'}
+                    </td>
                     <td className="px-3 py-2 text-right">{it.cost != null ? `₱${it.cost.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}</td>
                     <td className="px-3 py-2 text-right font-medium text-green-700">{it.selling_price != null ? `₱${it.selling_price.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}</td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
