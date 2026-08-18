@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Checkbox } from '@/components/ui/checkbox'
 import { PaginationBar } from '@/components/ui/pagination-bar'
-import { Plus, X, Search, MoreHorizontal, Loader2, FileText, LayoutGrid, List, ChevronDown, ChevronUp, Trash2, Printer, SlidersHorizontal, FileOutput, Mail, Camera, Image as ImageIcon, GripVertical, RefreshCw } from 'lucide-react'
+import { Plus, X, Search, Box, MoreHorizontal, Loader2, FileText, LayoutGrid, List, ChevronDown, ChevronUp, Trash2, Printer, SlidersHorizontal, FileOutput, Mail, Camera, Image as ImageIcon, GripVertical, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
@@ -159,8 +159,6 @@ export default function CSIMonitoringPage() {
   const [open, setOpen] = useState(false)
   const [chartsExpanded, setChartsExpanded] = useState(false)
   const [editingSiNumber, setEditingSiNumber] = useState<string | null>(null)
-  const [siFilter, setSiFilter] = usePersistedState('csi-monitoring:siFilter', '')
-  const [itemFilter, setItemFilter] = usePersistedState('csi-monitoring:itemFilter', '')
   const [clientFilter, setClientFilter] = usePersistedState('csi-monitoring:clientFilter', '')
   const [yearFilter, setYearFilter] = usePersistedState('csi-monitoring:yearFilter', 'all')
   const [header, setHeader] = useState(emptyHeader())
@@ -629,11 +627,9 @@ export default function CSIMonitoringPage() {
       r.item_name.toLowerCase().includes(q) ||
       (r.dr_number ?? '').toLowerCase().includes(q)
     )
-    const matchSI = !siFilter || r.si_number.toLowerCase().includes(siFilter.toLowerCase())
-    const matchItem = !itemFilter || r.item_name.toLowerCase().includes(itemFilter.toLowerCase())
     const matchClient = !clientFilter || (r.client_name ?? '') === clientFilter
     const matchYear = yearFilter === 'all' || r.si_date?.slice(0, 4) === yearFilter
-    return matchSearch && matchSI && matchItem && matchClient && matchYear
+    return matchSearch && matchClient && matchYear
   })
 
   const totalAmount = filtered.reduce((s, r) => s + (Number(r.amount) || 0), 0)
@@ -665,7 +661,7 @@ export default function CSIMonitoringPage() {
   const activeTotal = viewMode === 'by-si' ? siGroups.length : filtered.length
   const totalPages = Math.max(1, Math.ceil(activeTotal / PAGE_SIZE))
 
-  useEffect(() => { setPage(1) }, [search, siFilter, itemFilter, clientFilter, yearFilter, viewMode])
+  useEffect(() => { setPage(1) }, [search, clientFilter, yearFilter, viewMode])
   useEffect(() => { if (viewMode !== 'by-si') setSelectedSIs(new Set()) }, [viewMode])
 
   function toggleSI(si: string) {
@@ -1199,7 +1195,7 @@ export default function CSIMonitoringPage() {
                               </Select>
                               <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" title="Search items"
                                 onClick={() => { setItemSearchIdx(i); setItemQuery('') }}>
-                                <Search className="h-3.5 w-3.5" />
+                                <Box className="h-3.5 w-3.5" />
                               </Button>
                             </div>
                           </TableCell>
@@ -1481,40 +1477,6 @@ export default function CSIMonitoringPage() {
       })()}
 
       {!open && <div className="flex flex-wrap gap-3 items-center">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-          <input
-            list="si-number-list"
-            value={siFilter}
-            onChange={e => setSiFilter(e.target.value)}
-            placeholder="Filter by SI Number…"
-            className="h-9 pl-8 pr-8 text-sm border rounded-md bg-background w-52 focus:outline-none focus:ring-2 focus:ring-red-500"
-          />
-          <datalist id="si-number-list">
-            {[...new Set(records.map(r => r.si_number))].sort().map(si => (
-              <option key={si} value={si} />
-            ))}
-          </datalist>
-          {siFilter && (
-            <button onClick={() => setSiFilter('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-          <input
-            value={itemFilter}
-            onChange={e => setItemFilter(e.target.value)}
-            placeholder="Search line item…"
-            className="h-9 pl-8 pr-8 text-sm border rounded-md bg-background w-52 focus:outline-none focus:ring-2 focus:ring-red-500"
-          />
-          {itemFilter && (
-            <button onClick={() => setItemFilter('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
         <Select value={clientFilter || '__all__'} onValueChange={v => setClientFilter(!v || v === '__all__' ? '' : v)}>
           <SelectTrigger className="h-9 w-72 text-sm">
             <SelectValue className="truncate">{(v: string) => v === '__all__' ? 'Client' : v}</SelectValue>

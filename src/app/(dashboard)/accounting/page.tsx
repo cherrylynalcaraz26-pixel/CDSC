@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsContent } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
@@ -2404,16 +2404,6 @@ function BookkeepingTab({ activeSub, onSubChange }: { activeSub: string; onSubCh
     <div className="space-y-4">
       <DateFilterBar df={df} />
       <Tabs value={activeSub} onValueChange={v => onSubChange(v ?? 'crj')}>
-        <TabsList>
-          <TabsTrigger value="crj">Sales Journal</TabsTrigger>
-          <TabsTrigger value="cdj">Disbursements</TabsTrigger>
-          <TabsTrigger value="coa">Chart of Accounts</TabsTrigger>
-          <TabsTrigger value="gl">General Ledger</TabsTrigger>
-          <TabsTrigger value="tb">Trial Balance</TabsTrigger>
-          <TabsTrigger value="is">Income Statement</TabsTrigger>
-          <TabsTrigger value="bs">Balance Sheet</TabsTrigger>
-          <TabsTrigger value="bir">BIR Export</TabsTrigger>
-        </TabsList>
         <div>
           <TabsContent value="crj"><SalesJournalTab collections={filteredCollections} csiRecords={filteredCsi} /></TabsContent>
           <TabsContent value="cdj"><DisbursementsTab filterFrom={filterFrom} filterTo={filterTo} /></TabsContent>
@@ -2467,13 +2457,6 @@ function AccountingPageContent() {
       </div>
 
       <Tabs value={activeTab} onValueChange={v => setTab(v ?? 'overview')}>
-        {activeTab !== 'bookkeeping' && (
-          <TabsList variant="line">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="collections">Collections</TabsTrigger>
-            <TabsTrigger value="bir">BIR Compliance</TabsTrigger>
-          </TabsList>
-        )}
         <div>
           <TabsContent value="overview"><OverviewTab /></TabsContent>
           <TabsContent value="collections"><CollectionsTab /></TabsContent>

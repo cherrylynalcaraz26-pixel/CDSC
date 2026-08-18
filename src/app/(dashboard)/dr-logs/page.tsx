@@ -150,7 +150,6 @@ export default function DRLogsPage() {
   const [statusFilter, setStatusFilter] = usePersistedState('dr-logs:statusFilter', 'all')
   const [clientFilter, setClientFilter] = usePersistedState('dr-logs:clientFilter', '')
   const [yearFilter, setYearFilter] = usePersistedState('dr-logs:yearFilter', 'all')
-  const [drFilter, setDrFilter] = usePersistedState('dr-logs:drFilter', '')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [page, setPage] = useState(1)
   const [open, setOpen] = useState(false)
@@ -161,7 +160,6 @@ export default function DRLogsPage() {
   const [saving, setSaving] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [viewMode, setViewMode] = usePersistedState<'by-dr' | 'all-items'>('dr-logs:viewMode', 'by-dr')
-  const [itemFilter, setItemFilter] = usePersistedState('dr-logs:itemFilter', '')
   const [drActiveTab, setDrActiveTab] = useState<'form' | 'preview'>('form')
   const [companyInfo, setCompanyInfo] = useState<{ company_name: string; address: string; phone: string; email: string; tin: string } | null>(null)
   const [itemSearches, setItemSearches] = useState<Record<number, string>>({})
@@ -419,11 +417,7 @@ export default function DRLogsPage() {
     const matchStatus = statusFilter === 'all' || l.status === statusFilter
     const matchClient = !clientFilter || (l.supplier_name ?? '') === clientFilter
     const matchYear = yearFilter === 'all' || l.dr_date?.slice(0, 4) === yearFilter
-    const matchDR = !drFilter || l.dr_number.toLowerCase().includes(drFilter.toLowerCase())
-    const matchItem = !itemFilter || getItems(l.dr_number).some(it =>
-      it.item_name.toLowerCase().includes(itemFilter.toLowerCase())
-    )
-    return matchSearch && matchStatus && matchClient && matchYear && matchDR && matchItem
+    return matchSearch && matchStatus && matchClient && matchYear
   })
 
   const PAGE_SIZE = 30
@@ -435,7 +429,7 @@ export default function DRLogsPage() {
   const activeTotal = viewMode === 'by-dr' ? filtered.length : allItemsFlat.length
   const totalPages = Math.max(1, Math.ceil(activeTotal / PAGE_SIZE))
 
-  useEffect(() => { setPage(1) }, [search, statusFilter, clientFilter, yearFilter, drFilter, itemFilter, viewMode])
+  useEffect(() => { setPage(1) }, [search, statusFilter, clientFilter, yearFilter, viewMode])
 
   function toggleExpand(id: string) {
     setExpandedId(prev => prev === id ? null : id)
@@ -873,38 +867,6 @@ export default function DRLogsPage() {
       })()}
 
       <div className="flex flex-wrap gap-3 items-center">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-          <input
-            list="dr-number-list"
-            value={drFilter}
-            onChange={e => setDrFilter(e.target.value)}
-            placeholder="Filter by DR Number…"
-            className="h-9 pl-8 pr-8 text-sm border rounded-md bg-background w-52 focus:outline-none focus:ring-2 focus:ring-red-500"
-          />
-          <datalist id="dr-number-list">
-            {logs.map(l => <option key={l.id} value={l.dr_number} />)}
-          </datalist>
-          {drFilter && (
-            <button onClick={() => setDrFilter('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-          <input
-            value={itemFilter}
-            onChange={e => setItemFilter(e.target.value)}
-            placeholder="Search line item…"
-            className="h-9 pl-8 pr-8 text-sm border rounded-md bg-background w-52 focus:outline-none focus:ring-2 focus:ring-red-500"
-          />
-          {itemFilter && (
-            <button onClick={() => setItemFilter('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
         <Select value={clientFilter || '_all'} onValueChange={(v: string | null) => setClientFilter(!v || v === '_all' ? '' : v)}>
           <SelectTrigger className="min-w-[220px]">
             <SelectValue>{(v: string) => v === '_all' ? 'Client' : v}</SelectValue>

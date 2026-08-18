@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { Plus, MoreHorizontal, Loader2, Trash2, X, FileText, Printer, Mail, Send, Package, Search, Pencil, Eye, CheckCircle, XCircle, Clock, CheckCheck, ClipboardList, GripVertical, Camera, Image as ImageIcon } from 'lucide-react'
+import { Plus, MoreHorizontal, Loader2, Trash2, X, FileText, Printer, Mail, Send, Package, Search, Box, Pencil, Eye, CheckCircle, XCircle, Clock, CheckCheck, ClipboardList, GripVertical, Camera, Image as ImageIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { undoToast } from '@/lib/undo-toast'
 import { useSearchContext } from '@/context/search-context'
@@ -1009,7 +1009,7 @@ export default function QuotationPage() {
                             </Select>
                             <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" title="Search inventory"
                               onClick={() => { setItemSearchIdx(idx); setItemQuery('') }}>
-                              <Search className="h-3.5 w-3.5" />
+                              <Box className="h-3.5 w-3.5" />
                             </Button>
                           </div>
                           <Input placeholder="Description (optional)" className="h-7 text-xs" value={line.description}

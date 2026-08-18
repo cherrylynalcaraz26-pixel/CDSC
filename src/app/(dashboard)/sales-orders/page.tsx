@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import {
   Plus, MoreHorizontal, Eye, Printer, Trash2, CheckCircle2, XCircle,
   Loader2, X, FileText, Package, Search, Mail, ChevronDown, ChevronUp,
-  Globe, EyeOff, Receipt, GripVertical,
+  Globe, EyeOff, Receipt, GripVertical, RefreshCw, Box,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
@@ -307,6 +307,17 @@ export default function SalesOrdersPage() {
     setQuickPOSaving(false)
     setQuickPOOpen(false)
     setQuickPOLineIdx(null)
+  }
+
+  async function updateSellingPriceInConfig(i: number) {
+    const line = lines[i]
+    const price = parseFloat(line.selling_price)
+    if (!line.item_name) { toast.error('Select an item first'); return }
+    if (!price || price <= 0) { toast.error('Enter a Selling Price first'); return }
+    const { error } = await supabase.from('items').update({ selling_price: price }).eq('item_name', line.item_name)
+    if (error) { toast.error(error.message); return }
+    setItems(prev => prev.map(it => it.item_name === line.item_name ? { ...it, selling_price: price } : it))
+    toast.success(`Selling price for "${line.item_name}" updated to ${fmt(price)} in Configuration`)
   }
 
   async function submitSO() {
@@ -1123,12 +1134,23 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
                             })()}
                           </TableCell>
                           <TableCell className="py-1.5">
-                            <Input type="number" min={0} step="0.01" className="h-8 text-xs w-full" placeholder="0.00" value={line.unit_price}
-                              onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, unit_price: e.target.value } : l))} />
+                            <div className="h-8 flex items-center px-2 text-xs bg-muted/30 rounded border text-muted-foreground tabular-nums" title="Current Configuration cost (for reference)">
+                              {(() => {
+                                const cost = items.find(it => it.item_name === line.item_name)?.cost
+                                return cost != null ? fmt(cost) : '—'
+                              })()}
+                            </div>
                           </TableCell>
                           <TableCell className="py-1.5">
-                            <Input type="number" min={0} step="0.01" className="h-8 text-xs w-full" placeholder="0.00" value={line.selling_price}
-                              onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, selling_price: e.target.value } : l))} />
+                            <div className="flex items-center gap-1">
+                              <Input type="number" min={0} step="0.01" className="h-8 text-xs w-full" placeholder="0.00" value={line.selling_price}
+                                onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, selling_price: e.target.value } : l))} />
+                              <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-muted-foreground hover:text-blue-600"
+                                title="Update this item's selling price in Configuration to match this Selling Price"
+                                onClick={() => updateSellingPriceInConfig(i)}>
+                                <RefreshCw className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
                           </TableCell>
                           <TableCell className="py-1.5 text-right text-xs font-medium">{fmt(lineTotal)}</TableCell>
                           <TableCell className="py-1.5">
@@ -1146,7 +1168,7 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
                 </Table>
               </div>
               <Button variant="outline" size="sm" onClick={() => setLines(p => [...p, emptyLine()])}>
-                <Plus className="h-3.5 w-3.5 mr-1.5" />Add Item
+                <Box className="h-3.5 w-3.5 mr-1.5" />Add Item
               </Button>
             </CardContent>
           </Card>
