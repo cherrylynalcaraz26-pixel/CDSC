@@ -51,8 +51,10 @@ export interface SendEmailPayload {
    *  prefer poPdfData/soPdfData for PO/SO, which draw a lighter native PDF directly. */
   printHtml?: string
   pdfFilename?: string
-  /** Extra PDF attachments beyond the single poPdfData/soPdfData/printHtml one, e.g. one per selected record in a bulk send. */
-  attachments?: { base64: string; filename: string }[]
+  /** Extra attachments beyond the single poPdfData/soPdfData/printHtml one — e.g. one PDF per
+   *  selected record in a bulk send, or a user-picked image. contentType defaults to
+   *  'application/pdf' for backward compatibility; pass it explicitly for non-PDF files. */
+  attachments?: { base64: string; filename: string; contentType?: string }[]
 }
 
 function fmtAmt(n: number) {

@@ -99,6 +99,13 @@ export default function QuotationPage() {
   const [emailToQ, setEmailToQ] = useState('')
   const [emailSubjectQ, setEmailSubjectQ] = useState('')
   const [emailBodyQ, setEmailBodyQ] = useState('')
+  // Optional extra image attached to the quotation email — a photo picked from the
+  // device (which, depending on the OS/browser, can itself browse a mounted Google
+  // Drive) rather than a full Google Drive file picker, which this app has no API
+  // access configured for.
+  const [emailAttachmentFile, setEmailAttachmentFile] = useState<File | null>(null)
+  const [emailAttachmentPreview, setEmailAttachmentPreview] = useState<string | null>(null)
+  const emailAttachmentInputRef = useRef<HTMLInputElement>(null)
   const [itemSearchIdx, setItemSearchIdx] = useState<number | null>(null)
   const [dragLineIndex, setDragLineIndex] = useState<number | null>(null)
   const [uomList, setUomList] = useState<UOMOption[]>([])
@@ -168,6 +175,30 @@ export default function QuotationPage() {
     </head><body class="p-6 text-[11px]">${el.innerHTML}</body></html>`)
     win.document.close()
     setTimeout(() => { win.focus(); win.print(); win.close() }, 800)
+  }
+
+  function fileToBase64(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => resolve((reader.result as string).split(',')[1] ?? '')
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
+  }
+
+  function handleEmailAttachmentSelect(file: File) {
+    setEmailAttachmentFile(file)
+    setEmailAttachmentPreview(URL.createObjectURL(file))
+  }
+
+  function clearEmailAttachment() {
+    setEmailAttachmentFile(null)
+    setEmailAttachmentPreview(null)
+  }
+
+  async function buildExtraAttachments(): Promise<{ base64: string; filename: string; contentType: string }[]> {
+    if (!emailAttachmentFile) return []
+    return [{ base64: await fileToBase64(emailAttachmentFile), filename: emailAttachmentFile.name, contentType: emailAttachmentFile.type || 'application/octet-stream' }]
   }
 
   async function load() {
@@ -531,8 +562,8 @@ export default function QuotationPage() {
         ${itemsHtml}
         <div style="display:flex;justify-content:flex-end;margin-top:12px;">
           <div style="width:220px;font-size:10px;">
-            <div style="display:flex;justify-content:space-between;padding-bottom:4px;"><span style="color:#6b7280;">Subtotal</span><span>${fmtAmt(q.subtotal)}</span></div>
-            ${hasVat ? `<div style="display:flex;justify-content:space-between;border-top:1px solid #e5e7eb;padding-top:4px;"><span style="color:#6b7280;">VAT (12%)</span><span style="color:#2563eb;">${fmtAmt(q.vat_amount)}</span></div>` : ''}
+            <div style="display:flex;justify-content:space-between;padding-bottom:4px;"><span style="color:#6b7280;">&nbsp;&nbsp;&nbsp;Subtotal</span><span>${fmtAmt(q.subtotal)}</span></div>
+            ${hasVat ? `<div style="display:flex;justify-content:space-between;border-top:1px solid #e5e7eb;padding-top:4px;"><span style="color:#6b7280;">&nbsp;&nbsp;&nbsp;VAT (12%)</span><span style="color:#2563eb;">${fmtAmt(q.vat_amount)}</span></div>` : ''}
             ${hasEwt ? `<div style="display:flex;justify-content:space-between;"><span style="color:#6b7280;">EWT</span><span style="color:#b91c1c;">−${fmtAmt(q.ewt_amount)}</span></div>` : ''}
             <div style="display:flex;justify-content:space-between;border-top:1px solid #e5e7eb;padding-top:4px;font-weight:700;font-size:11px;"><span>Total</span><span style="color:#b91c1c;">${fmtAmt(q.total_amount)}</span></div>
           </div>
@@ -540,11 +571,11 @@ export default function QuotationPage() {
         ${q.notes ? `<div style="border-top:1px solid #e5e7eb;padding-top:8px;margin-top:8px;"><div style="font-size:9px;font-weight:600;text-transform:uppercase;color:#9ca3af;margin-bottom:4px;">Notes / Terms</div><div style="font-size:10px;color:#374151;">${q.notes}</div></div>` : ''}
         <div style="display:flex;justify-content:space-between;margin-top:40px;gap:24px;">
           <div style="flex:1;text-align:center;">
-            <div style="border-top:1px solid #374151;padding-top:6px;font-size:10px;color:#374151;font-weight:600;">PREPARED BY</div>
+            <div style="border-top:1px solid #374151;padding-top:6px;font-size:10px;color:#374151;font-weight:600;">&nbsp;&nbsp;&nbsp;PREPARED BY</div>
             <div style="font-size:9px;color:#9ca3af;margin-top:2px;">Signature over Printed Name</div>
           </div>
           <div style="flex:1;text-align:center;">
-            <div style="border-top:1px solid #374151;padding-top:6px;font-size:10px;color:#374151;font-weight:600;">ACCEPTED BY</div>
+            <div style="border-top:1px solid #374151;padding-top:6px;font-size:10px;color:#374151;font-weight:600;">&nbsp;&nbsp;&nbsp;ACCEPTED BY</div>
             <div style="font-size:9px;color:#9ca3af;margin-top:2px;">Signature over Printed Name / Date</div>
           </div>
         </div>
@@ -580,6 +611,36 @@ export default function QuotationPage() {
     sent: quotations.filter(q => q.status === 'sent').length,
     accepted: quotations.filter(q => q.status === 'accepted').length,
   }
+
+  const EmailAttachmentPicker = () => (
+    <div className="space-y-1.5">
+      <Label>Attach Image (optional)</Label>
+      {emailAttachmentPreview ? (
+        <div className="flex items-center gap-2 border rounded-md p-2">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={emailAttachmentPreview} alt="" className="h-10 w-10 rounded object-cover shrink-0" />
+          <span className="text-xs text-muted-foreground truncate flex-1">{emailAttachmentFile?.name}</span>
+          <Button type="button" variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={clearEmailAttachment}>
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      ) : (
+        <Button type="button" variant="outline" size="sm" onClick={() => emailAttachmentInputRef.current?.click()}>
+          Choose Image
+        </Button>
+      )}
+      <input
+        ref={emailAttachmentInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={e => { const f = e.target.files?.[0]; if (f) handleEmailAttachmentSelect(f); e.target.value = '' }}
+      />
+      <p className="text-[11px] text-muted-foreground">
+        Picks from your device — if you have Google Drive for Desktop or a Drive browser extension set up, its files appear in this same picker.
+      </p>
+    </div>
+  )
 
   const PreviewDoc = () => {
     const imageLines = lines.filter(l => l.item_name.trim() && itemImage(l.item_name))
@@ -642,12 +703,12 @@ export default function QuotationPage() {
       <table className="w-full border-collapse text-[10px]">
         <thead>
           <tr className="bg-red-700 text-white">
-            <th className="text-left px-1.5 py-1 w-6">#</th>
-            <th className="text-left px-1.5 py-1">Item Description</th>
-            <th className="text-right px-1.5 py-1 w-14 font-bold">QTY</th>
-            <th className="text-left px-1.5 py-1 w-16">Unit</th>
-            <th className="text-right px-1.5 py-1 w-24">Selling Price</th>
-            <th className="text-right px-1.5 py-1 w-20">Total</th>
+            <th className="text-center px-1.5 py-1 w-6">#</th>
+            <th className="text-center px-1.5 py-1">Item Description</th>
+            <th className="text-center px-1.5 py-1 w-14 font-bold">QTY</th>
+            <th className="text-center px-1.5 py-1 w-16">Unit</th>
+            <th className="text-center px-1.5 py-1 w-24">Selling Price</th>
+            <th className="text-center px-1.5 py-1 w-20">Total</th>
           </tr>
         </thead>
         <tbody>
@@ -1215,6 +1276,7 @@ export default function QuotationPage() {
                 onChange={e => setEmailBodyQ(e.target.value)}
               />
             </div>
+            <EmailAttachmentPicker />
             <p className="text-xs text-muted-foreground">
               The email will be sent from cdsc.gmot@gmail.com with the quotation attached as a PDF.
             </p>
@@ -1270,9 +1332,11 @@ ${emailBodyQ.replace(/\n/g, '<br/>')}
                       htmlBody: htmlBodyQ,
                       printHtml: buildQuoteHtml(formQ, formItems),
                       pdfFilename: `Quotation-${quoteNumber || 'draft'}.pdf`,
+                      attachments: await buildExtraAttachments(),
                     })
                     toast.success('Email sent successfully!')
                     setShowEmailQ(false)
+                    clearEmailAttachment()
                   } catch (err: unknown) {
                     toast.error(err instanceof Error ? err.message : 'Failed to send email')
                   } finally {
@@ -1332,6 +1396,7 @@ ${emailBodyQ.replace(/\n/g, '<br/>')}
                 onChange={e => setListEmailBody(e.target.value)}
               />
             </div>
+            <EmailAttachmentPicker />
             <p className="text-xs text-muted-foreground">The email will be sent from cdsc.gmot@gmail.com and the quotation will be marked as Sent.</p>
             <div className="flex justify-end gap-2 pt-1">
               <Button variant="outline" disabled={sendingListEmail} onClick={() => setListEmailQ(null)}>Cancel</Button>
@@ -1361,9 +1426,11 @@ ${listEmailBody.replace(/\n/g, '<br/>')}
                       htmlBody: htmlBodyList,
                       printHtml: buildQuoteHtml(q, qItemsForEmail ?? []),
                       pdfFilename: `Quotation-${q.quote_number ?? 'draft'}.pdf`,
+                      attachments: await buildExtraAttachments(),
                     })
                     toast.success('Email sent successfully!')
                     setListEmailQ(null)
+                    clearEmailAttachment()
                     updateStatus(q.id, 'sent')
                   } catch (err: unknown) {
                     toast.error(err instanceof Error ? err.message : 'Failed to send email')

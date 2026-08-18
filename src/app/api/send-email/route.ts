@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
             filename: a.filename,
             content: a.base64,
             encoding: 'base64',
-            contentType: 'application/pdf',
+            contentType: a.contentType || 'application/pdf',
           })
         }
       }
