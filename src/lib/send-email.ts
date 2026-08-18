@@ -12,7 +12,7 @@ export interface QuotationPdfData {
   validUntil?: string
   clientName?: string
   subject?: string
-  items: { item_name: string; quantity: number; unit?: string | null; unit_price: number; selling_price?: number | null; total_amount: number; imageDataUrl?: string }[]
+  items: { item_name: string; description?: string | null; quantity: number; unit?: string | null; unit_price: number; selling_price?: number | null; total_amount: number; imageDataUrl?: string }[]
   subtotal: number
   vatAmount: number
   ewtAmount: number
@@ -218,9 +218,10 @@ async function buildQuotePdf(data: QuotationPdfData): Promise<string> {
     y += rowH
 
     data.items.forEach((item, i) => {
+      const thisRowH = item.description ? rowH + 9 : rowH
       const rowBg = i % 2 === 0 ? [255, 255, 255] : [249, 250, 251]
       pdf.setFillColor(rowBg[0], rowBg[1], rowBg[2])
-      pdf.rect(margin, y, contentW, rowH, 'F')
+      pdf.rect(margin, y, contentW, thisRowH, 'F')
 
       setFont()
       pdf.setFontSize(8)
@@ -232,8 +233,18 @@ async function buildQuotePdf(data: QuotationPdfData): Promise<string> {
       pdf.setTextColor(31, 41, 55)
       const maxDescW = cols.desc - 8
       const descText = pdf.splitTextToSize(item.item_name ?? '-', maxDescW)[0]
-      pdf.text(descText, rx2 + 4, y + 11); rx2 += cols.desc
+      pdf.text(descText, rx2 + 4, y + 11)
+      if (item.description) {
+        setFont()
+        pdf.setFontSize(7)
+        pdf.setTextColor(107, 114, 128)
+        const subText = pdf.splitTextToSize(item.description, maxDescW)[0]
+        pdf.text(subText, rx2 + 4, y + 20)
+        pdf.setFontSize(8)
+      }
+      rx2 += cols.desc
 
+      pdf.setTextColor(31, 41, 55)
       pdf.text(String(item.quantity), rx2 + cols.qty / 2, y + 11, { align: 'center' }); rx2 += cols.qty
 
       pdf.setTextColor(107, 114, 128)
@@ -244,7 +255,7 @@ async function buildQuotePdf(data: QuotationPdfData): Promise<string> {
       pdf.text(fmtAmt(price), rx2 + cols.price - 2, y + 11, { align: 'right' }); rx2 += cols.price
       pdf.text(fmtAmt(item.total_amount), rx2 + cols.total - 2, y + 11, { align: 'right' })
 
-      y += rowH
+      y += thisRowH
     })
 
     y += 8

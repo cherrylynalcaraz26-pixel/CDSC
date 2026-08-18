@@ -892,6 +892,14 @@ export default function CSIMonitoringPage() {
   }
 
   const totalItems = items.reduce((s, it) => s + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0), 0)
+  // The Live Preview mirrors what actually prints on the Sales Invoice, so it shows
+  // each item's current Configuration selling price rather than a possibly-overridden
+  // Unit Price — falling back to Unit Price only when the item has no selling price on file.
+  function previewUnitPrice(it: CSIItem): number {
+    const sp = itemOptions.find(o => o.item_name === it.item_name)?.selling_price
+    return sp != null ? sp : (Number(it.unit_price) || 0)
+  }
+  const previewTotal = items.reduce((s, it) => s + (Number(it.quantity) || 0) * previewUnitPrice(it), 0)
   const filteredSearchItems = itemQuery.trim()
     ? itemOptions.filter(it => it.item_name.toLowerCase().includes(itemQuery.toLowerCase()))
     : itemOptions
@@ -1095,14 +1103,15 @@ export default function CSIMonitoringPage() {
                         {items.filter(it => it.item_name).length === 0 ? (
                           <tr><td colSpan={6} className="px-1.5 py-3 text-center text-gray-300 italic">No items added yet</td></tr>
                         ) : items.map((item, i) => {
-                          const amt = (Number(item.quantity) || 0) * (Number(item.unit_price) || 0)
+                          const unitPrice = previewUnitPrice(item)
+                          const amt = (Number(item.quantity) || 0) * unitPrice
                           return item.item_name ? (
                             <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                               <td className="px-1.5 py-1 text-gray-400">{i + 1}</td>
                               <td className="px-1.5 py-1">{item.item_name}</td>
                               <td className="px-1.5 py-1 text-gray-500">{item.unit || '—'}</td>
                               <td className="px-1.5 py-1 text-right">{Number(item.quantity) || '—'}</td>
-                              <td className="px-1.5 py-1 text-right">{item.unit_price ? formatPeso(Number(item.unit_price)) : '—'}</td>
+                              <td className="px-1.5 py-1 text-right">{unitPrice ? formatPeso(unitPrice) : '—'}</td>
                               <td className="px-1.5 py-1 text-right font-medium">{formatPeso(amt)}</td>
                             </tr>
                           ) : null
@@ -1111,7 +1120,7 @@ export default function CSIMonitoringPage() {
                       <tfoot>
                         <tr className="border-t-2 border-gray-300">
                           <td colSpan={5} className="px-1.5 py-1 text-right font-bold text-gray-700">Total</td>
-                          <td className="px-1.5 py-1 text-right font-bold text-red-700">{formatPeso(totalItems)}</td>
+                          <td className="px-1.5 py-1 text-right font-bold text-red-700">{formatPeso(previewTotal)}</td>
                         </tr>
                       </tfoot>
                     </table>
@@ -1128,11 +1137,11 @@ export default function CSIMonitoringPage() {
                   <TableHeader>
                     <TableRow className="bg-muted/40">
                       <TableHead className="w-12">No.</TableHead>
-                      <TableHead className="min-w-[260px]">Item Description</TableHead>
-                      <TableHead className="w-24">Unit</TableHead>
-                      <TableHead className="w-36">Selling Price (₱)</TableHead>
                       <TableHead className="w-24">Qty</TableHead>
+                      <TableHead className="w-24">Unit</TableHead>
+                      <TableHead className="min-w-[260px]">Item Description</TableHead>
                       <TableHead className="w-32">Unit Price (₱)</TableHead>
+                      <TableHead className="w-36">Selling Price (₱)</TableHead>
                       <TableHead className="w-32 text-right">Amount</TableHead>
                       <TableHead className="w-10"></TableHead>
                     </TableRow>
@@ -1170,6 +1179,13 @@ export default function CSIMonitoringPage() {
                             </div>
                           </TableCell>
                           <TableCell className="py-1.5">
+                            <Input type="number" min={0} className="h-8 text-sm" placeholder="0" value={item.quantity}
+                              onChange={e => setItems(prev => prev.map((it, idx) => idx === i ? { ...it, quantity: e.target.value } : it))} />
+                          </TableCell>
+                          <TableCell className="py-1.5">
+                            <div className="h-8 flex items-center px-2 text-sm bg-muted/30 rounded border text-muted-foreground">{item.unit || '—'}</div>
+                          </TableCell>
+                          <TableCell className="py-1.5">
                             <div className="flex items-center gap-1">
                               <Select value={item.item_name} onValueChange={val => {
                                 const opt = itemOptions.find(o => o.item_name === (val ?? ''))
@@ -1196,7 +1212,8 @@ export default function CSIMonitoringPage() {
                             </div>
                           </TableCell>
                           <TableCell className="py-1.5">
-                            <div className="h-8 flex items-center px-2 text-sm bg-muted/30 rounded border text-muted-foreground">{item.unit || '—'}</div>
+                            <Input type="number" min={0} step="0.01" className="h-8 text-sm" placeholder="0.00" value={item.unit_price}
+                              onChange={e => setItems(prev => prev.map((it, idx) => idx === i ? { ...it, unit_price: e.target.value } : it))} />
                           </TableCell>
                           <TableCell className="py-1.5">
                             <div className="flex items-center gap-1">
@@ -1212,14 +1229,6 @@ export default function CSIMonitoringPage() {
                                 <RefreshCw className="h-3.5 w-3.5" />
                               </Button>
                             </div>
-                          </TableCell>
-                          <TableCell className="py-1.5">
-                            <Input type="number" min={0} className="h-8 text-sm" placeholder="0" value={item.quantity}
-                              onChange={e => setItems(prev => prev.map((it, idx) => idx === i ? { ...it, quantity: e.target.value } : it))} />
-                          </TableCell>
-                          <TableCell className="py-1.5">
-                            <Input type="number" min={0} step="0.01" className="h-8 text-sm" placeholder="0.00" value={item.unit_price}
-                              onChange={e => setItems(prev => prev.map((it, idx) => idx === i ? { ...it, unit_price: e.target.value } : it))} />
                           </TableCell>
                           <TableCell className="py-1.5 text-right text-sm font-medium tabular-nums">
                             ₱{amt.toLocaleString('en-PH', { minimumFractionDigits: 2 })}
