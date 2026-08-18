@@ -20,12 +20,14 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Plus, X, Search, MoreHorizontal, Loader2, FileText, LayoutGrid, List, ChevronDown, ChevronUp, Package, Trash2, Printer, SlidersHorizontal, FileOutput, Mail } from 'lucide-react'
+import { PaginationBar } from '@/components/ui/pagination-bar'
+import { Plus, X, Search, MoreHorizontal, Loader2, FileText, LayoutGrid, List, ChevronDown, ChevronUp, Trash2, Printer, SlidersHorizontal, FileOutput, Mail, Camera, Image as ImageIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
 import { usePersistedState } from '@/lib/use-persisted-state'
 import { sendEmail, htmlToPdfBase64 } from '@/lib/send-email'
+import { uploadImageToDrive } from '@/lib/upload-image'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   Cell, Legend, AreaChart, Area,
@@ -166,10 +168,14 @@ export default function CSIMonitoringPage() {
   const [drItemsForCrossRef, setDrItemsForCrossRef] = useState<{ dr_number: string; item_name: string; client_name: string | null }[]>([])
   const [expandedSIs, setExpandedSIs] = useState<Set<string>>(new Set())
   const [page, setPage] = useState(1)
-  const [inventoryItem, setInventoryItem] = useState<string>('')
-  const [inventoryOpen, setInventoryOpen] = useState(false)
   const [itemSearchIdx, setItemSearchIdx] = useState<number | null>(null)
   const [itemQuery, setItemQuery] = useState('')
+  const [addItemOpen, setAddItemOpen] = useState(false)
+  const [newItemForm, setNewItemForm] = useState({ item_name: '', unit_of_measure: '', selling_price: '' })
+  const [newItemImageFile, setNewItemImageFile] = useState<File | null>(null)
+  const [newItemImageUrl, setNewItemImageUrl] = useState<string | null>(null)
+  const newItemImageInputRef = useRef<HTMLInputElement>(null)
+  const [savingNewItem, setSavingNewItem] = useState(false)
   const [activeTab, setActiveTab] = useState<'form' | 'preview'>('form')
   const [siNumberOptions, setSiNumberOptions] = useState<{ value: string; tag: 'current' | 'next' | 'missing' }[]>([])
   const [companyInfo, setCompanyInfo] = useState<{ company_name: string; address: string; phone: string; email: string; tin: string } | null>(null)
@@ -724,6 +730,72 @@ export default function CSIMonitoringPage() {
     closeForm()
   }
 
+  function openAddItem() {
+    setNewItemForm({ item_name: itemQuery.trim(), unit_of_measure: '', selling_price: '' })
+    setNewItemImageFile(null)
+    setNewItemImageUrl(null)
+    setAddItemOpen(true)
+  }
+
+  // Derives a short letters-only prefix from the item name (e.g. "Laptop Stand" -> "LAP")
+  // so the auto-generated code reads as related to the item instead of a plain running number.
+  function deriveItemCodePrefix(name: string): string {
+    const cleaned = name.replace(/[^a-zA-Z]/g, '').toUpperCase()
+    return cleaned.slice(0, 3) || 'ITM'
+  }
+
+  async function saveNewItem() {
+    const name = newItemForm.item_name.trim()
+    if (!name) { toast.error('Item name is required'); return }
+    setSavingNewItem(true)
+    const prefix = deriveItemCodePrefix(name)
+    const { data: last } = await supabase
+      .from('items')
+      .select('item_code')
+      .like('item_code', `${prefix}-%`)
+      .order('item_code', { ascending: false })
+      .limit(1)
+      .single()
+    let next = 1
+    if (last?.item_code) {
+      const num = parseInt(last.item_code.replace(`${prefix}-`, ''), 10)
+      if (!isNaN(num)) next = num + 1
+    }
+    const item_code = `${prefix}-${String(next).padStart(3, '0')}`
+    const unit_of_measure = newItemForm.unit_of_measure.trim() || 'piece'
+
+    let imageUrl: string | null = null
+    if (newItemImageFile) {
+      try {
+        imageUrl = await uploadImageToDrive(newItemImageFile, { displayName: name, folder: 'Items' })
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : 'Failed to upload image')
+        setSavingNewItem(false)
+        return
+      }
+    }
+
+    const { error } = await supabase.from('items').insert({
+      item_code,
+      item_name: name,
+      unit_of_measure,
+      selling_price: newItemForm.selling_price.trim() ? parseFloat(newItemForm.selling_price) : null,
+      image_url: imageUrl,
+      image_urls: imageUrl ? [imageUrl] : [],
+      status: 'active',
+    })
+    if (error) { toast.error(error.message); setSavingNewItem(false); return }
+    const newOption: ItemOption = { item_name: name, unit_of_measure }
+    setItemOptions(prev => [...prev, newOption].sort((a, b) => a.item_name.localeCompare(b.item_name)))
+    if (itemSearchIdx !== null) {
+      setItems(prev => prev.map((it, idx) => idx === itemSearchIdx ? { ...it, item_name: name, unit: unit_of_measure } : it))
+    }
+    toast.success('Item added')
+    setSavingNewItem(false)
+    setAddItemOpen(false)
+    setItemSearchIdx(null)
+  }
+
   async function save() {
     if (!header.si_number.trim()) { toast.error('SI Number is required'); return }
     if (!header.si_date) { toast.error('Date is required'); return }
@@ -1033,10 +1105,6 @@ export default function CSIMonitoringPage() {
                               <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" title="Search items"
                                 onClick={() => { setItemSearchIdx(i); setItemQuery('') }}>
                                 <Search className="h-3.5 w-3.5" />
-                              </Button>
-                              <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0 text-muted-foreground hover:text-blue-600"
-                                title="View inventory" onClick={() => { setInventoryItem(item.item_name); setInventoryOpen(true) }}>
-                                <Package className="h-3.5 w-3.5" />
                               </Button>
                             </div>
                           </TableCell>
@@ -1678,25 +1746,7 @@ export default function CSIMonitoringPage() {
               <span className="text-muted-foreground">
                 Showing {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, activeTotal)} of {activeTotal}
               </span>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="px-3 py-1.5 rounded-md border text-sm font-medium disabled:opacity-40 hover:bg-muted transition-colors"
-                >← Prev</button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-                  <button
-                    key={p}
-                    onClick={() => setPage(p)}
-                    className={`w-8 h-8 rounded-md text-sm font-medium transition-colors ${p === page ? 'bg-red-600 text-white' : 'border hover:bg-muted'}`}
-                  >{p}</button>
-                ))}
-                <button
-                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages}
-                  className="px-3 py-1.5 rounded-md border text-sm font-medium disabled:opacity-40 hover:bg-muted transition-colors"
-                >Next →</button>
-              </div>
+              <PaginationBar page={page} totalPages={totalPages} onPageChange={setPage} />
             </div>
           )}
         </CardContent>
@@ -1706,10 +1756,13 @@ export default function CSIMonitoringPage() {
       {/* Item Search Dialog */}
       <Dialog open={itemSearchIdx !== null} onOpenChange={o => { if (!o) setItemSearchIdx(null) }}>
         <DialogContent className="w-[98vw] sm:!max-w-lg max-h-[80vh] flex flex-col overflow-hidden">
-          <DialogHeader>
+          <DialogHeader className="flex flex-row items-center justify-between gap-2 pr-6">
             <DialogTitle className="flex items-center gap-2">
               <Search className="h-4 w-4" />Search Item
             </DialogTitle>
+            <Button type="button" size="sm" variant="outline" className="h-7 px-2 text-xs gap-1" onClick={openAddItem}>
+              <Plus className="h-3.5 w-3.5" />Add Item
+            </Button>
           </DialogHeader>
           <div className="relative mb-2">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -1723,7 +1776,13 @@ export default function CSIMonitoringPage() {
           </div>
           <div className="flex-1 overflow-y-auto border rounded-lg divide-y">
             {filteredSearchItems.length === 0 ? (
-              <p className="text-center py-6 text-muted-foreground text-sm">No items found.</p>
+              <div className="text-center py-6 space-y-2">
+                <p className="text-muted-foreground text-sm">No items found.</p>
+                <Button type="button" size="sm" variant="outline" className="gap-1" onClick={openAddItem}>
+                  <Plus className="h-3.5 w-3.5" />
+                  {itemQuery.trim() ? <>Add &quot;{itemQuery.trim()}&quot; as new item</> : 'Add Item'}
+                </Button>
+              </div>
             ) : filteredSearchItems.map(opt => (
               <button
                 key={opt.item_name}
@@ -1744,52 +1803,90 @@ export default function CSIMonitoringPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Inventory Lookup Modal */}
-      <Dialog open={inventoryOpen} onOpenChange={setInventoryOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+      {/* Add Item Modal */}
+      <Dialog open={addItemOpen} onOpenChange={setAddItemOpen}>
+        <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>Inventory Stock — {inventoryItem || 'All Items'}</DialogTitle>
+            <DialogTitle>Add Item</DialogTitle>
           </DialogHeader>
-          <div className="py-2">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>SI Number</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead className="text-right">Qty</TableHead>
-                  <TableHead>Unit</TableHead>
-                  <TableHead className="text-right">Unit Price</TableHead>
-                  <TableHead className="text-right">Amount</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {records
-                  .filter(r => !inventoryItem || r.item_name === inventoryItem)
-                  .slice(0, 50)
-                  .map(r => (
-                    <TableRow key={r.id}>
-                      <TableCell className="font-mono text-xs text-red-600">{r.si_number}</TableCell>
-                      <TableCell className="text-sm whitespace-nowrap">{format(parseISO(r.si_date), 'MMM d, yyyy')}</TableCell>
-                      <TableCell className="text-sm">{r.client_name ?? '—'}</TableCell>
-                      <TableCell className="text-right text-sm">{r.quantity}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{r.unit ?? '—'}</TableCell>
-                      <TableCell className="text-right text-sm">{r.unit_price ? formatPeso(Number(r.unit_price)) : '—'}</TableCell>
-                      <TableCell className="text-right text-sm font-medium">{r.amount ? formatPeso(Number(r.amount)) : '—'}</TableCell>
-                    </TableRow>
-                  ))}
-                {records.filter(r => !inventoryItem || r.item_name === inventoryItem).length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                      No CSI records found for this item.
-                    </TableCell>
-                  </TableRow>
+          <div className="space-y-3 py-1">
+            <div className="flex items-center gap-3">
+              <div className="relative group shrink-0">
+                <div className="h-16 w-16 rounded-lg overflow-hidden border bg-muted/30 flex items-center justify-center">
+                  {newItemImageUrl
+                    ? <img src={newItemImageUrl} alt="Item" className="h-full w-full object-cover" />
+                    : <ImageIcon className="h-6 w-6 text-muted-foreground" />}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => newItemImageInputRef.current?.click()}
+                  className="absolute inset-0 rounded-lg bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <Camera className="h-4 w-4 text-white" />
+                </button>
+                {newItemImageUrl && (
+                  <button
+                    type="button"
+                    onClick={() => { setNewItemImageUrl(null); setNewItemImageFile(null) }}
+                    className="absolute -top-1.5 -right-1.5 h-4 w-4 bg-gray-600 rounded-full flex items-center justify-center"
+                  >
+                    <X className="h-2.5 w-2.5 text-white" />
+                  </button>
                 )}
-              </TableBody>
-            </Table>
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground">Item Photo</p>
+                <button
+                  type="button"
+                  onClick={() => newItemImageInputRef.current?.click()}
+                  className="mt-0.5 text-xs text-blue-600 hover:underline"
+                >
+                  {newItemImageUrl ? 'Change photo' : 'Upload photo'}
+                </button>
+              </div>
+              <input
+                ref={newItemImageInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={e => {
+                  const f = e.target.files?.[0]
+                  if (f) { setNewItemImageFile(f); setNewItemImageUrl(URL.createObjectURL(f)) }
+                  e.target.value = ''
+                }}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Item Name <span className="text-destructive">*</span></Label>
+              <Input
+                autoFocus
+                placeholder="e.g. Steel Pipe 1/2&quot;"
+                value={newItemForm.item_name}
+                onChange={e => setNewItemForm(f => ({ ...f, item_name: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Unit of Measure</Label>
+              <Input
+                placeholder="piece"
+                value={newItemForm.unit_of_measure}
+                onChange={e => setNewItemForm(f => ({ ...f, unit_of_measure: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Selling Price (₱)</Label>
+              <Input
+                type="number" min={0} step="0.01" placeholder="0.00"
+                value={newItemForm.selling_price}
+                onChange={e => setNewItemForm(f => ({ ...f, selling_price: e.target.value }))}
+              />
+            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setInventoryOpen(false)}>Close</Button>
+            <Button variant="outline" onClick={() => setAddItemOpen(false)} disabled={savingNewItem}>Cancel</Button>
+            <Button onClick={saveNewItem} disabled={savingNewItem} className="bg-red-600 hover:bg-red-700">
+              {savingNewItem ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : 'Save'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
