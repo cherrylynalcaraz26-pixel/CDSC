@@ -33,7 +33,7 @@ import {
   Cell, Legend, AreaChart, Area,
 } from 'recharts'
 
-interface ItemOption { item_name: string; unit_of_measure: string }
+interface ItemOption { item_name: string; unit_of_measure: string; selling_price: number | null }
 interface ClientOption {
   id: string
   company_name: string
@@ -209,7 +209,7 @@ export default function CSIMonitoringPage() {
   async function load() {
     setLoading(true)
     const [{ data: itemOptData }, { data: clientData }, { data: soData }, drItemsData, drLogData, { data: uomData }, { data: attrData }] = await Promise.all([
-      supabase.from('items').select('item_name, unit_of_measure').order('item_name'),
+      supabase.from('items').select('item_name, unit_of_measure, selling_price').order('item_name'),
       supabase.from('clients').select('id, company_name, show_csi_in_portal, address, city, province, tin, industry, email').eq('status', 'active').order('company_name'),
       supabase.from('sales_orders').select('id, so_number').not('so_number', 'is', null).order('created_at', { ascending: false }),
       fetchAllRows((from, to) => supabase.from('dr_log_items').select('dr_number, item_name').order('item_name').order('id').range(from, to)),
@@ -801,10 +801,16 @@ export default function CSIMonitoringPage() {
       status: 'active',
     })
     if (error) { toast.error(error.message); setSavingNewItem(false); return }
-    const newOption: ItemOption = { item_name: name, unit_of_measure }
+    const sellingPrice = newItemForm.selling_price.trim() ? parseFloat(newItemForm.selling_price) : null
+    const newOption: ItemOption = { item_name: name, unit_of_measure, selling_price: sellingPrice }
     setItemOptions(prev => [...prev, newOption].sort((a, b) => a.item_name.localeCompare(b.item_name)))
     if (itemSearchIdx !== null) {
-      setItems(prev => prev.map((it, idx) => idx === itemSearchIdx ? { ...it, item_name: name, unit: unit_of_measure } : it))
+      setItems(prev => prev.map((it, idx) => idx === itemSearchIdx ? {
+        ...it,
+        item_name: name,
+        unit: unit_of_measure,
+        unit_price: sellingPrice != null ? String(sellingPrice) : it.unit_price,
+      } : it))
     }
     toast.success('Item added')
     setSavingNewItem(false)
@@ -1107,7 +1113,12 @@ export default function CSIMonitoringPage() {
                             <div className="flex items-center gap-1">
                               <Select value={item.item_name} onValueChange={val => {
                                 const opt = itemOptions.find(o => o.item_name === (val ?? ''))
-                                setItems(prev => prev.map((it, idx) => idx === i ? { ...it, item_name: val ?? '', unit: opt?.unit_of_measure ?? it.unit } : it))
+                                setItems(prev => prev.map((it, idx) => idx === i ? {
+                                  ...it,
+                                  item_name: val ?? '',
+                                  unit: opt?.unit_of_measure ?? it.unit,
+                                  unit_price: opt?.selling_price != null ? String(opt.selling_price) : it.unit_price,
+                                } : it))
                               }}>
                                 <SelectTrigger className="h-8 text-sm flex-1"><SelectValue placeholder="Select item…" /></SelectTrigger>
                                 <SelectContent>
@@ -1806,7 +1817,12 @@ export default function CSIMonitoringPage() {
                 className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-muted/50 transition-colors text-left"
                 onClick={() => {
                   if (itemSearchIdx !== null) {
-                    setItems(prev => prev.map((it, idx) => idx === itemSearchIdx ? { ...it, item_name: opt.item_name, unit: opt.unit_of_measure } : it))
+                    setItems(prev => prev.map((it, idx) => idx === itemSearchIdx ? {
+                      ...it,
+                      item_name: opt.item_name,
+                      unit: opt.unit_of_measure,
+                      unit_price: opt.selling_price != null ? String(opt.selling_price) : it.unit_price,
+                    } : it))
                   }
                   setItemSearchIdx(null)
                 }}
@@ -1886,12 +1902,12 @@ export default function CSIMonitoringPage() {
               <Select value={newItemForm.unit_of_measure} onValueChange={v => setNewItemForm(f => ({ ...f, unit_of_measure: v ?? '' }))}>
                 <SelectTrigger className="w-full">
                   {newItemForm.unit_of_measure
-                    ? <span className="truncate text-sm">{uomList.find(u => u.code === newItemForm.unit_of_measure)?.name ?? newItemForm.unit_of_measure}</span>
+                    ? <span className="truncate text-sm">{newItemForm.unit_of_measure}</span>
                     : <span className="text-muted-foreground text-sm">Select UOM…</span>}
                 </SelectTrigger>
                 <SelectContent>
                   {uomList.map(u => (
-                    <SelectItem key={u.id} value={u.code}>{u.code} – {u.name}</SelectItem>
+                    <SelectItem key={u.id} value={u.name}>{u.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

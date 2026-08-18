@@ -653,7 +653,7 @@ export default function NewRequestPage() {
                     onChange={e => setCustomForm(p => ({ ...p, unit_of_measure: e.target.value }))}
                     className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-red-500">
                     <option value="">— Select —</option>
-                    {uomList.map(u => <option key={u.id} value={u.code}>{u.code} – {u.name}</option>)}
+                    {uomList.map(u => <option key={u.id} value={u.name}>{u.name}</option>)}
                   </select>
                 </div>
               </div>
