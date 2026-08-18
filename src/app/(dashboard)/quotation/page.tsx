@@ -10,18 +10,21 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { Plus, MoreHorizontal, Loader2, Trash2, X, FileText, Printer, Mail, Send, Package, Search, Pencil, Eye, CheckCircle, XCircle, Clock, CheckCheck, ClipboardList, GripVertical } from 'lucide-react'
+import { Plus, MoreHorizontal, Loader2, Trash2, X, FileText, Printer, Mail, Send, Package, Search, Pencil, Eye, CheckCircle, XCircle, Clock, CheckCheck, ClipboardList, GripVertical, Camera, Image as ImageIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { undoToast } from '@/lib/undo-toast'
 import { useSearchContext } from '@/context/search-context'
 import { sendEmail, QuotationPdfData } from '@/lib/send-email'
+import { uploadImageToDrive } from '@/lib/upload-image'
 import Image from 'next/image'
 import QuotationRequestsPanel from '@/components/quotation/quotation-requests-panel'
 
 interface Client { id: string; company_name: string; email: string | null }
 interface ItemOption { item_name: string; unit_of_measure: string; cost: number | null; selling_price: number | null; image_url: string | null; image_urls: string[] | null }
+interface UOMOption { id: string; code: string; name: string }
+interface AttributeOption { id: string; name: string; data_type: string; options: string[] | null }
 interface SystemSettings {
   company_name: string
   address: string
@@ -98,6 +101,15 @@ export default function QuotationPage() {
   const [emailBodyQ, setEmailBodyQ] = useState('')
   const [itemSearchIdx, setItemSearchIdx] = useState<number | null>(null)
   const [dragLineIndex, setDragLineIndex] = useState<number | null>(null)
+  const [uomList, setUomList] = useState<UOMOption[]>([])
+  const [attributeList, setAttributeList] = useState<AttributeOption[]>([])
+  const [addItemOpen, setAddItemOpen] = useState(false)
+  const [newItemForm, setNewItemForm] = useState({ item_name: '', unit_of_measure: '', cost: '', selling_price: '', attribute: '' })
+  const [newItemAttributeTypeId, setNewItemAttributeTypeId] = useState('')
+  const [newItemImageFile, setNewItemImageFile] = useState<File | null>(null)
+  const [newItemImageUrl, setNewItemImageUrl] = useState<string | null>(null)
+  const newItemImageInputRef = useRef<HTMLInputElement>(null)
+  const [savingNewItem, setSavingNewItem] = useState(false)
   const [itemQuery, setItemQuery] = useState('')
   const [activeTab, setActiveTab] = useState('quotations')
   const [rfqPendingCount, setRfqPendingCount] = useState(0)
@@ -160,18 +172,22 @@ export default function QuotationPage() {
 
   async function load() {
     setLoading(true)
-    const [{ data: quoData }, { data: clientData }, { data: itemData }, { data: sysData }, { count: rfqCount }] = await Promise.all([
+    const [{ data: quoData }, { data: clientData }, { data: itemData }, { data: sysData }, { count: rfqCount }, { data: uomData }, { data: attrData }] = await Promise.all([
       supabase.from('quotations').select('*').order('created_at', { ascending: false }),
       supabase.from('clients').select('id, company_name, email').eq('status', 'active').order('company_name'),
       supabase.from('items').select('item_name, unit_of_measure, cost, selling_price, image_url, image_urls').eq('status', 'active').order('item_name'),
       supabase.from('system_settings').select('company_name, address, phone, email, tin, logo_url').single(),
       supabase.from('quotation_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+      supabase.from('uom_list').select('id, code, name').eq('is_active', true).order('code'),
+      supabase.from('attributes').select('id, name, data_type, options').order('name'),
     ])
     setQuotations((quoData ?? []) as Quotation[])
     setClients(clientData ?? [])
     setItems((itemData ?? []) as ItemOption[])
     if (sysData) setCompanyInfo(sysData as SystemSettings)
     setRfqPendingCount(rfqCount ?? 0)
+    setUomList((uomData ?? []) as UOMOption[])
+    setAttributeList((attrData ?? []) as AttributeOption[])
     setLoading(false)
   }
 
@@ -281,6 +297,90 @@ export default function QuotationPage() {
   const filteredSearchItems = itemQuery.trim()
     ? items.filter(it => it.item_name.toLowerCase().includes(itemQuery.toLowerCase()))
     : items
+
+  function openAddItem() {
+    setNewItemForm({ item_name: itemQuery.trim(), unit_of_measure: '', cost: '', selling_price: '', attribute: '' })
+    setNewItemImageFile(null)
+    setNewItemImageUrl(null)
+    setNewItemAttributeTypeId('')
+    setAddItemOpen(true)
+  }
+
+  function handleNewItemAttributeTypeChange(id: string) {
+    setNewItemAttributeTypeId(id)
+    setNewItemForm(f => ({ ...f, attribute: '' }))
+  }
+
+  // Derives a short letters-only prefix from the item name (e.g. "Laptop Stand" -> "LAP")
+  // so the auto-generated code reads as related to the item instead of a plain running number.
+  function deriveItemCodePrefix(name: string): string {
+    const cleaned = name.replace(/[^a-zA-Z]/g, '').toUpperCase()
+    return cleaned.slice(0, 3) || 'ITM'
+  }
+
+  async function saveNewItem() {
+    const name = newItemForm.item_name.trim()
+    if (!name) { toast.error('Item name is required'); return }
+    setSavingNewItem(true)
+    const prefix = deriveItemCodePrefix(name)
+    const { data: last } = await supabase
+      .from('items')
+      .select('item_code')
+      .like('item_code', `${prefix}-%`)
+      .order('item_code', { ascending: false })
+      .limit(1)
+      .single()
+    let next = 1
+    if (last?.item_code) {
+      const num = parseInt(last.item_code.replace(`${prefix}-`, ''), 10)
+      if (!isNaN(num)) next = num + 1
+    }
+    const item_code = `${prefix}-${String(next).padStart(3, '0')}`
+    const unit_of_measure = newItemForm.unit_of_measure.trim() || 'piece'
+
+    let imageUrl: string | null = null
+    if (newItemImageFile) {
+      try {
+        imageUrl = await uploadImageToDrive(newItemImageFile, { displayName: name, folder: 'Items' })
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : 'Failed to upload image')
+        setSavingNewItem(false)
+        return
+      }
+    }
+
+    const cost = newItemForm.cost.trim() ? parseFloat(newItemForm.cost) : 0
+    const sellingPrice = newItemForm.selling_price.trim() ? parseFloat(newItemForm.selling_price) : null
+    const { error } = await supabase.from('items').insert({
+      item_code,
+      item_name: name,
+      unit_of_measure,
+      cost,
+      selling_price: sellingPrice,
+      attribute: newItemForm.attribute.trim() || null,
+      image_url: imageUrl,
+      image_urls: imageUrl ? [imageUrl] : [],
+      status: 'active',
+    })
+    if (error) { toast.error(error.message); setSavingNewItem(false); return }
+
+    const newOption: ItemOption = { item_name: name, unit_of_measure, cost, selling_price: sellingPrice, image_url: imageUrl, image_urls: imageUrl ? [imageUrl] : [] }
+    setItems(prev => [...prev, newOption].sort((a, b) => a.item_name.localeCompare(b.item_name)))
+    if (itemSearchIdx !== null) {
+      setLines(prev => prev.map((l, idx) => idx === itemSearchIdx ? {
+        ...l,
+        item_name: name,
+        quantity: l.quantity || '1',
+        unit: unit_of_measure,
+        unit_price: String(cost),
+        selling_price: sellingPrice != null ? String(sellingPrice) : l.selling_price,
+      } : l))
+    }
+    toast.success('Item added')
+    setSavingNewItem(false)
+    setAddItemOpen(false)
+    setItemSearchIdx(null)
+  }
 
   async function handleSave() {
     if (!clientId) { toast.error('Select a client'); return }
@@ -1328,8 +1428,11 @@ ${listEmailBody.replace(/\n/g, '<br/>')}
       {/* Item Search Dialog */}
       <Dialog open={itemSearchIdx !== null} onOpenChange={o => { if (!o) setItemSearchIdx(null) }}>
         <DialogContent className="w-[98vw] sm:!max-w-3xl max-h-[80vh] flex flex-col overflow-hidden">
-          <DialogHeader>
+          <DialogHeader className="flex flex-row items-center justify-between gap-2 pr-6">
             <DialogTitle className="flex items-center gap-2"><Package className="h-4 w-4" />Item Inventory</DialogTitle>
+            <Button type="button" size="sm" variant="outline" className="h-7 px-2 text-xs gap-1" onClick={openAddItem}>
+              <Plus className="h-3.5 w-3.5" />Add Item
+            </Button>
           </DialogHeader>
           <div className="relative mb-2">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -1348,7 +1451,15 @@ ${listEmailBody.replace(/\n/g, '<br/>')}
               </thead>
               <tbody className="divide-y">
                 {filteredSearchItems.length === 0 ? (
-                  <tr><td colSpan={5} className="text-center py-6 text-muted-foreground text-sm">No items found.</td></tr>
+                  <tr><td colSpan={5} className="text-center py-8">
+                    <div className="flex flex-col items-center gap-2">
+                      <p className="text-muted-foreground text-sm">No items found.</p>
+                      <Button type="button" size="sm" variant="outline" className="gap-1" onClick={openAddItem}>
+                        <Plus className="h-3.5 w-3.5" />
+                        {itemQuery.trim() ? <>Add &quot;{itemQuery.trim()}&quot; as new item</> : 'Add Item'}
+                      </Button>
+                    </div>
+                  </td></tr>
                 ) : filteredSearchItems.map(it => (
                   <tr key={it.item_name} className="hover:bg-muted/40 cursor-pointer" onClick={() => {
                     if (itemSearchIdx === null) return
@@ -1372,6 +1483,148 @@ ${listEmailBody.replace(/\n/g, '<br/>')}
               </tbody>
             </table>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Item Modal */}
+      <Dialog open={addItemOpen} onOpenChange={setAddItemOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Add Item</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div className="flex items-center gap-3">
+              <div className="relative group shrink-0">
+                <div className="h-16 w-16 rounded-lg overflow-hidden border bg-muted/30 flex items-center justify-center">
+                  {newItemImageUrl
+                    ? <img src={newItemImageUrl} alt="Item" className="h-full w-full object-cover" />
+                    : <ImageIcon className="h-6 w-6 text-muted-foreground" />}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => newItemImageInputRef.current?.click()}
+                  className="absolute inset-0 rounded-lg bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <Camera className="h-4 w-4 text-white" />
+                </button>
+                {newItemImageUrl && (
+                  <button
+                    type="button"
+                    onClick={() => { setNewItemImageUrl(null); setNewItemImageFile(null) }}
+                    className="absolute -top-1.5 -right-1.5 h-4 w-4 bg-gray-600 rounded-full flex items-center justify-center"
+                  >
+                    <X className="h-2.5 w-2.5 text-white" />
+                  </button>
+                )}
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground">Item Photo</p>
+                <button
+                  type="button"
+                  onClick={() => newItemImageInputRef.current?.click()}
+                  className="mt-0.5 text-xs text-blue-600 hover:underline"
+                >
+                  {newItemImageUrl ? 'Change photo' : 'Upload photo'}
+                </button>
+              </div>
+              <input
+                ref={newItemImageInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={e => {
+                  const f = e.target.files?.[0]
+                  if (f) { setNewItemImageFile(f); setNewItemImageUrl(URL.createObjectURL(f)) }
+                  e.target.value = ''
+                }}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Item Name <span className="text-destructive">*</span></Label>
+              <Input
+                autoFocus
+                placeholder="e.g. Steel Pipe 1/2&quot;"
+                value={newItemForm.item_name}
+                onChange={e => setNewItemForm(f => ({ ...f, item_name: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Unit of Measure</Label>
+              <Select value={newItemForm.unit_of_measure} onValueChange={v => setNewItemForm(f => ({ ...f, unit_of_measure: v ?? '' }))}>
+                <SelectTrigger className="w-full">
+                  {newItemForm.unit_of_measure
+                    ? <span className="truncate text-sm">{newItemForm.unit_of_measure}</span>
+                    : <span className="text-muted-foreground text-sm">Select UOM…</span>}
+                </SelectTrigger>
+                <SelectContent>
+                  {uomList.map(u => (
+                    <SelectItem key={u.id} value={u.name}>{u.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Attribute</Label>
+              <Select value={newItemAttributeTypeId} onValueChange={v => handleNewItemAttributeTypeChange(v ?? '')}>
+                <SelectTrigger className="w-full">
+                  {newItemAttributeTypeId
+                    ? <span className="truncate text-sm">{attributeList.find(a => a.id === newItemAttributeTypeId)?.name}</span>
+                    : <span className="text-muted-foreground text-sm">Select attribute…</span>}
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">— None —</SelectItem>
+                  {attributeList.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            {newItemAttributeTypeId && (() => {
+              const attrType = attributeList.find(a => a.id === newItemAttributeTypeId)
+              return (
+                <div className="space-y-1.5">
+                  <Label>{attrType?.name} Value</Label>
+                  {attrType?.data_type === 'select' ? (
+                    <Select value={newItemForm.attribute} onValueChange={v => setNewItemForm(f => ({ ...f, attribute: v ?? '' }))}>
+                      <SelectTrigger className="w-full">
+                        {newItemForm.attribute
+                          ? <span className="truncate text-sm">{newItemForm.attribute}</span>
+                          : <span className="text-muted-foreground text-sm">{attrType?.options?.length ? `Select ${attrType?.name}…` : 'No values yet'}</span>}
+                      </SelectTrigger>
+                      <SelectContent>
+                        {attrType?.options?.map(opt => <SelectItem key={opt} value={opt}>{opt}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input placeholder={`Enter ${attrType?.name ?? 'value'}…`} value={newItemForm.attribute}
+                      onChange={e => setNewItemForm(f => ({ ...f, attribute: e.target.value }))} />
+                  )}
+                </div>
+              )
+            })()}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Cost (₱)</Label>
+                <Input
+                  type="number" min={0} step="0.01" placeholder="0.00"
+                  value={newItemForm.cost}
+                  onChange={e => setNewItemForm(f => ({ ...f, cost: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Selling Price (₱)</Label>
+                <Input
+                  type="number" min={0} step="0.01" placeholder="0.00"
+                  value={newItemForm.selling_price}
+                  onChange={e => setNewItemForm(f => ({ ...f, selling_price: e.target.value }))}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddItemOpen(false)} disabled={savingNewItem}>Cancel</Button>
+            <Button onClick={saveNewItem} disabled={savingNewItem} className="bg-red-600 hover:bg-red-700">
+              {savingNewItem ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : 'Save'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

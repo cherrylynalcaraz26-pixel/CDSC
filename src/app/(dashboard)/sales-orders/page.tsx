@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import {
   Plus, MoreHorizontal, Eye, Printer, Trash2, CheckCircle2, XCircle,
   Loader2, X, FileText, Package, Search, Mail, ChevronDown, ChevronUp,
-  Globe, EyeOff, Receipt,
+  Globe, EyeOff, Receipt, GripVertical,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
@@ -65,6 +65,7 @@ export default function SalesOrdersPage() {
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false)
   const [mobileTab, setMobileTab] = useState<'form' | 'preview'>('form')
   const [itemSearchIdx, setItemSearchIdx] = useState<number | null>(null)
+  const [dragLineIndex, setDragLineIndex] = useState<number | null>(null)
   const [itemQuery, setItemQuery] = useState('')
   // CDSC's own unassigned warehouse stock per item — reference only, so staff can
   // see what's on hand vs. what still needs to be purchased from a Supplier.
@@ -824,139 +825,6 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
                     </div>
                   </div>
 
-                  {/* Line Items */}
-                  <div className="space-y-2">
-                    <Label>Line Items</Label>
-                    <div className="border rounded-lg overflow-hidden">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="bg-muted/40">
-                            <TableHead className="min-w-[160px]">Item Description</TableHead>
-                            <TableHead className="w-16">Qty</TableHead>
-                            <TableHead className="w-20">Unit</TableHead>
-                            <TableHead className="w-28">Unit Price</TableHead>
-                            <TableHead className="w-28">Selling Price</TableHead>
-                            <TableHead className="w-24 text-right">Amount</TableHead>
-                            <TableHead className="w-8"></TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {lines.map((line, i) => {
-                            const lineTotal = (parseFloat(line.selling_price) || parseFloat(line.unit_price) || 0) * (parseFloat(line.quantity) || 0)
-                            return (
-                              <TableRow key={i}>
-                                <TableCell className="py-1.5">
-                                  <div className="flex gap-1 min-w-0">
-                                    <Select value={line.item_name} onValueChange={val => {
-                                      const selected = items.find(it => it.item_name === val)
-                                      setLines(p => p.map((l, idx) => idx === i ? {
-                                        ...l, item_name: val ?? '',
-                                        unit: selected?.unit_of_measure || l.unit,
-                                        unit_price: selected?.cost !== null && selected?.cost !== undefined ? String(selected.cost) : l.unit_price,
-                                        selling_price: selected?.selling_price !== null && selected?.selling_price !== undefined ? String(selected.selling_price) : l.selling_price,
-                                        quantity: l.quantity || '1',
-                                      } : l))
-                                    }}>
-                                      <SelectTrigger className="h-8 text-xs flex-1"><SelectValue placeholder="Select item…" /></SelectTrigger>
-                                      <SelectContent>{items.map(it => <SelectItem key={it.item_code} value={it.item_name}>{it.item_name}</SelectItem>)}</SelectContent>
-                                    </Select>
-                                    <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" title="Search inventory"
-                                      onClick={() => { setItemSearchIdx(i); setItemQuery('') }}>
-                                      <Package className="h-3.5 w-3.5" />
-                                    </Button>
-                                  </div>
-                                  {line.item_name && (() => {
-                                    const inStock = warehouseQty[line.item_name] ?? 0
-                                    const needed = parseFloat(line.quantity) || 0
-                                    const short = needed > inStock
-                                    return (
-                                      <p className={`mt-1 text-[11px] ${short ? 'text-amber-600' : 'text-muted-foreground'}`}>
-                                        Warehouse stock: {inStock.toLocaleString('en-PH')} {line.unit || ''}
-                                        {short && ` — short ${(needed - inStock).toLocaleString('en-PH')}, purchase from Supplier`}
-                                      </p>
-                                    )
-                                  })()}
-                                </TableCell>
-                                <TableCell className="py-1.5">
-                                  <Input type="number" min={1} className="h-8 text-xs w-full min-w-[64px]" placeholder="1" value={line.quantity}
-                                    onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, quantity: e.target.value } : l))} />
-                                </TableCell>
-                                <TableCell className="py-1.5">
-                                  <div className="h-8 flex items-center px-2 text-xs bg-muted/40 rounded border text-muted-foreground">{line.unit || '—'}</div>
-                                </TableCell>
-                                <TableCell className="py-1.5">
-                                  <Input type="number" min={0} step="0.01" className="h-8 text-xs w-full" placeholder="0.00" value={line.unit_price}
-                                    onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, unit_price: e.target.value } : l))} />
-                                </TableCell>
-                                <TableCell className="py-1.5">
-                                  <Input type="number" min={0} step="0.01" className="h-8 text-xs w-full" placeholder="0.00" value={line.selling_price}
-                                    onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, selling_price: e.target.value } : l))} />
-                                </TableCell>
-                                <TableCell className="py-1.5 text-right text-xs font-medium">{fmt(lineTotal)}</TableCell>
-                                <TableCell className="py-1.5">
-                                  {lines.length > 1 && (
-                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                      onClick={() => setLines(p => p.filter((_, idx) => idx !== i))}>
-                                      <Trash2 className="h-3.5 w-3.5" />
-                                    </Button>
-                                  )}
-                                </TableCell>
-                              </TableRow>
-                            )
-                          })}
-                        </TableBody>
-                      </Table>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={() => setLines(p => [...p, emptyLine()])}>
-                      <Plus className="h-3.5 w-3.5 mr-1.5" />Add Item
-                    </Button>
-                  </div>
-
-                  {/* Remarks */}
-                  <div className="space-y-1.5">
-                    <Label>Remarks</Label>
-                    <textarea
-                      className="w-full min-h-[72px] rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
-                      placeholder="Optional notes…"
-                      value={remarks}
-                      onChange={e => setRemarks(e.target.value)}
-                    />
-                  </div>
-
-                  {/* Totals */}
-                  <div className="rounded-lg bg-muted/30 p-4 space-y-1 text-sm">
-                    <div className="flex justify-between"><span className="text-muted-foreground">Cost Total</span><span>{fmt(costTotal)}</span></div>
-                    <div className="flex justify-between"><span className="text-muted-foreground">Selling Total</span><span>{fmt(subtotal)}</span></div>
-                    <div className="h-px bg-border my-1" />
-                    <div className="flex justify-between font-bold"><span>Total</span><span className="text-red-600">{fmt(subtotal)}</span></div>
-                    <div className="h-px bg-border my-1" />
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">Estimated Profit</span>
-                      <span className={estimatedProfit >= 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>{fmt(estimatedProfit)}</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">Profit Margin</span>
-                      <span className={profitMarginPct >= 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>{profitMarginPct.toFixed(1)}%</span>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end gap-2 pt-2">
-                    <Button variant="outline" onClick={handleCancelClick}>Cancel</Button>
-                    <Button type="button" variant="outline" className="gap-1.5" onClick={handlePrint}>
-                      <Printer className="h-4 w-4" />Print
-                    </Button>
-                    <Button
-                      type="button" variant="outline" className="gap-1.5"
-                      disabled={!editingSOId}
-                      title={!editingSOId ? 'Save the sales order first' : undefined}
-                      onClick={() => { const so = sos.find(s => s.id === editingSOId); if (so) openEmailSO(so) }}
-                    >
-                      <Mail className="h-4 w-4" />Email
-                    </Button>
-                    <Button onClick={submitSO} disabled={saving} className="bg-red-600 hover:bg-red-700">
-                      {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />{editingSOId ? 'Updating…' : 'Creating…'}</> : editingSOId ? 'Update Sales Order' : 'Create Sales Order'}
-                    </Button>
-                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -1082,6 +950,173 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
               </div>
             </div>
           </div>
+
+          {/* Line Items — full width */}
+          <Card>
+            <CardContent className="pt-5 space-y-2">
+              <Label>Line Items</Label>
+              <div className="border rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/40">
+                      <TableHead className="w-12">No.</TableHead>
+                      <TableHead className="w-16">Qty</TableHead>
+                      <TableHead className="w-20">Unit</TableHead>
+                      <TableHead className="min-w-[220px]">Item Description</TableHead>
+                      <TableHead className="w-28">Unit Price</TableHead>
+                      <TableHead className="w-28">Selling Price</TableHead>
+                      <TableHead className="w-24 text-right">Amount</TableHead>
+                      <TableHead className="w-8"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {lines.map((line, i) => {
+                      const lineTotal = (parseFloat(line.selling_price) || parseFloat(line.unit_price) || 0) * (parseFloat(line.quantity) || 0)
+                      return (
+                        <TableRow
+                          key={i}
+                          className={dragLineIndex === i ? 'bg-red-50/60' : undefined}
+                          onDragOver={e => { if (dragLineIndex !== null) e.preventDefault() }}
+                          onDrop={e => {
+                            e.preventDefault()
+                            if (dragLineIndex === null || dragLineIndex === i) return
+                            setLines(prev => {
+                              const next = [...prev]
+                              const [moved] = next.splice(dragLineIndex, 1)
+                              next.splice(i, 0, moved)
+                              return next
+                            })
+                            setDragLineIndex(null)
+                          }}
+                        >
+                          <TableCell className="py-1.5">
+                            <div
+                              className="flex items-center gap-1 text-sm text-muted-foreground cursor-grab active:cursor-grabbing"
+                              draggable
+                              onDragStart={() => setDragLineIndex(i)}
+                              onDragEnd={() => setDragLineIndex(null)}
+                              title="Drag to reorder"
+                            >
+                              <GripVertical className="h-3.5 w-3.5 shrink-0" />
+                              {i + 1}
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-1.5">
+                            <Input type="number" min={1} className="h-8 text-xs w-full min-w-[64px]" placeholder="1" value={line.quantity}
+                              onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, quantity: e.target.value } : l))} />
+                          </TableCell>
+                          <TableCell className="py-1.5">
+                            <div className="h-8 flex items-center px-2 text-xs bg-muted/40 rounded border text-muted-foreground">{line.unit || '—'}</div>
+                          </TableCell>
+                          <TableCell className="py-1.5">
+                            <div className="flex gap-1 min-w-0">
+                              <Select value={line.item_name} onValueChange={val => {
+                                const selected = items.find(it => it.item_name === val)
+                                setLines(p => p.map((l, idx) => idx === i ? {
+                                  ...l, item_name: val ?? '',
+                                  unit: selected?.unit_of_measure || l.unit,
+                                  unit_price: selected?.cost !== null && selected?.cost !== undefined ? String(selected.cost) : l.unit_price,
+                                  selling_price: selected?.selling_price !== null && selected?.selling_price !== undefined ? String(selected.selling_price) : l.selling_price,
+                                  quantity: l.quantity || '1',
+                                } : l))
+                              }}>
+                                <SelectTrigger className="h-8 text-xs flex-1"><SelectValue placeholder="Select item…" /></SelectTrigger>
+                                <SelectContent>{items.map(it => <SelectItem key={it.item_code} value={it.item_name}>{it.item_name}</SelectItem>)}</SelectContent>
+                              </Select>
+                              <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" title="Search inventory"
+                                onClick={() => { setItemSearchIdx(i); setItemQuery('') }}>
+                                <Package className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                            {line.item_name && (() => {
+                              const inStock = warehouseQty[line.item_name] ?? 0
+                              const needed = parseFloat(line.quantity) || 0
+                              const short = needed > inStock
+                              return (
+                                <p className={`mt-1 text-[11px] ${short ? 'text-amber-600' : 'text-muted-foreground'}`}>
+                                  Warehouse stock: {inStock.toLocaleString('en-PH')} {line.unit || ''}
+                                  {short && ` — short ${(needed - inStock).toLocaleString('en-PH')}, purchase from Supplier`}
+                                </p>
+                              )
+                            })()}
+                          </TableCell>
+                          <TableCell className="py-1.5">
+                            <Input type="number" min={0} step="0.01" className="h-8 text-xs w-full" placeholder="0.00" value={line.unit_price}
+                              onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, unit_price: e.target.value } : l))} />
+                          </TableCell>
+                          <TableCell className="py-1.5">
+                            <Input type="number" min={0} step="0.01" className="h-8 text-xs w-full" placeholder="0.00" value={line.selling_price}
+                              onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, selling_price: e.target.value } : l))} />
+                          </TableCell>
+                          <TableCell className="py-1.5 text-right text-xs font-medium">{fmt(lineTotal)}</TableCell>
+                          <TableCell className="py-1.5">
+                            {lines.length > 1 && (
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                onClick={() => setLines(p => p.filter((_, idx) => idx !== i))}>
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => setLines(p => [...p, emptyLine()])}>
+                <Plus className="h-3.5 w-3.5 mr-1.5" />Add Item
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Remarks, totals, actions — full width */}
+          <Card>
+            <CardContent className="pt-5 space-y-4">
+              <div className="space-y-1.5">
+                <Label>Remarks</Label>
+                <textarea
+                  className="w-full min-h-[72px] rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                  placeholder="Optional notes…"
+                  value={remarks}
+                  onChange={e => setRemarks(e.target.value)}
+                />
+              </div>
+
+              <div className="rounded-lg bg-muted/30 p-4 space-y-1 text-sm max-w-sm ml-auto">
+                <div className="flex justify-between"><span className="text-muted-foreground">Cost Total</span><span>{fmt(costTotal)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Selling Total</span><span>{fmt(subtotal)}</span></div>
+                <div className="h-px bg-border my-1" />
+                <div className="flex justify-between font-bold"><span>Total</span><span className="text-red-600">{fmt(subtotal)}</span></div>
+                <div className="h-px bg-border my-1" />
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Estimated Profit</span>
+                  <span className={estimatedProfit >= 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>{fmt(estimatedProfit)}</span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Profit Margin</span>
+                  <span className={profitMarginPct >= 0 ? 'text-green-600 font-medium' : 'text-red-600 font-medium'}>{profitMarginPct.toFixed(1)}%</span>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t mt-4">
+                <Button variant="outline" onClick={handleCancelClick}>Cancel</Button>
+                <Button type="button" variant="outline" className="gap-1.5" onClick={handlePrint}>
+                  <Printer className="h-4 w-4" />Print
+                </Button>
+                <Button
+                  type="button" variant="outline" className="gap-1.5"
+                  disabled={!editingSOId}
+                  title={!editingSOId ? 'Save the sales order first' : undefined}
+                  onClick={() => { const so = sos.find(s => s.id === editingSOId); if (so) openEmailSO(so) }}
+                >
+                  <Mail className="h-4 w-4" />Email
+                </Button>
+                <Button onClick={submitSO} disabled={saving} className="bg-red-600 hover:bg-red-700">
+                  {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />{editingSOId ? 'Updating…' : 'Creating…'}</> : editingSOId ? 'Update Sales Order' : 'Create Sales Order'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </>
       )}
 
