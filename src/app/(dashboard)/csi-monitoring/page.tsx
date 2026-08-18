@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Checkbox } from '@/components/ui/checkbox'
 import { PaginationBar } from '@/components/ui/pagination-bar'
-import { Plus, X, Search, MoreHorizontal, Loader2, FileText, LayoutGrid, List, ChevronDown, ChevronUp, Trash2, Printer, SlidersHorizontal, FileOutput, Mail, Camera, Image as ImageIcon, GripVertical, RefreshCw } from 'lucide-react'
+import { Plus, X, Search, Box, MoreHorizontal, Loader2, FileText, LayoutGrid, List, ChevronDown, ChevronUp, Trash2, Printer, SlidersHorizontal, FileOutput, Mail, Camera, Image as ImageIcon, GripVertical, RefreshCw, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
@@ -159,8 +159,6 @@ export default function CSIMonitoringPage() {
   const [open, setOpen] = useState(false)
   const [chartsExpanded, setChartsExpanded] = useState(false)
   const [editingSiNumber, setEditingSiNumber] = useState<string | null>(null)
-  const [siFilter, setSiFilter] = usePersistedState('csi-monitoring:siFilter', '')
-  const [itemFilter, setItemFilter] = usePersistedState('csi-monitoring:itemFilter', '')
   const [clientFilter, setClientFilter] = usePersistedState('csi-monitoring:clientFilter', '')
   const [yearFilter, setYearFilter] = usePersistedState('csi-monitoring:yearFilter', 'all')
   const [header, setHeader] = useState(emptyHeader())
@@ -629,11 +627,9 @@ export default function CSIMonitoringPage() {
       r.item_name.toLowerCase().includes(q) ||
       (r.dr_number ?? '').toLowerCase().includes(q)
     )
-    const matchSI = !siFilter || r.si_number.toLowerCase().includes(siFilter.toLowerCase())
-    const matchItem = !itemFilter || r.item_name.toLowerCase().includes(itemFilter.toLowerCase())
     const matchClient = !clientFilter || (r.client_name ?? '') === clientFilter
     const matchYear = yearFilter === 'all' || r.si_date?.slice(0, 4) === yearFilter
-    return matchSearch && matchSI && matchItem && matchClient && matchYear
+    return matchSearch && matchClient && matchYear
   })
 
   const totalAmount = filtered.reduce((s, r) => s + (Number(r.amount) || 0), 0)
@@ -665,7 +661,7 @@ export default function CSIMonitoringPage() {
   const activeTotal = viewMode === 'by-si' ? siGroups.length : filtered.length
   const totalPages = Math.max(1, Math.ceil(activeTotal / PAGE_SIZE))
 
-  useEffect(() => { setPage(1) }, [search, siFilter, itemFilter, clientFilter, yearFilter, viewMode])
+  useEffect(() => { setPage(1) }, [search, clientFilter, yearFilter, viewMode])
   useEffect(() => { if (viewMode !== 'by-si') setSelectedSIs(new Set()) }, [viewMode])
 
   function toggleSI(si: string) {
@@ -1199,7 +1195,7 @@ export default function CSIMonitoringPage() {
                               </Select>
                               <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" title="Search items"
                                 onClick={() => { setItemSearchIdx(i); setItemQuery('') }}>
-                                <Search className="h-3.5 w-3.5" />
+                                <Box className="h-3.5 w-3.5" />
                               </Button>
                             </div>
                           </TableCell>
@@ -1257,22 +1253,40 @@ export default function CSIMonitoringPage() {
 
       {!open && (
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        <Card>
-          <CardContent className="pt-4 pb-3">
-            <div className="text-2xl font-bold">{loading ? '—' : uniqueSIs}</div>
-            <div className="text-xs text-muted-foreground">Total SI Numbers</div>
+        <Card className="relative overflow-hidden border-none shadow-md shadow-black/5 ring-1 ring-black/5 rounded-2xl">
+          <div className="absolute inset-0 bg-gradient-to-br from-red-50 to-transparent" />
+          <CardContent className="relative pt-4 pb-3 flex items-start justify-between gap-3">
+            <div>
+              <div className="text-2xl font-bold">{loading ? '—' : uniqueSIs}</div>
+              <div className="text-xs text-muted-foreground mt-0.5">Total SI Numbers</div>
+            </div>
+            <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center shadow-sm shadow-red-500/30">
+              <FileText className="h-5 w-5 text-white" />
+            </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-4 pb-3">
-            <div className="text-2xl font-bold">{loading ? '—' : filtered.length}</div>
-            <div className="text-xs text-muted-foreground">Line Items</div>
+        <Card className="relative overflow-hidden border-none shadow-md shadow-black/5 ring-1 ring-black/5 rounded-2xl">
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-transparent" />
+          <CardContent className="relative pt-4 pb-3 flex items-start justify-between gap-3">
+            <div>
+              <div className="text-2xl font-bold">{loading ? '—' : filtered.length}</div>
+              <div className="text-xs text-muted-foreground mt-0.5">Line Items</div>
+            </div>
+            <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm shadow-blue-500/30">
+              <List className="h-5 w-5 text-white" />
+            </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-4 pb-3">
-            <div className="text-2xl font-bold text-green-600">{loading ? '—' : formatPeso(totalAmount)}</div>
-            <div className="text-xs text-muted-foreground">Total Amount</div>
+        <Card className="relative overflow-hidden border-none shadow-md shadow-black/5 ring-1 ring-black/5 rounded-2xl">
+          <div className="absolute inset-0 bg-gradient-to-br from-green-50 to-transparent" />
+          <CardContent className="relative pt-4 pb-3 flex items-start justify-between gap-3">
+            <div>
+              <div className="text-2xl font-bold text-green-600">{loading ? '—' : formatPeso(totalAmount)}</div>
+              <div className="text-xs text-muted-foreground mt-0.5">Total Amount</div>
+            </div>
+            <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center shadow-sm shadow-green-500/30">
+              <Wallet className="h-5 w-5 text-white" />
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -1351,7 +1365,7 @@ export default function CSIMonitoringPage() {
             {/* Row 1: Revenue bar + Revenue Share stacked */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               {/* Revenue Bar Chart */}
-              <Card className="lg:col-span-2">
+              <Card className="lg:col-span-2 border-none shadow-md shadow-black/5 ring-1 ring-black/5 rounded-2xl">
                 <CardHeader className="pb-2 pt-4 px-5">
                   <CardTitle className="text-sm font-semibold">Revenue by Client</CardTitle>
                   <p className="text-xs text-muted-foreground">Total invoiced amount per client</p>
@@ -1382,7 +1396,7 @@ export default function CSIMonitoringPage() {
               </Card>
 
               {/* Revenue Share – stacked progress breakdown */}
-              <Card className="flex flex-col">
+              <Card className="flex flex-col border-none shadow-md shadow-black/5 ring-1 ring-black/5 rounded-2xl">
                 <CardHeader className="pb-2 pt-4 px-5">
                   <CardTitle className="text-sm font-semibold">Revenue Share</CardTitle>
                   <p className="text-xs text-muted-foreground">% of total per client</p>
@@ -1429,7 +1443,7 @@ export default function CSIMonitoringPage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Monthly Revenue Trend */}
               {trendData.length > 1 && (
-                <Card>
+                <Card className="border-none shadow-md shadow-black/5 ring-1 ring-black/5 rounded-2xl">
                   <CardHeader className="pb-2 pt-4 px-5">
                     <CardTitle className="text-sm font-semibold">Monthly Revenue Trend</CardTitle>
                     <p className="text-xs text-muted-foreground">Last 12 months</p>
@@ -1455,7 +1469,7 @@ export default function CSIMonitoringPage() {
               )}
 
               {/* SI Count vs Line Items grouped bar */}
-              <Card>
+              <Card className="border-none shadow-md shadow-black/5 ring-1 ring-black/5 rounded-2xl">
                 <CardHeader className="pb-2 pt-4 px-5">
                   <CardTitle className="text-sm font-semibold">SI Count vs Line Items</CardTitle>
                   <p className="text-xs text-muted-foreground">Invoice activity per client</p>
@@ -1481,40 +1495,6 @@ export default function CSIMonitoringPage() {
       })()}
 
       {!open && <div className="flex flex-wrap gap-3 items-center">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-          <input
-            list="si-number-list"
-            value={siFilter}
-            onChange={e => setSiFilter(e.target.value)}
-            placeholder="Filter by SI Number…"
-            className="h-9 pl-8 pr-8 text-sm border rounded-md bg-background w-52 focus:outline-none focus:ring-2 focus:ring-red-500"
-          />
-          <datalist id="si-number-list">
-            {[...new Set(records.map(r => r.si_number))].sort().map(si => (
-              <option key={si} value={si} />
-            ))}
-          </datalist>
-          {siFilter && (
-            <button onClick={() => setSiFilter('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-          <input
-            value={itemFilter}
-            onChange={e => setItemFilter(e.target.value)}
-            placeholder="Search line item…"
-            className="h-9 pl-8 pr-8 text-sm border rounded-md bg-background w-52 focus:outline-none focus:ring-2 focus:ring-red-500"
-          />
-          {itemFilter && (
-            <button onClick={() => setItemFilter('')} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-              <X className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
         <Select value={clientFilter || '__all__'} onValueChange={v => setClientFilter(!v || v === '__all__' ? '' : v)}>
           <SelectTrigger className="h-9 w-72 text-sm">
             <SelectValue className="truncate">{(v: string) => v === '__all__' ? 'Client' : v}</SelectValue>
@@ -1584,8 +1564,8 @@ export default function CSIMonitoringPage() {
         )}
       </div>}
 
-      {!open && <Card>
-        <CardHeader className="pb-2">
+      {!open && <Card className="border-none shadow-md shadow-black/5 ring-1 ring-black/5 rounded-2xl overflow-hidden py-0 gap-0">
+        <CardHeader className="pb-2 pt-5 px-5 bg-gradient-to-r from-muted/50 to-transparent">
           <CardTitle className="text-base flex items-center gap-2">
             <FileText className="h-4 w-4 text-red-600" /> Charge Sales Invoice Log
           </CardTitle>
@@ -1890,7 +1870,7 @@ export default function CSIMonitoringPage() {
 
       {/* Item Search Dialog */}
       <Dialog open={itemSearchIdx !== null} onOpenChange={o => { if (!o) setItemSearchIdx(null) }}>
-        <DialogContent className="w-[98vw] sm:!max-w-lg max-h-[80vh] flex flex-col overflow-hidden">
+        <DialogContent className="w-[98vw] sm:!max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
           <DialogHeader className="flex flex-row items-center justify-between gap-2 pr-6">
             <DialogTitle className="flex items-center gap-2">
               <Search className="h-4 w-4" />Search Item
@@ -1948,7 +1928,7 @@ export default function CSIMonitoringPage() {
 
       {/* Add Item Modal */}
       <Dialog open={addItemOpen} onOpenChange={setAddItemOpen}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Add Item</DialogTitle>
           </DialogHeader>
@@ -2080,7 +2060,7 @@ export default function CSIMonitoringPage() {
 
       {/* Attachment Preview */}
       <Dialog open={previewAttachmentUrl !== null} onOpenChange={o => { if (!o) setPreviewAttachmentUrl(null) }}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>SI Attachment</DialogTitle>
           </DialogHeader>
@@ -2093,7 +2073,7 @@ export default function CSIMonitoringPage() {
 
       {/* Discard Confirmation */}
       <Dialog open={discardConfirmOpen} onOpenChange={setDiscardConfirmOpen}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Unsaved Changes</DialogTitle>
           </DialogHeader>
@@ -2119,7 +2099,7 @@ export default function CSIMonitoringPage() {
 
       {/* Bulk Send Email Dialog */}
       <Dialog open={emailBulkOpen} onOpenChange={o => { if (!o && !sendingBulkEmail) setEmailBulkOpen(false) }}>
-        <DialogContent className="sm:!max-w-lg">
+        <DialogContent className="sm:!max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Mail className="h-4 w-4" />Send CSI Invoice(s)</DialogTitle>
           </DialogHeader>
@@ -2182,7 +2162,7 @@ export default function CSIMonitoringPage() {
       </Dialog>
 
       <Dialog open={calibOpen} onOpenChange={setCalibOpen}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Calibrate Blank Form Print</DialogTitle>
           </DialogHeader>

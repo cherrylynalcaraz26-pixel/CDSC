@@ -1091,7 +1091,7 @@ export default function DashboardPage() {
 
       {/* Detail Modal */}
       <Dialog open={!!detailModal} onOpenChange={() => setDetailModal(null)}>
-        <DialogContent className="w-[95vw] max-w-4xl sm:max-w-4xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-5xl sm:max-w-5xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-base">
               {detailModal?.type === 'or' && `Collections — ${detailModal.client}`}

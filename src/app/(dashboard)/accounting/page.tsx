@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Tabs, TabsContent } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
@@ -1226,7 +1226,7 @@ function CollectionsTab() {
       </Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-[95vw] max-w-2xl sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-3xl sm:max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editingId ? 'Edit Collection (OR)' : 'New Collection (OR)'}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-4">
@@ -1354,7 +1354,7 @@ function CollectionsTab() {
 
       {/* View OR Dialog */}
       <Dialog open={!!viewRecord} onOpenChange={o => { if (!o) setViewRecord(null) }}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Receipt className="h-4 w-4 text-red-600" />Official Receipt</DialogTitle>
           </DialogHeader>
@@ -1394,7 +1394,7 @@ function CollectionsTab() {
       </Dialog>
 
       <Dialog open={blankFormOpen} onOpenChange={setBlankFormOpen}>
-        <DialogContent className="w-[95vw] max-w-4xl sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-5xl sm:max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Printer className="h-4 w-4 text-red-600" />Print Blank Form</DialogTitle>
           </DialogHeader>
@@ -1479,7 +1479,7 @@ function CollectionsTab() {
       </Dialog>
 
       <Dialog open={orCalibOpen} onOpenChange={setOrCalibOpen}>
-        <DialogContent className="w-[95vw] max-w-4xl sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-5xl sm:max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Calibrate Blank Form Print</DialogTitle>
           </DialogHeader>
@@ -1885,7 +1885,7 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
       </CardContent></Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-[95vw] max-w-2xl sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-3xl sm:max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>New Disbursement</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-3">
@@ -2404,16 +2404,6 @@ function BookkeepingTab({ activeSub, onSubChange }: { activeSub: string; onSubCh
     <div className="space-y-4">
       <DateFilterBar df={df} />
       <Tabs value={activeSub} onValueChange={v => onSubChange(v ?? 'crj')}>
-        <TabsList>
-          <TabsTrigger value="crj">Sales Journal</TabsTrigger>
-          <TabsTrigger value="cdj">Disbursements</TabsTrigger>
-          <TabsTrigger value="coa">Chart of Accounts</TabsTrigger>
-          <TabsTrigger value="gl">General Ledger</TabsTrigger>
-          <TabsTrigger value="tb">Trial Balance</TabsTrigger>
-          <TabsTrigger value="is">Income Statement</TabsTrigger>
-          <TabsTrigger value="bs">Balance Sheet</TabsTrigger>
-          <TabsTrigger value="bir">BIR Export</TabsTrigger>
-        </TabsList>
         <div>
           <TabsContent value="crj"><SalesJournalTab collections={filteredCollections} csiRecords={filteredCsi} /></TabsContent>
           <TabsContent value="cdj"><DisbursementsTab filterFrom={filterFrom} filterTo={filterTo} /></TabsContent>
@@ -2467,13 +2457,6 @@ function AccountingPageContent() {
       </div>
 
       <Tabs value={activeTab} onValueChange={v => setTab(v ?? 'overview')}>
-        {activeTab !== 'bookkeeping' && (
-          <TabsList variant="line">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="collections">Collections</TabsTrigger>
-            <TabsTrigger value="bir">BIR Compliance</TabsTrigger>
-          </TabsList>
-        )}
         <div>
           <TabsContent value="overview"><OverviewTab /></TabsContent>
           <TabsContent value="collections"><CollectionsTab /></TabsContent>

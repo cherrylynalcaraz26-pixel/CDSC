@@ -1261,7 +1261,7 @@ export default function BIRPage() {
 
       {/* Auto-filled Form Generator */}
       <Dialog open={formGenOpen} onOpenChange={o => { if (!o) setFormGenOpen(false) }}>
-        <DialogContent className="sm:max-w-2xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-primary" /> Generate Form {formGenTarget?.form}

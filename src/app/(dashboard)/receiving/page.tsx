@@ -934,7 +934,7 @@ export default function ReceivingPage() {
 
       {/* Create/Edit RR Dialog */}
       <Dialog open={rrOpen} onOpenChange={v => { setRrOpen(v); if (!v) resetRRForm() }}>
-        <DialogContent className="w-[95vw] max-w-2xl sm:max-w-2xl">
+        <DialogContent className="w-[95vw] max-w-3xl sm:max-w-3xl">
           <DialogHeader><DialogTitle>{editingRRId ? 'Edit Receiving Report' : 'New Receiving Report'}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-4">
@@ -1023,7 +1023,7 @@ export default function ReceivingPage() {
 
       {/* Sales Delivery Dialog */}
       <Dialog open={salesdOpen} onOpenChange={v => { setSalesdOpen(v); if (!v) resetSalesdForm() }}>
-        <DialogContent className="w-[98vw] sm:!max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[98vw] sm:!max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle className="flex items-center gap-2"><ShoppingBag className="h-4 w-4" />New Sales Delivery</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-4">
@@ -1117,7 +1117,7 @@ export default function ReceivingPage() {
 
       {/* Sales Delivery Detail */}
       <Dialog open={salesDetailOpen} onOpenChange={setSalesDetailOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><ShoppingBag className="h-4 w-4" />Sales Delivery Details</DialogTitle>
           </DialogHeader>
@@ -1172,7 +1172,7 @@ export default function ReceivingPage() {
 
       {/* Pending Delivery Detail */}
       <Dialog open={!!poDetail} onOpenChange={o => { if (!o) setPoDetail(null) }}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Package className="h-4 w-4" />Pending Delivery Details</DialogTitle>
           </DialogHeader>

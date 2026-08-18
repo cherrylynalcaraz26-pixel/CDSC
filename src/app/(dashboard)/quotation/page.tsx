@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { Plus, MoreHorizontal, Loader2, Trash2, X, FileText, Printer, Mail, Send, Package, Search, Pencil, Eye, CheckCircle, XCircle, Clock, CheckCheck, ClipboardList, GripVertical, Camera, Image as ImageIcon } from 'lucide-react'
+import { Plus, MoreHorizontal, Loader2, Trash2, X, FileText, Printer, Mail, Send, Package, Search, Box, Pencil, Eye, CheckCircle, XCircle, Clock, CheckCheck, ClipboardList, GripVertical, Camera, Image as ImageIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { undoToast } from '@/lib/undo-toast'
 import { useSearchContext } from '@/context/search-context'
@@ -1009,7 +1009,7 @@ export default function QuotationPage() {
                             </Select>
                             <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" title="Search inventory"
                               onClick={() => { setItemSearchIdx(idx); setItemQuery('') }}>
-                              <Search className="h-3.5 w-3.5" />
+                              <Box className="h-3.5 w-3.5" />
                             </Button>
                           </div>
                           <Input placeholder="Description (optional)" className="h-7 text-xs" value={line.description}
@@ -1235,7 +1235,7 @@ export default function QuotationPage() {
 
       {/* Email Dialog */}
       <Dialog open={showEmailQ} onOpenChange={setShowEmailQ}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Mail className="h-4 w-4" />Send Quotation by Email
@@ -1345,7 +1345,7 @@ ${emailBodyQ.replace(/\n/g, '<br/>')}
 
       {/* View Quotation Dialog */}
       <Dialog open={!!viewingQ} onOpenChange={o => { if (!o) { setViewingQ(null); setViewingQItems([]) } }}>
-        <DialogContent className="w-[98vw] sm:!max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[98vw] sm:!max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Eye className="h-4 w-4" />Quotation Preview
@@ -1364,7 +1364,7 @@ ${emailBodyQ.replace(/\n/g, '<br/>')}
 
       {/* List Send Email Dialog */}
       <Dialog open={!!listEmailQ} onOpenChange={o => { if (!o) setListEmailQ(null) }}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Mail className="h-4 w-4" />Send Quotation by Email
@@ -1440,7 +1440,7 @@ ${listEmailBody.replace(/\n/g, '<br/>')}
 
       {/* Item Search Dialog */}
       <Dialog open={itemSearchIdx !== null} onOpenChange={o => { if (!o) setItemSearchIdx(null) }}>
-        <DialogContent className="w-[98vw] sm:!max-w-3xl max-h-[80vh] flex flex-col overflow-hidden">
+        <DialogContent className="w-[98vw] sm:!max-w-4xl max-h-[80vh] flex flex-col overflow-hidden">
           <DialogHeader className="flex flex-row items-center justify-between gap-2 pr-6">
             <DialogTitle className="flex items-center gap-2"><Package className="h-4 w-4" />Item Inventory</DialogTitle>
             <Button type="button" size="sm" variant="outline" className="h-7 px-2 text-xs gap-1" onClick={openAddItem}>
@@ -1502,7 +1502,7 @@ ${listEmailBody.replace(/\n/g, '<br/>')}
 
       {/* Add Item Modal */}
       <Dialog open={addItemOpen} onOpenChange={setAddItemOpen}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Add Item</DialogTitle>
           </DialogHeader>
@@ -1644,7 +1644,7 @@ ${listEmailBody.replace(/\n/g, '<br/>')}
 
       {/* Discard Unsaved Changes Dialog */}
       <Dialog open={discardOpen} onOpenChange={setDiscardOpen}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Discard Changes?</DialogTitle>
           </DialogHeader>

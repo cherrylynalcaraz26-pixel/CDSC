@@ -20,7 +20,7 @@ import { Badge } from '@/components/ui/badge'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Search, Loader2, Pencil, AlertTriangle, Plus, X, MoreHorizontal, Trash2, FileText, Printer, Mail, Send, Truck, Package } from 'lucide-react'
+import { Search, Loader2, Pencil, AlertTriangle, Plus, MoreHorizontal, Trash2, FileText, Printer, Mail, Send, Truck, Package } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSearchContext } from '@/context/search-context'
 import { sendEmail } from '@/lib/send-email'
@@ -72,8 +72,6 @@ export default function InventoryPage() {
   const [uomMap, setUomMap] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(true)
   const [clientFilter, setClientFilter] = useState('all')
-  const [itemFilter, setItemFilter] = useState('all')
-  const [itemSearch, setItemSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [viewMode, setViewMode] = useState<'by_client' | 'by_item' | 'by_warehouse'>('by_client')
   const [clientDetailRow, setClientDetailRow] = useState<InventoryRow | null>(null)
@@ -414,7 +412,7 @@ export default function InventoryPage() {
   }
 
   useEffect(() => { load() }, [])
-  useEffect(() => { setPage(1) }, [clientFilter, itemFilter, statusFilter, search, viewMode])
+  useEffect(() => { setPage(1) }, [clientFilter, statusFilter, search, viewMode])
 
   // Keep WH Stock (and DR/CSI totals) live — e.g. once a delivery is recorded
   // in DR Logs elsewhere, this page's Generate Report reflects it immediately
@@ -623,14 +621,9 @@ export default function InventoryPage() {
   }
 
   const clients = Array.from(new Set(rows.map(r => r.client))).sort()
-  const itemNames = Array.from(new Set(rows.map(r => r.item_name))).sort()
-  const filteredItemNames = itemSearch.trim()
-    ? itemNames.filter(n => n.toLowerCase().includes(itemSearch.toLowerCase()))
-    : itemNames
 
   const filtered = rows.filter(r => {
     const matchClient = clientFilter === 'all' || r.client === clientFilter
-    const matchItem = itemFilter === 'all' || r.item_name === itemFilter
     const q = search.toLowerCase()
     const matchSearch = !q || r.item_name.toLowerCase().includes(q) || r.client.toLowerCase().includes(q)
     const matchStatus =
@@ -638,7 +631,7 @@ export default function InventoryPage() {
       (statusFilter === 'in_stock' && r.balance > 0) ||
       (statusFilter === 'balanced' && r.balance === 0) ||
       (statusFilter === 'deficit' && r.balance < 0)
-    return matchClient && matchItem && matchSearch && matchStatus
+    return matchClient && matchSearch && matchStatus
   })
 
   // Group by item for By Item view
@@ -958,45 +951,6 @@ export default function InventoryPage() {
 
       {/* Filters — hidden when report is open */}
       {!reportOpen && <div className="flex gap-3 flex-wrap items-center">
-        {/* Item name searchable select */}
-        <div className="relative min-w-[240px] max-w-xs flex-1">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-            <input
-              className="w-full rounded-md border border-input bg-background pl-9 pr-8 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              placeholder={itemFilter !== 'all' ? itemFilter : 'Search item name…'}
-              value={itemSearch}
-              onChange={e => { setItemSearch(e.target.value); if (e.target.value) setItemFilter('all') }}
-            />
-            {(itemFilter !== 'all' || itemSearch) && (
-              <button
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                onClick={() => { setItemFilter('all'); setItemSearch('') }}
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
-          </div>
-          {itemSearch.trim() && (
-            <div className="absolute top-full left-0 right-0 mt-1 bg-popover border rounded-lg shadow-lg z-50 max-h-52 overflow-y-auto">
-              <button
-                className="w-full text-left px-3 py-2 text-sm hover:bg-muted text-muted-foreground"
-                onMouseDown={() => { setItemFilter('all'); setItemSearch('') }}
-              >All Items</button>
-              {filteredItemNames.slice(0, 50).map(n => (
-                <button
-                  key={n}
-                  className="w-full text-left px-3 py-2 text-sm hover:bg-muted"
-                  onMouseDown={() => { setItemFilter(n); setItemSearch('') }}
-                >{n}</button>
-              ))}
-              {filteredItemNames.length === 0 && (
-                <div className="px-3 py-2 text-sm text-muted-foreground">No items match</div>
-              )}
-            </div>
-          )}
-        </div>
-
         {viewMode !== 'by_warehouse' && (
           <Select value={clientFilter} onValueChange={v => setClientFilter(v ?? 'all')}>
             <SelectTrigger className="w-72">
@@ -1624,7 +1578,7 @@ export default function InventoryPage() {
 
           {/* Email Client Dialog */}
           <Dialog open={emailReportOpen} onOpenChange={setEmailReportOpen}>
-            <DialogContent className="max-w-lg">
+            <DialogContent className="max-w-2xl">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <Mail className="h-4 w-4 text-blue-600" />
@@ -1672,7 +1626,7 @@ export default function InventoryPage() {
       })()}
 
       <Dialog open={warehouseUpdateOpen} onOpenChange={o => { if (!o) setWarehouseUpdateOpen(false) }}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Pencil className="h-4 w-4 text-blue-600" /> Update Warehouse Stock
@@ -1745,7 +1699,7 @@ export default function InventoryPage() {
       </Dialog>
 
       <Dialog open={!!editRow} onOpenChange={o => { if (!o) setEditRow(null) }}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Pencil className="h-4 w-4 text-yellow-600" /> Edit Item
@@ -1775,7 +1729,7 @@ export default function InventoryPage() {
 
       {/* ── Assign Channel Dialog (By Client view) ─────────────────────────────── */}
       <Dialog open={!!assignChannelRow} onOpenChange={o => { if (!o) setAssignChannelRow(null) }}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Send className="h-4 w-4 text-blue-600" /> Assign Channel
@@ -1806,7 +1760,7 @@ export default function InventoryPage() {
 
       {/* ── Product Detail Dialog (By Item view) ──────────────────────────────── */}
       <Dialog open={!!detailItem} onOpenChange={o => { if (!o) setDetailItem(null) }}>
-        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Product Details — {detailItem?.item_name}</DialogTitle>
           </DialogHeader>
@@ -1934,7 +1888,7 @@ export default function InventoryPage() {
 
       {/* ── Client Row Detail Dialog (By Client view) ──────────────────────────── */}
       <Dialog open={!!clientDetailRow} onOpenChange={o => { if (!o) setClientDetailRow(null) }}>
-        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{clientDetailRow?.client} — {clientDetailRow?.item_name}</DialogTitle>
           </DialogHeader>
@@ -2045,7 +1999,7 @@ export default function InventoryPage() {
       </Dialog>
 
       <Dialog open={addOpen} onOpenChange={o => { if (!o) setAddOpen(false) }}>
-        <DialogContent className="w-[95vw] max-w-lg sm:max-w-lg">
+        <DialogContent className="w-[95vw] max-w-2xl sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {addPoId ? <Truck className="h-4 w-4 text-red-600" /> : <Plus className="h-4 w-4 text-red-600" />}
@@ -2173,7 +2127,7 @@ export default function InventoryPage() {
 
       {/* ── Item Picker Dialog (Add Stock — box icon) ──────────────────────────── */}
       <Dialog open={itemPickerRowIdx !== null} onOpenChange={o => { if (!o) { setItemPickerRowIdx(null); setItemPickerSearch('') } }}>
-        <DialogContent className="sm:max-w-lg max-h-[80vh] flex flex-col">
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] flex flex-col">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Package className="h-4 w-4 text-muted-foreground" /> Select Item
@@ -2226,7 +2180,7 @@ export default function InventoryPage() {
 
       {/* Confirm Dialog */}
       <Dialog open={confirmOpen} onOpenChange={o => { if (!o) setConfirmOpen(false) }}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="text-base">Confirm Delete</DialogTitle>
           </DialogHeader>

@@ -589,7 +589,7 @@ export default function ClientsPage() {
 
       {/* Create / Edit Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingId ? 'Edit Client' : 'New Client Account'}</DialogTitle>
           </DialogHeader>
@@ -797,7 +797,7 @@ export default function ClientsPage() {
 
       {/* Invite to Portal Dialog */}
       <Dialog open={!!inviteClient} onOpenChange={o => { if (!o) { setInviteClient(null); setInviteResult(null) } }}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-xl">
           <DialogHeader>
             <DialogTitle>
               {inviteResult ? 'Portal Account Created' : 'Create Portal Account'}
@@ -887,7 +887,7 @@ export default function ClientsPage() {
 
       {/* Delete Confirm Dialog */}
       <Dialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
-        <DialogContent className="sm:max-w-sm">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Delete Client</DialogTitle>
           </DialogHeader>

@@ -39,7 +39,7 @@ export function PaginationBar({ page, totalPages, onPageChange, className }: Pag
 
   return (
     <div className={cn('flex flex-wrap items-center gap-3', className)}>
-      <div className="flex items-center gap-1 rounded-full border bg-muted/30 p-1">
+      <div className="flex items-center gap-1 rounded-full border bg-muted/30 p-1 shadow-sm shadow-black/5">
         <button
           type="button"
           onClick={() => onPageChange(Math.max(1, page - 1))}
@@ -58,7 +58,7 @@ export function PaginationBar({ page, totalPages, onPageChange, className }: Pag
               onClick={() => onPageChange(p)}
               className={cn(
                 'h-8 min-w-8 px-2 rounded-full text-sm font-medium transition-colors',
-                p === page ? 'bg-red-600 text-white' : 'text-foreground hover:bg-muted',
+                p === page ? 'bg-gradient-to-br from-red-500 to-red-600 text-white shadow-sm shadow-red-500/30' : 'text-foreground hover:bg-muted',
               )}
             >
               {p}

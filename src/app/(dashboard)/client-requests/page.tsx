@@ -237,7 +237,7 @@ export default function ClientRequestsPage() {
 
       {/* View Request Dialog */}
       <Dialog open={!!viewing} onOpenChange={o => !o && setViewing(null)}>
-        <DialogContent className="sm:max-w-xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <FileText className="h-4 w-4" />
