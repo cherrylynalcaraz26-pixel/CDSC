@@ -495,7 +495,6 @@ export default function QuotationPage() {
 
   function buildQuoteHtml(q: Quotation, items: { item_name: string; description?: string | null; quantity: number; unit: string | null; unit_price: number; selling_price: number | null; total_amount: number }[] = []) {
     const fmtAmt = (n: number) => `₱${(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
-    const hasVat = (q.vat_amount ?? 0) > 0
     const hasEwt = (q.ewt_amount ?? 0) > 0
     const itemsHtml = items.length > 0 ? `
       <table style="width:100%;border-collapse:collapse;font-size:10px;margin-top:8px;">
@@ -513,13 +512,10 @@ export default function QuotationPage() {
           ${items.map((it, i) => {
             const price = it.selling_price ?? it.unit_price ?? 0
             const total = it.total_amount ?? price * it.quantity
-            const img = it.item_name ? itemImage(it.item_name) : null
             const nameCell = `<div>${it.item_name ?? '—'}</div>${it.description ? `<div style="font-size:9px;color:#6b7280;margin-top:2px;">${it.description}</div>` : ''}`
             return `<tr style="background:${i % 2 === 0 ? '#fff' : '#f9fafb'};">
               <td style="padding:4px 6px;color:#9ca3af;">${i + 1}</td>
-              <td style="padding:4px 6px;">${img
-                ? `<div style="display:flex;align-items:center;gap:6px;"><img src="${img}" alt="" style="width:24px;height:24px;border-radius:4px;object-fit:cover;flex-shrink:0;" />${nameCell}</div>`
-                : nameCell}</td>
+              <td style="padding:4px 6px;">${nameCell}</td>
               <td style="padding:4px 6px;text-align:right;font-weight:700;">${it.quantity}</td>
               <td style="padding:4px 6px;color:#6b7280;">${it.unit ?? '—'}</td>
               <td style="padding:4px 6px;text-align:right;">${fmtAmt(price)}</td>
@@ -530,12 +526,12 @@ export default function QuotationPage() {
       </table>` : ''
     const logoUrl = companyInfo?.logo_url || (typeof window !== 'undefined' ? `${window.location.origin}/cdsc-logo.jpg` : '/cdsc-logo.jpg')
     return `<!DOCTYPE html><html><head><title>Quotation</title>
-      <style>body{font-family:Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;padding:24px;font-size:11px;}@media print{body{margin:0;}}</style>
+      <style>body{font-family:Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;padding:24px 24px 64px 24px;font-size:11px;}@media print{body{margin:0;}}</style>
     </head><body>
       <div>
         <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1px solid #e5e7eb;padding-bottom:12px;margin-bottom:12px;">
           <div>
-            <img src="${logoUrl}" alt="CDSC" style="width:48px;height:48px;border-radius:4px;object-fit:cover;flex-shrink:0;" crossorigin="anonymous" />
+            <img src="${logoUrl}" alt="CDSC" style="width:48px;height:48px;border-radius:4px;object-fit:cover;flex-shrink:0;" />
           </div>
           <div style="text-align:right;">
             <div style="font-size:13px;font-weight:700;color:#b91c1c;line-height:1.25;margin-bottom:2px;">${companyInfo?.company_name ?? 'CDSC Industrial Supply'}</div>
@@ -562,10 +558,8 @@ export default function QuotationPage() {
         ${itemsHtml}
         <div style="display:flex;justify-content:flex-end;margin-top:12px;">
           <div style="width:220px;font-size:10px;">
-            <div style="display:flex;justify-content:space-between;padding-bottom:4px;"><span style="color:#6b7280;">&nbsp;&nbsp;&nbsp;Subtotal</span><span>${fmtAmt(q.subtotal)}</span></div>
-            ${hasVat ? `<div style="display:flex;justify-content:space-between;border-top:1px solid #e5e7eb;padding-top:4px;"><span style="color:#6b7280;">&nbsp;&nbsp;&nbsp;VAT (12%)</span><span style="color:#2563eb;">${fmtAmt(q.vat_amount)}</span></div>` : ''}
-            ${hasEwt ? `<div style="display:flex;justify-content:space-between;"><span style="color:#6b7280;">EWT</span><span style="color:#b91c1c;">−${fmtAmt(q.ewt_amount)}</span></div>` : ''}
-            <div style="display:flex;justify-content:space-between;border-top:1px solid #e5e7eb;padding-top:4px;font-weight:700;font-size:11px;"><span>Total</span><span style="color:#b91c1c;">${fmtAmt(q.total_amount)}</span></div>
+            ${hasEwt ? `<div style="display:flex;justify-content:space-between;padding-bottom:4px;"><span style="color:#6b7280;">EWT</span><span style="color:#b91c1c;">−${fmtAmt(q.ewt_amount)}</span></div>` : ''}
+            <div style="display:flex;justify-content:space-between;border-top:1px solid #e5e7eb;padding-top:4px;font-weight:700;font-size:11px;"><span>&nbsp;&nbsp;&nbsp;Total</span><span style="color:#b91c1c;">${fmtAmt(q.subtotal)}</span></div>
           </div>
         </div>
         ${q.notes ? `<div style="border-top:1px solid #e5e7eb;padding-top:8px;margin-top:8px;"><div style="font-size:9px;font-weight:600;text-transform:uppercase;color:#9ca3af;margin-bottom:4px;">Notes / Terms</div><div style="font-size:10px;color:#374151;">${q.notes}</div></div>` : ''}
@@ -743,10 +737,8 @@ export default function QuotationPage() {
       {/* Totals */}
       <div className="flex justify-end">
         <div className="w-52 space-y-0.5 text-[10px]">
-          <div className="flex justify-between"><span className="text-gray-500">Subtotal</span><span>₱{subtotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
-          {vatType !== 'exempt' && <div className="flex justify-between"><span className="text-gray-500">VAT {vatType === 'inclusive' ? '(incl. 12%)' : '(12%)'}</span><span className="text-blue-600">₱{vatAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
           {ewtType !== 'none' && <div className="flex justify-between"><span className="text-gray-500">{ewtLabel} ({ewtCfg.rate * 100}%)</span><span className="text-red-700">−₱{ewtAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
-          <div className="flex justify-between border-t pt-0.5 font-bold text-[11px]"><span>Total</span><span className="text-red-700">₱{totalAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+          <div className="flex justify-between border-t pt-0.5 font-bold text-[11px]"><span>Total</span><span className="text-red-700">₱{subtotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
         </div>
       </div>
 
