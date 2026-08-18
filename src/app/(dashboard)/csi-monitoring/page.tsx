@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Checkbox } from '@/components/ui/checkbox'
 import { PaginationBar } from '@/components/ui/pagination-bar'
-import { Plus, X, Search, Box, MoreHorizontal, Loader2, FileText, LayoutGrid, List, ChevronDown, ChevronUp, Trash2, Printer, SlidersHorizontal, FileOutput, Mail, Camera, Image as ImageIcon, GripVertical, RefreshCw } from 'lucide-react'
+import { Plus, X, Search, Box, MoreHorizontal, Loader2, FileText, LayoutGrid, List, ChevronDown, ChevronUp, Trash2, Printer, SlidersHorizontal, FileOutput, Mail, Camera, Image as ImageIcon, GripVertical, RefreshCw, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
@@ -1253,22 +1253,40 @@ export default function CSIMonitoringPage() {
 
       {!open && (
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        <Card>
-          <CardContent className="pt-4 pb-3">
-            <div className="text-2xl font-bold">{loading ? '—' : uniqueSIs}</div>
-            <div className="text-xs text-muted-foreground">Total SI Numbers</div>
+        <Card className="relative overflow-hidden border-none shadow-md shadow-black/5 ring-1 ring-black/5 rounded-2xl">
+          <div className="absolute inset-0 bg-gradient-to-br from-red-50 to-transparent" />
+          <CardContent className="relative pt-4 pb-3 flex items-start justify-between gap-3">
+            <div>
+              <div className="text-2xl font-bold">{loading ? '—' : uniqueSIs}</div>
+              <div className="text-xs text-muted-foreground mt-0.5">Total SI Numbers</div>
+            </div>
+            <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center shadow-sm shadow-red-500/30">
+              <FileText className="h-5 w-5 text-white" />
+            </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-4 pb-3">
-            <div className="text-2xl font-bold">{loading ? '—' : filtered.length}</div>
-            <div className="text-xs text-muted-foreground">Line Items</div>
+        <Card className="relative overflow-hidden border-none shadow-md shadow-black/5 ring-1 ring-black/5 rounded-2xl">
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-transparent" />
+          <CardContent className="relative pt-4 pb-3 flex items-start justify-between gap-3">
+            <div>
+              <div className="text-2xl font-bold">{loading ? '—' : filtered.length}</div>
+              <div className="text-xs text-muted-foreground mt-0.5">Line Items</div>
+            </div>
+            <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm shadow-blue-500/30">
+              <List className="h-5 w-5 text-white" />
+            </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-4 pb-3">
-            <div className="text-2xl font-bold text-green-600">{loading ? '—' : formatPeso(totalAmount)}</div>
-            <div className="text-xs text-muted-foreground">Total Amount</div>
+        <Card className="relative overflow-hidden border-none shadow-md shadow-black/5 ring-1 ring-black/5 rounded-2xl">
+          <div className="absolute inset-0 bg-gradient-to-br from-green-50 to-transparent" />
+          <CardContent className="relative pt-4 pb-3 flex items-start justify-between gap-3">
+            <div>
+              <div className="text-2xl font-bold text-green-600">{loading ? '—' : formatPeso(totalAmount)}</div>
+              <div className="text-xs text-muted-foreground mt-0.5">Total Amount</div>
+            </div>
+            <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center shadow-sm shadow-green-500/30">
+              <Wallet className="h-5 w-5 text-white" />
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -1347,7 +1365,7 @@ export default function CSIMonitoringPage() {
             {/* Row 1: Revenue bar + Revenue Share stacked */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               {/* Revenue Bar Chart */}
-              <Card className="lg:col-span-2">
+              <Card className="lg:col-span-2 border-none shadow-md shadow-black/5 ring-1 ring-black/5 rounded-2xl">
                 <CardHeader className="pb-2 pt-4 px-5">
                   <CardTitle className="text-sm font-semibold">Revenue by Client</CardTitle>
                   <p className="text-xs text-muted-foreground">Total invoiced amount per client</p>
@@ -1378,7 +1396,7 @@ export default function CSIMonitoringPage() {
               </Card>
 
               {/* Revenue Share – stacked progress breakdown */}
-              <Card className="flex flex-col">
+              <Card className="flex flex-col border-none shadow-md shadow-black/5 ring-1 ring-black/5 rounded-2xl">
                 <CardHeader className="pb-2 pt-4 px-5">
                   <CardTitle className="text-sm font-semibold">Revenue Share</CardTitle>
                   <p className="text-xs text-muted-foreground">% of total per client</p>
@@ -1425,7 +1443,7 @@ export default function CSIMonitoringPage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Monthly Revenue Trend */}
               {trendData.length > 1 && (
-                <Card>
+                <Card className="border-none shadow-md shadow-black/5 ring-1 ring-black/5 rounded-2xl">
                   <CardHeader className="pb-2 pt-4 px-5">
                     <CardTitle className="text-sm font-semibold">Monthly Revenue Trend</CardTitle>
                     <p className="text-xs text-muted-foreground">Last 12 months</p>
@@ -1451,7 +1469,7 @@ export default function CSIMonitoringPage() {
               )}
 
               {/* SI Count vs Line Items grouped bar */}
-              <Card>
+              <Card className="border-none shadow-md shadow-black/5 ring-1 ring-black/5 rounded-2xl">
                 <CardHeader className="pb-2 pt-4 px-5">
                   <CardTitle className="text-sm font-semibold">SI Count vs Line Items</CardTitle>
                   <p className="text-xs text-muted-foreground">Invoice activity per client</p>
@@ -1546,8 +1564,8 @@ export default function CSIMonitoringPage() {
         )}
       </div>}
 
-      {!open && <Card>
-        <CardHeader className="pb-2">
+      {!open && <Card className="border-none shadow-md shadow-black/5 ring-1 ring-black/5 rounded-2xl overflow-hidden py-0 gap-0">
+        <CardHeader className="pb-2 pt-5 px-5 bg-gradient-to-r from-muted/50 to-transparent">
           <CardTitle className="text-base flex items-center gap-2">
             <FileText className="h-4 w-4 text-red-600" /> Charge Sales Invoice Log
           </CardTitle>
