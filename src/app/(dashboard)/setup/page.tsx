@@ -1587,12 +1587,12 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
                   <Select value={form.unit_of_measure} onValueChange={v => setForm(p => ({ ...p, unit_of_measure: v ?? '' }))}>
                     <SelectTrigger className="w-full">
                       {form.unit_of_measure
-                        ? <span className="truncate text-sm">{uomList.find(u => u.code === form.unit_of_measure)?.name ?? form.unit_of_measure}</span>
+                        ? <span className="truncate text-sm">{form.unit_of_measure}</span>
                         : <span className="text-muted-foreground text-sm">Select UOM…</span>}
                     </SelectTrigger>
                     <SelectContent>
                       {uomList.map(u => (
-                        <SelectItem key={u.id} value={u.code}>{u.code} – {u.name}</SelectItem>
+                        <SelectItem key={u.id} value={u.name}>{u.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
