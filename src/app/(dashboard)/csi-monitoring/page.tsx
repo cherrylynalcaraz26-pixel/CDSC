@@ -20,12 +20,14 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Plus, X, Search, MoreHorizontal, Loader2, FileText, LayoutGrid, List, ChevronDown, ChevronUp, Trash2, Printer, SlidersHorizontal, FileOutput, Mail } from 'lucide-react'
+import { PaginationBar } from '@/components/ui/pagination-bar'
+import { Plus, X, Search, MoreHorizontal, Loader2, FileText, LayoutGrid, List, ChevronDown, ChevronUp, Trash2, Printer, SlidersHorizontal, FileOutput, Mail, Camera, Image as ImageIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
 import { usePersistedState } from '@/lib/use-persisted-state'
 import { sendEmail, htmlToPdfBase64 } from '@/lib/send-email'
+import { uploadImageToDrive } from '@/lib/upload-image'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   Cell, Legend, AreaChart, Area,
@@ -170,6 +172,9 @@ export default function CSIMonitoringPage() {
   const [itemQuery, setItemQuery] = useState('')
   const [addItemOpen, setAddItemOpen] = useState(false)
   const [newItemForm, setNewItemForm] = useState({ item_name: '', unit_of_measure: '', selling_price: '' })
+  const [newItemImageFile, setNewItemImageFile] = useState<File | null>(null)
+  const [newItemImageUrl, setNewItemImageUrl] = useState<string | null>(null)
+  const newItemImageInputRef = useRef<HTMLInputElement>(null)
   const [savingNewItem, setSavingNewItem] = useState(false)
   const [activeTab, setActiveTab] = useState<'form' | 'preview'>('form')
   const [siNumberOptions, setSiNumberOptions] = useState<{ value: string; tag: 'current' | 'next' | 'missing' }[]>([])
@@ -727,6 +732,8 @@ export default function CSIMonitoringPage() {
 
   function openAddItem() {
     setNewItemForm({ item_name: itemQuery.trim(), unit_of_measure: '', selling_price: '' })
+    setNewItemImageFile(null)
+    setNewItemImageUrl(null)
     setAddItemOpen(true)
   }
 
@@ -756,11 +763,25 @@ export default function CSIMonitoringPage() {
     }
     const item_code = `${prefix}-${String(next).padStart(3, '0')}`
     const unit_of_measure = newItemForm.unit_of_measure.trim() || 'piece'
+
+    let imageUrl: string | null = null
+    if (newItemImageFile) {
+      try {
+        imageUrl = await uploadImageToDrive(newItemImageFile, { displayName: name, folder: 'Items' })
+      } catch (err: unknown) {
+        toast.error(err instanceof Error ? err.message : 'Failed to upload image')
+        setSavingNewItem(false)
+        return
+      }
+    }
+
     const { error } = await supabase.from('items').insert({
       item_code,
       item_name: name,
       unit_of_measure,
       selling_price: newItemForm.selling_price.trim() ? parseFloat(newItemForm.selling_price) : null,
+      image_url: imageUrl,
+      image_urls: imageUrl ? [imageUrl] : [],
       status: 'active',
     })
     if (error) { toast.error(error.message); setSavingNewItem(false); return }
@@ -1725,25 +1746,7 @@ export default function CSIMonitoringPage() {
               <span className="text-muted-foreground">
                 Showing {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, activeTotal)} of {activeTotal}
               </span>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="px-3 py-1.5 rounded-md border text-sm font-medium disabled:opacity-40 hover:bg-muted transition-colors"
-                >← Prev</button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-                  <button
-                    key={p}
-                    onClick={() => setPage(p)}
-                    className={`w-8 h-8 rounded-md text-sm font-medium transition-colors ${p === page ? 'bg-red-600 text-white' : 'border hover:bg-muted'}`}
-                  >{p}</button>
-                ))}
-                <button
-                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages}
-                  className="px-3 py-1.5 rounded-md border text-sm font-medium disabled:opacity-40 hover:bg-muted transition-colors"
-                >Next →</button>
-              </div>
+              <PaginationBar page={page} totalPages={totalPages} onPageChange={setPage} />
             </div>
           )}
         </CardContent>
@@ -1807,6 +1810,52 @@ export default function CSIMonitoringPage() {
             <DialogTitle>Add Item</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-1">
+            <div className="flex items-center gap-3">
+              <div className="relative group shrink-0">
+                <div className="h-16 w-16 rounded-lg overflow-hidden border bg-muted/30 flex items-center justify-center">
+                  {newItemImageUrl
+                    ? <img src={newItemImageUrl} alt="Item" className="h-full w-full object-cover" />
+                    : <ImageIcon className="h-6 w-6 text-muted-foreground" />}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => newItemImageInputRef.current?.click()}
+                  className="absolute inset-0 rounded-lg bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <Camera className="h-4 w-4 text-white" />
+                </button>
+                {newItemImageUrl && (
+                  <button
+                    type="button"
+                    onClick={() => { setNewItemImageUrl(null); setNewItemImageFile(null) }}
+                    className="absolute -top-1.5 -right-1.5 h-4 w-4 bg-gray-600 rounded-full flex items-center justify-center"
+                  >
+                    <X className="h-2.5 w-2.5 text-white" />
+                  </button>
+                )}
+              </div>
+              <div>
+                <p className="text-sm font-medium text-foreground">Item Photo</p>
+                <button
+                  type="button"
+                  onClick={() => newItemImageInputRef.current?.click()}
+                  className="mt-0.5 text-xs text-blue-600 hover:underline"
+                >
+                  {newItemImageUrl ? 'Change photo' : 'Upload photo'}
+                </button>
+              </div>
+              <input
+                ref={newItemImageInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={e => {
+                  const f = e.target.files?.[0]
+                  if (f) { setNewItemImageFile(f); setNewItemImageUrl(URL.createObjectURL(f)) }
+                  e.target.value = ''
+                }}
+              />
+            </div>
             <div className="space-y-1.5">
               <Label>Item Name <span className="text-destructive">*</span></Label>
               <Input
