@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Fragment } from 'react'
+import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { fetchAllRows } from '@/lib/supabase/fetch-all'
 import { Button } from '@/components/ui/button'
@@ -15,7 +15,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import {
   Plus, MoreHorizontal, CheckCircle2, Package, Loader2, Trash2, X,
-  ShoppingBag, ArrowLeftRight, ChevronDown, ChevronRight, Pencil, Printer, Search,
+  ShoppingBag, ArrowLeftRight, Pencil, Printer, Search,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSearchContext } from '@/context/search-context'
@@ -60,7 +60,7 @@ export default function ReceivingPage() {
   const [deliveryDate, setDeliveryDate] = useState(new Date().toISOString().split('T')[0])
   const [receivedBy, setReceivedBy] = useState('')
   const [rrSaving, setRrSaving] = useState(false)
-  const [expandedRRId, setExpandedRRId] = useState<string | null>(null)
+  const [rrDetailsId, setRrDetailsId] = useState<string | null>(null)
   const [deleteRRId, setDeleteRRId] = useState<string | null>(null)
   const [poItemsByNumber, setPoItemsByNumber] = useState<Record<string, POItemLine[]>>({})
 
@@ -247,8 +247,8 @@ export default function ReceivingPage() {
     setRrOpen(true)
   }
 
-  function toggleExpandRR(id: string) {
-    setExpandedRRId(prev => prev === id ? null : id)
+  function openRRDetails(id: string) {
+    setRrDetailsId(id)
   }
   function resetReturnForm() { setReturnType('warehouse'); setReturnDate(new Date().toISOString().split('T')[0]); setReturnSupplierId(''); setReturnClientId(''); setReturnItems([emptyReturnItem()]); setReturnNotes(''); setReturnItemSearches({}); setReturnItemDropdowns({}) }
   function resetSalesdForm() { setSalesdClientId(''); setSalesdQuote(''); setSalesdDate(new Date().toISOString().split('T')[0]); setSalesdBy(''); setSalesdNotes(''); setSalesdStatus('pending'); setSalesdItems([emptySalesItem()]) }
@@ -539,14 +539,9 @@ export default function ReceivingPage() {
 
         {/* ── Receiving Reports ── */}
         <TabsContent value="receiving" className="space-y-6 mt-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold">Receiving Reports</h3>
-              <p className="text-muted-foreground text-sm">Record incoming deliveries from purchase orders</p>
-            </div>
-            <Button onClick={() => { resetRRForm(); setRrOpen(true) }} className="bg-red-600 hover:bg-red-700">
-              <Plus className="h-4 w-4 mr-2" />New Receiving Report
-            </Button>
+          <div>
+            <h3 className="text-lg font-semibold">Receiving Reports</h3>
+            <p className="text-muted-foreground text-sm">Record incoming deliveries from purchase orders</p>
           </div>
 
           <Card>
@@ -590,103 +585,114 @@ export default function ReceivingPage() {
           </Card>
 
           <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-base">Receiving Report History</CardTitle></CardHeader>
+            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+              <CardTitle className="text-base">Receiving Report History</CardTitle>
+              <Button onClick={() => { resetRRForm(); setRrOpen(true) }} className="bg-red-600 hover:bg-red-700">
+                <Plus className="h-4 w-4 mr-2" />New Receiving Report
+              </Button>
+            </CardHeader>
             <CardContent className="p-0">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-8" />
+                    <TableHead className="w-10">No.</TableHead>
                     <TableHead>RR Number</TableHead>
                     <TableHead>PO Reference</TableHead>
                     <TableHead>Supplier</TableHead>
                     <TableHead>Delivery Date</TableHead>
                     <TableHead>Received By</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead className="w-10"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading ? (
-                    <TableRow><TableCell colSpan={8} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
+                    <TableRow><TableCell colSpan={7} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
                   ) : rrs.filter(rr => filterQ(`${rr.rr_number} ${rr.po_number} ${rr.supplier} ${rr.status}`)).length === 0 ? (
-                    <TableRow><TableCell colSpan={8} className="text-center py-10 text-muted-foreground">No receiving reports found.</TableCell></TableRow>
-                  ) : rrs.filter(rr => filterQ(`${rr.rr_number} ${rr.po_number} ${rr.supplier} ${rr.status}`)).map(rr => {
-                    const isExpanded = expandedRRId === rr.id
-                    const rrItems = poItemsByNumber[rr.po_number] ?? []
-                    return (
-                      <Fragment key={rr.id}>
-                        <TableRow className="cursor-pointer hover:bg-muted/50" onClick={() => toggleExpandRR(rr.id)}>
-                          <TableCell className="pr-0 text-muted-foreground">
-                            {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                          </TableCell>
-                          <TableCell className="font-mono text-xs font-semibold text-red-600">{rr.rr_number ?? '—'}</TableCell>
-                          <TableCell className="text-xs font-mono">{rr.po_number}</TableCell>
-                          <TableCell className="text-sm font-medium">{rr.supplier ?? '—'}</TableCell>
-                          <TableCell className="text-sm">{rr.delivery_date}</TableCell>
-                          <TableCell className="text-sm">{rr.received_by ?? '—'}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline" className="text-xs text-green-700 border-green-300 capitalize">✓ {rr.status}</Badge>
-                          </TableCell>
-                          <TableCell onClick={e => e.stopPropagation()}>
-                            <DropdownMenu>
-                              <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-accent">
-                                <MoreHorizontal className="h-4 w-4" />
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => toggleExpandRR(rr.id)}>View Details</DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => openEditRR(rr)}><Pencil className="h-3.5 w-3.5 mr-1.5" />Edit</DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => printRR(rr)}><Printer className="h-3.5 w-3.5 mr-1.5" />Print</DropdownMenuItem>
-                                <DropdownMenuItem className="text-destructive" onClick={() => setDeleteRRId(rr.id)}><Trash2 className="h-3.5 w-3.5 mr-1.5" />Delete</DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </TableCell>
-                        </TableRow>
-                        {isExpanded && (
-                          <TableRow className="bg-muted/20 hover:bg-muted/20">
-                            <TableCell colSpan={8} className="py-3 px-6">
-                              <div className="space-y-3">
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                                  <div><span className="text-muted-foreground block">DR / SI Number</span><span className="font-mono">{rr.dr_number ?? '—'}</span></div>
-                                  <div><span className="text-muted-foreground block">PO Reference</span><span className="font-mono">{rr.po_number}</span></div>
-                                  <div><span className="text-muted-foreground block">Supplier</span>{rr.supplier ?? '—'}</div>
-                                  <div><span className="text-muted-foreground block">Received By</span>{rr.received_by ?? '—'}</div>
-                                </div>
-                                {rrItems.length === 0 ? (
-                                  <p className="text-xs text-muted-foreground italic">No line items found for this PO reference.</p>
-                                ) : (
-                                  <div className="border rounded-md overflow-hidden text-xs bg-background">
-                                    <table className="w-full">
-                                      <thead className="bg-muted/60">
-                                        <tr>
-                                          <th className="text-left px-3 py-1.5 font-medium">Item</th>
-                                          <th className="text-right px-3 py-1.5 font-medium w-20">Qty</th>
-                                          <th className="text-left px-3 py-1.5 font-medium w-24">Unit</th>
-                                        </tr>
-                                      </thead>
-                                      <tbody>
-                                        {rrItems.map((it, i) => (
-                                          <tr key={i} className="border-t">
-                                            <td className="px-3 py-1">{it.item_name}</td>
-                                            <td className="px-3 py-1 text-right font-medium">{it.quantity}</td>
-                                            <td className="px-3 py-1 text-muted-foreground">{it.unit_of_measure}</td>
-                                          </tr>
-                                        ))}
-                                      </tbody>
-                                    </table>
-                                  </div>
-                                )}
-                              </div>
-                            </TableCell>
-                          </TableRow>
-                        )}
-                      </Fragment>
-                    )
-                  })}
+                    <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground">No receiving reports found.</TableCell></TableRow>
+                  ) : rrs.filter(rr => filterQ(`${rr.rr_number} ${rr.po_number} ${rr.supplier} ${rr.status}`)).map((rr, idx) => (
+                    <TableRow key={rr.id} className="cursor-pointer hover:bg-red-50/40 transition-colors" onClick={() => openRRDetails(rr.id)}>
+                      <TableCell className="text-muted-foreground text-xs">{idx + 1}</TableCell>
+                      <TableCell className="font-mono text-xs font-semibold text-red-600">{rr.rr_number ?? '—'}</TableCell>
+                      <TableCell className="text-xs font-mono">{rr.po_number}</TableCell>
+                      <TableCell className="text-sm font-medium">{rr.supplier ?? '—'}</TableCell>
+                      <TableCell className="text-sm">{rr.delivery_date}</TableCell>
+                      <TableCell className="text-sm">{rr.received_by ?? '—'}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-xs text-green-700 border-green-300 capitalize">✓ {rr.status}</Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* RR Details Dialog */}
+        <Dialog open={!!rrDetailsId} onOpenChange={o => { if (!o) setRrDetailsId(null) }}>
+          <DialogContent className="w-[98vw] sm:!max-w-2xl max-h-[90vh] overflow-y-auto">
+            {(() => {
+              const rr = rrs.find(r => r.id === rrDetailsId)
+              if (!rr) return null
+              const rrItems = poItemsByNumber[rr.po_number] ?? []
+              return (
+                <>
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <Package className="h-4 w-4 text-red-600" />{rr.rr_number ?? 'Receiving Report'}
+                    </DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <Badge variant="outline" className="text-xs text-green-700 border-green-300 capitalize">✓ {rr.status}</Badge>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs bg-muted/30 rounded-xl p-3">
+                      <div><span className="text-muted-foreground block">DR / SI Number</span><span className="font-mono">{rr.dr_number ?? '—'}</span></div>
+                      <div><span className="text-muted-foreground block">PO Reference</span><span className="font-mono">{rr.po_number}</span></div>
+                      <div><span className="text-muted-foreground block">Supplier</span>{rr.supplier ?? '—'}</div>
+                      <div><span className="text-muted-foreground block">Received By</span>{rr.received_by ?? '—'}</div>
+                    </div>
+                    {rrItems.length === 0 ? (
+                      <p className="text-xs text-muted-foreground italic">No line items found for this PO reference.</p>
+                    ) : (
+                      <div className="border rounded-xl overflow-hidden text-xs">
+                        <table className="w-full">
+                          <thead className="bg-muted/60">
+                            <tr>
+                              <th className="text-left px-3 py-1.5 font-medium">Item</th>
+                              <th className="text-right px-3 py-1.5 font-medium w-20">Qty</th>
+                              <th className="text-left px-3 py-1.5 font-medium w-24">Unit</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rrItems.map((it, i) => (
+                              <tr key={i} className="border-t">
+                                <td className="px-3 py-1">{it.item_name}</td>
+                                <td className="px-3 py-1 text-right font-medium">{it.quantity}</td>
+                                <td className="px-3 py-1 text-muted-foreground">{it.unit_of_measure}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                    <div className="flex flex-wrap items-center gap-2 border-t pt-3">
+                      <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { openEditRR(rr); setRrDetailsId(null) }}>
+                        <Pencil className="h-3.5 w-3.5" />Edit
+                      </Button>
+                      <Button variant="outline" size="sm" className="gap-1.5" onClick={() => printRR(rr)}>
+                        <Printer className="h-3.5 w-3.5" />Print
+                      </Button>
+                      <Button variant="outline" size="sm" className="gap-1.5 text-destructive ml-auto" onClick={() => { setDeleteRRId(rr.id); setRrDetailsId(null) }}>
+                        <Trash2 className="h-3.5 w-3.5" />Delete
+                      </Button>
+                    </div>
+                  </div>
+                </>
+              )
+            })()}
+          </DialogContent>
+        </Dialog>
 
         {/* ── Sales Deliveries (synced from DR Logs) ── */}
         <TabsContent value="sales" className="space-y-6 mt-4">
@@ -709,9 +715,6 @@ export default function ReceivingPage() {
                   Clear
                 </Button>
               )}
-              <Button variant="outline" size="sm" onClick={loadSalesDeliveries}>
-                <Loader2 className={`h-3.5 w-3.5 mr-1.5 ${salesdLoading ? 'animate-spin' : 'hidden'}`} />Refresh
-              </Button>
             </div>
           </div>
 

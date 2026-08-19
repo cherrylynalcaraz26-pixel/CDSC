@@ -1,12 +1,11 @@
 'use client'
 
-import { useState, useEffect, useRef, Fragment } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { fetchAllRows } from '@/lib/supabase/fetch-all'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -15,10 +14,10 @@ import {
 } from '@/components/ui/dialog'
 
 import {
-  Plus, MoreHorizontal, Eye, Printer, Loader2,
+  Plus, Printer, Loader2,
   Trash2, CheckCircle2, XCircle, ArrowRightLeft, X,
   Package, Search, Mail, Send, Pencil, FileText,
-  ChevronDown, ChevronUp, ChevronRight, Wallet, Clock3, AlertCircle,
+  ChevronDown, ChevronUp, Wallet, Clock3, AlertCircle,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
@@ -37,7 +36,7 @@ interface ItemOption {
 type POStatus = 'open' | 'partially_delivered' | 'completed' | 'cancelled'
 
 const STATUS_CFG: Record<POStatus, { label: string; cls: string }> = {
-  open:                { label: 'Open',             cls: 'bg-blue-100 text-blue-700' },
+  open:                { label: 'Pending',          cls: 'bg-blue-100 text-blue-700' },
   partially_delivered: { label: 'Partial Delivery', cls: 'bg-yellow-100 text-yellow-700' },
   completed:           { label: 'Completed',        cls: 'bg-green-100 text-green-700' },
   cancelled:           { label: 'Cancelled',        cls: 'bg-red-100 text-red-700' },
@@ -118,25 +117,14 @@ export default function PurchaseOrdersPage() {
   const [itemSearchIdx, setItemSearchIdx] = useState<number | null>(null)
   const [itemQuery, setItemQuery] = useState('')
 
-  // View PO modal
+  // Details modal (row click)
   const [viewPO, setViewPO] = useState<PO | null>(null)
   const [viewPOItems, setViewPOItems] = useState<{ item_name: string; quantity: number; unit: string | null; unit_price: number; selling_price: number | null; total_amount: number }[]>([])
 
-  // Row expand (click a row to show its details/items inline)
-  type POLineItem = { item_name: string; quantity: number; unit: string | null; unit_price: number; selling_price: number | null; total_amount: number }
-  const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [expandedItems, setExpandedItems] = useState<Record<string, POLineItem[]>>({})
-
-  async function toggleExpand(po: PO) {
-    if (expandedId === po.id) { setExpandedId(null); return }
-    setExpandedId(po.id)
-    if (!expandedItems[po.id]) {
-      const { data } = await supabase.from('po_items').select('item_name,quantity,unit_of_measure,unit_cost,selling_price,total_cost').eq('po_id', po.id).order('created_at')
-      setExpandedItems(prev => ({
-        ...prev,
-        [po.id]: (data ?? []).map(r => ({ item_name: r.item_name, quantity: r.quantity, unit: r.unit_of_measure, unit_price: r.unit_cost, selling_price: r.selling_price, total_amount: r.total_cost })),
-      }))
-    }
+  async function openDetails(po: PO) {
+    setViewPO(po)
+    const { data } = await supabase.from('po_items').select('item_name,quantity,unit_of_measure,unit_cost,selling_price,total_cost').eq('po_id', po.id).order('created_at')
+    setViewPOItems((data ?? []).map(r => ({ item_name: r.item_name, quantity: r.quantity, unit: r.unit_of_measure, unit_price: r.unit_cost, selling_price: r.selling_price, total_amount: r.total_cost })))
   }
 
   // Edit
@@ -392,80 +380,87 @@ export default function PurchaseOrdersPage() {
   function buildPOHtml(po: PO, items: { item_name: string; quantity: number; unit: string | null; unit_price: number; selling_price: number | null; total_amount: number }[] = []) {
     const supplierName = (po.supplier as any)?.company_name ?? '-'
     const logoUrl = companyInfo?.logo_url || (typeof window !== 'undefined' ? `${window.location.origin}/cdsc-logo.jpg` : '/cdsc-logo.jpg')
-    const poDate = po.po_date ? new Date(po.po_date + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '-'
-    const delDate = po.delivery_date ? new Date(po.delivery_date + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : null
-    const fmtAmt = (n: number) => `&#8369;${(n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
+    const poDate = po.po_date ? new Date(po.po_date + 'T00:00:00').toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }) : '-'
+    const delDate = po.delivery_date ? new Date(po.delivery_date + 'T00:00:00').toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }) : null
+    const fmtN = (n: number) => (n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })
     const hasEwt = (po.ewt_amount ?? 0) > 0
     const hasDiscount = (po.discount_rate ?? 0) > 0
     const vNetSub = (po.subtotal ?? 0) - (po.discount_amount ?? 0)
-    const itemsHtml = items.length > 0 ? `
-      <table style="width:100%;border-collapse:collapse;font-size:10px;margin-top:8px;">
-        <thead>
-          <tr style="background:#b91c1c;color:#fff;">
-            <th style="text-align:center;vertical-align:middle;padding:6px;">#</th>
-            <th style="text-align:center;vertical-align:middle;padding:6px;">Item Description</th>
-            <th style="text-align:center;vertical-align:middle;padding:6px;width:50px;">QTY</th>
-            <th style="text-align:center;vertical-align:middle;padding:6px;width:60px;">Unit</th>
-            <th style="text-align:center;vertical-align:middle;padding:6px;width:90px;">Unit Price</th>
-            <th style="text-align:center;vertical-align:middle;padding:6px;width:80px;">Total</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${items.map((it, i) => {
-            const price = it.unit_price ?? 0
-            return `<tr style="background:${i % 2 === 0 ? '#fff' : '#f9fafb'};">
-              <td style="padding:4px 6px;color:#9ca3af;text-align:center;">${i + 1}</td>
-              <td style="padding:4px 6px;">${it.item_name ?? '-'}</td>
-              <td style="padding:4px 6px;text-align:center;font-weight:700;">${it.quantity}</td>
-              <td style="padding:4px 6px;color:#6b7280;text-align:center;">${it.unit ?? '-'}</td>
-              <td style="padding:4px 6px;text-align:right;">${fmtAmt(price)}</td>
-              <td style="padding:4px 6px;text-align:right;font-weight:600;">${fmtAmt(it.total_amount)}</td>
-            </tr>`
-          }).join('')}
-        </tbody>
-      </table>` : ''
-    return `<!DOCTYPE html><html><head><title>Purchase Order</title>
-      <style>body{font-family:Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;padding:24px;font-size:11px;}@media print{body{margin:0;}}</style>
-    </head><body>
-      <div>
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1px solid #e5e7eb;padding-bottom:12px;margin-bottom:12px;">
-          <div>
-            <img src="${logoUrl}" alt="CDSC" style="width:56px;height:56px;border-radius:4px;object-fit:cover;" />
-          </div>
-          <div style="text-align:right;">
-            <div style="font-size:13px;font-weight:700;color:#b91c1c;line-height:1.25;margin-bottom:2px;">${companyInfo?.company_name ?? 'CDSC Industrial Supply'}</div>
-            <div style="font-size:9px;color:#6b7280;">${companyInfo?.address ?? ''}${companyInfo?.phone ? '<br/>' + companyInfo.phone : ''}${companyInfo?.email ? '<br/>' + companyInfo.email : ''}${companyInfo?.tin ? '<br/>TIN: ' + companyInfo.tin : ''}</div>
-          </div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;border-bottom:1px solid #e5e7eb;padding-bottom:12px;margin-bottom:12px;">
-          <div>
-            <div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#9ca3af;">Supplier</div>
-            <div style="font-weight:700;color:#1f2937;">${supplierName}</div>
-            ${po.payment_terms ? `<div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#9ca3af;margin-top:4px;">Payment Terms</div><div style="font-size:10px;color:#374151;">${po.payment_terms}</div>` : ''}
-            ${po.remarks ? `<div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#9ca3af;margin-top:4px;">Remarks</div><div style="font-size:10px;color:#374151;">${po.remarks}</div>` : ''}
-          </div>
-          <div style="text-align:right;">
-            <div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#9ca3af;">PO Number</div>
-            <div style="font-family:monospace;font-weight:700;">${po.po_number ?? '-'}</div>
-            <div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#9ca3af;margin-top:4px;">Date</div>
-            <div>${poDate}</div>
-            ${delDate ? `<div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#9ca3af;margin-top:4px;">Delivery Date</div><div>${delDate}</div>` : ''}
-          </div>
-        </div>
-        <div style="font-size:16px;font-weight:900;color:#b91c1c;text-align:center;letter-spacing:0.1em;margin-bottom:8px;">PURCHASE ORDER</div>
-        ${itemsHtml}
-        <div style="display:flex;justify-content:flex-end;margin-top:20px;">
-          <div style="width:220px;font-size:10px;">
-            ${hasDiscount ? `<div style="display:flex;justify-content:space-between;padding-bottom:4px;"><span style="color:#6b7280;">Discount (${po.discount_rate}%)</span><span style="color:#ea580c;">-${fmtAmt(po.discount_amount)}</span></div>` : ''}
-            ${hasEwt ? `<div style="display:flex;justify-content:space-between;${hasDiscount ? 'border-top:1px solid #e5e7eb;padding-top:4px;' : 'padding-bottom:4px;'}"><span style="color:#6b7280;">EWT</span><span style="color:#b91c1c;">-${fmtAmt(po.ewt_amount)}</span></div>` : ''}
-            <div style="display:flex;justify-content:space-between;border-top:1px solid #e5e7eb;padding-top:4px;font-weight:700;font-size:11px;"><span>Total</span><span style="color:#b91c1c;">${fmtAmt(vNetSub)}</span></div>
-          </div>
-        </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:48px;">
-          <div style="text-align:center;"><div style="border-top:1px solid #374151;padding-top:6px;font-size:10px;font-weight:700;color:#374151;">PREPARED BY</div><div style="font-size:9px;color:#9ca3af;margin-top:2px;">Signature over Printed Name</div></div>
-          <div style="text-align:center;"><div style="border-top:1px solid #374151;padding-top:6px;font-size:10px;font-weight:700;color:#374151;">APPROVED BY</div><div style="font-size:9px;color:#9ca3af;margin-top:2px;">Signature over Printed Name / Date</div></div>
+    const rows = items.map((it, i) => `
+      <tr style="background:${i % 2 === 0 ? '#fff' : '#f9fafb'}">
+        <td style="padding:4px 6px;color:#9ca3af;text-align:center">${i + 1}</td>
+        <td style="padding:4px 6px">${it.item_name ?? '-'}</td>
+        <td style="padding:4px 6px;text-align:center">${it.quantity}</td>
+        <td style="padding:4px 6px;color:#6b7280;text-align:center">${it.unit ?? '-'}</td>
+        <td style="padding:4px 6px;text-align:right">${fmtN(it.unit_price)}</td>
+        <td style="padding:4px 6px;text-align:right;font-weight:600">${fmtN(it.total_amount)}</td>
+      </tr>`).join('')
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Purchase Order</title><style>
+      *{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:11px;padding:32px;color:#1f2937;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+      table{border-collapse:collapse;width:100%}
+      @media print{body{margin:0;padding:24px}}
+    </style></head><body>
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:12px;border-bottom:1px solid #e5e7eb;margin-bottom:14px">
+      <div><img src="${logoUrl}" style="width:64px;height:64px;object-fit:cover;border-radius:4px"/></div>
+      <div style="text-align:right">
+        <div style="font-size:14px;font-weight:bold;color:#b91c1c;margin-bottom:2px">${companyInfo?.company_name ?? 'CDSC Industrial Supply'}</div>
+        <div style="font-size:9px;color:#6b7280">
+          ${companyInfo?.address ? `<div>${companyInfo.address}</div>` : ''}
+          ${companyInfo?.phone || companyInfo?.email ? `<div>${[companyInfo.phone, companyInfo.email].filter(Boolean).join(' | ')}</div>` : ''}
+          ${companyInfo?.tin ? `<div>TIN: ${companyInfo.tin}</div>` : ''}
         </div>
       </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;padding-bottom:12px;border-bottom:1px solid #e5e7eb;margin-bottom:14px">
+      <div>
+        <div style="font-size:9px;font-weight:600;color:#9ca3af;text-transform:uppercase;margin-bottom:2px">Supplier</div>
+        <div style="font-weight:bold;font-size:11px">${supplierName}</div>
+        ${po.payment_terms ? `<div style="margin-top:6px"><div style="font-size:9px;font-weight:600;color:#9ca3af;text-transform:uppercase">Payment Terms</div><div>${po.payment_terms}</div></div>` : ''}
+        ${po.remarks ? `<div style="margin-top:6px"><div style="font-size:9px;font-weight:600;color:#9ca3af;text-transform:uppercase">Remarks</div><div style="font-size:10px">${po.remarks}</div></div>` : ''}
+      </div>
+      <div style="display:flex;align-items:center;justify-content:center">
+        <div style="font-size:18px;font-weight:900;color:#b91c1c;text-transform:uppercase;text-align:center;letter-spacing:2px">Purchase<br/>Order</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:9px;font-weight:600;color:#9ca3af;text-transform:uppercase">PO Number</div>
+        <div style="font-weight:bold;font-family:monospace">${po.po_number ?? '—'}</div>
+        <div style="font-size:9px;font-weight:600;color:#9ca3af;text-transform:uppercase;margin-top:6px">Date</div>
+        <div>${poDate}</div>
+        ${delDate ? `<div style="font-size:9px;font-weight:600;color:#9ca3af;text-transform:uppercase;margin-top:6px">Delivery Date</div><div>${delDate}</div>` : ''}
+      </div>
+    </div>
+    <table style="margin-bottom:8px">
+      <thead><tr style="background:#b91c1c;color:#fff">
+        <th style="padding:5px 6px;text-align:center;width:28px">#</th>
+        <th style="padding:5px 6px;text-align:left">Item Description</th>
+        <th style="padding:5px 6px;text-align:center;width:48px">QTY</th>
+        <th style="padding:5px 6px;text-align:center;width:60px">Unit</th>
+        <th style="padding:5px 6px;text-align:right;width:80px">Unit Price</th>
+        <th style="padding:5px 6px;text-align:right;width:80px">Total</th>
+      </tr></thead>
+      <tbody>${rows || '<tr><td colspan="6" style="padding:12px;text-align:center;color:#9ca3af">No items</td></tr>'}</tbody>
+    </table>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:20px">
+      <div style="width:200px">
+        ${hasDiscount ? `<div style="display:flex;justify-content:space-between;padding-bottom:4px;font-size:10px"><span style="color:#6b7280">Discount (${po.discount_rate}%)</span><span style="color:#ea580c">-${fmtN(po.discount_amount)}</span></div>` : ''}
+        ${hasEwt ? `<div style="display:flex;justify-content:space-between;padding-bottom:4px;font-size:10px"><span style="color:#6b7280">EWT</span><span style="color:#b91c1c">-${fmtN(po.ewt_amount)}</span></div>` : ''}
+        <div style="border-top:1px solid #e5e7eb;padding-top:4px;display:flex;justify-content:space-between;font-weight:bold;font-size:12px">
+          <span>Total</span><span style="color:#b91c1c">${fmtN(vNetSub)}</span>
+        </div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;border-top:1px solid #e5e7eb;padding-top:24px">
+      <div style="text-align:center">
+        <div style="border-bottom:1px solid #374151;height:36px;margin-bottom:4px"></div>
+        <div style="font-size:9px;color:#6b7280;text-transform:uppercase;letter-spacing:1px;font-weight:bold">PREPARED BY</div>
+        <div style="font-size:8px;color:#9ca3af">Signature over Printed Name</div>
+      </div>
+      <div style="text-align:center">
+        <div style="border-bottom:1px solid #374151;height:36px;margin-bottom:4px"></div>
+        <div style="font-size:9px;color:#6b7280;text-transform:uppercase;letter-spacing:1px;font-weight:bold">APPROVED BY</div>
+        <div style="font-size:8px;color:#9ca3af">Signature over Printed Name / Date</div>
+      </div>
+    </div>
     </body></html>`
   }
 
@@ -485,10 +480,12 @@ export default function PurchaseOrdersPage() {
     setTimeout(() => { win.focus(); win.print(); win.close() }, 800)
   }
 
-  function handlePrintPO(po: PO) {
+  async function handlePrintPO(po: PO) {
+    const { data } = await supabase.from('po_items').select('item_name,quantity,unit_of_measure,unit_cost,selling_price,total_cost').eq('po_id', po.id).order('created_at')
+    const items = (data ?? []).map(r => ({ item_name: r.item_name, quantity: r.quantity, unit: r.unit_of_measure, unit_price: r.unit_cost, selling_price: r.selling_price, total_amount: r.total_cost }))
     const win = window.open('', '_blank', 'width=900,height=750')
     if (!win) return
-    win.document.write(buildPOHtml(po))
+    win.document.write(buildPOHtml(po, items))
     win.document.close()
     setTimeout(() => { win.focus(); win.print(); win.close() }, 800)
   }
@@ -651,7 +648,7 @@ export default function PurchaseOrdersPage() {
             <CardContent className="relative pt-5 pb-4 flex items-start justify-between gap-3">
               <div>
                 <div className="text-2xl font-bold text-blue-600">{loading ? '—' : counts.open}</div>
-                <div className="text-sm text-muted-foreground mt-0.5">Open Orders</div>
+                <div className="text-sm text-muted-foreground mt-0.5">Pending Orders</div>
               </div>
               <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm shadow-blue-500/30">
                 <Clock3 className="h-5 w-5 text-white" />
@@ -702,23 +699,23 @@ export default function PurchaseOrdersPage() {
           </CardHeader>
           {pipelineOpen && (
             <CardContent className="p-0 mt-3">
-              <div className="grid grid-cols-5 text-center text-[10px] font-semibold uppercase tracking-wider border-b border-t">
+              <div className="grid grid-cols-5 text-center text-[10px] font-semibold uppercase tracking-wider gap-1.5 px-3 pb-2">
                 {[
-                  { label: 'PO Created',  color: 'text-blue-600 bg-blue-50' },
-                  { label: 'Receiving',   color: 'text-yellow-600 bg-yellow-50' },
-                  { label: 'DR Logged',   color: 'text-orange-600 bg-orange-50' },
-                  { label: 'CSI Issued',  color: 'text-purple-600 bg-purple-50' },
-                  { label: 'Collected',   color: 'text-green-600 bg-green-50' },
+                  { label: 'PO Created',  cls: 'text-blue-700 bg-blue-50 ring-1 ring-blue-200' },
+                  { label: 'Receiving',   cls: 'text-yellow-700 bg-amber-50 ring-1 ring-amber-200' },
+                  { label: 'DR Logged',   cls: 'text-orange-700 bg-orange-50 ring-1 ring-orange-200' },
+                  { label: 'CSI Issued',  cls: 'text-purple-700 bg-purple-50 ring-1 ring-purple-200' },
+                  { label: 'Collected',   cls: 'text-green-700 bg-green-50 ring-1 ring-green-200' },
                 ].map(s => (
-                  <div key={s.label} className={`py-2 ${s.color}`}>{s.label}</div>
+                  <div key={s.label} className={`py-1.5 rounded-full ${s.cls}`}>{s.label}</div>
                 ))}
               </div>
               {loading ? (
                 <div className="text-center py-6"><Loader2 className="h-4 w-4 animate-spin mx-auto text-muted-foreground" /></div>
               ) : pos.filter(p => p.status === 'open' || p.status === 'partially_delivered').length === 0 ? (
-                <div className="text-center py-6 text-xs text-muted-foreground">No open purchase orders</div>
+                <div className="text-center py-6 text-xs text-muted-foreground">No pending purchase orders</div>
               ) : (
-                <div className="divide-y max-h-64 overflow-y-auto">
+                <div className="divide-y border-t max-h-64 overflow-y-auto">
                   {pos.filter(p => p.status === 'open' || p.status === 'partially_delivered').map(po => {
                     const supplierName = (po.supplier as any)?.company_name ?? ''
                     const isReceived = receivedPONums.has(po.po_number ?? '')
@@ -732,10 +729,10 @@ export default function PurchaseOrdersPage() {
                       { done: hasOr,      label: hasOr  ? 'Collected' : 'Pending' },
                     ]
                     return (
-                      <div key={po.id} className="grid grid-cols-5 text-center text-xs">
+                      <div key={po.id} className="grid grid-cols-5 text-center text-xs hover:bg-muted/30 transition-colors">
                         {stages.map((s, i) => (
-                          <div key={i} className={`py-2 px-1 border-r last:border-r-0 ${s.done ? '' : 'opacity-40'}`}>
-                            <div className={`inline-flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold mx-auto mb-0.5 ${s.done ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-400'}`}>
+                          <div key={i} className={`py-2.5 px-1 border-r last:border-r-0 ${s.done ? '' : 'opacity-40'}`}>
+                            <div className={`inline-flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold mx-auto mb-0.5 ${s.done ? 'bg-gradient-to-br from-green-500 to-green-600 text-white shadow-sm shadow-green-500/30' : 'bg-gray-100 text-gray-400'}`}>
                               {s.done ? '✓' : (i + 1)}
                             </div>
                             <div className="font-medium truncate px-1">{s.label}</div>
@@ -762,7 +759,7 @@ export default function PurchaseOrdersPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-8" />
+                  <TableHead className="w-10">No.</TableHead>
                   <TableHead>PO Number</TableHead>
                   <TableHead>PR Ref</TableHead>
                   <TableHead>Supplier</TableHead>
@@ -773,32 +770,26 @@ export default function PurchaseOrdersPage() {
                   <TableHead className="text-right">EWT</TableHead>
                   <TableHead className="text-right">Net Payable</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead className="w-10" />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={12} className="text-center py-10">
+                    <TableCell colSpan={11} className="text-center py-10">
                       <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                     </TableCell>
                   </TableRow>
                 ) : displayedPos.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={12} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={11} className="text-center py-12 text-muted-foreground">
                       No purchase orders yet. Click <strong>Create PO</strong> to get started.
                     </TableCell>
                   </TableRow>
-                ) : displayedPos.map(po => {
+                ) : displayedPos.map((po, idx) => {
                   const sCfg = STATUS_CFG[po.status] ?? STATUS_CFG.open
-                  const isExpanded = expandedId === po.id
-                  const lineItems = expandedItems[po.id] ?? []
                   return (
-                    <Fragment key={po.id}>
-                    <TableRow className="cursor-pointer hover:bg-muted/50" onClick={() => toggleExpand(po)}>
-                      <TableCell className="pr-0 text-muted-foreground">
-                        {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                      </TableCell>
+                    <TableRow key={po.id} className="cursor-pointer hover:bg-red-50/40 transition-colors" onClick={() => openDetails(po)}>
+                      <TableCell className="text-muted-foreground text-xs">{idx + 1}</TableCell>
                       <TableCell className="font-mono text-xs font-semibold text-red-600">{po.po_number ?? '—'}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{(po.pr as any)?.pr_number ?? '—'}</TableCell>
                       <TableCell className="font-medium text-sm">{(po.supplier as any)?.company_name ?? '—'}</TableCell>
@@ -815,96 +806,7 @@ export default function PurchaseOrdersPage() {
                       <TableCell>
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${sCfg.cls}`}>{sCfg.label}</span>
                       </TableCell>
-                      <TableCell onClick={e => e.stopPropagation()}>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-52">
-                            <DropdownMenuItem onClick={async () => {
-                              setViewPO(po)
-                              const { data } = await supabase.from('po_items').select('item_name,quantity,unit_of_measure,unit_cost,selling_price,total_cost').eq('po_id', po.id).order('created_at')
-                              setViewPOItems((data ?? []).map(r => ({ item_name: r.item_name, quantity: r.quantity, unit: r.unit_of_measure, unit_price: r.unit_cost, selling_price: r.selling_price, total_amount: r.total_cost })))
-                            }}>
-                              <Eye className="mr-2 h-4 w-4" />View PO
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => openEdit(po)}>
-                              <Pencil className="mr-2 h-4 w-4" />Edit
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => handlePrintPO(po)}>
-                              <Printer className="mr-2 h-4 w-4" />Print PO
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => openEmailDialog(po)}>
-                              <Mail className="mr-2 h-4 w-4" />Send Email
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            {po.status === 'open' && (
-                              <DropdownMenuItem onClick={() => updateStatus(po.id, 'partially_delivered')} className="text-yellow-600">
-                                <ArrowRightLeft className="mr-2 h-4 w-4" />Mark Partial Delivery
-                              </DropdownMenuItem>
-                            )}
-                            {(po.status === 'open' || po.status === 'partially_delivered') && (
-                              <DropdownMenuItem onClick={() => updateStatus(po.id, 'completed')} className="text-green-600">
-                                <CheckCircle2 className="mr-2 h-4 w-4" />Mark Completed
-                              </DropdownMenuItem>
-                            )}
-                            {po.status !== 'cancelled' && po.status !== 'completed' && (
-                              <DropdownMenuItem onClick={() => updateStatus(po.id, 'cancelled')} className="text-destructive">
-                                <XCircle className="mr-2 h-4 w-4" />Cancel PO
-                              </DropdownMenuItem>
-                            )}
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => deletePO(po.id)} className="text-destructive">
-                              <Trash2 className="mr-2 h-4 w-4" />Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
                     </TableRow>
-                    {isExpanded && (
-                      <TableRow className="bg-muted/20 hover:bg-muted/20">
-                        <TableCell colSpan={12} className="py-3 px-6">
-                          <div className="space-y-3">
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
-                              <div><span className="text-muted-foreground block">Payment Terms</span>{po.payment_terms ?? '—'}</div>
-                              <div><span className="text-muted-foreground block">Discount</span>{po.discount_rate ? `${po.discount_rate}% (${fmt(po.discount_amount ?? 0)})` : '—'}</div>
-                              <div><span className="text-muted-foreground block">CWT</span>{fmt(po.cwt_amount ?? 0)}</div>
-                              <div><span className="text-muted-foreground block">Remarks</span>{po.remarks || '—'}</div>
-                            </div>
-                            {lineItems.length === 0 ? (
-                              <p className="text-xs text-muted-foreground italic">No line items found.</p>
-                            ) : (
-                              <div className="border rounded-md overflow-hidden text-xs bg-background">
-                                <table className="w-full">
-                                  <thead className="bg-muted/60">
-                                    <tr>
-                                      <th className="text-left px-3 py-1.5 font-medium">Item</th>
-                                      <th className="text-right px-3 py-1.5 font-medium w-20">Qty</th>
-                                      <th className="text-left px-3 py-1.5 font-medium w-24">Unit</th>
-                                      <th className="text-right px-3 py-1.5 font-medium w-28">Unit Cost</th>
-                                      <th className="text-right px-3 py-1.5 font-medium w-28">Amount</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {lineItems.map((it, i) => (
-                                      <tr key={i} className="border-t">
-                                        <td className="px-3 py-1">{it.item_name}</td>
-                                        <td className="px-3 py-1 text-right font-medium">{it.quantity}</td>
-                                        <td className="px-3 py-1 text-muted-foreground">{it.unit}</td>
-                                        <td className="px-3 py-1 text-right">{fmt(it.unit_price)}</td>
-                                        <td className="px-3 py-1 text-right font-medium">{fmt(it.total_amount)}</td>
-                                      </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                    </Fragment>
                   )
                 })}
               </TableBody>
@@ -1347,20 +1249,117 @@ export default function PurchaseOrdersPage() {
 
       )}
 
-      {/* View PO Dialog */}
+      {/* PO Details Dialog */}
       <Dialog open={!!viewPO} onOpenChange={o => { if (!o) { setViewPO(null); setViewPOItems([]) } }}>
-        <DialogContent className="w-[98vw] sm:!max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[98vw] sm:!max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <FileText className="h-4 w-4" />Purchase Order Preview
+              <FileText className="h-4 w-4 text-red-600" />
+              {viewPO?.po_number ?? 'Purchase Order'}
             </DialogTitle>
           </DialogHeader>
           {viewPO && (
-            <iframe
-              srcDoc={buildPOHtml(viewPO, viewPOItems)}
-              style={{ width: '100%', minHeight: '600px', border: 'none' }}
-              title="PO Preview"
-            />
+            <div className="space-y-4">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${(STATUS_CFG[viewPO.status] ?? STATUS_CFG.open).cls}`}>
+                  {(STATUS_CFG[viewPO.status] ?? STATUS_CFG.open).label}
+                </span>
+                <div className="flex items-center gap-1.5">
+                  <Label className="text-xs text-muted-foreground">Change Status</Label>
+                  <Select
+                    value={viewPO.status}
+                    onValueChange={async v => {
+                      await updateStatus(viewPO.id, v as POStatus)
+                      setViewPO(p => p ? { ...p, status: v as POStatus } : p)
+                    }}
+                  >
+                    <SelectTrigger className="h-8 w-44 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {(Object.keys(STATUS_CFG) as POStatus[]).map(s => (
+                        <SelectItem key={s} value={s}>{STATUS_CFG[s].label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs bg-muted/30 rounded-xl p-3">
+                <div><span className="text-muted-foreground block">Supplier</span><span className="font-medium">{viewPO.supplier?.company_name ?? '—'}</span></div>
+                <div><span className="text-muted-foreground block">PR Ref</span><span className="font-medium">{viewPO.pr?.pr_number ?? '—'}</span></div>
+                <div><span className="text-muted-foreground block">PO Date</span><span className="font-medium">{viewPO.po_date ? format(new Date(viewPO.po_date), 'MMM d, yyyy') : '—'}</span></div>
+                <div><span className="text-muted-foreground block">Delivery Date</span><span className="font-medium">{viewPO.delivery_date ? format(new Date(viewPO.delivery_date), 'MMM d, yyyy') : '—'}</span></div>
+                <div><span className="text-muted-foreground block">Payment Terms</span><span className="font-medium">{viewPO.payment_terms ?? '—'}</span></div>
+                <div><span className="text-muted-foreground block">Discount</span><span className="font-medium">{viewPO.discount_rate ? `${viewPO.discount_rate}% (${fmt(viewPO.discount_amount ?? 0)})` : '—'}</span></div>
+                <div><span className="text-muted-foreground block">CWT</span><span className="font-medium">{fmt(viewPO.cwt_amount ?? 0)}</span></div>
+                <div><span className="text-muted-foreground block">Remarks</span><span className="font-medium">{viewPO.remarks || '—'}</span></div>
+              </div>
+
+              <div className="border rounded-xl overflow-hidden text-xs">
+                <table className="w-full">
+                  <thead className="bg-muted/60">
+                    <tr>
+                      <th className="text-left px-3 py-1.5 font-medium">Item</th>
+                      <th className="text-right px-3 py-1.5 font-medium w-20">Qty</th>
+                      <th className="text-left px-3 py-1.5 font-medium w-24">Unit</th>
+                      <th className="text-right px-3 py-1.5 font-medium w-28">Unit Cost</th>
+                      <th className="text-right px-3 py-1.5 font-medium w-28">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {viewPOItems.length === 0 ? (
+                      <tr><td colSpan={5} className="text-center py-4 text-muted-foreground italic">No line items found.</td></tr>
+                    ) : viewPOItems.map((it, i) => (
+                      <tr key={i} className="border-t">
+                        <td className="px-3 py-1">{it.item_name}</td>
+                        <td className="px-3 py-1 text-right font-medium">{it.quantity}</td>
+                        <td className="px-3 py-1 text-muted-foreground">{it.unit}</td>
+                        <td className="px-3 py-1 text-right">{fmt(it.unit_price)}</td>
+                        <td className="px-3 py-1 text-right font-medium">{fmt(it.total_amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="flex justify-end">
+                <div className="w-56 space-y-1 text-xs">
+                  <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{fmt(viewPO.subtotal ?? 0)}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">VAT 12%</span><span className="text-blue-600">{fmt(viewPO.vat_amount ?? 0)}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">EWT</span><span className="text-red-700">-{fmt(viewPO.ewt_amount ?? 0)}</span></div>
+                  <div className="flex justify-between border-t pt-1 font-semibold text-sm"><span>Net Payable</span><span>{fmt(viewPO.net_payable ?? 0)}</span></div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 border-t pt-3">
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => { openEdit(viewPO); setViewPO(null) }}>
+                  <Pencil className="h-3.5 w-3.5" />Edit
+                </Button>
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => handlePrintPO(viewPO)}>
+                  <Printer className="h-3.5 w-3.5" />Print PO
+                </Button>
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => openEmailDialog(viewPO)}>
+                  <Mail className="h-3.5 w-3.5" />Send Email
+                </Button>
+                {viewPO.status === 'open' && (
+                  <Button variant="outline" size="sm" className="gap-1.5 text-yellow-600" onClick={() => { updateStatus(viewPO.id, 'partially_delivered'); setViewPO(null) }}>
+                    <ArrowRightLeft className="h-3.5 w-3.5" />Mark Partial Delivery
+                  </Button>
+                )}
+                {(viewPO.status === 'open' || viewPO.status === 'partially_delivered') && (
+                  <Button variant="outline" size="sm" className="gap-1.5 text-green-600" onClick={() => { updateStatus(viewPO.id, 'completed'); setViewPO(null) }}>
+                    <CheckCircle2 className="h-3.5 w-3.5" />Mark Completed
+                  </Button>
+                )}
+                {viewPO.status !== 'cancelled' && viewPO.status !== 'completed' && (
+                  <Button variant="outline" size="sm" className="gap-1.5 text-destructive" onClick={() => { updateStatus(viewPO.id, 'cancelled'); setViewPO(null) }}>
+                    <XCircle className="h-3.5 w-3.5" />Cancel PO
+                  </Button>
+                )}
+                <Button variant="outline" size="sm" className="gap-1.5 text-destructive ml-auto" onClick={() => { deletePO(viewPO.id); setViewPO(null) }}>
+                  <Trash2 className="h-3.5 w-3.5" />Delete
+                </Button>
+              </div>
+            </div>
           )}
         </DialogContent>
       </Dialog>

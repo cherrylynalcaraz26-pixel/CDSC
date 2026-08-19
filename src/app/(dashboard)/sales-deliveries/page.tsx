@@ -7,11 +7,13 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
-import { Search, ChevronDown, ChevronRight, Truck } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import { ChevronDown, ChevronRight, Truck } from 'lucide-react'
 import { format, parseISO } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
 
@@ -50,6 +52,8 @@ export default function SalesDeliveriesPage() {
   const [deliveries, setDeliveries] = useState<EnrichedDelivery[]>([])
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState('_all')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
 
   useEffect(() => {
@@ -97,6 +101,8 @@ export default function SalesDeliveriesPage() {
   const q = search.toLowerCase()
   const filtered = deliveries.filter(d => {
     if (statusFilter !== '_all' && d.status !== statusFilter) return false
+    if (dateFrom && (!d.delivery_date || d.delivery_date < dateFrom)) return false
+    if (dateTo && (!d.delivery_date || d.delivery_date > dateTo)) return false
     if (!q) return true
     return (
       d.delivery_number?.toLowerCase().includes(q) ||
@@ -134,19 +140,33 @@ export default function SalesDeliveriesPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-3 flex-wrap">
-        <Select value={statusFilter} onValueChange={v => setStatusFilter(v ?? '_all')}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="All Statuses" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="_all">All Statuses</SelectItem>
-            <SelectItem value="received">Received</SelectItem>
-            <SelectItem value="partial">Partial</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="rejected">Rejected</SelectItem>
-          </SelectContent>
-        </Select>
+      <div className="flex gap-3 flex-wrap items-end">
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Status</Label>
+          <Select value={statusFilter} onValueChange={v => setStatusFilter(v ?? '_all')}>
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="All Statuses" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_all">All Statuses</SelectItem>
+              <SelectItem value="received">Received</SelectItem>
+              <SelectItem value="partial">Partial</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="rejected">Rejected</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">From</Label>
+          <Input type="date" className="w-40" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">To</Label>
+          <Input type="date" className="w-40" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+        </div>
+        {(dateFrom || dateTo) && (
+          <Button variant="ghost" size="sm" onClick={() => { setDateFrom(''); setDateTo('') }}>Clear</Button>
+        )}
       </div>
 
       <Card>
@@ -166,6 +186,7 @@ export default function SalesDeliveriesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10">No.</TableHead>
                   <TableHead className="w-8" />
                   <TableHead>Delivery #</TableHead>
                   <TableHead>SO Number</TableHead>
@@ -177,9 +198,10 @@ export default function SalesDeliveriesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map(d => (
+                {filtered.map((d, idx) => (
                   <>
-                    <TableRow key={d.id} className="cursor-pointer hover:bg-muted/50" onClick={() => toggleExpand(d.id)}>
+                    <TableRow key={d.id} className="cursor-pointer hover:bg-red-50/40 transition-colors" onClick={() => toggleExpand(d.id)}>
+                      <TableCell className="text-muted-foreground text-xs">{idx + 1}</TableCell>
                       <TableCell>
                         {expanded.has(d.id) ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                       </TableCell>
@@ -197,7 +219,7 @@ export default function SalesDeliveriesPage() {
                     </TableRow>
                     {expanded.has(d.id) && (
                       <TableRow key={`${d.id}-items`} className="bg-muted/30">
-                        <TableCell colSpan={8} className="p-0">
+                        <TableCell colSpan={9} className="p-0">
                           <div className="px-10 py-3">
                             <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Items Delivered</p>
                             <table className="text-sm w-full">

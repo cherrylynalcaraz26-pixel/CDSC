@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { PaginationBar } from '@/components/ui/pagination-bar'
 import { Tabs, TabsContent } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
@@ -280,30 +281,30 @@ function OverviewTab() {
     load()
   }, [df.filterFrom, df.filterTo])
 
-  const periodLabel = df.filterFrom || df.filterTo ? `${df.filterFrom ?? '—'} → ${df.filterTo ?? '—'}` : 'All Time'
-
   const cards = [
-    { title: 'PO Amount', value: fmt(summary.totalPO), icon: FileText, color: 'text-blue-600' },
-    { title: 'Total Received', value: fmt(summary.totalReceived), icon: TrendingUp, color: 'text-green-600' },
-    { title: 'Pending Payables', value: fmt(summary.pendingPayables), icon: DollarSign, color: 'text-red-700' },
-    { title: 'EWT Withheld', value: fmt(summary.totalEWT), icon: Receipt, color: 'text-purple-600' },
-    { title: 'Input VAT', value: fmt(summary.totalVAT), icon: Calculator, color: 'text-red-600' },
+    { title: 'PO Amount', value: fmt(summary.totalPO), icon: FileText, grad: 'from-blue-500 to-blue-600', tint: 'from-blue-50', shadow: 'shadow-blue-500/30' },
+    { title: 'Total Received', value: fmt(summary.totalReceived), icon: TrendingUp, grad: 'from-green-500 to-green-600', tint: 'from-green-50', shadow: 'shadow-green-500/30' },
+    { title: 'Pending Payables', value: fmt(summary.pendingPayables), icon: DollarSign, grad: 'from-red-500 to-red-600', tint: 'from-red-50', shadow: 'shadow-red-500/30' },
+    { title: 'EWT Withheld', value: fmt(summary.totalEWT), icon: Receipt, grad: 'from-purple-500 to-purple-600', tint: 'from-purple-50', shadow: 'shadow-purple-500/30' },
+    { title: 'Input VAT', value: fmt(summary.totalVAT), icon: Calculator, grad: 'from-amber-500 to-amber-600', tint: 'from-amber-50', shadow: 'shadow-amber-500/30' },
   ]
 
   return (
     <div className="space-y-6">
       <DateFilterBar df={df} />
-      <p className="text-sm text-muted-foreground">Showing: {periodLabel}</p>
 
       <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         {cards.map(card => (
-          <Card key={card.title}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-xs font-medium text-muted-foreground">{card.title}</CardTitle>
-              <card.icon className={`h-4 w-4 ${card.color}`} />
-            </CardHeader>
-            <CardContent>
-              <div className="text-xl font-bold">{loading ? '—' : card.value}</div>
+          <Card key={card.title} className="relative overflow-hidden border-none">
+            <div className={`absolute inset-0 bg-gradient-to-br ${card.tint} to-transparent`} />
+            <CardContent className="relative pt-4 pb-3 flex items-start justify-between gap-3">
+              <div>
+                <div className="text-xl font-bold">{loading ? '—' : card.value}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">{card.title}</div>
+              </div>
+              <div className={`h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br ${card.grad} flex items-center justify-center shadow-sm ${card.shadow}`}>
+                <card.icon className="h-5 w-5 text-white" />
+              </div>
             </CardContent>
           </Card>
         ))}
@@ -317,6 +318,7 @@ function OverviewTab() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">No.</TableHead>
                 <TableHead>PO Number</TableHead>
                 <TableHead>Supplier</TableHead>
                 <TableHead className="text-right">Gross Amount</TableHead>
@@ -328,16 +330,17 @@ function OverviewTab() {
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Loading…</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Loading…</TableCell></TableRow>
               ) : recentPOs.length === 0 ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">No purchase orders yet</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No purchase orders yet</TableCell></TableRow>
               ) : recentPOs.map((po: any, i: number) => {
                 const gross = po.total_amount ?? 0
                 const vat = po.vat_amount ?? 0
                 const ewt = po.ewt_amount ?? 0
                 const net = po.net_payable ?? 0
                 return (
-                  <TableRow key={po.id ?? i}>
+                  <TableRow key={po.id ?? i} className="hover:bg-red-50/40 transition-colors">
+                    <TableCell className="text-muted-foreground text-xs">{i + 1}</TableCell>
                     <TableCell className="font-mono text-sm">{po.po_number}</TableCell>
                     <TableCell>{po.supplier?.company_name ?? '—'}</TableCell>
                     <TableCell className="text-right">{fmt(gross)}</TableCell>
@@ -956,36 +959,47 @@ function CollectionsTab() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div>
         <p className="text-sm text-muted-foreground">Official Receipts and Collection Receipts management</p>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" title="Calibrate Blank Form Print" onClick={openOrCalib}>
-            <SlidersHorizontal className="h-4 w-4" />
-          </Button>
-          <Button variant="outline" onClick={openBlankFormDialog}>
-            <Printer className="h-4 w-4 mr-2" />Print Blank Form
-          </Button>
-          <Button onClick={() => { resetForm(); setOpen(true) }} className="bg-red-600 hover:bg-red-700">
-            <Plus className="h-4 w-4 mr-2" />New Collection
-          </Button>
-        </div>
       </div>
 
-      <DateFilterBar df={df} />
-
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <Card><CardContent className="pt-5 pb-4">
-          <div className="text-2xl font-bold text-green-600">{loading ? '—' : fmt(totalPosted)}</div>
-          <div className="text-sm text-muted-foreground">Total Collections</div>
-        </CardContent></Card>
-        <Card><CardContent className="pt-5 pb-4">
-          <div className="text-2xl font-bold">{loading ? '—' : countPosted}</div>
-          <div className="text-sm text-muted-foreground">Posted Records</div>
-        </CardContent></Card>
-        <Card><CardContent className="pt-5 pb-4">
-          <div className="text-2xl font-bold text-red-600">{loading ? '—' : countVoided}</div>
-          <div className="text-sm text-muted-foreground">Voided</div>
-        </CardContent></Card>
+        <Card className="relative overflow-hidden border-none">
+          <div className="absolute inset-0 bg-gradient-to-br from-green-50 to-transparent" />
+          <CardContent className="relative pt-4 pb-3 flex items-start justify-between gap-3">
+            <div>
+              <div className="text-2xl font-bold text-green-600">{loading ? '—' : fmt(totalPosted)}</div>
+              <div className="text-xs text-muted-foreground mt-0.5">Total Collections</div>
+            </div>
+            <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center shadow-sm shadow-green-500/30">
+              <TrendingUp className="h-5 w-5 text-white" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="relative overflow-hidden border-none">
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-transparent" />
+          <CardContent className="relative pt-4 pb-3 flex items-start justify-between gap-3">
+            <div>
+              <div className="text-2xl font-bold">{loading ? '—' : countPosted}</div>
+              <div className="text-xs text-muted-foreground mt-0.5">Posted Records</div>
+            </div>
+            <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm shadow-blue-500/30">
+              <CheckCircle2 className="h-5 w-5 text-white" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="relative overflow-hidden border-none">
+          <div className="absolute inset-0 bg-gradient-to-br from-red-50 to-transparent" />
+          <CardContent className="relative pt-4 pb-3 flex items-start justify-between gap-3">
+            <div>
+              <div className="text-2xl font-bold text-red-600">{loading ? '—' : countVoided}</div>
+              <div className="text-xs text-muted-foreground mt-0.5">Voided</div>
+            </div>
+            <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center shadow-sm shadow-red-500/30">
+              <AlertTriangle className="h-5 w-5 text-white" />
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <Card>
@@ -1088,6 +1102,21 @@ function CollectionsTab() {
         </CardContent>
       </Card>
 
+      <div className="flex items-end gap-3 flex-wrap justify-between">
+        <DateFilterBar df={df} />
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" title="Calibrate Blank Form Print" onClick={openOrCalib}>
+            <SlidersHorizontal className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" onClick={openBlankFormDialog}>
+            <Printer className="h-4 w-4 mr-2" />Print Blank Form
+          </Button>
+          <Button onClick={() => { resetForm(); setOpen(true) }} className="bg-red-600 hover:bg-red-700">
+            <Plus className="h-4 w-4 mr-2" />New Collection
+          </Button>
+        </div>
+      </div>
+
       <Card>
         <CardHeader className="pb-3">
           <div className="grid grid-cols-1 sm:grid-cols-3 items-center gap-3">
@@ -1115,7 +1144,7 @@ function CollectionsTab() {
             <div className="hidden sm:block" />
           </div>
         </CardHeader>
-        <CardContent className="p-0">
+        <CardContent className="p-0 overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -1142,7 +1171,7 @@ function CollectionsTab() {
                   {clientFilter ? `No collections found for "${clientFilter}".` : 'No collections yet. Click New Collection to record one.'}
                 </TableCell></TableRow>
               ) : pagedRecords.map((r, i) => (
-                <TableRow key={r.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setViewRecord(r)}>
+                <TableRow key={r.id} className="cursor-pointer hover:bg-red-50/40 transition-colors" onClick={() => setViewRecord(r)}>
                   <TableCell className="text-sm text-muted-foreground">{(page - 1) * PAGE_SIZE + i + 1}</TableCell>
                   <TableCell className="font-mono text-xs font-semibold text-red-600">{r.or_number ?? '—'}</TableCell>
                   <TableCell className="text-sm whitespace-nowrap">
@@ -1201,25 +1230,7 @@ function CollectionsTab() {
               <span className="text-muted-foreground">
                 Showing {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, filteredRecords.length)} of {filteredRecords.length}
               </span>
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setPage(p => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="px-3 py-1.5 rounded-md border text-sm font-medium disabled:opacity-40 hover:bg-muted transition-colors"
-                >← Prev</button>
-                {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
-                  <button
-                    key={p}
-                    onClick={() => setPage(p)}
-                    className={`w-8 h-8 rounded-md text-sm font-medium transition-colors ${p === page ? 'bg-red-600 text-white' : 'border hover:bg-muted'}`}
-                  >{p}</button>
-                ))}
-                <button
-                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                  disabled={page === totalPages}
-                  className="px-3 py-1.5 rounded-md border text-sm font-medium disabled:opacity-40 hover:bg-muted transition-colors"
-                >Next →</button>
-              </div>
+              <PaginationBar page={page} totalPages={totalPages} onPageChange={setPage} />
             </div>
           )}
         </CardContent>

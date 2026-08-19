@@ -899,13 +899,9 @@ export default function CSIMonitoringPage() {
           <h1 className="text-2xl font-semibold">CSI Monitoring</h1>
           <p className="text-muted-foreground text-sm">Charge Sales Invoice records</p>
         </div>
-        {open ? (
+        {open && (
           <Button variant="outline" onClick={handleCancelClick}>
             <X className="h-4 w-4 mr-2" />Cancel
-          </Button>
-        ) : (
-          <Button onClick={openAdd} className="bg-red-600 hover:bg-red-700">
-            <Plus className="h-4 w-4 mr-2" /> New Record
           </Button>
         )}
       </div>
@@ -1494,25 +1490,31 @@ export default function CSIMonitoringPage() {
         )
       })()}
 
-      {!open && <div className="flex flex-wrap gap-3 items-center">
-        <Select value={clientFilter || '__all__'} onValueChange={v => setClientFilter(!v || v === '__all__' ? '' : v)}>
-          <SelectTrigger className="h-9 w-72 text-sm">
-            <SelectValue className="truncate">{(v: string) => v === '__all__' ? 'Client' : v}</SelectValue>
-          </SelectTrigger>
-          <SelectContent className="min-w-[320px]">
-            <SelectItem value="__all__">All Clients</SelectItem>
-            {clientOptions.map(c => <SelectItem key={c.id} value={c.company_name}>{c.company_name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={yearFilter} onValueChange={v => setYearFilter(v ?? 'all')}>
-          <SelectTrigger className="h-9 w-32 text-sm">
-            <SelectValue>{(v: string) => v === 'all' ? 'Filter by Year' : v}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Years</SelectItem>
-            {availableYears.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
-          </SelectContent>
-        </Select>
+      {!open && <div className="flex flex-wrap gap-3 items-end">
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Client</Label>
+          <Select value={clientFilter || '__all__'} onValueChange={v => setClientFilter(!v || v === '__all__' ? '' : v)}>
+            <SelectTrigger className="h-9 w-72 text-sm">
+              <SelectValue className="truncate">{(v: string) => v === '__all__' ? 'Client' : v}</SelectValue>
+            </SelectTrigger>
+            <SelectContent className="min-w-[320px]">
+              <SelectItem value="__all__">All Clients</SelectItem>
+              {clientOptions.map(c => <SelectItem key={c.id} value={c.company_name}>{c.company_name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Year</Label>
+          <Select value={yearFilter} onValueChange={v => setYearFilter(v ?? 'all')}>
+            <SelectTrigger className="h-9 w-32 text-sm">
+              <SelectValue>{(v: string) => v === 'all' ? 'Filter by Year' : v}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Years</SelectItem>
+              {availableYears.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
         {clientFilter && (() => {
           const sel = clientOptions.find(c => c.company_name === clientFilter)
           return sel ? (
@@ -1531,26 +1533,32 @@ export default function CSIMonitoringPage() {
             </div>
           ) : null
         })()}
-        <div className="flex border rounded-md overflow-hidden">
-          <button
-            onClick={() => setViewMode('by-si')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm ${viewMode === 'by-si' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
-          >
-            <LayoutGrid className="h-3.5 w-3.5" /> By SI
-          </button>
-          <button
-            onClick={() => setViewMode('all-items')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm border-l ${viewMode === 'all-items' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
-          >
-            <List className="h-3.5 w-3.5" /> All Items
-          </button>
-          <button
-            onClick={() => setViewMode('cross-ref')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm border-l ${viewMode === 'cross-ref' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
-          >
-            <Search className="h-3.5 w-3.5" /> CSI vs DR
-          </button>
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">View</Label>
+          <div className="flex border rounded-md overflow-hidden">
+            <button
+              onClick={() => setViewMode('by-si')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm ${viewMode === 'by-si' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" /> By SI
+            </button>
+            <button
+              onClick={() => setViewMode('all-items')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm border-l ${viewMode === 'all-items' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
+            >
+              <List className="h-3.5 w-3.5" /> All Items
+            </button>
+            <button
+              onClick={() => setViewMode('cross-ref')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm border-l ${viewMode === 'cross-ref' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
+            >
+              <Search className="h-3.5 w-3.5" /> CSI vs DR
+            </button>
+          </div>
         </div>
+        <Button onClick={openAdd} className="bg-red-600 hover:bg-red-700 ml-auto">
+          <Plus className="h-4 w-4 mr-2" /> New Record
+        </Button>
         {viewMode === 'by-si' && selectedSIs.size > 0 && (
           <div className="flex items-center gap-2">
             <span className="text-xs text-muted-foreground">{selectedSIs.size} selected</span>
@@ -1676,7 +1684,7 @@ export default function CSIMonitoringPage() {
                   ) : pagedSiGroups.map((group, i) => (
                     <Fragment key={group.si_number}>
                       <TableRow
-                        className="cursor-pointer hover:bg-muted/50"
+                        className="cursor-pointer hover:bg-red-50/40 transition-colors"
                         onClick={() => toggleSI(group.si_number)}
                       >
                         <TableCell onClick={e => e.stopPropagation()}>

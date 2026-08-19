@@ -1176,6 +1176,7 @@ export default function QuotationPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10">No.</TableHead>
                   <TableHead>Quote #</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead>Valid Until</TableHead>
@@ -1188,17 +1189,26 @@ export default function QuotationPage() {
               </TableHeader>
               <TableBody>
                 {loading ? (
-                  <TableRow><TableCell colSpan={8} className="text-center py-10">
+                  <TableRow><TableCell colSpan={9} className="text-center py-10">
                     <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                   </TableCell></TableRow>
                 ) : displayedQuotations.length === 0 ? (
-                  <TableRow><TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
+                  <TableRow><TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
                     No quotations match your search.
                   </TableCell></TableRow>
-                ) : displayedQuotations.map(q => {
+                ) : displayedQuotations.map((q, idx) => {
                   const cfg = STATUS_CFG[q.status] ?? { label: q.status, cls: 'bg-gray-100 text-gray-700' }
                   return (
-                    <TableRow key={q.id}>
+                    <TableRow
+                      key={q.id}
+                      className="cursor-pointer hover:bg-red-50/40 transition-colors"
+                      onClick={async () => {
+                        setViewingQ(q)
+                        const { data } = await supabase.from('quotation_items').select('item_name,description,quantity,unit,unit_price,selling_price,total_amount').eq('quotation_id', q.id).order('created_at')
+                        setViewingQItems(data ?? [])
+                      }}
+                    >
+                      <TableCell className="text-muted-foreground text-xs">{idx + 1}</TableCell>
                       <TableCell className="font-mono text-xs font-semibold text-red-600">{q.quote_number}</TableCell>
                       <TableCell className="text-sm">{q.quote_date}</TableCell>
                       <TableCell className="text-sm">{q.valid_until ?? '—'}</TableCell>
@@ -1210,7 +1220,7 @@ export default function QuotationPage() {
                           {cfg.label}
                         </span>
                       </TableCell>
-                      <TableCell>
+                      <TableCell onClick={e => e.stopPropagation()}>
                         <DropdownMenu>
                           <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-accent">
                             <MoreHorizontal className="h-4 w-4" />

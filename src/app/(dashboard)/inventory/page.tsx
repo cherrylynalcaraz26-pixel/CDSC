@@ -975,22 +975,6 @@ export default function InventoryPage() {
           <h1 className="text-2xl font-semibold">Inventory</h1>
           <p className="text-muted-foreground text-sm">Stock balance per client (DR delivered + WH Stock − CSI charged)</p>
         </div>
-        <div className="flex gap-2 shrink-0">
-          <Button
-            variant="outline"
-            onClick={() => {
-              if (!reportOpen) setReportClient(clientFilter !== 'all' ? clientFilter : clients[0] ?? '')
-              setReportOpen(v => !v)
-            }}
-            disabled={rows.length === 0}
-            className={reportOpen ? 'border-red-300 text-red-600 bg-red-50 gap-1.5' : 'border-gray-300 text-gray-700 gap-1.5'}
-          >
-            <FileText className="h-4 w-4" /> {reportOpen ? 'Close Report' : 'Generate Report'}
-          </Button>
-          <Button onClick={openAddDialog} className="bg-red-600 hover:bg-red-700 text-white">
-            <Plus className="h-4 w-4 mr-1.5" /> Add Stock
-          </Button>
-        </div>
       </div>
 
       {/* KPI cards — specific to the active view */}
@@ -1037,49 +1021,86 @@ export default function InventoryPage() {
         </div>
       )}
 
-      {/* View toggle — hidden when report is open */}
-      {!reportOpen && <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex border rounded-md overflow-hidden">
-          <button
-            className={`px-4 py-1.5 text-sm font-medium transition-colors ${viewMode === 'by_client' ? 'bg-red-600 text-white' : 'hover:bg-muted text-muted-foreground'}`}
-            onClick={() => setViewMode('by_client')}
-          >By Client</button>
-          <button
-            className={`px-4 py-1.5 text-sm font-medium transition-colors ${viewMode === 'by_item' ? 'bg-red-600 text-white' : 'hover:bg-muted text-muted-foreground'}`}
-            onClick={() => setViewMode('by_item')}
-          >By Item</button>
-          <button
-            className={`px-4 py-1.5 text-sm font-medium transition-colors ${viewMode === 'by_warehouse' ? 'bg-red-600 text-white' : 'hover:bg-muted text-muted-foreground'}`}
-            onClick={() => setViewMode('by_warehouse')}
-          >By Warehouse</button>
+      {/* View toggle + Filters + Actions — hidden when report is open */}
+      {!reportOpen && <div className="flex items-end gap-3 flex-wrap">
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">View</Label>
+          <div className="flex border rounded-md overflow-hidden">
+            <button
+              className={`px-4 py-1.5 text-sm font-medium transition-colors ${viewMode === 'by_client' ? 'bg-red-600 text-white' : 'hover:bg-muted text-muted-foreground'}`}
+              onClick={() => setViewMode('by_client')}
+            >By Client</button>
+            <button
+              className={`px-4 py-1.5 text-sm font-medium transition-colors ${viewMode === 'by_item' ? 'bg-red-600 text-white' : 'hover:bg-muted text-muted-foreground'}`}
+              onClick={() => setViewMode('by_item')}
+            >By Item</button>
+            <button
+              className={`px-4 py-1.5 text-sm font-medium transition-colors ${viewMode === 'by_warehouse' ? 'bg-red-600 text-white' : 'hover:bg-muted text-muted-foreground'}`}
+              onClick={() => setViewMode('by_warehouse')}
+            >By Warehouse</button>
+          </div>
+        </div>
+        {viewMode !== 'by_warehouse' && (
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Client</Label>
+            <Select value={clientFilter} onValueChange={v => setClientFilter(v ?? 'all')}>
+              <SelectTrigger className="w-72">
+                <SelectValue className="truncate">{(v: string) => v === 'all' ? 'Client' : v}</SelectValue>
+              </SelectTrigger>
+              <SelectContent className="min-w-[320px]">
+                <SelectItem value="all">All Clients</SelectItem>
+                {clients.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Status</Label>
+          <Select value={statusFilter} onValueChange={v => setStatusFilter(v ?? 'all')}>
+            <SelectTrigger className="w-40">
+              <SelectValue>{(v: string) => v === 'all' ? 'Status' : v === 'in_stock' ? 'In Stock' : v === 'balanced' ? 'Balanced' : v === 'deficit' ? 'Deficit' : v}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Statuses</SelectItem>
+              <SelectItem value="in_stock">In Stock</SelectItem>
+              <SelectItem value="balanced">Balanced</SelectItem>
+              <SelectItem value="deficit">Deficit</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex gap-2 ml-auto">
+          <Button
+            variant="outline"
+            onClick={() => {
+              if (!reportOpen) setReportClient(clientFilter !== 'all' ? clientFilter : clients[0] ?? '')
+              setReportOpen(v => !v)
+            }}
+            disabled={rows.length === 0}
+            className={reportOpen ? 'border-red-300 text-red-600 bg-red-50 gap-1.5' : 'border-gray-300 text-gray-700 gap-1.5'}
+          >
+            <FileText className="h-4 w-4" /> {reportOpen ? 'Close Report' : 'Generate Report'}
+          </Button>
+          <Button onClick={openAddDialog} className="bg-red-600 hover:bg-red-700 text-white">
+            <Plus className="h-4 w-4 mr-1.5" /> Add Stock
+          </Button>
         </div>
       </div>}
 
-      {/* Filters — hidden when report is open */}
-      {!reportOpen && <div className="flex gap-3 flex-wrap items-center">
-        {viewMode !== 'by_warehouse' && (
-          <Select value={clientFilter} onValueChange={v => setClientFilter(v ?? 'all')}>
-            <SelectTrigger className="w-72">
-              <SelectValue className="truncate">{(v: string) => v === 'all' ? 'Client' : v}</SelectValue>
-            </SelectTrigger>
-            <SelectContent className="min-w-[320px]">
-              <SelectItem value="all">All Clients</SelectItem>
-              {clients.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        )}
-        <Select value={statusFilter} onValueChange={v => setStatusFilter(v ?? 'all')}>
-          <SelectTrigger className="w-40">
-            <SelectValue>{(v: string) => v === 'all' ? 'Status' : v === 'in_stock' ? 'In Stock' : v === 'balanced' ? 'Balanced' : v === 'deficit' ? 'Deficit' : v}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Statuses</SelectItem>
-            <SelectItem value="in_stock">In Stock</SelectItem>
-            <SelectItem value="balanced">Balanced</SelectItem>
-            <SelectItem value="deficit">Deficit</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>}
+      {/* Actions — stay visible even while the report is open, so it can be closed */}
+      {reportOpen && (
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={() => setReportOpen(v => !v)}
+            className="border-red-300 text-red-600 bg-red-50 gap-1.5"
+          >
+            <FileText className="h-4 w-4" /> Close Report
+          </Button>
+          <Button onClick={openAddDialog} className="bg-red-600 hover:bg-red-700 text-white">
+            <Plus className="h-4 w-4 mr-1.5" /> Add Stock
+          </Button>
+        </div>
+      )}
 
       {/* Client inventory summary box — hidden when report is open or viewing By Warehouse */}
       {!reportOpen && viewMode !== 'by_warehouse' && clientFilter !== 'all' && (

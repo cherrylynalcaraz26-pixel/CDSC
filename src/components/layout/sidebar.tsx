@@ -48,7 +48,7 @@ const navigation: NavItem[] = [
     label: 'Accounting', icon: Calculator,
     children: [
       { label: 'Overview', href: '/accounting?tab=overview', icon: Calculator },
-      { label: 'Collections', href: '/accounting?tab=collections', icon: Receipt },
+      { label: 'Accounting - Collections', href: '/accounting?tab=collections', icon: Receipt },
       { label: 'BIR Compliance', href: '/accounting?tab=bir', icon: FileText },
     ],
   },
