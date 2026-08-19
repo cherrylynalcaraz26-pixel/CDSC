@@ -19,11 +19,12 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
-import { Plus, Search, MoreHorizontal, Loader2, Truck, Trash2, LayoutGrid, List, X, Printer, SlidersHorizontal, FileOutput } from 'lucide-react'
+import { Plus, Search, MoreHorizontal, Loader2, Truck, Trash2, LayoutGrid, List, X, Printer, SlidersHorizontal, FileOutput, Camera } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
 import { usePersistedState } from '@/lib/use-persisted-state'
+import { uploadImageToDrive } from '@/lib/upload-image'
 
 interface Supplier { id: string; company_name: string }
 interface Client {
@@ -95,6 +96,7 @@ interface DRLog {
   status: string
   received_by_name: string | null
   created_at: string
+  attachment_url: string | null
 }
 
 interface DRItem {
@@ -163,6 +165,8 @@ export default function DRLogsPage() {
   const [drActiveTab, setDrActiveTab] = useState<'form' | 'preview'>('form')
   const [companyInfo, setCompanyInfo] = useState<{ company_name: string; address: string; phone: string; email: string; tin: string } | null>(null)
   const [itemSearches, setItemSearches] = useState<Record<number, string>>({})
+  const [previewAttachmentUrl, setPreviewAttachmentUrl] = useState<string | null>(null)
+  const [uploadingAttachmentDr, setUploadingAttachmentDr] = useState<string | null>(null)
   const [itemDropdowns, setItemDropdowns] = useState<Record<number, boolean>>({})
   const [drNumberOptions, setDrNumberOptions] = useState<{ value: string; tag: 'current' | 'next' | 'missing' }[]>([])
   const [drNumberDropdownOpen, setDrNumberDropdownOpen] = useState(false)
@@ -433,6 +437,21 @@ export default function DRLogsPage() {
 
   function toggleExpand(id: string) {
     setExpandedId(prev => prev === id ? null : id)
+  }
+
+  async function uploadDrAttachment(drNumber: string, file: File) {
+    setUploadingAttachmentDr(drNumber)
+    try {
+      const url = await uploadImageToDrive(file, { displayName: `DR-${drNumber}`, folder: 'DR Attachments' })
+      const { error } = await supabase.from('dr_logs').update({ attachment_url: url }).eq('dr_number', drNumber)
+      if (error) { toast.error(error.message); return }
+      setLogs(prev => prev.map(l => l.dr_number === drNumber ? { ...l, attachment_url: url } : l))
+      toast.success(`Photo attached to DR ${drNumber}`)
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to upload image')
+    } finally {
+      setUploadingAttachmentDr(null)
+    }
   }
 
   // Suggests the next sequential DR number after the highest one used so far (within its
@@ -948,19 +967,20 @@ export default function DRLogsPage() {
                     <TableHead>Delivered To</TableHead>
                     <TableHead className="text-right">Total Qty</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead className="w-16 text-center">Photo</TableHead>
                     <TableHead className="w-10" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-10">
+                      <TableCell colSpan={8} className="text-center py-10">
                         <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                       </TableCell>
                     </TableRow>
                   ) : filtered.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                      <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
                         No DR logs found. Click <strong>New DR Log</strong> to add one.
                       </TableCell>
                     </TableRow>
@@ -987,6 +1007,37 @@ export default function DRLogsPage() {
                           <TableCell>
                             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${sc.cls}`}>{sc.label}</span>
                           </TableCell>
+                          <TableCell className="text-center" onClick={e => e.stopPropagation()}>
+                            {log.attachment_url ? (
+                              <button
+                                type="button"
+                                onClick={() => setPreviewAttachmentUrl(log.attachment_url)}
+                                className="h-9 w-9 mx-auto rounded border overflow-hidden block"
+                                title="View attached photo"
+                              >
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={log.attachment_url} alt={`DR ${log.dr_number} attachment`} className="h-full w-full object-cover" />
+                              </button>
+                            ) : (
+                              <label className="h-9 w-9 mx-auto rounded border border-dashed flex items-center justify-center text-muted-foreground hover:text-blue-600 hover:border-blue-400 cursor-pointer transition-colors"
+                                title="Upload photo">
+                                {uploadingAttachmentDr === log.dr_number
+                                  ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                  : <Camera className="h-3.5 w-3.5" />}
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  disabled={uploadingAttachmentDr !== null}
+                                  onChange={e => {
+                                    const f = e.target.files?.[0]
+                                    if (f) uploadDrAttachment(log.dr_number, f)
+                                    e.target.value = ''
+                                  }}
+                                />
+                              </label>
+                            )}
+                          </TableCell>
                           <TableCell onClick={e => e.stopPropagation()}>
                             <DropdownMenu>
                               <DropdownMenuTrigger className="h-8 w-8 flex items-center justify-center rounded hover:bg-accent">
@@ -1004,7 +1055,7 @@ export default function DRLogsPage() {
 
                         {isExpanded && (
                           <TableRow key={`${log.id}-expanded`} className="bg-muted/30 hover:bg-muted/30">
-                            <TableCell colSpan={7} className="py-3 px-6">
+                            <TableCell colSpan={8} className="py-3 px-6">
                               <div className="space-y-3">
                                 <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
                                   {log.po_number && <span>SO: <span className="font-mono text-foreground">{log.po_number}</span></span>}
@@ -1521,6 +1572,19 @@ export default function DRLogsPage() {
             <Button variant="outline" onClick={() => setDeleteId(null)}>Cancel</Button>
             <Button variant="destructive" onClick={confirmDelete}>Delete</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Attachment Preview */}
+      <Dialog open={previewAttachmentUrl !== null} onOpenChange={o => { if (!o) setPreviewAttachmentUrl(null) }}>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>DR Attachment</DialogTitle>
+          </DialogHeader>
+          {previewAttachmentUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={previewAttachmentUrl} alt="DR attachment" className="w-full max-h-[70vh] object-contain rounded-lg border" />
+          )}
         </DialogContent>
       </Dialog>
 
