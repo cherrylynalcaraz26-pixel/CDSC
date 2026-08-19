@@ -829,22 +829,54 @@ export default function QuotationPage() {
 
       {!open && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card><CardContent className="pt-5 pb-4">
-            <div className="text-2xl font-bold">{loading ? '—' : counts.total}</div>
-            <div className="text-sm text-muted-foreground">Total Quotes</div>
-          </CardContent></Card>
-          <Card><CardContent className="pt-5 pb-4">
-            <div className="text-2xl font-bold text-gray-600">{loading ? '—' : counts.draft}</div>
-            <div className="text-sm text-muted-foreground">Draft</div>
-          </CardContent></Card>
-          <Card><CardContent className="pt-5 pb-4">
-            <div className="text-2xl font-bold text-blue-600">{loading ? '—' : counts.sent}</div>
-            <div className="text-sm text-muted-foreground">Sent</div>
-          </CardContent></Card>
-          <Card><CardContent className="pt-5 pb-4">
-            <div className="text-2xl font-bold text-green-600">{loading ? '—' : counts.accepted}</div>
-            <div className="text-sm text-muted-foreground">Accepted</div>
-          </CardContent></Card>
+          <Card className="relative overflow-hidden border-none">
+            <div className="absolute inset-0 bg-gradient-to-br from-red-50 to-transparent" />
+            <CardContent className="relative pt-5 pb-4 flex items-start justify-between gap-3">
+              <div>
+                <div className="text-2xl font-bold">{loading ? '—' : counts.total}</div>
+                <div className="text-sm text-muted-foreground mt-0.5">Total Quotes</div>
+              </div>
+              <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center shadow-sm shadow-red-500/30">
+                <ClipboardList className="h-5 w-5 text-white" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="relative overflow-hidden border-none">
+            <div className="absolute inset-0 bg-gradient-to-br from-slate-50 to-transparent" />
+            <CardContent className="relative pt-5 pb-4 flex items-start justify-between gap-3">
+              <div>
+                <div className="text-2xl font-bold text-gray-600">{loading ? '—' : counts.draft}</div>
+                <div className="text-sm text-muted-foreground mt-0.5">Draft</div>
+              </div>
+              <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-slate-400 to-slate-500 flex items-center justify-center shadow-sm shadow-slate-500/30">
+                <FileText className="h-5 w-5 text-white" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="relative overflow-hidden border-none">
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-transparent" />
+            <CardContent className="relative pt-5 pb-4 flex items-start justify-between gap-3">
+              <div>
+                <div className="text-2xl font-bold text-blue-600">{loading ? '—' : counts.sent}</div>
+                <div className="text-sm text-muted-foreground mt-0.5">Sent</div>
+              </div>
+              <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm shadow-blue-500/30">
+                <Send className="h-5 w-5 text-white" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="relative overflow-hidden border-none">
+            <div className="absolute inset-0 bg-gradient-to-br from-green-50 to-transparent" />
+            <CardContent className="relative pt-5 pb-4 flex items-start justify-between gap-3">
+              <div>
+                <div className="text-2xl font-bold text-green-600">{loading ? '—' : counts.accepted}</div>
+                <div className="text-sm text-muted-foreground mt-0.5">Accepted</div>
+              </div>
+              <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center shadow-sm shadow-green-500/30">
+                <CheckCircle className="h-5 w-5 text-white" />
+              </div>
+            </CardContent>
+          </Card>
         </div>
       )}
 

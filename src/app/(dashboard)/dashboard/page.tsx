@@ -111,18 +111,32 @@ const STATUS_COLORS: Record<string, string> = {
   closed:     'bg-gray-100 text-gray-600',
 }
 
+const STAT_COLOR_GRAD: Record<string, { grad: string; tint: string; shadow: string }> = {
+  blue:   { grad: 'from-blue-500 to-blue-600',     tint: 'from-blue-50',   shadow: 'shadow-blue-500/30' },
+  green:  { grad: 'from-green-500 to-green-600',   tint: 'from-green-50',  shadow: 'shadow-green-500/30' },
+  yellow: { grad: 'from-amber-500 to-amber-600',   tint: 'from-amber-50',  shadow: 'shadow-amber-500/30' },
+  purple: { grad: 'from-purple-500 to-purple-600', tint: 'from-purple-50', shadow: 'shadow-purple-500/30' },
+  red:    { grad: 'from-red-500 to-red-600',       tint: 'from-red-50',   shadow: 'shadow-red-500/30' },
+  gray:   { grad: 'from-slate-400 to-slate-500',   tint: 'from-slate-50', shadow: 'shadow-slate-500/30' },
+}
+
 function StatCard({ title, value, icon: Icon, sub, color, href }: {
   title: string; value: string | number; icon: any; sub?: string; color?: string; href?: string
 }) {
+  const family = color?.match(/text-(\w+)-/)?.[1] ?? 'gray'
+  const { grad, tint, shadow } = STAT_COLOR_GRAD[family] ?? STAT_COLOR_GRAD.gray
   const inner = (
-    <Card className={href ? 'hover:shadow-md transition-shadow cursor-pointer' : ''}>
-      <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0">
-        <CardTitle className="text-xs font-medium text-muted-foreground">{title}</CardTitle>
-        <Icon className={`h-4 w-4 ${color ?? 'text-muted-foreground'}`} />
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
-        {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
+    <Card className={`relative overflow-hidden border-none ${href ? 'hover:shadow-lg transition-shadow cursor-pointer' : ''}`}>
+      <div className={`absolute inset-0 bg-gradient-to-br ${tint} to-transparent`} />
+      <CardContent className="relative pt-4 pb-3 flex items-start justify-between gap-3">
+        <div>
+          <div className="text-2xl font-bold">{value}</div>
+          <div className="text-xs text-muted-foreground mt-0.5">{title}</div>
+          {sub && <p className="text-xs text-muted-foreground mt-0.5">{sub}</p>}
+        </div>
+        <div className={`h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br ${grad} flex items-center justify-center shadow-sm ${shadow}`}>
+          <Icon className="h-5 w-5 text-white" />
+        </div>
       </CardContent>
     </Card>
   )
