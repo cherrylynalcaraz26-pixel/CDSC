@@ -20,7 +20,7 @@ import { Badge } from '@/components/ui/badge'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Search, Loader2, Pencil, AlertTriangle, Plus, MoreHorizontal, Trash2, FileText, Printer, Mail, Send, Truck, Package } from 'lucide-react'
+import { Search, Loader2, Pencil, AlertTriangle, Plus, MoreHorizontal, Trash2, FileText, Printer, Mail, Send, Truck, Package, History, ArrowDownCircle, ArrowUpCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSearchContext } from '@/context/search-context'
 import { sendEmail } from '@/lib/send-email'
@@ -65,6 +65,20 @@ interface ItemOption {
   cost: number | null; selling_price: number | null; status: string
 }
 
+type LedgerSourceType = 'po_receiving' | 'manual_add' | 'manual_edit' | 'dr_delivery' | 'return_to_warehouse'
+interface LedgerRow {
+  id: string; change_qty: number; source_type: LedgerSourceType
+  reference_no: string | null; client_name: string | null; notes: string | null; created_at: string
+}
+
+const LEDGER_SOURCE_LABEL: Record<LedgerSourceType, string> = {
+  po_receiving: 'Purchase Order',
+  manual_add: 'Manually Added',
+  manual_edit: 'Manual Correction',
+  dr_delivery: 'Delivered to Client',
+  return_to_warehouse: 'Returned to Warehouse',
+}
+
 export default function InventoryPage() {
   const supabase = createClient()
   const { query: search } = useSearchContext()
@@ -84,10 +98,14 @@ export default function InventoryPage() {
 
   const [warehouseRows, setWarehouseRows] = useState<{id: string; client_name: string | null; item_name: string; unit: string; quantity: number; notes: string | null; created_at: string; hasClientRecord: boolean}[]>([])
   const [warehouseUpdateOpen, setWarehouseUpdateOpen] = useState(false)
-  const [warehouseUpdateRow, setWarehouseUpdateRow] = useState<{id: string; item_name: string; unit: string; notes: string | null} | null>(null)
+  const [warehouseUpdateRow, setWarehouseUpdateRow] = useState<{id: string; item_name: string; unit: string; notes: string | null; quantity: number} | null>(null)
   const [warehouseUpdateQty, setWarehouseUpdateQty] = useState('')
   const [warehouseUpdateNotes, setWarehouseUpdateNotes] = useState('')
   const [warehouseUpdateSaving, setWarehouseUpdateSaving] = useState(false)
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [historyItemName, setHistoryItemName] = useState('')
+  const [historyRows, setHistoryRows] = useState<LedgerRow[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
   const [wsMarkDelivered, setWsMarkDelivered] = useState(false)
   const [wsDeliverClientId, setWsDeliverClientId] = useState('')
   const [wsDeliverQty, setWsDeliverQty] = useState('')
@@ -430,8 +448,21 @@ export default function InventoryPage() {
 
   function uomName(code: string) { return uomMap[code] || code }
 
+  async function openHistory(itemName: string) {
+    setHistoryItemName(itemName)
+    setHistoryOpen(true)
+    setHistoryLoading(true)
+    const { data } = await supabase
+      .from('warehouse_stock_ledger')
+      .select('id, change_qty, source_type, reference_no, client_name, notes, created_at')
+      .eq('item_name', itemName)
+      .order('created_at', { ascending: false })
+    setHistoryRows((data ?? []) as LedgerRow[])
+    setHistoryLoading(false)
+  }
+
   function openWarehouseUpdate(row: typeof warehouseRows[0]) {
-    setWarehouseUpdateRow({ id: row.id, item_name: row.item_name, unit: row.unit, notes: row.notes })
+    setWarehouseUpdateRow({ id: row.id, item_name: row.item_name, unit: row.unit, notes: row.notes, quantity: row.quantity })
     setWarehouseUpdateQty(String(row.quantity))
     setWarehouseUpdateNotes(row.notes ?? '')
     setWsMarkDelivered(false)
@@ -461,6 +492,14 @@ export default function InventoryPage() {
       if (error) { toast.error(error.message); setWarehouseUpdateSaving(false); return }
 
       const deliverClient = clientOptions.find(c => c.id === wsDeliverClientId)
+      await supabase.from('warehouse_stock_ledger').insert({
+        item_name: warehouseUpdateRow.item_name,
+        unit: warehouseUpdateRow.unit || null,
+        change_qty: -qty,
+        source_type: 'manual_edit',
+        client_name: deliverClient?.company_name ?? null,
+        notes: 'Manually marked delivered from Warehouse',
+      })
       if (deliverClient) {
         const { data: ciRow } = await supabase.from('client_inventory').select('id, quantity_on_hand').eq('client_id', deliverClient.id).eq('item_name', warehouseUpdateRow.item_name).maybeSingle()
         if (ciRow) {
@@ -493,13 +532,24 @@ export default function InventoryPage() {
       return
     }
 
+    const newQty = Number(warehouseUpdateQty)
+    const delta = newQty - warehouseUpdateRow.quantity
     const { error } = await supabase.from('warehouse_stock').update({
-      quantity: Number(warehouseUpdateQty),
+      quantity: newQty,
       notes: warehouseUpdateNotes.trim() || null,
     }).eq('id', warehouseUpdateRow.id)
     if (error) {
       toast.error(error.message)
     } else {
+      if (delta !== 0) {
+        await supabase.from('warehouse_stock_ledger').insert({
+          item_name: warehouseUpdateRow.item_name,
+          unit: warehouseUpdateRow.unit || null,
+          change_qty: delta,
+          source_type: 'manual_edit',
+          notes: warehouseUpdateNotes.trim() || 'Quantity corrected manually',
+        })
+      }
       toast.success('Warehouse stock updated')
       setWarehouseUpdateOpen(false)
       load()
@@ -580,7 +630,11 @@ export default function InventoryPage() {
   // (e.g. two POs for the same item) creates a second, separate row instead of
   // accumulating, and the warehouse total silently loses whatever was already there.
   // Mirrors the same check-then-update-or-insert pattern the Receiving page uses.
-  async function addToWarehouseStock(rows: { item_name: string; unit: string; quantity: number; notes: string | null }[]) {
+  async function addToWarehouseStock(
+    rows: { item_name: string; unit: string; quantity: number; notes: string | null }[],
+    sourceType: 'po_receiving' | 'manual_add',
+    referenceNo: string | null,
+  ) {
     for (const row of rows) {
       if (row.quantity <= 0) continue
       const { data: wsRow } = await supabase
@@ -606,6 +660,14 @@ export default function InventoryPage() {
         })
         if (error) return error.message
       }
+      await supabase.from('warehouse_stock_ledger').insert({
+        item_name: row.item_name,
+        unit: row.unit,
+        change_qty: row.quantity,
+        source_type: sourceType,
+        reference_no: referenceNo,
+        notes: row.notes,
+      })
     }
     return null
   }
@@ -619,7 +681,8 @@ export default function InventoryPage() {
       quantity: Number(it.quantity) || 0,
       notes: addNotes.trim() || null,
     }))
-    const error = await addToWarehouseStock(rows)
+    const poNumber = addPoOptions.find(p => p.id === addPoId)?.po_number ?? null
+    const error = await addToWarehouseStock(rows, 'po_receiving', poNumber)
     if (error) {
       toast.error(error)
     } else {
@@ -640,7 +703,8 @@ export default function InventoryPage() {
       quantity: Number(it.quantity),
       notes: addNotes.trim() || null,
     }))
-    const error = await addToWarehouseStock(rows)
+    const poNumber = addPoId ? (addPoOptions.find(p => p.id === addPoId)?.po_number ?? null) : null
+    const error = await addToWarehouseStock(rows, addPoId ? 'po_receiving' : 'manual_add', poNumber)
     if (error) {
       toast.error(error)
     } else {
@@ -1105,6 +1169,9 @@ export default function InventoryPage() {
                               <MoreHorizontal className="h-4 w-4" />
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => openHistory(r.item_name)}>
+                                <History className="h-3.5 w-3.5 mr-2 text-slate-600" /> History
+                              </DropdownMenuItem>
                               <DropdownMenuItem onClick={() => openWarehouseUpdate(r)}>
                                 <Pencil className="h-3.5 w-3.5 mr-2 text-blue-600" /> Edit
                               </DropdownMenuItem>
@@ -1657,6 +1724,56 @@ export default function InventoryPage() {
           </>
         )
       })()}
+
+      <Dialog open={historyOpen} onOpenChange={o => { if (!o) setHistoryOpen(false) }}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="h-4 w-4 text-slate-600" /> Stock History — {historyItemName}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Reference / Destination</TableHead>
+                  <TableHead className="text-right">Qty Change</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {historyLoading ? (
+                  <TableRow><TableCell colSpan={4} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
+                ) : historyRows.length === 0 ? (
+                  <TableRow><TableCell colSpan={4} className="text-center py-10 text-muted-foreground">No recorded history for this item yet — its current quantity predates this tracking.</TableCell></TableRow>
+                ) : historyRows.map(h => (
+                  <TableRow key={h.id}>
+                    <TableCell className="text-sm whitespace-nowrap">{new Date(h.created_at).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })}</TableCell>
+                    <TableCell className="text-sm">
+                      <span className="inline-flex items-center gap-1">
+                        {h.change_qty >= 0
+                          ? <ArrowUpCircle className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                          : <ArrowDownCircle className="h-3.5 w-3.5 text-red-600 shrink-0" />}
+                        {LEDGER_SOURCE_LABEL[h.source_type]}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {[h.reference_no, h.client_name].filter(Boolean).join(' → ') || h.notes || '—'}
+                    </TableCell>
+                    <TableCell className={`text-right text-sm font-semibold ${h.change_qty >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                      {h.change_qty >= 0 ? '+' : ''}{h.change_qty}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setHistoryOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={warehouseUpdateOpen} onOpenChange={o => { if (!o) setWarehouseUpdateOpen(false) }}>
         <DialogContent className="sm:max-w-xl">

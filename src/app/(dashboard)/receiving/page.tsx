@@ -316,6 +316,13 @@ export default function ReceivingPage() {
             client_name: null,
           })
         }
+        await supabase.from('warehouse_stock_ledger').insert({
+          item_name: it.item_name,
+          unit: it.unit_of_measure ?? '',
+          change_qty: qty,
+          source_type: 'po_receiving',
+          reference_no: selectedPO,
+        })
       }
     }
 
@@ -434,6 +441,13 @@ export default function ReceivingPage() {
         } else {
           await supabase.from('warehouse_stock').insert({ client_name: null, item_name: itemName, unit: it.unit || null, quantity: qty })
         }
+        await supabase.from('warehouse_stock_ledger').insert({
+          item_name: itemName,
+          unit: it.unit || null,
+          change_qty: qty,
+          source_type: 'return_to_warehouse',
+          reference_no: data.return_number,
+        })
         if (returnClientId) {
           const { data: ciRow } = await supabase.from('client_inventory').select('id, quantity_on_hand').eq('client_id', returnClientId).eq('item_name', itemName).maybeSingle()
           if (ciRow) {

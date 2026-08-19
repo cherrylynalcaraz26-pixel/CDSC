@@ -629,6 +629,15 @@ export default function DRLogsPage() {
             quantity: Number(wsRow.quantity) + qty,
             updated_at: new Date().toISOString(),
           }).eq('id', wsRow.id)
+          await supabase.from('warehouse_stock_ledger').insert({
+            item_name: it.item_name.trim(),
+            unit: it.unit || null,
+            change_qty: qty,
+            source_type: 'dr_delivery',
+            reference_no: drNumber,
+            client_name: clientName,
+            notes: 'Reversal of previous delivery (DR edited)',
+          })
         }
       }
     }
@@ -650,6 +659,14 @@ export default function DRLogsPage() {
             quantity: Math.max(0, Number(wsRow.quantity) - qty),
             updated_at: new Date().toISOString(),
           }).eq('id', wsRow.id)
+          await supabase.from('warehouse_stock_ledger').insert({
+            item_name: it.item_name.trim(),
+            unit: it.unit || null,
+            change_qty: -qty,
+            source_type: 'dr_delivery',
+            reference_no: drNumber,
+            client_name: clientName,
+          })
         }
       }
     }
