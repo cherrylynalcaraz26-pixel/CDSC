@@ -48,6 +48,7 @@ interface ItemOption { item_code: string; item_name: string; unit_of_measure: st
 interface ClientOption { id: string; company_name: string; payment_terms?: string | null }
 interface SupplierOption { id: string; company_name: string }
 interface SystemSettings { company_name: string; address: string; phone: string; email: string; tin: string; logo_url?: string }
+interface QuickPOItem { lineIdx: number; item_name: string; unit: string; quantity: string; unit_cost: string; include: boolean }
 
 const emptyLine = (): SOLine => ({ item_name: '', quantity: '', unit: '', unit_price: '', selling_price: '' })
 const today = () => new Date().toISOString().split('T')[0]
@@ -61,10 +62,8 @@ export default function SalesOrdersPage() {
   const [clients, setClients] = useState<ClientOption[]>([])
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([])
   const [quickPOOpen, setQuickPOOpen] = useState(false)
-  const [quickPOLineIdx, setQuickPOLineIdx] = useState<number | null>(null)
+  const [quickPOItems, setQuickPOItems] = useState<QuickPOItem[]>([])
   const [quickPOSupplierId, setQuickPOSupplierId] = useState('')
-  const [quickPOQuantity, setQuickPOQuantity] = useState('')
-  const [quickPOUnitCost, setQuickPOUnitCost] = useState('')
   const [quickPONotes, setQuickPONotes] = useState('')
   const [quickPOSaving, setQuickPOSaving] = useState(false)
   const [companyInfo, setCompanyInfo] = useState<SystemSettings | null>(null)
@@ -249,33 +248,52 @@ export default function SalesOrdersPage() {
   // Opens a quick Purchase Order form pre-filled for a line that's short on CDSC's own
   // warehouse stock, so staff can order the shortfall from a Supplier without leaving the
   // Sales Order they're working on. Notes explain why the PO exists for whoever reviews it.
-  function openQuickPO(idx: number) {
-    const line = lines[idx]
-    const inStock = warehouseQty[line.item_name] ?? 0
-    const needed = parseFloat(line.quantity) || 0
-    const shortQty = Math.max(0, needed - inStock)
-    const found = items.find(it => it.item_name === line.item_name)
-    setQuickPOLineIdx(idx)
+  function openQuickPO() {
+    // Pre-populate every currently warehouse-short line (not just the one clicked) so the
+    // user can bundle 2+ items into a single PO / supplier order instead of creating one
+    // PO per shortage.
+    const shortItems: QuickPOItem[] = lines
+      .map((line, i) => {
+        if (!line.item_name) return null
+        const inStock = warehouseQty[line.item_name] ?? 0
+        const needed = parseFloat(line.quantity) || 0
+        const shortQty = Math.max(0, needed - inStock)
+        if (shortQty <= 0) return null
+        const found = items.find(it => it.item_name === line.item_name)
+        return {
+          lineIdx: i,
+          item_name: line.item_name,
+          unit: line.unit || '',
+          quantity: String(shortQty),
+          unit_cost: found?.cost != null ? String(found.cost) : '',
+          include: true,
+        }
+      })
+      .filter((it): it is QuickPOItem => it !== null)
+    setQuickPOItems(shortItems)
     setQuickPOSupplierId('')
-    setQuickPOQuantity(shortQty > 0 ? String(shortQty) : '')
-    setQuickPOUnitCost(found?.cost != null ? String(found.cost) : '')
     setQuickPONotes(
       `Created from Sales Order ${soNumber.trim() || '(draft)'}${selectedClient ? ` for ${selectedClient.company_name}` : ''} — ` +
-      `"${line.item_name}" is short by ${shortQty.toLocaleString('en-PH')} ${line.unit || ''} in CDSC's warehouse ` +
-      `(needed ${needed.toLocaleString('en-PH')}, on hand ${inStock.toLocaleString('en-PH')}).`
+      `items below are short in CDSC's warehouse.`
     )
     setQuickPOOpen(true)
   }
 
+  function updateQuickPOItem(lineIdx: number, patch: Partial<QuickPOItem>) {
+    setQuickPOItems(prev => prev.map(it => it.lineIdx === lineIdx ? { ...it, ...patch } : it))
+  }
+
   async function saveQuickPO() {
-    if (quickPOLineIdx === null) return
-    const line = lines[quickPOLineIdx]
+    const selected = quickPOItems.filter(it => it.include && (parseFloat(it.quantity) || 0) > 0)
     if (!quickPOSupplierId) { toast.error('Select a supplier'); return }
-    const qty = parseFloat(quickPOQuantity) || 0
-    if (qty <= 0) { toast.error('Enter a quantity to order'); return }
+    if (selected.length === 0) { toast.error('Select at least one item with a quantity to order'); return }
     setQuickPOSaving(true)
-    const unitCost = parseFloat(quickPOUnitCost) || 0
-    const totalCost = unitCost * qty
+    const rows = selected.map(it => {
+      const qty = parseFloat(it.quantity) || 0
+      const unitCost = parseFloat(it.unit_cost) || 0
+      return { item_name: it.item_name, unit: it.unit, quantity: qty, unit_cost: unitCost, total_cost: unitCost * qty }
+    })
+    const totalCost = rows.reduce((s, r) => s + r.total_cost, 0)
     const { data: { user } } = await supabase.auth.getUser()
     const { data: po, error } = await supabase.from('purchase_orders').insert({
       supplier_id: quickPOSupplierId,
@@ -293,20 +311,22 @@ export default function SalesOrdersPage() {
       created_by: user?.id,
     }).select('id, po_number').single()
     if (error) { toast.error(error.message); setQuickPOSaving(false); return }
-    const { error: itemErr } = await supabase.from('po_items').insert({
-      po_id: po.id,
-      item_name: line.item_name,
-      quantity: qty,
-      unit_of_measure: line.unit || null,
-      unit_cost: unitCost,
-      selling_price: null,
-      total_cost: totalCost,
-    })
+    const { error: itemErr } = await supabase.from('po_items').insert(
+      rows.map(r => ({
+        po_id: po.id,
+        item_name: r.item_name,
+        quantity: r.quantity,
+        unit_of_measure: r.unit || null,
+        unit_cost: r.unit_cost,
+        selling_price: null,
+        total_cost: r.total_cost,
+      }))
+    )
     if (itemErr) { toast.error(itemErr.message); setQuickPOSaving(false); return }
-    toast.success(`Purchase Order ${po.po_number ?? ''} created for "${line.item_name}"`)
+    toast.success(`Purchase Order ${po.po_number ?? ''} created with ${rows.length} item${rows.length !== 1 ? 's' : ''}`)
     setQuickPOSaving(false)
     setQuickPOOpen(false)
-    setQuickPOLineIdx(null)
+    setQuickPOItems([])
   }
 
   async function updateSellingPriceInConfig(i: number) {
@@ -1124,7 +1144,7 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
                                     {short && ` — short ${(needed - inStock).toLocaleString('en-PH')}`}
                                   </span>
                                   {short && (
-                                    <button type="button" onClick={() => openQuickPO(i)}
+                                    <button type="button" onClick={() => openQuickPO()}
                                       className="text-blue-600 hover:underline font-medium">
                                       Create PO from Supplier
                                     </button>
@@ -1709,19 +1729,13 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
         </DialogContent>
       </Dialog>
 
-      {/* Quick Create PO (from a warehouse-short line) */}
+      {/* Quick Create PO (from warehouse-short lines) — can bundle 2+ items into one PO */}
       <Dialog open={quickPOOpen} onOpenChange={setQuickPOOpen}>
-        <DialogContent className="sm:max-w-xl">
+        <DialogContent className="sm:max-w-2xl">
           <DialogHeader>
             <DialogTitle>Create Purchase Order</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-1">
-            <div className="space-y-1.5">
-              <Label>Item</Label>
-              <div className="h-9 flex items-center px-3 text-sm bg-muted/40 rounded-md border text-muted-foreground">
-                {quickPOLineIdx !== null ? lines[quickPOLineIdx]?.item_name : ''}
-              </div>
-            </div>
             <div className="space-y-1.5">
               <Label>Supplier <span className="text-destructive">*</span></Label>
               <Select value={quickPOSupplierId} onValueChange={v => setQuickPOSupplierId(v ?? '')}>
@@ -1735,14 +1749,39 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Quantity</Label>
-                <Input type="number" min={0} step="0.01" value={quickPOQuantity} onChange={e => setQuickPOQuantity(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Unit Cost (₱)</Label>
-                <Input type="number" min={0} step="0.01" value={quickPOUnitCost} onChange={e => setQuickPOUnitCost(e.target.value)} />
+            <div className="space-y-1.5">
+              <Label>Short Items — select the ones to include in this PO</Label>
+              <div className="border rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/40">
+                      <TableHead className="w-8"></TableHead>
+                      <TableHead>Item</TableHead>
+                      <TableHead className="w-28">Quantity</TableHead>
+                      <TableHead className="w-32">Unit Cost (₱)</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {quickPOItems.length === 0 ? (
+                      <TableRow><TableCell colSpan={4} className="text-center py-6 text-muted-foreground text-sm">No warehouse-short items.</TableCell></TableRow>
+                    ) : quickPOItems.map(it => (
+                      <TableRow key={it.lineIdx}>
+                        <TableCell className="py-1.5">
+                          <input type="checkbox" checked={it.include} onChange={e => updateQuickPOItem(it.lineIdx, { include: e.target.checked })} className="h-4 w-4" />
+                        </TableCell>
+                        <TableCell className="py-1.5 text-sm">{it.item_name}<span className="text-muted-foreground text-xs ml-1">{it.unit}</span></TableCell>
+                        <TableCell className="py-1.5">
+                          <Input type="number" min={0} step="0.01" className="h-8 text-xs w-full" value={it.quantity}
+                            onChange={e => updateQuickPOItem(it.lineIdx, { quantity: e.target.value })} disabled={!it.include} />
+                        </TableCell>
+                        <TableCell className="py-1.5">
+                          <Input type="number" min={0} step="0.01" className="h-8 text-xs w-full" value={it.unit_cost}
+                            onChange={e => updateQuickPOItem(it.lineIdx, { unit_cost: e.target.value })} disabled={!it.include} />
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
             </div>
             <div className="space-y-1.5">
