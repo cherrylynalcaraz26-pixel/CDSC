@@ -841,13 +841,9 @@ export default function DRLogsPage() {
           <h1 className="text-2xl font-semibold">DR Logs</h1>
           <p className="text-muted-foreground text-sm">Delivery Receipt log — track all incoming supplier DRs</p>
         </div>
-        {open ? (
+        {open && (
           <Button variant="outline" onClick={handleCancelClick}>
             <X className="h-4 w-4 mr-2" />Cancel
-          </Button>
-        ) : (
-          <Button onClick={openAdd} className="bg-red-600 hover:bg-red-700">
-            <Plus className="h-4 w-4 mr-2" /> New DR Log
           </Button>
         )}
       </div>
@@ -908,51 +904,66 @@ export default function DRLogsPage() {
         )
       })()}
 
-      <div className="flex flex-wrap gap-3 items-center">
-        <Select value={clientFilter || '_all'} onValueChange={(v: string | null) => setClientFilter(!v || v === '_all' ? '' : v)}>
-          <SelectTrigger className="min-w-[220px]">
-            <SelectValue>{(v: string) => v === '_all' ? 'Client' : v}</SelectValue>
-          </SelectTrigger>
-          <SelectContent className="min-w-[300px]">
-            <SelectItem value="_all">All Clients</SelectItem>
-            {clients.map(c => <SelectItem key={c.id} value={c.company_name}>{c.company_name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={yearFilter} onValueChange={v => setYearFilter(v ?? 'all')}>
-          <SelectTrigger className="w-32">
-            <SelectValue>{(v: string) => v === 'all' ? 'Filter by Year' : v}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Years</SelectItem>
-            {availableYears.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={statusFilter} onValueChange={v => setStatusFilter(v ?? 'all')}>
-          <SelectTrigger className="w-40">
-            <SelectValue>{(v: string) => v === 'all' ? 'Status' : STATUS_CFG[v]?.label ?? v}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="received">Received</SelectItem>
-            <SelectItem value="partial">Partial</SelectItem>
-            <SelectItem value="rejected">Rejected</SelectItem>
-            <SelectItem value="returned">Returned</SelectItem>
-          </SelectContent>
-        </Select>
-        <div className="flex rounded-md border overflow-hidden">
-          <button
-            onClick={() => setViewMode('by-dr')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm ${viewMode === 'by-dr' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
-          >
-            <LayoutGrid className="h-3.5 w-3.5" /> By DR#
-          </button>
-          <button
-            onClick={() => setViewMode('all-items')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-sm border-l ${viewMode === 'all-items' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
-          >
-            <List className="h-3.5 w-3.5" /> All Items
-          </button>
+      <div className="flex flex-wrap gap-3 items-end">
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Client</Label>
+          <Select value={clientFilter || '_all'} onValueChange={(v: string | null) => setClientFilter(!v || v === '_all' ? '' : v)}>
+            <SelectTrigger className="min-w-[220px]">
+              <SelectValue>{(v: string) => v === '_all' ? 'Client' : v}</SelectValue>
+            </SelectTrigger>
+            <SelectContent className="min-w-[300px]">
+              <SelectItem value="_all">All Clients</SelectItem>
+              {clients.map(c => <SelectItem key={c.id} value={c.company_name}>{c.company_name}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Year</Label>
+          <Select value={yearFilter} onValueChange={v => setYearFilter(v ?? 'all')}>
+            <SelectTrigger className="w-32">
+              <SelectValue>{(v: string) => v === 'all' ? 'Filter by Year' : v}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Years</SelectItem>
+              {availableYears.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Status</Label>
+          <Select value={statusFilter} onValueChange={v => setStatusFilter(v ?? 'all')}>
+            <SelectTrigger className="w-40">
+              <SelectValue>{(v: string) => v === 'all' ? 'Status' : STATUS_CFG[v]?.label ?? v}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="received">Received</SelectItem>
+              <SelectItem value="partial">Partial</SelectItem>
+              <SelectItem value="rejected">Rejected</SelectItem>
+              <SelectItem value="returned">Returned</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">View</Label>
+          <div className="flex rounded-md border overflow-hidden">
+            <button
+              onClick={() => setViewMode('by-dr')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm ${viewMode === 'by-dr' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
+            >
+              <LayoutGrid className="h-3.5 w-3.5" /> By DR#
+            </button>
+            <button
+              onClick={() => setViewMode('all-items')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm border-l ${viewMode === 'all-items' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
+            >
+              <List className="h-3.5 w-3.5" /> All Items
+            </button>
+          </div>
+        </div>
+        <Button onClick={openAdd} className="bg-red-600 hover:bg-red-700 ml-auto">
+          <Plus className="h-4 w-4 mr-2" /> New DR Log
+        </Button>
       </div>
 
       <Card>
@@ -1000,7 +1011,7 @@ export default function DRLogsPage() {
                       <>
                         <TableRow
                           key={log.id}
-                          className="cursor-pointer hover:bg-muted/50"
+                          className="cursor-pointer hover:bg-red-50/40 transition-colors"
                           onClick={() => toggleExpand(log.id)}
                         >
                           <TableCell className="text-sm text-muted-foreground">{(page - 1) * PAGE_SIZE + i + 1}</TableCell>

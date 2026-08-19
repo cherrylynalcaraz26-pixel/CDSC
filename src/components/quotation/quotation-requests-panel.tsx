@@ -673,6 +673,7 @@ export default function QuotationRequestsPanel({ onQuotationCreated }: { onQuota
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">No.</TableHead>
                 <TableHead>Request #</TableHead>
                 <TableHead>Client</TableHead>
                 <TableHead>Subject</TableHead>
@@ -684,15 +685,16 @@ export default function QuotationRequestsPanel({ onQuotationCreated }: { onQuota
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-10">
+                <TableRow><TableCell colSpan={8} className="text-center py-10">
                   <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                 </TableCell></TableRow>
               ) : displayed.length === 0 ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
+                <TableRow><TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
                   No requests for quotation{filterStatus ? ' with this status' : ''}.
                 </TableCell></TableRow>
-              ) : displayed.map(r => (
-                <TableRow key={r.id} className="cursor-pointer hover:bg-muted/40" onClick={() => openReview(r)}>
+              ) : displayed.map((r, idx) => (
+                <TableRow key={r.id} className="cursor-pointer hover:bg-red-50/40 transition-colors" onClick={() => openReview(r)}>
+                  <TableCell className="text-muted-foreground text-xs">{idx + 1}</TableCell>
                   <TableCell className="font-mono text-xs font-semibold text-red-600">{r.request_number}</TableCell>
                   <TableCell className="text-sm font-medium">{r.client_name}</TableCell>
                   <TableCell className="text-sm text-muted-foreground max-w-[180px] truncate">{r.subject}</TableCell>

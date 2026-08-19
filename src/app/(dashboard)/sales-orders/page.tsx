@@ -114,6 +114,7 @@ export default function SalesOrdersPage() {
 
   // Pipeline
   const [pipelineOpen, setPipelineOpen] = useState(false)
+  const [chartOpen, setChartOpen] = useState(true)
   // collectedClients removed — no OR/CR receipt system
 
   // Form
@@ -815,13 +816,9 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
           <h2 className="text-2xl font-bold">Sales Orders</h2>
           <p className="text-muted-foreground text-sm">Create and manage client sales orders</p>
         </div>
-        {open ? (
+        {open && (
           <Button variant="outline" onClick={handleCancelClick}>
             <X className="h-4 w-4 mr-2" />Cancel
-          </Button>
-        ) : (
-          <Button onClick={() => { resetForm(); setOpen(true); loadWarehouseQty() }} className="bg-red-600 hover:bg-red-700">
-            <Plus className="h-4 w-4 mr-2" />New Sales Order
           </Button>
         )}
       </div>
@@ -880,24 +877,42 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
       {/* Monthly Sales Chart */}
       {!open && (
         <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium">Monthly Sales Revenue (Last 6 Months)</CardTitle>
+          <CardHeader className="pb-0 pt-4 px-4">
+            <button
+              className="flex items-center justify-between w-full text-left"
+              onClick={() => setChartOpen(o => !o)}
+            >
+              <CardTitle className="text-sm font-medium">Monthly Sales Revenue (Last 6 Months)</CardTitle>
+              {chartOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+            </button>
           </CardHeader>
-          <CardContent>
-            {soMonthlyData.every(m => m.total === 0) ? (
-              <div className="h-40 flex items-center justify-center text-muted-foreground text-xs">No sales data yet</div>
-            ) : (
-              <ResponsiveContainer width="100%" height={180}>
-                <BarChart data={soMonthlyData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="month" tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} tickFormatter={v => `₱${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip formatter={(v: any) => [`₱${(v ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, 'Revenue']} />
-                  <Bar dataKey="total" name="Revenue" fill="#dc2626" radius={[3, 3, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
+          {chartOpen && (
+            <CardContent className="pt-3">
+              {soMonthlyData.every(m => m.total === 0) ? (
+                <div className="h-40 flex items-center justify-center text-muted-foreground text-xs">No sales data yet</div>
+              ) : (
+                <ResponsiveContainer width="100%" height={200}>
+                  <BarChart data={soMonthlyData} margin={{ top: 4, right: 4, bottom: 0, left: 0 }}>
+                    <defs>
+                      <linearGradient id="soRevenueGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#ef4444" />
+                        <stop offset="100%" stopColor="#b91c1c" />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="month" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `₱${(v / 1000).toFixed(0)}k`} />
+                    <Tooltip
+                      cursor={{ fill: 'rgba(220,38,38,0.06)' }}
+                      contentStyle={{ borderRadius: 12, border: '1px solid #e5e7eb', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', fontSize: 12 }}
+                      formatter={(v: any) => [`₱${(v ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}`, 'Revenue']}
+                    />
+                    <Bar dataKey="total" name="Revenue" fill="url(#soRevenueGradient)" radius={[6, 6, 0, 0]} maxBarSize={48} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          )}
         </Card>
       )}
 
@@ -1342,13 +1357,17 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
       {/* Sales Order List — hidden while creating/editing */}
       {!open && (
       <Card>
-        <CardHeader className="pb-3">
+        <CardHeader className="pb-3 flex flex-row items-center justify-between">
           <CardTitle className="text-base">Sales Order List</CardTitle>
+          <Button onClick={() => { resetForm(); setOpen(true); loadWarehouseQty() }} className="bg-red-600 hover:bg-red-700">
+            <Plus className="h-4 w-4 mr-2" />New Sales Order
+          </Button>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">No.</TableHead>
                 <TableHead>SO Number</TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead>Client</TableHead>
@@ -1362,17 +1381,18 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={9} className="text-center py-10">
+                <TableRow><TableCell colSpan={10} className="text-center py-10">
                   <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                 </TableCell></TableRow>
               ) : displayedSOs.length === 0 ? (
-                <TableRow><TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
+                <TableRow><TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
                   No sales orders match your search.
                 </TableCell></TableRow>
-              ) : displayedSOs.map(so => {
+              ) : displayedSOs.map((so, idx) => {
                 const sCfg = STATUS_CFG[so.status] ?? STATUS_CFG.draft
                 return (
-                  <TableRow key={so.id} className="cursor-pointer hover:bg-muted/50" onClick={() => openViewSO(so)}>
+                  <TableRow key={so.id} className="cursor-pointer hover:bg-red-50/40 transition-colors" onClick={() => openViewSO(so)}>
+                    <TableCell className="text-muted-foreground text-xs">{idx + 1}</TableCell>
                     <TableCell className="font-mono text-xs font-semibold text-red-600">{so.so_number ?? '—'}</TableCell>
                     <TableCell className="text-sm whitespace-nowrap">
                       {(so.so_date ?? so.created_at) ? format(new Date(so.so_date ?? so.created_at), 'MMM d, yyyy') : '—'}
