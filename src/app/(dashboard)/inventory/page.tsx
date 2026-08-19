@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Fragment } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -97,6 +97,9 @@ export default function InventoryPage() {
   const [detailLoading, setDetailLoading] = useState(false)
 
   const [warehouseRows, setWarehouseRows] = useState<{id: string; client_name: string | null; item_name: string; unit: string; quantity: number; notes: string | null; created_at: string; hasClientRecord: boolean}[]>([])
+  const [expandedWhId, setExpandedWhId] = useState<string | null>(null)
+  const [expandedWhHistory, setExpandedWhHistory] = useState<LedgerRow[]>([])
+  const [expandedWhHistoryLoading, setExpandedWhHistoryLoading] = useState(false)
   const [warehouseUpdateOpen, setWarehouseUpdateOpen] = useState(false)
   const [warehouseUpdateRow, setWarehouseUpdateRow] = useState<{id: string; item_name: string; unit: string; notes: string | null; quantity: number} | null>(null)
   const [warehouseUpdateQty, setWarehouseUpdateQty] = useState('')
@@ -447,6 +450,20 @@ export default function InventoryPage() {
   }, [])
 
   function uomName(code: string) { return uomMap[code] || code }
+
+  async function toggleWhExpand(row: typeof warehouseRows[0]) {
+    if (expandedWhId === row.id) { setExpandedWhId(null); return }
+    setExpandedWhId(row.id)
+    setExpandedWhHistoryLoading(true)
+    const { data } = await supabase
+      .from('warehouse_stock_ledger')
+      .select('id, change_qty, source_type, reference_no, client_name, notes, created_at')
+      .eq('item_name', row.item_name)
+      .order('created_at', { ascending: false })
+      .limit(5)
+    setExpandedWhHistory((data ?? []) as LedgerRow[])
+    setExpandedWhHistoryLoading(false)
+  }
 
   async function openHistory(itemName: string) {
     setHistoryItemName(itemName)
@@ -1119,21 +1136,25 @@ export default function InventoryPage() {
                     <TableHead className="text-right">Est. Value</TableHead>
                     <TableHead>Warehouse Note</TableHead>
                     <TableHead>Date Added</TableHead>
-                    <TableHead className="w-28">Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading ? (
-                    <TableRow><TableCell colSpan={9} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
+                    <TableRow><TableCell colSpan={8} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
                   ) : warehouseRows.length === 0 ? (
-                    <TableRow><TableCell colSpan={9} className="text-center py-12 text-muted-foreground">No warehouse stock records found.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={8} className="text-center py-12 text-muted-foreground">No warehouse stock records found.</TableCell></TableRow>
                   ) : pagedWarehouseRows.map((r, i) => {
                     // client_name is null for general-pool stock by design (that's how
                     // Receiving always adds it) — that alone isn't a red flag. Only warn
                     // when the item has no DR/CSI history anywhere.
                     const noClientRecord = !r.hasClientRecord
+                    const isWhExpanded = expandedWhId === r.id
                     return (
-                      <TableRow key={r.id} className={noClientRecord ? 'bg-amber-50/60' : ''}>
+                      <Fragment key={r.id}>
+                      <TableRow
+                        className={`cursor-pointer hover:bg-muted/50 ${noClientRecord ? 'bg-amber-50/60' : ''}`}
+                        onClick={() => toggleWhExpand(r)}
+                      >
                         <TableCell className="text-sm text-muted-foreground">{(page - 1) * PAGE_SIZE + i + 1}</TableCell>
                         <TableCell className="text-sm">
                           {r.client_name ? (
@@ -1163,25 +1184,61 @@ export default function InventoryPage() {
                           )}
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">{new Date(r.created_at).toLocaleDateString('en-PH')}</TableCell>
-                        <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => openHistory(r.item_name)}>
-                                <History className="h-3.5 w-3.5 mr-2 text-slate-600" /> History
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => openWarehouseUpdate(r)}>
-                                <Pencil className="h-3.5 w-3.5 mr-2 text-blue-600" /> Edit
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => deleteWarehouseRow(r.id, r.item_name)} className="text-red-600 focus:text-red-600">
-                                <Trash2 className="h-3.5 w-3.5 mr-2" /> Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
                       </TableRow>
+                      {isWhExpanded && (
+                        <TableRow className="bg-muted/30 hover:bg-muted/30">
+                          <TableCell colSpan={8} className="py-4 px-6">
+                            <div className="space-y-4">
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-2 text-xs">
+                                <div><div className="text-muted-foreground uppercase tracking-wide text-[10px] mb-0.5">Owner</div><div className="text-foreground">{r.client_name || 'CDSC Stock'}</div></div>
+                                <div><div className="text-muted-foreground uppercase tracking-wide text-[10px] mb-0.5">Unit</div><div className="text-foreground">{r.unit ? uomName(r.unit) : '—'}</div></div>
+                                <div><div className="text-muted-foreground uppercase tracking-wide text-[10px] mb-0.5">Quantity</div><div className="text-foreground font-semibold">{r.quantity}</div></div>
+                                <div><div className="text-muted-foreground uppercase tracking-wide text-[10px] mb-0.5">Est. Value</div><div className="text-foreground">{r.item_name in itemPriceMap ? `₱${warehouseEstValue(r).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}</div></div>
+                                <div className="col-span-2 sm:col-span-2"><div className="text-muted-foreground uppercase tracking-wide text-[10px] mb-0.5">Warehouse Note</div><div className="text-foreground">{r.notes || '—'}</div></div>
+                                <div><div className="text-muted-foreground uppercase tracking-wide text-[10px] mb-0.5">Date Added</div><div className="text-foreground">{new Date(r.created_at).toLocaleDateString('en-PH')}</div></div>
+                              </div>
+
+                              <div>
+                                <div className="text-muted-foreground uppercase tracking-wide text-[10px] mb-1.5">Recent History</div>
+                                {expandedWhHistoryLoading ? (
+                                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                                ) : expandedWhHistory.length === 0 ? (
+                                  <p className="text-xs text-muted-foreground italic">No recorded history for this item yet — its current quantity predates this tracking.</p>
+                                ) : (
+                                  <div className="space-y-1">
+                                    {expandedWhHistory.map(h => (
+                                      <div key={h.id} className="flex items-center gap-2 text-xs">
+                                        {h.change_qty >= 0
+                                          ? <ArrowUpCircle className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                                          : <ArrowDownCircle className="h-3.5 w-3.5 text-red-600 shrink-0" />}
+                                        <span className={`font-semibold ${h.change_qty >= 0 ? 'text-green-700' : 'text-red-600'}`}>{h.change_qty >= 0 ? '+' : ''}{h.change_qty}</span>
+                                        <span className={h.source_type === 'manual_add' || h.source_type === 'manual_edit' ? 'inline-flex items-center rounded-full bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 font-medium' : 'text-foreground'}>
+                                          {LEDGER_SOURCE_LABEL[h.source_type]}
+                                        </span>
+                                        <span className="text-muted-foreground">{[h.reference_no, h.client_name].filter(Boolean).join(' → ') || h.notes || ''}</span>
+                                        <span className="text-muted-foreground ml-auto shrink-0">{new Date(h.created_at).toLocaleDateString('en-PH')}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="flex gap-2 pt-1" onClick={e => e.stopPropagation()}>
+                                <Button variant="outline" size="sm" onClick={() => openHistory(r.item_name)}>
+                                  <History className="h-3.5 w-3.5 mr-1.5 text-slate-600" /> Full History
+                                </Button>
+                                <Button variant="outline" size="sm" onClick={() => openWarehouseUpdate(r)}>
+                                  <Pencil className="h-3.5 w-3.5 mr-1.5 text-blue-600" /> Edit
+                                </Button>
+                                <Button variant="outline" size="sm" onClick={() => deleteWarehouseRow(r.id, r.item_name)} className="text-red-600 hover:text-red-600">
+                                  <Trash2 className="h-3.5 w-3.5 mr-1.5" /> Delete
+                                </Button>
+                              </div>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                      </Fragment>
                     )
                   })}
                 </TableBody>
