@@ -19,7 +19,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
-import { Plus, Search, MoreHorizontal, Loader2, Truck, Trash2, LayoutGrid, List, X, Printer, SlidersHorizontal, FileOutput, Camera } from 'lucide-react'
+import { Plus, Search, MoreHorizontal, Loader2, Truck, Trash2, LayoutGrid, List, X, Printer, SlidersHorizontal, FileOutput, Camera, CheckCircle2, AlertCircle, XCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
@@ -855,15 +855,21 @@ export default function DRLogsPage() {
       {!open && (<>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: 'Total DRs', count: counts.total,    color: 'text-foreground' },
-          { label: 'Received',  count: counts.received, color: 'text-green-600' },
-          { label: 'Partial',   count: counts.partial,  color: 'text-yellow-600' },
-          { label: 'Rejected',  count: counts.rejected, color: 'text-red-600' },
+          { label: 'Total DRs', count: counts.total,    color: 'text-foreground',  icon: Truck,        grad: 'from-red-500 to-red-600',     tint: 'from-red-50',    shadow: 'shadow-red-500/30' },
+          { label: 'Received',  count: counts.received, color: 'text-green-600',   icon: CheckCircle2, grad: 'from-green-500 to-green-600', tint: 'from-green-50',  shadow: 'shadow-green-500/30' },
+          { label: 'Partial',   count: counts.partial,  color: 'text-yellow-600',  icon: AlertCircle,  grad: 'from-amber-500 to-amber-600', tint: 'from-amber-50',  shadow: 'shadow-amber-500/30' },
+          { label: 'Rejected',  count: counts.rejected, color: 'text-red-600',     icon: XCircle,      grad: 'from-slate-400 to-slate-500', tint: 'from-slate-50',  shadow: 'shadow-slate-500/30' },
         ].map(s => (
-          <Card key={s.label}>
-            <CardContent className="pt-4 pb-3">
-              <div className={`text-2xl font-bold ${s.color}`}>{loading ? '—' : s.count}</div>
-              <div className="text-xs text-muted-foreground">{s.label}</div>
+          <Card key={s.label} className="relative overflow-hidden border-none">
+            <div className={`absolute inset-0 bg-gradient-to-br ${s.tint} to-transparent`} />
+            <CardContent className="relative pt-4 pb-3 flex items-start justify-between gap-3">
+              <div>
+                <div className={`text-2xl font-bold ${s.color}`}>{loading ? '—' : s.count}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">{s.label}</div>
+              </div>
+              <div className={`h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br ${s.grad} flex items-center justify-center shadow-sm ${s.shadow}`}>
+                <s.icon className="h-5 w-5 text-white" />
+              </div>
             </CardContent>
           </Card>
         ))}

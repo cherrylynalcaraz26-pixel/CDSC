@@ -20,7 +20,7 @@ import { Badge } from '@/components/ui/badge'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Search, Loader2, Pencil, AlertTriangle, Plus, MoreHorizontal, Trash2, FileText, Printer, Mail, Send, Truck, Package, History, ArrowDownCircle, ArrowUpCircle } from 'lucide-react'
+import { Search, Loader2, Pencil, AlertTriangle, Plus, MoreHorizontal, Trash2, FileText, Printer, Mail, Send, Truck, Package, History, ArrowDownCircle, ArrowUpCircle, Users, List, CheckCircle2, Scale, Wallet, Boxes } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSearchContext } from '@/context/search-context'
 import { sendEmail } from '@/lib/send-email'
@@ -77,6 +77,26 @@ const LEDGER_SOURCE_LABEL: Record<LedgerSourceType, string> = {
   manual_edit: 'Manual Correction',
   dr_delivery: 'Delivered to Client',
   return_to_warehouse: 'Returned to Warehouse',
+}
+
+function KpiCard({ value, label, valueClass, icon: Icon, tint, grad, shadow }: {
+  value: React.ReactNode; label: string; valueClass?: string
+  icon: React.ComponentType<{ className?: string }>; tint: string; grad: string; shadow: string
+}) {
+  return (
+    <Card className="relative overflow-hidden border-none">
+      <div className={`absolute inset-0 bg-gradient-to-br ${tint} to-transparent`} />
+      <CardContent className="relative pt-4 pb-3 flex items-start justify-between gap-3">
+        <div>
+          <div className={`text-2xl font-bold ${valueClass ?? ''}`}>{value}</div>
+          <div className="text-xs text-muted-foreground mt-0.5">{label}</div>
+        </div>
+        <div className={`h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br ${grad} flex items-center justify-center shadow-sm ${shadow}`}>
+          <Icon className="h-5 w-5 text-white" />
+        </div>
+      </CardContent>
+    </Card>
+  )
 }
 
 export default function InventoryPage() {
@@ -976,72 +996,44 @@ export default function InventoryPage() {
       {/* KPI cards — specific to the active view */}
       {viewMode === 'by_client' && (
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          <Card><CardContent className="pt-4 pb-3">
-            <div className="text-2xl font-bold text-blue-600">{loading ? '—' : uniqueClients}</div>
-            <div className="text-xs text-muted-foreground">Clients</div>
-          </CardContent></Card>
-          <Card><CardContent className="pt-4 pb-3">
-            <div className="text-2xl font-bold">{loading ? '—' : totalItems}</div>
-            <div className="text-xs text-muted-foreground">Line Items</div>
-          </CardContent></Card>
-          <Card><CardContent className="pt-4 pb-3">
-            <div className="text-2xl font-bold text-green-600">{loading ? '—' : inStock}</div>
-            <div className="text-xs text-muted-foreground">In Stock</div>
-          </CardContent></Card>
-          <Card><CardContent className="pt-4 pb-3">
-            <div className="text-2xl font-bold text-gray-500">{loading ? '—' : balanced}</div>
-            <div className="text-xs text-muted-foreground">Balanced</div>
-          </CardContent></Card>
-          <Card><CardContent className="pt-4 pb-3">
-            <div className="text-2xl font-bold text-red-600">{loading ? '—' : negative}</div>
-            <div className="text-xs text-muted-foreground">Deficit</div>
-          </CardContent></Card>
+          <KpiCard value={loading ? '—' : uniqueClients} label="Clients" valueClass="text-blue-600"
+            icon={Users} tint="from-blue-50" grad="from-blue-500 to-blue-600" shadow="shadow-blue-500/30" />
+          <KpiCard value={loading ? '—' : totalItems} label="Line Items"
+            icon={List} tint="from-red-50" grad="from-red-500 to-red-600" shadow="shadow-red-500/30" />
+          <KpiCard value={loading ? '—' : inStock} label="In Stock" valueClass="text-green-600"
+            icon={CheckCircle2} tint="from-green-50" grad="from-green-500 to-green-600" shadow="shadow-green-500/30" />
+          <KpiCard value={loading ? '—' : balanced} label="Balanced" valueClass="text-gray-500"
+            icon={Scale} tint="from-slate-50" grad="from-slate-400 to-slate-500" shadow="shadow-slate-500/30" />
+          <KpiCard value={loading ? '—' : negative} label="Deficit" valueClass="text-red-600"
+            icon={AlertTriangle} tint="from-red-50" grad="from-red-500 to-red-600" shadow="shadow-red-500/30" />
         </div>
       )}
 
       {viewMode === 'by_item' && (
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          <Card><CardContent className="pt-4 pb-3">
-            <div className="text-2xl font-bold">{loading ? '—' : byItemGroups.length}</div>
-            <div className="text-xs text-muted-foreground">Unique Items</div>
-          </CardContent></Card>
-          <Card><CardContent className="pt-4 pb-3">
-            <div className="text-2xl font-bold text-blue-600">{loading ? '—' : itemTotalDelivered.toLocaleString('en-PH')}</div>
-            <div className="text-xs text-muted-foreground">Total Delivered (DR)</div>
-          </CardContent></Card>
-          <Card><CardContent className="pt-4 pb-3">
-            <div className="text-2xl font-bold text-green-600">{loading ? '—' : itemGroupsInStock}</div>
-            <div className="text-xs text-muted-foreground">In Stock</div>
-          </CardContent></Card>
-          <Card><CardContent className="pt-4 pb-3">
-            <div className="text-2xl font-bold text-gray-500">{loading ? '—' : itemGroupsBalanced}</div>
-            <div className="text-xs text-muted-foreground">Balanced</div>
-          </CardContent></Card>
-          <Card><CardContent className="pt-4 pb-3">
-            <div className="text-2xl font-bold text-red-600">{loading ? '—' : itemGroupsDeficit}</div>
-            <div className="text-xs text-muted-foreground">Deficit Items</div>
-          </CardContent></Card>
+          <KpiCard value={loading ? '—' : byItemGroups.length} label="Unique Items"
+            icon={Package} tint="from-red-50" grad="from-red-500 to-red-600" shadow="shadow-red-500/30" />
+          <KpiCard value={loading ? '—' : itemTotalDelivered.toLocaleString('en-PH')} label="Total Delivered (DR)" valueClass="text-blue-600"
+            icon={Truck} tint="from-blue-50" grad="from-blue-500 to-blue-600" shadow="shadow-blue-500/30" />
+          <KpiCard value={loading ? '—' : itemGroupsInStock} label="In Stock" valueClass="text-green-600"
+            icon={CheckCircle2} tint="from-green-50" grad="from-green-500 to-green-600" shadow="shadow-green-500/30" />
+          <KpiCard value={loading ? '—' : itemGroupsBalanced} label="Balanced" valueClass="text-gray-500"
+            icon={Scale} tint="from-slate-50" grad="from-slate-400 to-slate-500" shadow="shadow-slate-500/30" />
+          <KpiCard value={loading ? '—' : itemGroupsDeficit} label="Deficit Items" valueClass="text-red-600"
+            icon={AlertTriangle} tint="from-red-50" grad="from-red-500 to-red-600" shadow="shadow-red-500/30" />
         </div>
       )}
 
       {viewMode === 'by_warehouse' && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Card><CardContent className="pt-4 pb-3">
-            <div className="text-2xl font-bold">{loading ? '—' : filteredWarehouseRows.length}</div>
-            <div className="text-xs text-muted-foreground">Stock Entries</div>
-          </CardContent></Card>
-          <Card><CardContent className="pt-4 pb-3">
-            <div className="text-2xl font-bold text-green-600">{loading ? '—' : `₱${whTotalEstValue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`}</div>
-            <div className="text-xs text-muted-foreground">Est. Value</div>
-          </CardContent></Card>
-          <Card><CardContent className="pt-4 pb-3">
-            <div className="text-2xl font-bold text-blue-600">{loading ? '—' : whTotalQty.toLocaleString('en-PH')}</div>
-            <div className="text-xs text-muted-foreground">Total On Hand</div>
-          </CardContent></Card>
-          <Card><CardContent className="pt-4 pb-3">
-            <div className="text-2xl font-bold text-amber-600">{loading ? '—' : whUnassigned}</div>
-            <div className="text-xs text-muted-foreground">General (No Client)</div>
-          </CardContent></Card>
+          <KpiCard value={loading ? '—' : filteredWarehouseRows.length} label="Stock Entries"
+            icon={Package} tint="from-red-50" grad="from-red-500 to-red-600" shadow="shadow-red-500/30" />
+          <KpiCard value={loading ? '—' : `₱${whTotalEstValue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`} label="Est. Value" valueClass="text-green-600"
+            icon={Wallet} tint="from-green-50" grad="from-green-500 to-green-600" shadow="shadow-green-500/30" />
+          <KpiCard value={loading ? '—' : whTotalQty.toLocaleString('en-PH')} label="Total On Hand" valueClass="text-blue-600"
+            icon={Boxes} tint="from-blue-50" grad="from-blue-500 to-blue-600" shadow="shadow-blue-500/30" />
+          <KpiCard value={loading ? '—' : whUnassigned} label="General (No Client)" valueClass="text-amber-600"
+            icon={AlertTriangle} tint="from-amber-50" grad="from-amber-500 to-amber-600" shadow="shadow-amber-500/30" />
         </div>
       )}
 
