@@ -575,19 +575,53 @@ export default function InventoryPage() {
     setAddItems(prev => prev.length > 1 ? prev.filter((_, i) => i !== idx) : prev)
   }
 
+  // Adds onto the existing general-pool (client_name IS NULL) quantity for each item
+  // instead of blindly inserting a new row — otherwise receiving the same item twice
+  // (e.g. two POs for the same item) creates a second, separate row instead of
+  // accumulating, and the warehouse total silently loses whatever was already there.
+  // Mirrors the same check-then-update-or-insert pattern the Receiving page uses.
+  async function addToWarehouseStock(rows: { item_name: string; unit: string; quantity: number; notes: string | null }[]) {
+    for (const row of rows) {
+      if (row.quantity <= 0) continue
+      const { data: wsRow } = await supabase
+        .from('warehouse_stock')
+        .select('id, quantity')
+        .eq('item_name', row.item_name)
+        .is('client_name', null)
+        .maybeSingle()
+      if (wsRow) {
+        const { error } = await supabase.from('warehouse_stock').update({
+          quantity: Number(wsRow.quantity) + row.quantity,
+          notes: row.notes,
+          updated_at: new Date().toISOString(),
+        }).eq('id', wsRow.id)
+        if (error) return error.message
+      } else {
+        const { error } = await supabase.from('warehouse_stock').insert({
+          client_name: null,
+          item_name: row.item_name,
+          unit: row.unit,
+          quantity: row.quantity,
+          notes: row.notes,
+        })
+        if (error) return error.message
+      }
+    }
+    return null
+  }
+
   async function receiveAllPoItems() {
     if (addPoItems.length === 0) return
     setAddSaving(true)
     const rows = addPoItems.map(it => ({
-      client_name: null,
       item_name: it.item_name,
       unit: it.unit_of_measure ?? '',
       quantity: Number(it.quantity) || 0,
       notes: addNotes.trim() || null,
     }))
-    const { error } = await supabase.from('warehouse_stock').insert(rows)
+    const error = await addToWarehouseStock(rows)
     if (error) {
-      toast.error(error.message)
+      toast.error(error)
     } else {
       toast.success(`${rows.length} item${rows.length !== 1 ? 's' : ''} received`)
       setAddOpen(false)
@@ -601,15 +635,14 @@ export default function InventoryPage() {
     if (validItems.length === 0) return
     setAddSaving(true)
     const rows = validItems.map(it => ({
-      client_name: null,
       item_name: it.item_name.trim(),
       unit: it.unit.trim(),
       quantity: Number(it.quantity),
       notes: addNotes.trim() || null,
     }))
-    const { error } = await supabase.from('warehouse_stock').insert(rows)
+    const error = await addToWarehouseStock(rows)
     if (error) {
-      toast.error(error.message)
+      toast.error(error)
     } else {
       toast.success(addPoId
         ? `${rows.length} item${rows.length !== 1 ? 's' : ''} received`
