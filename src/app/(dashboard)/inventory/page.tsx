@@ -20,7 +20,7 @@ import { Badge } from '@/components/ui/badge'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Search, Loader2, Pencil, AlertTriangle, Plus, MoreHorizontal, Trash2, FileText, Printer, Mail, Send, Truck, Package, History, ArrowDownCircle, ArrowUpCircle, Users, List, CheckCircle2, Scale, Wallet, Boxes } from 'lucide-react'
+import { Search, Loader2, Pencil, AlertTriangle, Plus, MoreHorizontal, Trash2, FileText, Printer, Mail, Send, Truck, Package, History, ArrowDownCircle, ArrowUpCircle, Users, List, CheckCircle2, Scale, Wallet, Boxes, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSearchContext } from '@/context/search-context'
 import { sendEmail } from '@/lib/send-email'
@@ -99,6 +99,23 @@ function KpiCard({ value, label, valueClass, icon: Icon, tint, grad, shadow }: {
   )
 }
 
+type WhSortKey = 'client_name' | 'item_name' | 'unit' | 'quantity' | 'est_value' | 'notes' | 'created_at'
+
+function SortableWhHead({ label, sortKey, whSortKey, whSortDir, onSort, className, align }: {
+  label: string; sortKey: WhSortKey; whSortKey: WhSortKey | null; whSortDir: 'asc' | 'desc'
+  onSort: (key: WhSortKey) => void; className?: string; align?: 'right'
+}) {
+  const active = whSortKey === sortKey
+  return (
+    <TableHead className={`${align === 'right' ? 'text-right' : ''} ${className ?? ''} cursor-pointer select-none hover:text-foreground`} onClick={() => onSort(sortKey)}>
+      <span className={`inline-flex items-center gap-1 ${align === 'right' ? 'flex-row-reverse' : ''}`}>
+        {label}
+        {active ? (whSortDir === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />) : <ArrowUpDown className="h-3 w-3 text-muted-foreground/50" />}
+      </span>
+    </TableHead>
+  )
+}
+
 export default function InventoryPage() {
   const supabase = createClient()
   const { query: search } = useSearchContext()
@@ -117,6 +134,8 @@ export default function InventoryPage() {
   const [detailLoading, setDetailLoading] = useState(false)
 
   const [warehouseRows, setWarehouseRows] = useState<{id: string; client_name: string | null; item_name: string; unit: string; quantity: number; notes: string | null; created_at: string; hasClientRecord: boolean}[]>([])
+  const [whSortKey, setWhSortKey] = useState<WhSortKey | null>(null)
+  const [whSortDir, setWhSortDir] = useState<'asc' | 'desc'>('asc')
   const [expandedWhId, setExpandedWhId] = useState<string | null>(null)
   const [expandedWhHistory, setExpandedWhHistory] = useState<LedgerRow[]>([])
   const [expandedWhHistoryLoading, setExpandedWhHistoryLoading] = useState(false)
@@ -471,6 +490,15 @@ export default function InventoryPage() {
 
   function uomName(code: string) { return uomMap[code] || code }
 
+  function toggleWhSort(key: WhSortKey) {
+    if (whSortKey === key) {
+      setWhSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setWhSortKey(key)
+      setWhSortDir('asc')
+    }
+  }
+
   async function toggleWhExpand(row: typeof warehouseRows[0]) {
     if (expandedWhId === row.id) { setExpandedWhId(null); return }
     setExpandedWhId(row.id)
@@ -819,14 +847,29 @@ export default function InventoryPage() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
   const pagedFiltered = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
   const pagedByItemGroups = byItemGroups.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
-  const pagedWarehouseRows = filteredWarehouseRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
-  const warehouseTotalPages = Math.max(1, Math.ceil(filteredWarehouseRows.length / PAGE_SIZE))
 
   // Est. Value per warehouse row — quantity × item Unit Cost.
   const itemPriceMap: Record<string, number> = {}
   for (const it of itemOptions) itemPriceMap[it.item_name] = it.cost ?? 0
   const warehouseEstValue = (r: { item_name: string; quantity: number }) => r.quantity * (itemPriceMap[r.item_name] ?? 0)
   const whTotalEstValue = filteredWarehouseRows.reduce((s, r) => s + warehouseEstValue(r), 0)
+
+  const sortedWarehouseRows = [...filteredWarehouseRows].sort((a, b) => {
+    if (!whSortKey) return 0
+    let av: string | number
+    let bv: string | number
+    switch (whSortKey) {
+      case 'client_name': av = a.client_name ?? ''; bv = b.client_name ?? ''; break
+      case 'item_name':   av = a.item_name; bv = b.item_name; break
+      case 'unit':        av = uomName(a.unit); bv = uomName(b.unit); break
+      case 'quantity':    av = a.quantity; bv = b.quantity; break
+      case 'est_value':   av = warehouseEstValue(a); bv = warehouseEstValue(b); break
+      case 'notes':       av = a.notes ?? ''; bv = b.notes ?? ''; break
+      case 'created_at':  av = a.created_at; bv = b.created_at; break
+    }
+    const cmp = typeof av === 'number' && typeof bv === 'number' ? av - bv : String(av).localeCompare(String(bv))
+    return whSortDir === 'asc' ? cmp : -cmp
+  })
 
   function rowKey(r: InventoryRow) { return `${r.client}||${r.item_name}` }
 
@@ -1137,18 +1180,18 @@ export default function InventoryPage() {
       {!reportOpen && viewMode === 'by_warehouse' && (
         <Card>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto max-h-[65vh] overflow-y-auto">
               <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-0 z-10 bg-muted/40">
                   <TableRow>
                     <TableHead className="w-12">No.</TableHead>
-                    <TableHead className="w-44">Owner</TableHead>
-                    <TableHead className="min-w-[280px]">Item Name</TableHead>
-                    <TableHead>Unit</TableHead>
-                    <TableHead className="text-right">Qty</TableHead>
-                    <TableHead className="text-right">Est. Value</TableHead>
-                    <TableHead>Warehouse Note</TableHead>
-                    <TableHead>Date Added</TableHead>
+                    <SortableWhHead label="Owner" sortKey="client_name" className="w-44" whSortKey={whSortKey} whSortDir={whSortDir} onSort={toggleWhSort} />
+                    <SortableWhHead label="Item Name" sortKey="item_name" className="min-w-[280px]" whSortKey={whSortKey} whSortDir={whSortDir} onSort={toggleWhSort} />
+                    <SortableWhHead label="Unit" sortKey="unit" whSortKey={whSortKey} whSortDir={whSortDir} onSort={toggleWhSort} />
+                    <SortableWhHead label="Qty" sortKey="quantity" align="right" whSortKey={whSortKey} whSortDir={whSortDir} onSort={toggleWhSort} />
+                    <SortableWhHead label="Est. Value" sortKey="est_value" align="right" whSortKey={whSortKey} whSortDir={whSortDir} onSort={toggleWhSort} />
+                    <SortableWhHead label="Warehouse Note" sortKey="notes" whSortKey={whSortKey} whSortDir={whSortDir} onSort={toggleWhSort} />
+                    <SortableWhHead label="Date Added" sortKey="created_at" whSortKey={whSortKey} whSortDir={whSortDir} onSort={toggleWhSort} />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -1156,7 +1199,7 @@ export default function InventoryPage() {
                     <TableRow><TableCell colSpan={8} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
                   ) : warehouseRows.length === 0 ? (
                     <TableRow><TableCell colSpan={8} className="text-center py-12 text-muted-foreground">No warehouse stock records found.</TableCell></TableRow>
-                  ) : pagedWarehouseRows.map((r, i) => {
+                  ) : sortedWarehouseRows.map((r, i) => {
                     // client_name is null for general-pool stock by design (that's how
                     // Receiving always adds it) — that alone isn't a red flag. Only warn
                     // when the item has no DR/CSI history anywhere.
@@ -1168,7 +1211,7 @@ export default function InventoryPage() {
                         className={`cursor-pointer hover:bg-muted/50 ${noClientRecord ? 'bg-amber-50/60' : ''}`}
                         onClick={() => toggleWhExpand(r)}
                       >
-                        <TableCell className="text-sm text-muted-foreground">{(page - 1) * PAGE_SIZE + i + 1}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{i + 1}</TableCell>
                         <TableCell className="text-sm">
                           {r.client_name ? (
                             <span>{r.client_name}</span>
@@ -1397,12 +1440,10 @@ export default function InventoryPage() {
         </CardContent>
       </Card>}
 
-      {/* Pagination — hidden when report is open */}
-      {!reportOpen && (() => {
-        const activeTotalPages = viewMode === 'by_warehouse' ? warehouseTotalPages : totalPages
-        const activeTotal = viewMode === 'by_warehouse'
-          ? warehouseRows.filter(r => { const q = search.toLowerCase(); return !q || r.item_name.toLowerCase().includes(q) || (r.client_name ?? '').toLowerCase().includes(q) }).length
-          : viewMode === 'by_item' ? byItemGroups.length : filtered.length
+      {/* Pagination — hidden when report is open, and not used for By Warehouse (scrollable, unpaginated) */}
+      {!reportOpen && viewMode !== 'by_warehouse' && (() => {
+        const activeTotalPages = totalPages
+        const activeTotal = viewMode === 'by_item' ? byItemGroups.length : filtered.length
         if (activeTotalPages <= 1) return null
         return (
           <div className="flex items-center justify-between text-sm">
