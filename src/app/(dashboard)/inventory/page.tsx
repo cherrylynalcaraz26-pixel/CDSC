@@ -133,7 +133,7 @@ export default function InventoryPage() {
   const [detailCsiRows, setDetailCsiRows] = useState<ItemDetailCsiRow[]>([])
   const [detailLoading, setDetailLoading] = useState(false)
 
-  const [warehouseRows, setWarehouseRows] = useState<{id: string; client_name: string | null; item_name: string; unit: string; quantity: number; notes: string | null; created_at: string; hasClientRecord: boolean}[]>([])
+  const [warehouseRows, setWarehouseRows] = useState<{id: string; client_name: string | null; item_name: string; unit: string; quantity: number; notes: string | null; created_at: string}[]>([])
   const [whSortKey, setWhSortKey] = useState<WhSortKey | null>(null)
   const [whSortDir, setWhSortDir] = useState<'asc' | 'desc'>('asc')
   const [expandedWhId, setExpandedWhId] = useState<string | null>(null)
@@ -429,7 +429,6 @@ export default function InventoryPage() {
     // item has been fully delivered out of that pool its quantity is decremented
     // to 0 by DR Logs — at that point it's no longer sitting in the warehouse, so
     // drop it from this view instead of showing an empty/zero row.
-    const allItemsWithClientRecord = new Set(result.map(r => r.item_name))
     const whRows: typeof warehouseRows = []
     from = 0
     while (true) {
@@ -452,7 +451,6 @@ export default function InventoryPage() {
           quantity: qty,
           notes: rec.notes ?? null,
           created_at: rec.created_at,
-          hasClientRecord: allItemsWithClientRecord.has(rec.item_name),
         })
       }
       if (data.length < PAGE) break
@@ -1200,15 +1198,11 @@ export default function InventoryPage() {
                   ) : warehouseRows.length === 0 ? (
                     <TableRow><TableCell colSpan={8} className="text-center py-12 text-muted-foreground">No warehouse stock records found.</TableCell></TableRow>
                   ) : sortedWarehouseRows.map((r, i) => {
-                    // client_name is null for general-pool stock by design (that's how
-                    // Receiving always adds it) — that alone isn't a red flag. Only warn
-                    // when the item has no DR/CSI history anywhere.
-                    const noClientRecord = !r.hasClientRecord
                     const isWhExpanded = expandedWhId === r.id
                     return (
                       <Fragment key={r.id}>
                       <TableRow
-                        className={`cursor-pointer hover:bg-muted/50 ${noClientRecord ? 'bg-amber-50/60' : ''}`}
+                        className="cursor-pointer hover:bg-muted/50"
                         onClick={() => toggleWhExpand(r)}
                       >
                         <TableCell className="text-sm text-muted-foreground">{i + 1}</TableCell>
@@ -1219,25 +1213,14 @@ export default function InventoryPage() {
                             <span className="inline-flex items-center rounded-full bg-slate-100 text-slate-600 border border-slate-200 px-2 py-0.5 text-xs font-medium">CDSC Stock</span>
                           )}
                         </TableCell>
-                        <TableCell className="text-sm font-medium">
-                          <span className="flex items-center gap-1.5">
-                            {noClientRecord && <span title="No client DR/CSI record — update stock"><AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" /></span>}
-                            {r.item_name}
-                          </span>
-                        </TableCell>
+                        <TableCell className="text-sm font-medium">{r.item_name}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">{r.unit ? uomName(r.unit) : '—'}</TableCell>
                         <TableCell className="text-right text-sm font-semibold text-green-700">{r.quantity}</TableCell>
                         <TableCell className="text-right text-sm font-medium text-gray-700">
                           {r.item_name in itemPriceMap ? `₱${warehouseEstValue(r).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : <span className="text-gray-300">—</span>}
                         </TableCell>
                         <TableCell className="text-sm max-w-[220px]">
-                          {noClientRecord ? (
-                            <span className="inline-flex items-center gap-1 rounded-md bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 text-xs font-medium">
-                              {r.notes || 'No DR/CSI record — update stock'}
-                            </span>
-                          ) : (
-                            <span className="text-muted-foreground text-xs">{r.notes || '—'}</span>
-                          )}
+                          <span className="text-muted-foreground text-xs">{r.notes || '—'}</span>
                         </TableCell>
                         <TableCell className="text-xs text-muted-foreground">{new Date(r.created_at).toLocaleDateString('en-PH')}</TableCell>
                       </TableRow>
