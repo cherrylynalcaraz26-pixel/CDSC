@@ -358,10 +358,53 @@ export default function PurchaseOrdersPage() {
     if (status === 'completed') {
       const received = await autoReceivePO(id)
       toast.success(received ? 'PO completed — automatically received, stock updated' : 'Status → Completed')
+    } else if (status === 'open') {
+      const undone = await undoReceivePO(id)
+      toast.success(undone ? 'Status → Pending — receiving undone, stock reverted' : 'Status → Pending')
     } else {
       toast.success(`Status → ${STATUS_CFG[status].label}`)
     }
     load()
+  }
+
+  // Inverse of autoReceivePO — moving a PO back to Pending means it hasn't actually
+  // arrived, so any Receiving Report(s) created for it (auto or manual) are removed and
+  // the warehouse stock/ledger entries they credited are reversed. Reverses once per
+  // existing RR, matching how each RR's creation credited stock once, and floors at 0
+  // in case some of that stock has already moved on (e.g. delivered out via DR Logs).
+  async function undoReceivePO(id: string): Promise<boolean> {
+    const { data: poRaw } = await supabase.from('purchase_orders').select('po_number').eq('id', id).maybeSingle()
+    const po = poRaw as { po_number: string | null } | null
+    if (!po?.po_number) return false
+
+    const { data: rrs } = await supabase.from('receiving_reports').select('id').eq('po_number', po.po_number)
+    if (!rrs || rrs.length === 0) return false
+
+    const { data: poItems } = await supabase.from('po_items').select('item_name, quantity, unit_of_measure').eq('po_id', id)
+
+    for (const rr of rrs) {
+      for (const it of poItems ?? []) {
+        const qty = Number(it.quantity) || 0
+        if (qty <= 0) continue
+        const { data: wsRow } = await supabase.from('warehouse_stock').select('id, quantity').eq('item_name', it.item_name).is('client_name', null).maybeSingle()
+        if (wsRow) {
+          await supabase.from('warehouse_stock').update({
+            quantity: Math.max(0, Number(wsRow.quantity) - qty),
+            updated_at: new Date().toISOString(),
+          }).eq('id', wsRow.id)
+        }
+        await supabase.from('warehouse_stock_ledger').insert({
+          item_name: it.item_name,
+          unit: it.unit_of_measure ?? '',
+          change_qty: -qty,
+          source_type: 'manual_edit',
+          reference_no: po.po_number,
+          notes: 'PO reverted to Pending — receiving undone',
+        })
+      }
+      await supabase.from('receiving_reports').delete().eq('id', rr.id)
+    }
+    return true
   }
 
   // Marking a PO "Completed" used to leave it stranded in Receiving's "Pending
