@@ -4,8 +4,9 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow, SortableTableHead,
 } from '@/components/ui/table'
+import { useTableSort } from '@/lib/use-table-sort'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {
@@ -114,6 +115,19 @@ export default function SalesDeliveriesPage() {
     )
   })
 
+  type DeliverySortKey = 'delivery_number' | 'so_number' | 'dr_number' | 'delivery_date' | 'client_name' | 'items' | 'status'
+  const { sorted: sortedDeliveries, sortKey: deliverySortKey, sortDir: deliverySortDir, onSort: onSortDelivery } = useTableSort<EnrichedDelivery, DeliverySortKey>(filtered, (d, key) => {
+    switch (key) {
+      case 'delivery_number': return d.delivery_number ?? ''
+      case 'so_number': return d.so_number ?? ''
+      case 'dr_number': return d.dr_number ?? ''
+      case 'delivery_date': return d.delivery_date ?? ''
+      case 'client_name': return d.client_name ?? ''
+      case 'items': return d.items.length
+      case 'status': return d.status ?? ''
+    }
+  })
+
   const statusCounts = deliveries.reduce<Record<string, number>>((acc, d) => {
     acc[d.status] = (acc[d.status] ?? 0) + 1
     return acc
@@ -140,9 +154,9 @@ export default function SalesDeliveriesPage() {
       </div>
 
       {/* Filters */}
-      <div className="flex gap-3 flex-wrap items-end">
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Status</Label>
+      <div className="flex gap-3 flex-wrap items-center">
+        <div className="flex items-center gap-1.5">
+          <Label className="text-xs text-muted-foreground whitespace-nowrap">Status</Label>
           <Select value={statusFilter} onValueChange={v => setStatusFilter(v ?? '_all')}>
             <SelectTrigger className="w-48">
               <SelectValue placeholder="All Statuses" />
@@ -156,12 +170,12 @@ export default function SalesDeliveriesPage() {
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">From</Label>
+        <div className="flex items-center gap-1.5">
+          <Label className="text-xs text-muted-foreground whitespace-nowrap">From</Label>
           <Input type="date" className="w-40" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">To</Label>
+        <div className="flex items-center gap-1.5">
+          <Label className="text-xs text-muted-foreground whitespace-nowrap">To</Label>
           <Input type="date" className="w-40" value={dateTo} onChange={e => setDateTo(e.target.value)} />
         </div>
         {(dateFrom || dateTo) && (
@@ -188,17 +202,17 @@ export default function SalesDeliveriesPage() {
                 <TableRow>
                   <TableHead className="w-10">No.</TableHead>
                   <TableHead className="w-8" />
-                  <TableHead>Delivery #</TableHead>
-                  <TableHead>SO Number</TableHead>
-                  <TableHead>DR Number</TableHead>
-                  <TableHead>Delivery Date</TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Items</TableHead>
-                  <TableHead>Status</TableHead>
+                  <SortableTableHead label="Delivery #" sortKey="delivery_number" activeKey={deliverySortKey} direction={deliverySortDir} onSort={onSortDelivery} />
+                  <SortableTableHead label="SO Number" sortKey="so_number" activeKey={deliverySortKey} direction={deliverySortDir} onSort={onSortDelivery} />
+                  <SortableTableHead label="DR Number" sortKey="dr_number" activeKey={deliverySortKey} direction={deliverySortDir} onSort={onSortDelivery} />
+                  <SortableTableHead label="Delivery Date" sortKey="delivery_date" activeKey={deliverySortKey} direction={deliverySortDir} onSort={onSortDelivery} />
+                  <SortableTableHead label="Client" sortKey="client_name" activeKey={deliverySortKey} direction={deliverySortDir} onSort={onSortDelivery} />
+                  <SortableTableHead label="Items" sortKey="items" activeKey={deliverySortKey} direction={deliverySortDir} onSort={onSortDelivery} />
+                  <SortableTableHead label="Status" sortKey="status" activeKey={deliverySortKey} direction={deliverySortDir} onSort={onSortDelivery} />
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {filtered.map((d, idx) => (
+                {sortedDeliveries.map((d, idx) => (
                   <>
                     <TableRow key={d.id} className="cursor-pointer hover:bg-red-50/40 transition-colors" onClick={() => toggleExpand(d.id)}>
                       <TableCell className="text-muted-foreground text-xs">{idx + 1}</TableCell>

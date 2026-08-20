@@ -5,7 +5,8 @@ import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, SortableTableHead } from '@/components/ui/table'
+import { useTableSort } from '@/lib/use-table-sort'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -599,6 +600,19 @@ export default function QuotationPage() {
       })
     : quotations
 
+  type QuoteSortKey = 'quote_number' | 'quote_date' | 'valid_until' | 'client_name' | 'subject' | 'total_amount' | 'status'
+  const { sorted: sortedQuotations, sortKey: quoteSortKey, sortDir: quoteSortDir, onSort: onSortQuote } = useTableSort<Quotation, QuoteSortKey>(displayedQuotations, (q, key) => {
+    switch (key) {
+      case 'quote_number': return q.quote_number ?? ''
+      case 'quote_date': return q.quote_date ?? ''
+      case 'valid_until': return q.valid_until ?? ''
+      case 'client_name': return q.client_name ?? ''
+      case 'subject': return q.subject ?? ''
+      case 'total_amount': return q.total_amount ?? 0
+      case 'status': return q.status ?? ''
+    }
+  })
+
   const counts = {
     total: quotations.length,
     draft: quotations.filter(q => q.status === 'draft').length,
@@ -1177,13 +1191,13 @@ export default function QuotationPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-10">No.</TableHead>
-                  <TableHead>Quote #</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Valid Until</TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Subject</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                  <TableHead>Status</TableHead>
+                  <SortableTableHead label="Quote #" sortKey="quote_number" activeKey={quoteSortKey} direction={quoteSortDir} onSort={onSortQuote} />
+                  <SortableTableHead label="Date" sortKey="quote_date" activeKey={quoteSortKey} direction={quoteSortDir} onSort={onSortQuote} />
+                  <SortableTableHead label="Valid Until" sortKey="valid_until" activeKey={quoteSortKey} direction={quoteSortDir} onSort={onSortQuote} />
+                  <SortableTableHead label="Client" sortKey="client_name" activeKey={quoteSortKey} direction={quoteSortDir} onSort={onSortQuote} />
+                  <SortableTableHead label="Subject" sortKey="subject" activeKey={quoteSortKey} direction={quoteSortDir} onSort={onSortQuote} />
+                  <SortableTableHead label="Total" sortKey="total_amount" align="right" activeKey={quoteSortKey} direction={quoteSortDir} onSort={onSortQuote} />
+                  <SortableTableHead label="Status" sortKey="status" activeKey={quoteSortKey} direction={quoteSortDir} onSort={onSortQuote} />
                   <TableHead className="w-10"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -1192,11 +1206,11 @@ export default function QuotationPage() {
                   <TableRow><TableCell colSpan={9} className="text-center py-10">
                     <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                   </TableCell></TableRow>
-                ) : displayedQuotations.length === 0 ? (
+                ) : sortedQuotations.length === 0 ? (
                   <TableRow><TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
                     No quotations match your search.
                   </TableCell></TableRow>
-                ) : displayedQuotations.map((q, idx) => {
+                ) : sortedQuotations.map((q, idx) => {
                   const cfg = STATUS_CFG[q.status] ?? { label: q.status, cls: 'bg-gray-100 text-gray-700' }
                   return (
                     <TableRow

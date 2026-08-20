@@ -8,8 +8,9 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow, SortableTableHead,
 } from '@/components/ui/table'
+import { useTableSort } from '@/lib/use-table-sort'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
@@ -425,11 +426,33 @@ export default function DRLogsPage() {
   })
 
   const PAGE_SIZE = 30
-  const pagedFiltered = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  type DrLogSortKey = 'dr_date' | 'dr_number' | 'supplier_name' | 'total_qty' | 'status'
+  const { sorted: sortedFiltered, sortKey: drLogSortKey, sortDir: drLogSortDir, onSort: onSortDrLog } = useTableSort<DRLog, DrLogSortKey>(filtered, (l, key) => {
+    switch (key) {
+      case 'dr_date': return l.dr_date ?? ''
+      case 'dr_number': return l.dr_number ?? ''
+      case 'supplier_name': return l.supplier_name ?? ''
+      case 'total_qty': return getTotalQty(l.dr_number)
+      case 'status': return l.status ?? ''
+    }
+  })
+  const pagedFiltered = sortedFiltered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
   const allItemsFlat = filtered.flatMap(log =>
     getItems(log.dr_number).map(item => ({ ...item, log }))
   )
-  const pagedItemsFlat = allItemsFlat.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  type DrItemSortKey = 'dr_number' | 'dr_date' | 'supplier_name' | 'quantity' | 'unit' | 'item_name' | 'status'
+  const { sorted: sortedItemsFlat, sortKey: drItemSortKey, sortDir: drItemSortDir, onSort: onSortDrItem } = useTableSort<typeof allItemsFlat[number], DrItemSortKey>(allItemsFlat, (row, key) => {
+    switch (key) {
+      case 'dr_number': return row.dr_number ?? ''
+      case 'dr_date': return row.log.dr_date ?? ''
+      case 'supplier_name': return row.log.supplier_name ?? ''
+      case 'quantity': return Number(row.quantity) || 0
+      case 'unit': return row.unit ?? ''
+      case 'item_name': return row.item_name ?? ''
+      case 'status': return row.log.status ?? ''
+    }
+  })
+  const pagedItemsFlat = sortedItemsFlat.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
   const activeTotal = viewMode === 'by-dr' ? filtered.length : allItemsFlat.length
   const totalPages = Math.max(1, Math.ceil(activeTotal / PAGE_SIZE))
 
@@ -904,9 +927,9 @@ export default function DRLogsPage() {
         )
       })()}
 
-      <div className="flex flex-wrap gap-3 items-end">
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Client</Label>
+      <div className="flex flex-wrap gap-3 items-center">
+        <div className="flex items-center gap-1.5">
+          <Label className="text-xs text-muted-foreground whitespace-nowrap">Client</Label>
           <Select value={clientFilter || '_all'} onValueChange={(v: string | null) => setClientFilter(!v || v === '_all' ? '' : v)}>
             <SelectTrigger className="min-w-[220px]">
               <SelectValue>{(v: string) => v === '_all' ? 'Client' : v}</SelectValue>
@@ -917,8 +940,8 @@ export default function DRLogsPage() {
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Year</Label>
+        <div className="flex items-center gap-1.5">
+          <Label className="text-xs text-muted-foreground whitespace-nowrap">Year</Label>
           <Select value={yearFilter} onValueChange={v => setYearFilter(v ?? 'all')}>
             <SelectTrigger className="w-32">
               <SelectValue>{(v: string) => v === 'all' ? 'Filter by Year' : v}</SelectValue>
@@ -929,8 +952,8 @@ export default function DRLogsPage() {
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Status</Label>
+        <div className="flex items-center gap-1.5">
+          <Label className="text-xs text-muted-foreground whitespace-nowrap">Status</Label>
           <Select value={statusFilter} onValueChange={v => setStatusFilter(v ?? 'all')}>
             <SelectTrigger className="w-40">
               <SelectValue>{(v: string) => v === 'all' ? 'Status' : STATUS_CFG[v]?.label ?? v}</SelectValue>
@@ -944,8 +967,8 @@ export default function DRLogsPage() {
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">View</Label>
+        <div className="flex items-center gap-1.5">
+          <Label className="text-xs text-muted-foreground whitespace-nowrap">View</Label>
           <div className="flex rounded-md border overflow-hidden">
             <button
               onClick={() => setViewMode('by-dr')}
@@ -979,11 +1002,11 @@ export default function DRLogsPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-12">No.</TableHead>
-                    <TableHead>Date</TableHead>
-                    <TableHead>DR Number</TableHead>
-                    <TableHead>Delivered To</TableHead>
-                    <TableHead className="text-right">Total Qty</TableHead>
-                    <TableHead>Status</TableHead>
+                    <SortableTableHead label="Date" sortKey="dr_date" activeKey={drLogSortKey} direction={drLogSortDir} onSort={onSortDrLog} />
+                    <SortableTableHead label="DR Number" sortKey="dr_number" activeKey={drLogSortKey} direction={drLogSortDir} onSort={onSortDrLog} />
+                    <SortableTableHead label="Delivered To" sortKey="supplier_name" activeKey={drLogSortKey} direction={drLogSortDir} onSort={onSortDrLog} />
+                    <SortableTableHead label="Total Qty" sortKey="total_qty" align="right" activeKey={drLogSortKey} direction={drLogSortDir} onSort={onSortDrLog} />
+                    <SortableTableHead label="Status" sortKey="status" activeKey={drLogSortKey} direction={drLogSortDir} onSort={onSortDrLog} />
                     <TableHead className="w-16 text-center">Photo</TableHead>
                     <TableHead className="w-10" />
                   </TableRow>
@@ -995,7 +1018,7 @@ export default function DRLogsPage() {
                         <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                       </TableCell>
                     </TableRow>
-                  ) : filtered.length === 0 ? (
+                  ) : sortedFiltered.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
                         No DR logs found. Click <strong>New DR Log</strong> to add one.
@@ -1173,13 +1196,13 @@ export default function DRLogsPage() {
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-12">No.</TableHead>
-                        <TableHead>DR Number</TableHead>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Delivered To</TableHead>
-                        <TableHead className="text-right">Qty</TableHead>
-                        <TableHead>Unit</TableHead>
-                        <TableHead>Item Description</TableHead>
-                        <TableHead>Status</TableHead>
+                        <SortableTableHead label="DR Number" sortKey="dr_number" activeKey={drItemSortKey} direction={drItemSortDir} onSort={onSortDrItem} />
+                        <SortableTableHead label="Date" sortKey="dr_date" activeKey={drItemSortKey} direction={drItemSortDir} onSort={onSortDrItem} />
+                        <SortableTableHead label="Delivered To" sortKey="supplier_name" activeKey={drItemSortKey} direction={drItemSortDir} onSort={onSortDrItem} />
+                        <SortableTableHead label="Qty" sortKey="quantity" align="right" activeKey={drItemSortKey} direction={drItemSortDir} onSort={onSortDrItem} />
+                        <SortableTableHead label="Unit" sortKey="unit" activeKey={drItemSortKey} direction={drItemSortDir} onSort={onSortDrItem} />
+                        <SortableTableHead label="Item Description" sortKey="item_name" activeKey={drItemSortKey} direction={drItemSortDir} onSort={onSortDrItem} />
+                        <SortableTableHead label="Status" sortKey="status" activeKey={drItemSortKey} direction={drItemSortDir} onSort={onSortDrItem} />
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1189,7 +1212,7 @@ export default function DRLogsPage() {
                             <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                           </TableCell>
                         </TableRow>
-                      ) : allItemsFlat.length === 0 ? (
+                      ) : sortedItemsFlat.length === 0 ? (
                         <TableRow>
                           <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
                             No item records found.

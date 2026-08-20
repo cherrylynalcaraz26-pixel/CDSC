@@ -7,7 +7,8 @@ import { fetchAllRows } from '@/lib/supabase/fetch-all'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, SortableTableHead } from '@/components/ui/table'
+import { useTableSort } from '@/lib/use-table-sort'
 import { PaginationBar } from '@/components/ui/pagination-bar'
 import { Tabs, TabsContent } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
@@ -252,6 +253,12 @@ function OverviewTab() {
   const [summary, setSummary] = useState({ totalPO: 0, totalReceived: 0, totalEWT: 0, totalVAT: 0, pendingPayables: 0 })
   const [recentPOs, setRecentPOs] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  type RecentPoSortKey = 'po_number' | 'supplier' | 'total_amount' | 'vat_amount' | 'ewt_amount' | 'net_payable' | 'status'
+  const { sorted: sortedRecentPOs, sortKey: poSortKey, sortDir: poSortDir, onSort: onSortPo } = useTableSort<Record<string, unknown> & { supplier?: { company_name?: string } | null }, RecentPoSortKey>(recentPOs, (po, key) => {
+    if (key === 'supplier') return po.supplier?.company_name ?? ''
+    const v = po[key]
+    return typeof v === 'number' ? v : String(v ?? '')
+  })
 
   useEffect(() => {
     async function load() {
@@ -319,21 +326,21 @@ function OverviewTab() {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-10">No.</TableHead>
-                <TableHead>PO Number</TableHead>
-                <TableHead>Supplier</TableHead>
-                <TableHead className="text-right">Gross Amount</TableHead>
-                <TableHead className="text-right">VAT (12%)</TableHead>
-                <TableHead className="text-right">EWT</TableHead>
-                <TableHead className="text-right">Net Payable</TableHead>
-                <TableHead>Status</TableHead>
+                <SortableTableHead label="PO Number" sortKey="po_number" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
+                <SortableTableHead label="Supplier" sortKey="supplier" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
+                <SortableTableHead label="Gross Amount" sortKey="total_amount" align="right" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
+                <SortableTableHead label="VAT (12%)" sortKey="vat_amount" align="right" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
+                <SortableTableHead label="EWT" sortKey="ewt_amount" align="right" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
+                <SortableTableHead label="Net Payable" sortKey="net_payable" align="right" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
+                <SortableTableHead label="Status" sortKey="status" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Loading…</TableCell></TableRow>
-              ) : recentPOs.length === 0 ? (
+              ) : sortedRecentPOs.length === 0 ? (
                 <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No purchase orders yet</TableCell></TableRow>
-              ) : recentPOs.map((po: any, i: number) => {
+              ) : sortedRecentPOs.map((po: any, i: number) => {
                 const gross = po.total_amount ?? 0
                 const vat = po.vat_amount ?? 0
                 const ewt = po.ewt_amount ?? 0
@@ -514,6 +521,8 @@ function CollectionsTab() {
   const [clientDropdownOpen, setClientDropdownOpen] = useState(false)
   const [csiOptions, setCsiOptions] = useState<{ si_number: string; si_date: string; total: number }[]>([])
   const [readyToCollect, setReadyToCollect] = useState<{ so_number: string; client_name: string; csi_total: number; collected_total: number; outstanding: number; si_numbers: string[] }[]>([])
+  type RtcSortKey = 'so_number' | 'client_name' | 'csi_total' | 'collected_total' | 'outstanding'
+  const { sorted: sortedReadyToCollect, sortKey: rtcSortKey, sortDir: rtcSortDir, onSort: onSortRtc } = useTableSort<typeof readyToCollect[number], RtcSortKey>(readyToCollect, (r, key) => r[key])
   const [expandedRTC, setExpandedRTC] = useState<string | null>(null)
   const [companyInfo, setCompanyInfo] = useState<{ company_name: string | null; address: string | null; phone: string | null; tin: string | null } | null>(null)
   const [viewRecord, setViewRecord] = useState<Collection | null>(null)
@@ -951,9 +960,24 @@ function CollectionsTab() {
   const countPosted = filteredRecords.filter(r => r.status === 'posted').length
   const countVoided = filteredRecords.filter(r => r.status === 'voided').length
 
+  type CollectionSortKey = 'or_number' | 'collection_date' | 'client_name' | 'si_number' | 'payment_mode' | 'amount' | 'form_2307' | 'net_total' | 'status'
+  const { sorted: sortedRecords, sortKey: collectionSortKey, sortDir: collectionSortDir, onSort: onSortCollection } = useTableSort<Collection, CollectionSortKey>(filteredRecords, (r, key) => {
+    switch (key) {
+      case 'or_number': return r.or_number ?? ''
+      case 'collection_date': return r.collection_date ?? ''
+      case 'client_name': return r.client_name ?? ''
+      case 'si_number': return r.si_number ?? ''
+      case 'payment_mode': return r.payment_mode ?? ''
+      case 'amount': return r.amount ?? 0
+      case 'form_2307': return r.form_2307 ?? 0
+      case 'net_total': return (r.amount ?? 0) - (r.form_2307 ?? 0)
+      case 'status': return r.status ?? ''
+    }
+  })
+
   const PAGE_SIZE = 30
   const totalPages = Math.max(1, Math.ceil(filteredRecords.length / PAGE_SIZE))
-  const pagedRecords = filteredRecords.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const pagedRecords = sortedRecords.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   useEffect(() => { setPage(1) }, [clientFilter, df.filterFrom, df.filterTo])
 
@@ -1013,11 +1037,11 @@ function CollectionsTab() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>SO Number</TableHead>
-                <TableHead>Client</TableHead>
-                <TableHead className="text-right">Billed (CSI)</TableHead>
-                <TableHead className="text-right">Collected</TableHead>
-                <TableHead className="text-right">Outstanding</TableHead>
+                <SortableTableHead label="SO Number" sortKey="so_number" activeKey={rtcSortKey} direction={rtcSortDir} onSort={onSortRtc} />
+                <SortableTableHead label="Client" sortKey="client_name" activeKey={rtcSortKey} direction={rtcSortDir} onSort={onSortRtc} />
+                <SortableTableHead label="Billed (CSI)" sortKey="csi_total" align="right" activeKey={rtcSortKey} direction={rtcSortDir} onSort={onSortRtc} />
+                <SortableTableHead label="Collected" sortKey="collected_total" align="right" activeKey={rtcSortKey} direction={rtcSortDir} onSort={onSortRtc} />
+                <SortableTableHead label="Outstanding" sortKey="outstanding" align="right" activeKey={rtcSortKey} direction={rtcSortDir} onSort={onSortRtc} />
                 <TableHead className="w-10" />
               </TableRow>
             </TableHeader>
@@ -1026,11 +1050,11 @@ function CollectionsTab() {
                 <TableRow><TableCell colSpan={6} className="text-center py-8">
                   <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                 </TableCell></TableRow>
-              ) : readyToCollect.length === 0 ? (
+              ) : sortedReadyToCollect.length === 0 ? (
                 <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                   No outstanding Sales Orders with both a DR and a CSI invoice.
                 </TableCell></TableRow>
-              ) : readyToCollect.map(row => {
+              ) : sortedReadyToCollect.map(row => {
                 const isExpanded = expandedRTC === row.so_number
                 const appliedCollections = records.filter(r => r.status === 'posted' && r.si_number && row.si_numbers.includes(r.si_number))
                 return (
@@ -1149,15 +1173,15 @@ function CollectionsTab() {
             <TableHeader>
               <TableRow>
                 <TableHead className="w-12">No.</TableHead>
-                <TableHead>OR Number</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Client</TableHead>
-                <TableHead>CSI</TableHead>
-                <TableHead>Payment Mode</TableHead>
-                <TableHead className="text-right">Gross Amount</TableHead>
-                <TableHead className="text-right">Form 2307</TableHead>
-                <TableHead className="text-right">Net Total</TableHead>
-                <TableHead>Status</TableHead>
+                <SortableTableHead label="OR Number" sortKey="or_number" activeKey={collectionSortKey} direction={collectionSortDir} onSort={onSortCollection} />
+                <SortableTableHead label="Date" sortKey="collection_date" activeKey={collectionSortKey} direction={collectionSortDir} onSort={onSortCollection} />
+                <SortableTableHead label="Client" sortKey="client_name" activeKey={collectionSortKey} direction={collectionSortDir} onSort={onSortCollection} />
+                <SortableTableHead label="CSI" sortKey="si_number" activeKey={collectionSortKey} direction={collectionSortDir} onSort={onSortCollection} />
+                <SortableTableHead label="Payment Mode" sortKey="payment_mode" activeKey={collectionSortKey} direction={collectionSortDir} onSort={onSortCollection} />
+                <SortableTableHead label="Gross Amount" sortKey="amount" align="right" activeKey={collectionSortKey} direction={collectionSortDir} onSort={onSortCollection} />
+                <SortableTableHead label="Form 2307" sortKey="form_2307" align="right" activeKey={collectionSortKey} direction={collectionSortDir} onSort={onSortCollection} />
+                <SortableTableHead label="Net Total" sortKey="net_total" align="right" activeKey={collectionSortKey} direction={collectionSortDir} onSort={onSortCollection} />
+                <SortableTableHead label="Status" sortKey="status" activeKey={collectionSortKey} direction={collectionSortDir} onSort={onSortCollection} />
                 <TableHead className="w-10" />
               </TableRow>
             </TableHeader>

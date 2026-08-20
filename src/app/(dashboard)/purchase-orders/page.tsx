@@ -5,7 +5,8 @@ import { createClient } from '@/lib/supabase/client'
 import { fetchAllRows } from '@/lib/supabase/fetch-all'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, SortableTableHead } from '@/components/ui/table'
+import { useTableSort } from '@/lib/use-table-sort'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -690,6 +691,22 @@ export default function PurchaseOrdersPage() {
       })
     : pos
 
+  type PoSortKey = 'po_number' | 'pr_number' | 'supplier' | 'po_date' | 'delivery_date' | 'subtotal' | 'vat_amount' | 'ewt_amount' | 'net_payable' | 'status'
+  const { sorted: sortedPos, sortKey: poSortKey, sortDir: poSortDir, onSort: onSortPo } = useTableSort<PO, PoSortKey>(displayedPos, (po, key) => {
+    switch (key) {
+      case 'po_number': return po.po_number ?? ''
+      case 'pr_number': return po.pr?.pr_number ?? ''
+      case 'supplier': return po.supplier?.company_name ?? ''
+      case 'po_date': return po.po_date ?? ''
+      case 'delivery_date': return po.delivery_date ?? ''
+      case 'subtotal': return po.subtotal ?? 0
+      case 'vat_amount': return po.vat_amount ?? 0
+      case 'ewt_amount': return po.ewt_amount ?? 0
+      case 'net_payable': return po.net_payable ?? 0
+      case 'status': return po.status ?? ''
+    }
+  })
+
   const counts = {
     open: pos.filter(p => p.status === 'open').length,
     partial: pos.filter(p => p.status === 'partially_delivered').length,
@@ -859,16 +876,16 @@ export default function PurchaseOrdersPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-10">No.</TableHead>
-                  <TableHead>PO Number</TableHead>
-                  <TableHead>PR Ref</TableHead>
-                  <TableHead>Supplier</TableHead>
-                  <TableHead>PO Date</TableHead>
-                  <TableHead>Delivery Date</TableHead>
-                  <TableHead className="text-right">Subtotal</TableHead>
-                  <TableHead className="text-right">VAT 12%</TableHead>
-                  <TableHead className="text-right">EWT</TableHead>
-                  <TableHead className="text-right">Net Payable</TableHead>
-                  <TableHead>Status</TableHead>
+                  <SortableTableHead label="PO Number" sortKey="po_number" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
+                  <SortableTableHead label="PR Ref" sortKey="pr_number" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
+                  <SortableTableHead label="Supplier" sortKey="supplier" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
+                  <SortableTableHead label="PO Date" sortKey="po_date" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
+                  <SortableTableHead label="Delivery Date" sortKey="delivery_date" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
+                  <SortableTableHead label="Subtotal" sortKey="subtotal" align="right" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
+                  <SortableTableHead label="VAT 12%" sortKey="vat_amount" align="right" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
+                  <SortableTableHead label="EWT" sortKey="ewt_amount" align="right" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
+                  <SortableTableHead label="Net Payable" sortKey="net_payable" align="right" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
+                  <SortableTableHead label="Status" sortKey="status" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -878,13 +895,13 @@ export default function PurchaseOrdersPage() {
                       <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                     </TableCell>
                   </TableRow>
-                ) : displayedPos.length === 0 ? (
+                ) : sortedPos.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={11} className="text-center py-12 text-muted-foreground">
                       No purchase orders yet. Click <strong>Create PO</strong> to get started.
                     </TableCell>
                   </TableRow>
-                ) : displayedPos.map((po, idx) => {
+                ) : sortedPos.map((po, idx) => {
                   const sCfg = STATUS_CFG[po.status] ?? STATUS_CFG.open
                   return (
                     <TableRow key={po.id} className="cursor-pointer hover:bg-red-50/40 transition-colors" onClick={() => openDetails(po)}>

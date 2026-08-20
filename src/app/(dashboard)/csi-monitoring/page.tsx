@@ -8,8 +8,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow, SortableTableHead,
 } from '@/components/ui/table'
+import { useTableSort } from '@/lib/use-table-sort'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
@@ -656,8 +657,34 @@ export default function CSIMonitoringPage() {
   }
 
   const PAGE_SIZE = 30
-  const pagedSiGroups = siGroups.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
-  const pagedFiltered = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  type SiGroupSortKey = 'date' | 'si_number' | 'po' | 'client' | 'dr' | 'items' | 'total'
+  const { sorted: sortedSiGroups, sortKey: siGroupSortKey, sortDir: siGroupSortDir, onSort: onSortSiGroup } = useTableSort<typeof siGroups[number], SiGroupSortKey>(siGroups, (g, key) => {
+    switch (key) {
+      case 'date': return g.date ?? ''
+      case 'si_number': return g.si_number ?? ''
+      case 'po': return g.po ?? ''
+      case 'client': return g.client ?? ''
+      case 'dr': return g.dr ?? ''
+      case 'items': return g.items.length
+      case 'total': return g.total
+    }
+  })
+  const pagedSiGroups = sortedSiGroups.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+
+  type CsiSortKey = 'si_date' | 'si_number' | 'client_name' | 'item_name' | 'quantity' | 'unit' | 'unit_price' | 'amount'
+  const { sorted: sortedFiltered, sortKey: csiSortKey, sortDir: csiSortDir, onSort: onSortCsi } = useTableSort<CSIRecord, CsiSortKey>(filtered, (r, key) => {
+    switch (key) {
+      case 'si_date': return r.si_date ?? ''
+      case 'si_number': return r.si_number ?? ''
+      case 'client_name': return r.client_name ?? ''
+      case 'item_name': return r.item_name ?? ''
+      case 'quantity': return Number(r.quantity) || 0
+      case 'unit': return r.unit ?? ''
+      case 'unit_price': return Number(r.unit_price) || 0
+      case 'amount': return Number(r.amount) || 0
+    }
+  })
+  const pagedFiltered = sortedFiltered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
   const activeTotal = viewMode === 'by-si' ? siGroups.length : filtered.length
   const totalPages = Math.max(1, Math.ceil(activeTotal / PAGE_SIZE))
 
@@ -1490,9 +1517,9 @@ export default function CSIMonitoringPage() {
         )
       })()}
 
-      {!open && <div className="flex flex-wrap gap-3 items-end">
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Client</Label>
+      {!open && <div className="flex flex-wrap gap-3 items-center">
+        <div className="flex items-center gap-1.5">
+          <Label className="text-xs text-muted-foreground whitespace-nowrap">Client</Label>
           <Select value={clientFilter || '__all__'} onValueChange={v => setClientFilter(!v || v === '__all__' ? '' : v)}>
             <SelectTrigger className="h-9 w-72 text-sm">
               <SelectValue className="truncate">{(v: string) => v === '__all__' ? 'Client' : v}</SelectValue>
@@ -1503,8 +1530,8 @@ export default function CSIMonitoringPage() {
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Year</Label>
+        <div className="flex items-center gap-1.5">
+          <Label className="text-xs text-muted-foreground whitespace-nowrap">Year</Label>
           <Select value={yearFilter} onValueChange={v => setYearFilter(v ?? 'all')}>
             <SelectTrigger className="h-9 w-32 text-sm">
               <SelectValue>{(v: string) => v === 'all' ? 'Filter by Year' : v}</SelectValue>
@@ -1533,8 +1560,8 @@ export default function CSIMonitoringPage() {
             </div>
           ) : null
         })()}
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">View</Label>
+        <div className="flex items-center gap-1.5">
+          <Label className="text-xs text-muted-foreground whitespace-nowrap">View</Label>
           <div className="flex border rounded-md overflow-hidden">
             <button
               onClick={() => setViewMode('by-si')}
@@ -1656,13 +1683,13 @@ export default function CSIMonitoringPage() {
                       />
                     </TableHead>
                     <TableHead className="w-12">No.</TableHead>
-                    <TableHead className="w-28">Date</TableHead>
-                    <TableHead className="w-32">SI Number</TableHead>
-                    <TableHead className="w-32">SO Number</TableHead>
-                    <TableHead className="min-w-[160px]">Client</TableHead>
-                    <TableHead className="w-28">DR Number</TableHead>
-                    <TableHead className="text-right w-16">Items</TableHead>
-                    <TableHead className="text-right w-32">Total Amount</TableHead>
+                    <SortableTableHead label="Date" sortKey="date" className="w-28" activeKey={siGroupSortKey} direction={siGroupSortDir} onSort={onSortSiGroup} />
+                    <SortableTableHead label="SI Number" sortKey="si_number" className="w-32" activeKey={siGroupSortKey} direction={siGroupSortDir} onSort={onSortSiGroup} />
+                    <SortableTableHead label="SO Number" sortKey="po" className="w-32" activeKey={siGroupSortKey} direction={siGroupSortDir} onSort={onSortSiGroup} />
+                    <SortableTableHead label="Client" sortKey="client" className="min-w-[160px]" activeKey={siGroupSortKey} direction={siGroupSortDir} onSort={onSortSiGroup} />
+                    <SortableTableHead label="DR Number" sortKey="dr" className="w-28" activeKey={siGroupSortKey} direction={siGroupSortDir} onSort={onSortSiGroup} />
+                    <SortableTableHead label="Items" sortKey="items" align="right" className="w-16" activeKey={siGroupSortKey} direction={siGroupSortDir} onSort={onSortSiGroup} />
+                    <SortableTableHead label="Total Amount" sortKey="total" align="right" className="w-32" activeKey={siGroupSortKey} direction={siGroupSortDir} onSort={onSortSiGroup} />
                     <TableHead className="w-16 text-center">Photo</TableHead>
                     <TableHead className="w-24 text-center">Portal</TableHead>
                     <TableHead className="w-10" />
@@ -1810,14 +1837,14 @@ export default function CSIMonitoringPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-12">No.</TableHead>
-                    <TableHead className="w-28">Date</TableHead>
-                    <TableHead className="w-32">SI Number</TableHead>
-                    <TableHead className="min-w-[160px]">Client</TableHead>
-                    <TableHead>Item/s</TableHead>
-                    <TableHead className="text-right w-16">QTY</TableHead>
-                    <TableHead className="w-20">Unit</TableHead>
-                    <TableHead className="text-right w-32">Unit Price</TableHead>
-                    <TableHead className="text-right w-28">Amount</TableHead>
+                    <SortableTableHead label="Date" sortKey="si_date" className="w-28" activeKey={csiSortKey} direction={csiSortDir} onSort={onSortCsi} />
+                    <SortableTableHead label="SI Number" sortKey="si_number" className="w-32" activeKey={csiSortKey} direction={csiSortDir} onSort={onSortCsi} />
+                    <SortableTableHead label="Client" sortKey="client_name" className="min-w-[160px]" activeKey={csiSortKey} direction={csiSortDir} onSort={onSortCsi} />
+                    <SortableTableHead label="Item/s" sortKey="item_name" activeKey={csiSortKey} direction={csiSortDir} onSort={onSortCsi} />
+                    <SortableTableHead label="QTY" sortKey="quantity" align="right" className="w-16" activeKey={csiSortKey} direction={csiSortDir} onSort={onSortCsi} />
+                    <SortableTableHead label="Unit" sortKey="unit" className="w-20" activeKey={csiSortKey} direction={csiSortDir} onSort={onSortCsi} />
+                    <SortableTableHead label="Unit Price" sortKey="unit_price" align="right" className="w-32" activeKey={csiSortKey} direction={csiSortDir} onSort={onSortCsi} />
+                    <SortableTableHead label="Amount" sortKey="amount" align="right" className="w-28" activeKey={csiSortKey} direction={csiSortDir} onSort={onSortCsi} />
                     <TableHead className="w-10" />
                   </TableRow>
                 </TableHeader>
@@ -1828,7 +1855,7 @@ export default function CSIMonitoringPage() {
                         <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                       </TableCell>
                     </TableRow>
-                  ) : filtered.length === 0 ? (
+                  ) : sortedFiltered.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
                         No records found. Click <strong>New Record</strong> to add one.

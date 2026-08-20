@@ -6,7 +6,8 @@ import { fetchAllRows } from '@/lib/supabase/fetch-all'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, SortableTableHead } from '@/components/ui/table'
+import { useTableSort } from '@/lib/use-table-sort'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
@@ -523,6 +524,41 @@ export default function ReceivingPage() {
     filterQ(`${d.delivery_number} ${(d as any).dr_number ?? ''} ${(d as any).so_number ?? ''} ${d.client_name ?? ''} ${d.status}`) && matchSalesdDate(d)
   )
 
+  type RrSortKey = 'rr_number' | 'po_number' | 'supplier' | 'delivery_date' | 'received_by' | 'status'
+  const filteredRRs = rrs.filter(rr => filterQ(`${rr.rr_number} ${rr.po_number} ${rr.supplier} ${rr.status}`))
+  const { sorted: sortedRRs, sortKey: rrSortKey, sortDir: rrSortDir, onSort: onSortRr } = useTableSort<RR, RrSortKey>(filteredRRs, (rr, key) => {
+    switch (key) {
+      case 'rr_number': return rr.rr_number ?? ''
+      case 'po_number': return rr.po_number ?? ''
+      case 'supplier': return rr.supplier ?? ''
+      case 'delivery_date': return rr.delivery_date ?? ''
+      case 'received_by': return rr.received_by ?? ''
+      case 'status': return rr.status ?? ''
+    }
+  })
+
+  type SdSortKey = 'dr_number' | 'so_number' | 'client_name' | 'delivery_date' | 'status'
+  const { sorted: sortedSalesDeliveries, sortKey: sdSortKey, sortDir: sdSortDir, onSort: onSortSd } = useTableSort<SalesDelivery, SdSortKey>(filteredSalesDeliveries, (d, key) => {
+    switch (key) {
+      case 'dr_number': return d.dr_number ?? d.delivery_number ?? ''
+      case 'so_number': return d.so_number ?? ''
+      case 'client_name': return d.client_name ?? ''
+      case 'delivery_date': return d.delivery_date ?? ''
+      case 'status': return d.status ?? ''
+    }
+  })
+
+  type ReturnSortKey = 'return_number' | 'return_date' | 'return_type' | 'party' | 'status'
+  const { sorted: sortedReturns, sortKey: returnSortKey, sortDir: returnSortDir, onSort: onSortReturn } = useTableSort<ItemReturn, ReturnSortKey>(returns, (ret, key) => {
+    switch (key) {
+      case 'return_number': return ret.return_number ?? ''
+      case 'return_date': return ret.return_date ?? ''
+      case 'return_type': return ret.return_type ?? ''
+      case 'party': return ret.return_type === 'supplier' ? (ret.supplier_name ?? '') : (ret.client_name ?? '')
+      case 'status': return ret.status ?? ''
+    }
+  })
+
   return (
     <div className="space-y-6">
       <div>
@@ -596,20 +632,20 @@ export default function ReceivingPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-10">No.</TableHead>
-                    <TableHead>RR Number</TableHead>
-                    <TableHead>PO Reference</TableHead>
-                    <TableHead>Supplier</TableHead>
-                    <TableHead>Delivery Date</TableHead>
-                    <TableHead>Received By</TableHead>
-                    <TableHead>Status</TableHead>
+                    <SortableTableHead label="RR Number" sortKey="rr_number" activeKey={rrSortKey} direction={rrSortDir} onSort={onSortRr} />
+                    <SortableTableHead label="PO Reference" sortKey="po_number" activeKey={rrSortKey} direction={rrSortDir} onSort={onSortRr} />
+                    <SortableTableHead label="Supplier" sortKey="supplier" activeKey={rrSortKey} direction={rrSortDir} onSort={onSortRr} />
+                    <SortableTableHead label="Delivery Date" sortKey="delivery_date" activeKey={rrSortKey} direction={rrSortDir} onSort={onSortRr} />
+                    <SortableTableHead label="Received By" sortKey="received_by" activeKey={rrSortKey} direction={rrSortDir} onSort={onSortRr} />
+                    <SortableTableHead label="Status" sortKey="status" activeKey={rrSortKey} direction={rrSortDir} onSort={onSortRr} />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading ? (
                     <TableRow><TableCell colSpan={7} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
-                  ) : rrs.filter(rr => filterQ(`${rr.rr_number} ${rr.po_number} ${rr.supplier} ${rr.status}`)).length === 0 ? (
+                  ) : sortedRRs.length === 0 ? (
                     <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground">No receiving reports found.</TableCell></TableRow>
-                  ) : rrs.filter(rr => filterQ(`${rr.rr_number} ${rr.po_number} ${rr.supplier} ${rr.status}`)).map((rr, idx) => (
+                  ) : sortedRRs.map((rr, idx) => (
                     <TableRow key={rr.id} className="cursor-pointer hover:bg-red-50/40 transition-colors" onClick={() => openRRDetails(rr.id)}>
                       <TableCell className="text-muted-foreground text-xs">{idx + 1}</TableCell>
                       <TableCell className="font-mono text-xs font-semibold text-red-600">{rr.rr_number ?? '—'}</TableCell>
@@ -724,22 +760,22 @@ export default function ReceivingPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>DR Number</TableHead>
-                    <TableHead>SO Reference</TableHead>
-                    <TableHead>Client</TableHead>
-                    <TableHead>Delivery Date</TableHead>
-                    <TableHead>Status</TableHead>
+                    <SortableTableHead label="DR Number" sortKey="dr_number" activeKey={sdSortKey} direction={sdSortDir} onSort={onSortSd} />
+                    <SortableTableHead label="SO Reference" sortKey="so_number" activeKey={sdSortKey} direction={sdSortDir} onSort={onSortSd} />
+                    <SortableTableHead label="Client" sortKey="client_name" activeKey={sdSortKey} direction={sdSortDir} onSort={onSortSd} />
+                    <SortableTableHead label="Delivery Date" sortKey="delivery_date" activeKey={sdSortKey} direction={sdSortDir} onSort={onSortSd} />
+                    <SortableTableHead label="Status" sortKey="status" activeKey={sdSortKey} direction={sdSortDir} onSort={onSortSd} />
                     <TableHead>CSI</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {salesdLoading ? (
                     <TableRow><TableCell colSpan={6} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
-                  ) : filteredSalesDeliveries.length === 0 ? (
+                  ) : sortedSalesDeliveries.length === 0 ? (
                     <TableRow><TableCell colSpan={6} className="text-center py-10 text-muted-foreground text-sm">
                       {salesdDateFrom || salesdDateTo ? 'No sales deliveries in this date range.' : 'No sales deliveries yet. Create a DR Log to populate this list.'}
                     </TableCell></TableRow>
-                  ) : filteredSalesDeliveries.map(d => {
+                  ) : sortedSalesDeliveries.map(d => {
                     const statusCls = d.status === 'delivered' ? 'bg-green-100 text-green-700' : d.status === 'partial' ? 'bg-yellow-100 text-yellow-700' : 'bg-orange-100 text-orange-700'
                     return (
                       <TableRow key={d.id} className="cursor-pointer hover:bg-muted/40" onClick={() => openSalesDetail(d)}>
@@ -909,11 +945,11 @@ export default function ReceivingPage() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Return #</TableHead>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Supplier / Warehouse</TableHead>
-                      <TableHead>Status</TableHead>
+                      <SortableTableHead label="Return #" sortKey="return_number" activeKey={returnSortKey} direction={returnSortDir} onSort={onSortReturn} />
+                      <SortableTableHead label="Date" sortKey="return_date" activeKey={returnSortKey} direction={returnSortDir} onSort={onSortReturn} />
+                      <SortableTableHead label="Type" sortKey="return_type" activeKey={returnSortKey} direction={returnSortDir} onSort={onSortReturn} />
+                      <SortableTableHead label="Supplier / Warehouse" sortKey="party" activeKey={returnSortKey} direction={returnSortDir} onSort={onSortReturn} />
+                      <SortableTableHead label="Status" sortKey="status" activeKey={returnSortKey} direction={returnSortDir} onSort={onSortReturn} />
                       <TableHead>Notes</TableHead>
                       <TableHead className="w-10"></TableHead>
                     </TableRow>
@@ -921,9 +957,9 @@ export default function ReceivingPage() {
                   <TableBody>
                     {returnsLoading ? (
                       <TableRow><TableCell colSpan={7} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
-                    ) : returns.length === 0 ? (
+                    ) : sortedReturns.length === 0 ? (
                       <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground">No returns yet.</TableCell></TableRow>
-                    ) : returns.map(ret => (
+                    ) : sortedReturns.map(ret => (
                       <TableRow key={ret.id}>
                         <TableCell className="font-mono text-xs font-semibold text-red-600">{ret.return_number}</TableCell>
                         <TableCell className="text-sm">{ret.return_date}</TableCell>

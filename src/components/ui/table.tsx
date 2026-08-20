@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
@@ -104,6 +105,35 @@ function TableCaption({
   )
 }
 
+// Clickable TableHead that shows a sort-direction indicator — pair with the
+// `useTableSort` hook (src/lib/use-table-sort.ts) for the sort state/comparator.
+function SortableTableHead<K extends string>({
+  label, sortKey, activeKey, direction, onSort, className, align,
+}: {
+  label: React.ReactNode
+  sortKey: K
+  activeKey: K | null
+  direction: 'asc' | 'desc'
+  onSort: (key: K) => void
+  className?: string
+  align?: 'right'
+}) {
+  const active = activeKey === sortKey
+  return (
+    <TableHead
+      className={cn(align === 'right' && 'text-right', 'cursor-pointer select-none hover:text-foreground', className)}
+      onClick={() => onSort(sortKey)}
+    >
+      <span className={cn('inline-flex items-center gap-1', align === 'right' && 'flex-row-reverse')}>
+        {label}
+        {active
+          ? (direction === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)
+          : <ArrowUpDown className="h-3 w-3 text-muted-foreground/50" />}
+      </span>
+    </TableHead>
+  )
+}
+
 export {
   Table,
   TableHeader,
@@ -113,4 +143,5 @@ export {
   TableRow,
   TableCell,
   TableCaption,
+  SortableTableHead,
 }
