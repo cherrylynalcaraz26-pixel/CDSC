@@ -354,8 +354,64 @@ export default function PurchaseOrdersPage() {
   async function updateStatus(id: string, status: POStatus) {
     const { error } = await supabase.from('purchase_orders').update({ status }).eq('id', id)
     if (error) { toast.error(error.message); return }
-    toast.success(status === 'completed' ? 'PO completed — stock will be updated on receiving' : `Status → ${STATUS_CFG[status].label}`)
+
+    if (status === 'completed') {
+      const received = await autoReceivePO(id)
+      toast.success(received ? 'PO completed — automatically received, stock updated' : 'Status → Completed')
+    } else {
+      toast.success(`Status → ${STATUS_CFG[status].label}`)
+    }
     load()
+  }
+
+  // Marking a PO "Completed" used to leave it stranded in Receiving's "Pending
+  // Deliveries" forever, since receiving was otherwise a separate manual step — this
+  // creates the Receiving Report (and credits warehouse stock) automatically, the same
+  // way manually receiving it would, so completing a PO here is enough on its own.
+  // Skips silently if it's already been received (manually or by an earlier call here),
+  // or if the PO has no number/items to receive against.
+  async function autoReceivePO(id: string): Promise<boolean> {
+    const { data: poRaw } = await supabase.from('purchase_orders').select('po_number, supplier:suppliers(company_name)').eq('id', id).maybeSingle()
+    const po = poRaw as unknown as { po_number: string | null; supplier: { company_name: string } | null } | null
+    if (!po?.po_number) return false
+
+    const { data: existingRRs } = await supabase.from('receiving_reports').select('id').eq('po_number', po.po_number).limit(1)
+    if (existingRRs && existingRRs.length > 0) return false
+
+    const { data: poItems } = await supabase.from('po_items').select('item_name, quantity, unit_of_measure').eq('po_id', id)
+    if (!poItems || poItems.length === 0) return false
+
+    const { error: rrError } = await supabase.from('receiving_reports').insert({
+      rr_number: `AUTO-${po.po_number}`,
+      po_number: po.po_number,
+      supplier: po.supplier?.company_name ?? null,
+      delivery_date: new Date().toISOString().split('T')[0],
+      received_by: 'System (Auto)',
+      status: 'completed',
+    })
+    if (rrError) return false
+
+    for (const it of poItems) {
+      const qty = Number(it.quantity) || 0
+      if (qty <= 0) continue
+      const { data: wsRow } = await supabase.from('warehouse_stock').select('id, quantity').eq('item_name', it.item_name).is('client_name', null).maybeSingle()
+      if (wsRow) {
+        await supabase.from('warehouse_stock').update({
+          quantity: Number(wsRow.quantity) + qty,
+          updated_at: new Date().toISOString(),
+        }).eq('id', wsRow.id)
+      } else {
+        await supabase.from('warehouse_stock').insert({ item_name: it.item_name, unit: it.unit_of_measure ?? '', quantity: qty, client_name: null })
+      }
+      await supabase.from('warehouse_stock_ledger').insert({
+        item_name: it.item_name,
+        unit: it.unit_of_measure ?? '',
+        change_qty: qty,
+        source_type: 'po_receiving',
+        reference_no: po.po_number,
+      })
+    }
+    return true
   }
 
   async function deletePO(id: string) {
