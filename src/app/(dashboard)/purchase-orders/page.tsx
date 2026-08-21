@@ -221,6 +221,28 @@ export default function PurchaseOrdersPage() {
     setEwtType('services'); setPreparedBy(''); setApprovedBy(''); setVatInclusive(false)
   }
 
+  // Next sequential PO-<year>-NNNNN number, continuing the highest number already
+  // used this year (falls back to 00001 if none yet) — same convention as the
+  // existing PO-2026-000xx records.
+  async function nextPoNumber() {
+    const year = new Date().getFullYear()
+    const prefix = `PO-${year}-`
+    const { data } = await supabase
+      .from('purchase_orders')
+      .select('po_number')
+      .ilike('po_number', `${prefix}%`)
+      .order('po_number', { ascending: false })
+      .limit(1)
+    const lastNum = parseInt(data?.[0]?.po_number?.slice(prefix.length) ?? '0', 10) || 0
+    return `${prefix}${String(lastNum + 1).padStart(5, '0')}`
+  }
+
+  async function handleOpenCreate() {
+    resetForm()
+    setPoNumber(await nextPoNumber())
+    setOpen(true)
+  }
+
   function handleCancelClick() {
     const hasData = supplierId || poNumber || lines.some(l => l.item_name)
     if (hasData) { setDiscardConfirmOpen(true); return }
@@ -722,7 +744,7 @@ export default function PurchaseOrdersPage() {
             <X className="h-4 w-4 mr-2" />Cancel
           </Button>
         ) : (
-          <Button onClick={() => setOpen(true)} className="bg-red-600 hover:bg-red-700">
+          <Button onClick={handleOpenCreate} className="bg-red-600 hover:bg-red-700">
             <Plus className="h-4 w-4 mr-2" />Create PO
           </Button>
         )}
@@ -944,7 +966,7 @@ export default function PurchaseOrdersPage() {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <Label>PO Number</Label>
-                      <Input placeholder="Enter PO number" value={poNumber} onChange={e => setPoNumber(e.target.value)} />
+                      <Input placeholder="Auto-generated" value={poNumber} onChange={e => setPoNumber(e.target.value)} />
                     </div>
                     <div className="space-y-1.5">
                       <Label>Delivery Date</Label>

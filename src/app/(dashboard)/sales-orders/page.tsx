@@ -235,6 +235,28 @@ export default function SalesOrdersPage() {
     setEditingSOId(null)
   }
 
+  // Next sequential SO-<year>-NNNNN number, continuing the highest number already
+  // used this year (falls back to 00001 if none yet).
+  async function nextSoNumber() {
+    const year = new Date().getFullYear()
+    const prefix = `SO-${year}-`
+    const { data } = await supabase
+      .from('sales_orders')
+      .select('so_number')
+      .ilike('so_number', `${prefix}%`)
+      .order('so_number', { ascending: false })
+      .limit(1)
+    const lastNum = parseInt(data?.[0]?.so_number?.slice(prefix.length) ?? '0', 10) || 0
+    return `${prefix}${String(lastNum + 1).padStart(5, '0')}`
+  }
+
+  async function handleOpenCreate() {
+    resetForm()
+    setSoNumber(await nextSoNumber())
+    setOpen(true)
+    loadWarehouseQty()
+  }
+
   function handleCancelClick() {
     const hasData = clientId || soNumber || lines.some(l => l.item_name)
     if (hasData) { setDiscardConfirmOpen(true); return }
@@ -1376,7 +1398,7 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
       <Card>
         <CardHeader className="pb-3 flex flex-row items-center justify-between">
           <CardTitle className="text-base">Sales Order List</CardTitle>
-          <Button onClick={() => { resetForm(); setOpen(true); loadWarehouseQty() }} className="bg-red-600 hover:bg-red-700">
+          <Button onClick={handleOpenCreate} className="bg-red-600 hover:bg-red-700">
             <Plus className="h-4 w-4 mr-2" />New Sales Order
           </Button>
         </CardHeader>
