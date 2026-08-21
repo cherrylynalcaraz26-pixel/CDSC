@@ -648,16 +648,23 @@ export default function DRLogsPage() {
             quantity: Number(wsRow.quantity) + qty,
             updated_at: new Date().toISOString(),
           }).eq('id', wsRow.id)
-          await supabase.from('warehouse_stock_ledger').insert({
-            item_name: it.item_name.trim(),
-            unit: it.unit || null,
-            change_qty: qty,
-            source_type: 'dr_delivery',
-            reference_no: drNumber,
-            client_name: clientName,
-            notes: 'Reversal of previous delivery (DR edited)',
+        } else {
+          // No row yet for this item (e.g. it's never been received into stock) — create
+          // one instead of silently dropping the reversal, so the ledger entry below stays
+          // truthful and future receiving has a row to accumulate onto.
+          await supabase.from('warehouse_stock').insert({
+            client_name: null, item_name: it.item_name.trim(), unit: it.unit || null, quantity: qty,
           })
         }
+        await supabase.from('warehouse_stock_ledger').insert({
+          item_name: it.item_name.trim(),
+          unit: it.unit || null,
+          change_qty: qty,
+          source_type: 'dr_delivery',
+          reference_no: drNumber,
+          client_name: clientName,
+          notes: 'Reversal of previous delivery (DR edited)',
+        })
       }
     }
 
@@ -678,15 +685,23 @@ export default function DRLogsPage() {
             quantity: Math.max(0, Number(wsRow.quantity) - qty),
             updated_at: new Date().toISOString(),
           }).eq('id', wsRow.id)
-          await supabase.from('warehouse_stock_ledger').insert({
-            item_name: it.item_name.trim(),
-            unit: it.unit || null,
-            change_qty: -qty,
-            source_type: 'dr_delivery',
-            reference_no: drNumber,
-            client_name: clientName,
+        } else {
+          // No row yet for this item — without this, the decrement is silently lost and
+          // warehouse stock ends up overstated once the item is eventually received in.
+          // Create the row at 0 (can't go negative) so the ledger below records the real
+          // shortfall and the row exists for future receiving to accumulate onto.
+          await supabase.from('warehouse_stock').insert({
+            client_name: null, item_name: it.item_name.trim(), unit: it.unit || null, quantity: 0,
           })
         }
+        await supabase.from('warehouse_stock_ledger').insert({
+          item_name: it.item_name.trim(),
+          unit: it.unit || null,
+          change_qty: -qty,
+          source_type: 'dr_delivery',
+          reference_no: drNumber,
+          client_name: clientName,
+        })
       }
     }
 
