@@ -22,7 +22,7 @@ import { useSearchContext } from '@/context/search-context'
 import { sendEmail, SOPdfData } from '@/lib/send-email'
 import { fetchAllRows } from '@/lib/supabase/fetch-all'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { subMonths, startOfMonth, endOfMonth, format as fmtDate } from 'date-fns'
+import { format as fmtDate } from 'date-fns'
 
 type SOStatus = 'draft' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'cancelled'
 
@@ -115,6 +115,7 @@ export default function SalesOrdersPage() {
   // Pipeline
   const [pipelineOpen, setPipelineOpen] = useState(false)
   const [chartOpen, setChartOpen] = useState(true)
+  const [chartYear, setChartYear] = useState(() => new Date().getFullYear())
   // collectedClients removed — no OR/CR receipt system
 
   // Form
@@ -787,18 +788,22 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
 
   const todayStr = new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
 
-  const soMonthlyData = (() => {
-    const now = new Date()
-    return Array.from({ length: 6 }, (_, i) => {
-      const d = subMonths(now, 5 - i)
-      const start = startOfMonth(d).toISOString().slice(0, 10)
-      const end = endOfMonth(d).toISOString().slice(0, 10)
-      const total = sos
-        .filter(s => s.status !== 'cancelled' && (s.so_date ?? s.created_at?.slice(0, 10) ?? '') >= start && (s.so_date ?? s.created_at?.slice(0, 10) ?? '') <= end)
-        .reduce((sum, s) => sum + (s.total_amount ?? 0), 0)
-      return { month: fmtDate(d, 'MMM'), total }
-    })
+  const chartYears = (() => {
+    const years = new Set(sos.map(s => Number((s.so_date ?? s.created_at ?? '').slice(0, 4))).filter(y => !isNaN(y)))
+    years.add(chartYear)
+    return Array.from(years).sort((a, b) => b - a)
   })()
+
+  const soMonthlyData = Array.from({ length: 12 }, (_, month) => {
+    const total = sos
+      .filter(s => {
+        if (s.status === 'cancelled') return false
+        const d = s.so_date ?? s.created_at?.slice(0, 10) ?? ''
+        return Number(d.slice(0, 4)) === chartYear && Number(d.slice(5, 7)) - 1 === month
+      })
+      .reduce((sum, s) => sum + (s.total_amount ?? 0), 0)
+    return { month: fmtDate(new Date(chartYear, month, 1), 'MMM'), total }
+  })
   const deliveryStr = deliveryDate ? new Date(deliveryDate + 'T00:00:00').toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }) : ''
 
   // Pipeline stays focused on orders with a next action — drop cancelled orders, and
@@ -878,13 +883,25 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
       {!open && (
         <Card>
           <CardHeader className="pb-0 pt-4 px-4">
-            <button
-              className="flex items-center justify-between w-full text-left"
-              onClick={() => setChartOpen(o => !o)}
-            >
-              <CardTitle className="text-sm font-medium">Monthly Sales Revenue (Last 6 Months)</CardTitle>
-              {chartOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-            </button>
+            <div className="flex items-center justify-between w-full gap-2">
+              <button
+                className="flex items-center gap-2 text-left flex-1 min-w-0"
+                onClick={() => setChartOpen(o => !o)}
+              >
+                <CardTitle className="text-sm font-medium">Monthly Sales Revenue</CardTitle>
+                {chartOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" /> : <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />}
+              </button>
+              {chartOpen && (
+                <Select value={String(chartYear)} onValueChange={v => setChartYear(Number(v))}>
+                  <SelectTrigger className="h-7 w-24 text-xs" onClick={e => e.stopPropagation()}><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {chartYears.map(y => (
+                      <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
           </CardHeader>
           {chartOpen && (
             <CardContent className="pt-3">
