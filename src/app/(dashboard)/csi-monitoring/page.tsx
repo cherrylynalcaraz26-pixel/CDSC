@@ -152,7 +152,7 @@ export default function CSIMonitoringPage() {
   const [itemOptions, setItemOptions] = useState<ItemOption[]>([])
   const [clientOptions, setClientOptions] = useState<ClientOption[]>([])
   const [soNumbers, setSoNumbers] = useState<{ id: string; so_number: string }[]>([])
-  const [drNumbers, setDrNumbers] = useState<{ id: string; dr_number: string; po_number: string | null }[]>([])
+  const [drNumbers, setDrNumbers] = useState<{ id: string; dr_number: string; po_number: string | null; client_name: string | null }[]>([])
   const [drNumberLockedFromSo, setDrNumberLockedFromSo] = useState(false)
   const [soItemsMap, setSoItemsMap] = useState<Record<string, SOItemOption[]>>({})
   const [loading, setLoading] = useState(true)
@@ -226,7 +226,7 @@ export default function CSIMonitoringPage() {
     setDrItemsForCrossRef((drItemsData as any[]).map(d => ({ dr_number: d.dr_number, item_name: d.item_name, client_name: drClientMap.get(d.dr_number) ?? null })))
     setItemOptions((itemOptData ?? []) as ItemOption[])
     setClientOptions((clientData ?? []) as ClientOption[])
-    setDrNumbers(drLogData as { id: string; dr_number: string; po_number: string | null }[])
+    setDrNumbers((drLogData as any[]).map(d => ({ id: d.id, dr_number: d.dr_number, po_number: d.po_number, client_name: d.supplier_name ?? null })))
     const filteredSOs = (soData ?? []).filter((s: any) => s.so_number) as { id: string; so_number: string }[]
     setSoNumbers(filteredSOs)
     const soIds = filteredSOs.map(s => s.id)
@@ -948,7 +948,14 @@ export default function CSIMonitoringPage() {
                   </div>
                   <div className="space-y-1.5">
                     <Label>Client</Label>
-                    <Select value={header.client_name} onValueChange={v => setHeader(h => ({ ...h, client_name: v ?? '' }))}>
+                    <Select
+                      value={header.client_name}
+                      onValueChange={v => setHeader(h => {
+                        const nextClient = v ?? ''
+                        const drStillValid = !h.dr_number || drNumberLockedFromSo || drNumbers.some(d => d.dr_number === h.dr_number && d.client_name === nextClient)
+                        return { ...h, client_name: nextClient, dr_number: drStillValid ? h.dr_number : '' }
+                      })}
+                    >
                       <SelectTrigger className="w-full"><SelectValue placeholder="Select client…" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="">— None —</SelectItem>
@@ -993,7 +1000,9 @@ export default function CSIMonitoringPage() {
                         <SelectTrigger className="w-full"><SelectValue placeholder="Select DR…" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="">— None —</SelectItem>
-                          {drNumbers.map(d => <SelectItem key={d.id} value={d.dr_number}>{d.dr_number}</SelectItem>)}
+                          {drNumbers
+                            .filter(d => !header.client_name || d.client_name === header.client_name)
+                            .map(d => <SelectItem key={d.id} value={d.dr_number}>{d.dr_number}</SelectItem>)}
                           {header.dr_number && !drNumbers.some(d => d.dr_number === header.dr_number) && (
                             <SelectItem value={header.dr_number}>{header.dr_number}</SelectItem>
                           )}
@@ -1001,6 +1010,9 @@ export default function CSIMonitoringPage() {
                       </Select>
                       {drNumberLockedFromSo && (
                         <p className="text-[11px] text-muted-foreground">Locked — matched from the loaded SO&apos;s DR.</p>
+                      )}
+                      {!drNumberLockedFromSo && header.client_name && (
+                        <p className="text-[11px] text-muted-foreground">Showing DR numbers for {header.client_name} only.</p>
                       )}
                     </div>
                   </div>
@@ -1581,10 +1593,12 @@ export default function CSIMonitoringPage() {
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             {viewMode === 'cross-ref' ? (() => {
-              const csiItems = new Set(records.map(r => r.item_name.trim().toLowerCase()))
-              const drItems = new Set(drItemsForCrossRef.map(d => d.item_name.trim().toLowerCase()))
-              const inCsiNotDr = [...new Set(records.map(r => r.item_name))].filter(n => !drItems.has(n.trim().toLowerCase()))
-              const inDrNotCsi = [...new Set(drItemsForCrossRef.map(d => d.item_name))].filter(n => !csiItems.has(n.trim().toLowerCase()))
+              const csiForCrossRef = clientFilter ? filtered.filter(r => r.client_name === clientFilter) : filtered
+              const drForCrossRef = clientFilter ? drItemsForCrossRef.filter(d => d.client_name === clientFilter) : drItemsForCrossRef
+              const csiItems = new Set(csiForCrossRef.map(r => r.item_name.trim().toLowerCase()))
+              const drItems = new Set(drForCrossRef.map(d => d.item_name.trim().toLowerCase()))
+              const inCsiNotDr = [...new Set(csiForCrossRef.map(r => r.item_name))].filter(n => !drItems.has(n.trim().toLowerCase()))
+              const inDrNotCsi = [...new Set(drForCrossRef.map(d => d.item_name))].filter(n => !csiItems.has(n.trim().toLowerCase()))
               return (
                 <div className="p-4 space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1606,7 +1620,7 @@ export default function CSIMonitoringPage() {
                               <TableRow key={name}>
                                 <TableCell className="text-sm">{name}</TableCell>
                                 <TableCell className="text-right text-xs text-muted-foreground">
-                                  {records.filter(r => r.item_name === name).length}
+                                  {csiForCrossRef.filter(r => r.item_name === name).length}
                                 </TableCell>
                               </TableRow>
                             ))}
@@ -1632,7 +1646,7 @@ export default function CSIMonitoringPage() {
                               <TableRow key={name}>
                                 <TableCell className="text-sm">{name}</TableCell>
                                 <TableCell className="text-right text-xs text-muted-foreground">
-                                  {drItemsForCrossRef.filter(d => d.item_name === name).length}
+                                  {drForCrossRef.filter(d => d.item_name === name).length}
                                 </TableCell>
                               </TableRow>
                             ))}

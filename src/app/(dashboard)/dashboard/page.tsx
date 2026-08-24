@@ -504,8 +504,8 @@ export default function DashboardPage() {
 
       {/* KPI Row */}
       <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
-        <StatCard title="Items" value={loading ? '—' : kpi.totalItems.toLocaleString()} icon={Package} href="/setup?tab=items" />
-        <StatCard title="Suppliers" value={loading ? '—' : kpi.activeSuppliers} icon={TrendingUp} href="/setup" />
+        <StatCard title="Items" value={loading ? '—' : kpi.totalItems.toLocaleString()} icon={Package} color="text-red-600" href="/setup?tab=items" />
+        <StatCard title="Suppliers" value={loading ? '—' : kpi.activeSuppliers} icon={TrendingUp} color="text-blue-600" href="/setup" />
         <StatCard title="Open POs" value={loading ? '—' : kpi.openPOs} icon={ShoppingCart} color="text-blue-600" href="/purchase-orders" sub="Awaiting delivery" />
         <StatCard title="Pending PRs" value={loading ? '—' : kpi.pendingPRs} icon={FileText} color="text-yellow-600" href="/purchase-requests" sub="In approval" />
         <StatCard title="DR Logs" value={loading ? '—' : kpi.totalDRs.toLocaleString()} icon={Truck} href="/dr-logs" sub="All time" />

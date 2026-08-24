@@ -3,7 +3,8 @@ import { createClient } from '@supabase/supabase-js'
 
 export async function POST(req: NextRequest) {
   try {
-    const { email, password, full_name, company } = await req.json()
+    const { email, password, full_name, company, role } = await req.json()
+    const portalRole = role === 'vendor' ? 'vendor' : 'client'
 
     if (!email || !password) {
       return NextResponse.json({ error: 'Email and password are required.' }, { status: 400 })
@@ -26,7 +27,7 @@ export async function POST(req: NextRequest) {
       email: email.trim().toLowerCase(),
       password,
       email_confirm: true,
-      user_metadata: { full_name, role: 'client' },
+      user_metadata: { full_name, role: portalRole },
     })
 
     if (error) {
@@ -34,12 +35,12 @@ export async function POST(req: NextRequest) {
     }
 
     if (data.user) {
-      // Upsert profile row with role = 'client'
+      // Upsert profile row with role = 'client' or 'vendor'
       await admin.from('profiles').upsert({
         id: data.user.id,
         email: email.trim().toLowerCase(),
         full_name: full_name || null,
-        role: 'client',
+        role: portalRole,
         company: company || null,
         status: 'active',
       })
