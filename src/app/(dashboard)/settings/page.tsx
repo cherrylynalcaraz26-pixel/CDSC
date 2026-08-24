@@ -1093,7 +1093,7 @@ function ProposalDatabaseTab({ settings, proposals, loading, onReload }: {
 
       {/* Email Dialog */}
       <Dialog open={emailDialogOpen} onOpenChange={setEmailDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="w-[95vw] max-w-3xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Send className="h-4 w-4 text-blue-600" />
@@ -1106,21 +1106,23 @@ function ProposalDatabaseTab({ settings, proposals, loading, onReload }: {
             </div>
           )}
           <div className="space-y-3 py-1">
-            <div className="space-y-1.5">
-              <Label>To (recipient email) <span className="text-destructive">*</span></Label>
-              <Input
-                type="email"
-                placeholder="client@example.com"
-                value={emailTo}
-                onChange={e => setEmailTo(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Subject</Label>
-              <Input
-                value={emailSubject}
-                onChange={e => setEmailSubject(e.target.value)}
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>To (recipient email) <span className="text-destructive">*</span></Label>
+                <Input
+                  type="email"
+                  placeholder="client@example.com"
+                  value={emailTo}
+                  onChange={e => setEmailTo(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Subject</Label>
+                <Input
+                  value={emailSubject}
+                  onChange={e => setEmailSubject(e.target.value)}
+                />
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label>Message</Label>

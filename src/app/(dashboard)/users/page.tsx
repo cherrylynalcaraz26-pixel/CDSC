@@ -350,7 +350,7 @@ export default function UsersPage() {
 
       {/* Create Portal Account Dialog */}
       <Dialog open={portalOpen} onOpenChange={setPortalOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="w-[95vw] max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <KeyRound className="h-5 w-5 text-blue-600" />Create Portal Account
@@ -373,50 +373,52 @@ export default function UsersPage() {
                 </button>
               </div>
             </div>
-            <div className="space-y-1.5">
-              <Label>Email Address <span className="text-destructive">*</span></Label>
-              <Input type="email" placeholder={portalForm.role === 'vendor' ? 'vendor@company.com' : 'client@company.com'} value={portalForm.email}
-                onChange={e => setPortalForm(f => ({ ...f, email: e.target.value }))} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Full Name</Label>
-              <Input placeholder={portalForm.role === 'vendor' ? 'Vendor contact person' : 'Client contact person'} value={portalForm.full_name}
-                onChange={e => setPortalForm(f => ({ ...f, full_name: e.target.value }))} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Company</Label>
-              <Select value={portalForm.company || '_none'} onValueChange={v => setPortalForm(f => ({ ...f, company: v === '_none' ? '' : (v ?? '') }))}>
-                <SelectTrigger><SelectValue placeholder="Select company…" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="_none">— None —</SelectItem>
-                  {(portalForm.role === 'vendor' ? supplierNames : clientNames).map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Password <span className="text-destructive">*</span></Label>
-              <div className="relative">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Email Address <span className="text-destructive">*</span></Label>
+                <Input type="email" placeholder={portalForm.role === 'vendor' ? 'vendor@company.com' : 'client@company.com'} value={portalForm.email}
+                  onChange={e => setPortalForm(f => ({ ...f, email: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Full Name</Label>
+                <Input placeholder={portalForm.role === 'vendor' ? 'Vendor contact person' : 'Client contact person'} value={portalForm.full_name}
+                  onChange={e => setPortalForm(f => ({ ...f, full_name: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Company</Label>
+                <Select value={portalForm.company || '_none'} onValueChange={v => setPortalForm(f => ({ ...f, company: v === '_none' ? '' : (v ?? '') }))}>
+                  <SelectTrigger><SelectValue placeholder="Select company…" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">— None —</SelectItem>
+                    {(portalForm.role === 'vendor' ? supplierNames : clientNames).map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Password <span className="text-destructive">*</span></Label>
+                <div className="relative">
+                  <Input
+                    type={showPortalPw ? 'text' : 'password'}
+                    placeholder="Minimum 6 characters"
+                    value={portalForm.password}
+                    onChange={e => setPortalForm(f => ({ ...f, password: e.target.value }))}
+                    className="pr-10"
+                  />
+                  <button type="button" onClick={() => setShowPortalPw(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                    {showPortalPw ? <span className="text-xs">Hide</span> : <span className="text-xs">Show</span>}
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Confirm Password <span className="text-destructive">*</span></Label>
                 <Input
                   type={showPortalPw ? 'text' : 'password'}
-                  placeholder="Minimum 6 characters"
-                  value={portalForm.password}
-                  onChange={e => setPortalForm(f => ({ ...f, password: e.target.value }))}
-                  className="pr-10"
+                  placeholder="Re-enter password"
+                  value={portalForm.confirmPassword}
+                  onChange={e => setPortalForm(f => ({ ...f, confirmPassword: e.target.value }))}
                 />
-                <button type="button" onClick={() => setShowPortalPw(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                  {showPortalPw ? <span className="text-xs">Hide</span> : <span className="text-xs">Show</span>}
-                </button>
               </div>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Confirm Password <span className="text-destructive">*</span></Label>
-              <Input
-                type={showPortalPw ? 'text' : 'password'}
-                placeholder="Re-enter password"
-                value={portalForm.confirmPassword}
-                onChange={e => setPortalForm(f => ({ ...f, confirmPassword: e.target.value }))}
-              />
             </div>
             <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted px-3 py-2 rounded-md">
               <span className="bg-blue-100 text-blue-700 text-[10px] font-bold px-1.5 py-0.5 rounded">ROLE</span>
@@ -434,13 +436,13 @@ export default function UsersPage() {
 
       {/* Invite Dialog */}
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="w-[95vw] max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <UserPlus className="h-5 w-5 text-red-600" />Invite User
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
             <div className="space-y-1.5">
               <Label>Email Address <span className="text-destructive">*</span></Label>
               <Input type="email" placeholder="user@cdsc.com" value={inviteForm.email}
@@ -451,17 +453,15 @@ export default function UsersPage() {
               <Input placeholder="Juan dela Cruz" value={inviteForm.full_name}
                 onChange={e => setInviteForm(f => ({ ...f, full_name: e.target.value }))} />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Employee ID</Label>
-                <Input placeholder="e.g. EMP-001" value={inviteForm.employee_id}
-                  onChange={e => setInviteForm(f => ({ ...f, employee_id: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Department</Label>
-                <Input placeholder="e.g. Operations" value={inviteForm.department}
-                  onChange={e => setInviteForm(f => ({ ...f, department: e.target.value }))} />
-              </div>
+            <div className="space-y-1.5">
+              <Label>Employee ID</Label>
+              <Input placeholder="e.g. EMP-001" value={inviteForm.employee_id}
+                onChange={e => setInviteForm(f => ({ ...f, employee_id: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Department</Label>
+              <Input placeholder="e.g. Operations" value={inviteForm.department}
+                onChange={e => setInviteForm(f => ({ ...f, department: e.target.value }))} />
             </div>
             <div className="space-y-1.5">
               <Label>Role</Label>
@@ -482,7 +482,7 @@ export default function UsersPage() {
                 </SelectContent>
               </Select>
             </div>
-            <p className="text-xs text-muted-foreground bg-muted p-3 rounded-md">
+            <p className="sm:col-span-2 text-xs text-muted-foreground bg-muted p-3 rounded-md">
               A confirmation email will be sent. The user must confirm their email and set their password before logging in.
             </p>
           </div>
@@ -497,7 +497,7 @@ export default function UsersPage() {
 
       {/* Edit Dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-w-xl">
+        <DialogContent className="w-[95vw] max-w-2xl">
           <DialogHeader>
             <DialogTitle>Edit User</DialogTitle>
           </DialogHeader>
@@ -512,31 +512,27 @@ export default function UsersPage() {
               </div>
             </div>
           )}
-          <div className="space-y-4 py-1">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Full Name</Label>
-                <Input value={editForm.full_name} onChange={e => setEditForm(f => ({ ...f, full_name: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Employee ID</Label>
-                <Input placeholder="e.g. EMP-001" value={editForm.employee_id} onChange={e => setEditForm(f => ({ ...f, employee_id: e.target.value }))} />
-              </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-1">
+            <div className="space-y-1.5">
+              <Label>Full Name</Label>
+              <Input value={editForm.full_name} onChange={e => setEditForm(f => ({ ...f, full_name: e.target.value }))} />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Role</Label>
-                <Select value={editForm.role} onValueChange={v => setEditForm(f => ({ ...f, role: v ?? 'employee' }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {ROLES.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Department</Label>
-                <Input value={editForm.department} onChange={e => setEditForm(f => ({ ...f, department: e.target.value }))} />
-              </div>
+            <div className="space-y-1.5">
+              <Label>Employee ID</Label>
+              <Input placeholder="e.g. EMP-001" value={editForm.employee_id} onChange={e => setEditForm(f => ({ ...f, employee_id: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Role</Label>
+              <Select value={editForm.role} onValueChange={v => setEditForm(f => ({ ...f, role: v ?? 'employee' }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {ROLES.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Department</Label>
+              <Input value={editForm.department} onChange={e => setEditForm(f => ({ ...f, department: e.target.value }))} />
             </div>
             <div className="space-y-1.5">
               <Label>Company</Label>

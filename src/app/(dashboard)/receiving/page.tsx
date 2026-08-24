@@ -951,18 +951,16 @@ export default function ReceivingPage() {
 
       {/* Create/Edit RR Dialog */}
       <Dialog open={rrOpen} onOpenChange={v => { setRrOpen(v); if (!v) resetRRForm() }}>
-        <DialogContent className="w-[95vw] max-w-3xl sm:max-w-3xl">
+        <DialogContent className="w-[95vw] max-w-4xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editingRRId ? 'Edit Receiving Report' : 'New Receiving Report'}</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>RR Number <span className="text-destructive">*</span></Label>
-                <Input placeholder="e.g. RR-2026-00001" value={rrNumber} onChange={e => setRrNumber(e.target.value)} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Delivery Date</Label>
-                <Input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} />
-              </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
+            <div className="space-y-1.5">
+              <Label>RR Number <span className="text-destructive">*</span></Label>
+              <Input placeholder="e.g. RR-2026-00001" value={rrNumber} onChange={e => setRrNumber(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Delivery Date</Label>
+              <Input type="date" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} />
             </div>
             <div className="space-y-1.5">
               <Label>PO Reference <span className="text-destructive">*</span></Label>
@@ -987,9 +985,9 @@ export default function ReceivingPage() {
               <Input placeholder="Delivery Receipt or SI number" value={drNumber} onChange={e => setDrNumber(e.target.value)} />
             </div>
             {selectedPO && (
-              <div className="rounded-lg border bg-muted/30 p-4 text-sm">
+              <div className="sm:col-span-2 rounded-lg border bg-muted/30 p-4 text-sm">
                 <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">PO Details</p>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div><span className="text-xs text-muted-foreground block">PO Number</span><span className="font-mono font-semibold text-red-600">{selectedPO}</span></div>
                   <div className="space-y-1">
                     <span className="text-xs text-muted-foreground block">Supplier</span>
