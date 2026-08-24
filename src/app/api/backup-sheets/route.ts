@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase/server'
 import { google } from 'googleapis'
 import ExcelJS from 'exceljs'
 import { fetchAllRows } from '@/lib/supabase/fetch-all'
@@ -235,11 +236,31 @@ export async function POST() {
 
     if (!fileId) throw new Error('Drive did not return a file id')
 
+    const url = webViewLink ?? `https://docs.google.com/spreadsheets/d/${fileId}/edit`
+    const syncedAt = new Date().toISOString()
+
+    let triggeredByEmail: string | null = null
+    try {
+      const authClient = await createServerClient()
+      const { data: { user } } = await authClient.auth.getUser()
+      triggeredByEmail = user?.email ?? null
+    } catch {
+      // Not fatal — history entry is still recorded, just without an attributed user.
+    }
+
+    await supabase.from('backup_sync_log').insert({
+      url,
+      total_rows: tableCounts.reduce((sum, t) => sum + t.rows, 0),
+      tables: tableCounts,
+      triggered_by_email: triggeredByEmail,
+      synced_at: syncedAt,
+    })
+
     return NextResponse.json({
       success: true,
-      url: webViewLink ?? `https://docs.google.com/spreadsheets/d/${fileId}/edit`,
+      url,
       tables: tableCounts,
-      syncedAt: new Date().toISOString(),
+      syncedAt,
     })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Failed to sync backup'
