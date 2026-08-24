@@ -1163,9 +1163,35 @@ const BACKUP_TABLE_LABELS: Record<string, string> = {
   warehouse_stock_ledger: 'Warehouse Stock Ledger',
 }
 
+interface BackupLogEntry {
+  id: string
+  synced_at: string
+  url: string
+  total_rows: number
+  tables: { name: string; rows: number }[]
+  triggered_by_email: string | null
+}
+
 function BackupTab() {
+  const supabase = createClient()
   const [syncing, setSyncing] = useState(false)
   const [result, setResult] = useState<BackupSyncResult | null>(null)
+  const [history, setHistory] = useState<BackupLogEntry[]>([])
+  const [historyLoading, setHistoryLoading] = useState(true)
+
+  async function loadHistory() {
+    setHistoryLoading(true)
+    const { data, error } = await supabase
+      .from('backup_sync_log')
+      .select('*')
+      .order('synced_at', { ascending: false })
+      .limit(20)
+    if (error) toast.error(error.message)
+    else setHistory(data ?? [])
+    setHistoryLoading(false)
+  }
+
+  useEffect(() => { loadHistory() }, [])
 
   async function handleSync() {
     setSyncing(true)
@@ -1173,6 +1199,7 @@ function BackupTab() {
       const data = await syncDatabaseBackup()
       setResult(data)
       toast.success('Database synced to Google Sheets')
+      await loadHistory()
     } catch (err: unknown) {
       toast.error(err instanceof Error ? err.message : 'Failed to sync backup')
     }
@@ -1224,6 +1251,42 @@ function BackupTab() {
                 <div className="text-xs text-muted-foreground text-right pt-1 border-t">
                   {totalRows.toLocaleString()} rows total
                 </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div>
+        <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider mb-4">Sync History</h3>
+        <Card>
+          <CardContent className="pt-5">
+            {historyLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : history.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">No syncs yet.</p>
+            ) : (
+              <div className="space-y-0">
+                {history.map(h => (
+                  <div key={h.id} className="flex items-center justify-between gap-3 py-2.5 border-b last:border-0 text-sm">
+                    <div className="min-w-0">
+                      <div className="font-medium">{new Date(h.synced_at).toLocaleString('en-PH')}</div>
+                      <div className="text-xs text-muted-foreground truncate">
+                        {h.total_rows.toLocaleString()} rows{h.triggered_by_email ? ` · ${h.triggered_by_email}` : ''}
+                      </div>
+                    </div>
+                    <a
+                      href={h.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium shrink-0"
+                    >
+                      Open <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </div>
+                ))}
               </div>
             )}
           </CardContent>
