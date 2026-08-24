@@ -320,8 +320,10 @@ export default function DashboardPage() {
       const today = new Date().toISOString().slice(0, 10)
       const overduePOs = (openPOsData.data ?? []).filter((p: any) => p.delivery_date && p.delivery_date < today)
       setOverduePOCount(overduePOs.length)
-      const { count: lsCount } = await supabase.from('items').select('id', { count: 'exact', head: true }).in('status', ['low_stock', 'out_of_stock'])
-      setLowStockCount(lsCount ?? 0)
+      // items.status is only ever 'active' | 'inactive' | 'archived' — there's no
+      // low/out-of-stock tracking on company items yet, so this always reads 0
+      // rather than querying an enum value that doesn't exist (which 400s).
+      setLowStockCount(0)
 
       // --- Decision Maker: monthly SO revenue + top clients ---
       const { data: soAll } = await supabase.from('sales_orders').select('so_date, created_at, client_name, total_amount, status').not('status', 'eq', 'cancelled')
@@ -369,10 +371,13 @@ export default function DashboardPage() {
       setTopClients(Object.entries(clientMap).map(([client, v]) => ({ client, ...v })).sort((a, b) => b.revenue - a.revenue || a.client.localeCompare(b.client)))
 
       // --- Client low stock alerts ---
+      // PostgREST filters compare a column against a literal value, not another
+      // column, so `.filter('quantity_on_hand', 'lte', 'low_stock_threshold')`
+      // was trying (and failing, with a 400) to cast the string
+      // "low_stock_threshold" to a number — fetch all rows and compare client-side.
       const { data: lowStockData } = await supabase
         .from('client_inventory')
         .select('client_id, item_name, unit, quantity_on_hand, low_stock_threshold')
-        .filter('quantity_on_hand', 'lte', 'low_stock_threshold')
       const clientNameMap: Record<string, string> = {}
       for (const c of clientsData ?? []) clientNameMap[c.id] = c.company_name
       const lowRows = (lowStockData ?? [])
