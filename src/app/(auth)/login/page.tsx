@@ -38,7 +38,7 @@ export default function LoginPage() {
         .select('role')
         .eq('id', data.user.id)
         .single()
-      if (profile?.role === 'client') {
+      if (profile?.role === 'client' || profile?.role === 'vendor') {
         router.push('/portal')
       } else {
         router.push('/dashboard')
