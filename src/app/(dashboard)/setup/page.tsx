@@ -710,25 +710,28 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
     if (invitePassword.length < 8) { toast.error('Password must be at least 8 characters'); return }
     setInviting(true)
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email: inviteEmail.trim().toLowerCase(),
-        password: invitePassword,
-        options: { data: { full_name: inviteSupplier.company_name, role: 'vendor', supplier_id: inviteSupplier.id } },
-      })
-      if (error) throw error
-      if (data.user) {
-        await supabase.from('profiles').upsert({
-          id: data.user.id,
+      // Created via the service-role admin API (email_confirm: true) rather than
+      // client-side signUp, so the account can log in immediately instead of
+      // bouncing off "Your account email has not been confirmed" until the
+      // project's confirmation email is sent and clicked.
+      const res = await fetch('/api/create-portal-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           email: inviteEmail.trim().toLowerCase(),
+          password: invitePassword,
           full_name: inviteSupplier.contact_person || inviteSupplier.company_name,
+          company: inviteSupplier.company_name,
           role: 'vendor',
-        })
-        await supabase.from('suppliers').update({
-          auth_user_id: data.user.id,
-          portal_access: true,
-          email: inviteEmail.trim().toLowerCase(),
-        }).eq('id', inviteSupplier.id)
-      }
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Failed to create portal account')
+      await supabase.from('suppliers').update({
+        auth_user_id: json.userId ?? null,
+        portal_access: true,
+        email: inviteEmail.trim().toLowerCase(),
+      }).eq('id', inviteSupplier.id)
       setInviteResult({ email: inviteEmail.trim().toLowerCase() })
       load()
     } catch (err: any) {
