@@ -1,25 +1,29 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { google } from 'googleapis'
-import * as XLSX from 'xlsx'
+import ExcelJS from 'exceljs'
 import { fetchAllRows } from '@/lib/supabase/fetch-all'
 
 export const maxDuration = 60
 
 const BACKUP_FILE_NAME = 'CDSC Database Backup'
 
-// One tab per core business table, in the order they appear in the workbook.
-const TABLES = [
-  'items',
-  'suppliers',
-  'purchase_orders',
-  'po_items',
-  'clients',
-  'sales_orders',
-  'so_items',
-  'warehouse_stock',
-  'warehouse_stock_ledger',
-] as const
+// Table name -> tab title (Title Case, acronyms kept upper-case). Order here
+// is the order tabs appear in the workbook.
+const TABLES: { table: string; tab: string }[] = [
+  { table: 'items', tab: 'Items' },
+  { table: 'suppliers', tab: 'Suppliers' },
+  { table: 'purchase_orders', tab: 'Purchase Orders' },
+  { table: 'po_items', tab: 'PO Items' },
+  { table: 'clients', tab: 'Clients' },
+  { table: 'sales_orders', tab: 'Sales Orders' },
+  { table: 'so_items', tab: 'SO Items' },
+  { table: 'warehouse_stock', tab: 'Warehouse Stock' },
+  { table: 'warehouse_stock_ledger', tab: 'Warehouse Stock Ledger' },
+]
+
+const HEADER_FILL = 'FFB91C1C' // CDSC brand red, ARGB
+const HEADER_FONT = 'FFFFFFFF'
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -57,10 +61,10 @@ export async function POST() {
     }
     const { drive, folderId } = client
 
-    const wb = XLSX.utils.book_new()
+    const wb = new ExcelJS.Workbook()
     const tableCounts: { name: string; rows: number }[] = []
 
-    for (const table of TABLES) {
+    for (const { table, tab } of TABLES) {
       const rows = await fetchAllRows<Record<string, unknown>>((from, to) =>
         supabase.from(table).select('*').order('id', { ascending: true }).range(from, to)
       )
@@ -72,12 +76,32 @@ export async function POST() {
         }
         return out
       })
-      const ws = flat.length > 0 ? XLSX.utils.json_to_sheet(flat) : XLSX.utils.aoa_to_sheet([[]])
-      XLSX.utils.book_append_sheet(wb, ws, table.slice(0, 31))
+
+      const ws = wb.addWorksheet(tab, { views: [{ state: 'frozen', ySplit: 1 }] })
+      const columns = flat.length > 0 ? Object.keys(flat[0]) : []
+      ws.columns = columns.map(col => {
+        const maxLen = flat.slice(0, 200).reduce((m, row) => {
+          const v = row[col]
+          return v == null ? m : Math.max(m, String(v).length)
+        }, col.length)
+        return { header: col, key: col, width: Math.min(Math.max(maxLen + 2, 10), 50) }
+      })
+      ws.addRows(flat)
+
+      const headerRow = ws.getRow(1)
+      headerRow.eachCell(cell => {
+        cell.font = { bold: true, color: { argb: HEADER_FONT } }
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_FILL } }
+        cell.alignment = { vertical: 'middle', horizontal: 'center' }
+      })
+      if (columns.length > 0) {
+        ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: columns.length } }
+      }
+
       tableCounts.push({ name: table, rows: rows.length })
     }
 
-    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer
+    const buffer = Buffer.from(await wb.xlsx.writeBuffer())
     const { Readable } = await import('stream')
     const xlsxMime = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
 
