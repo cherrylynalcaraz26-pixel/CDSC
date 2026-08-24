@@ -25,6 +25,92 @@ const TABLES: { table: string; tab: string }[] = [
 const HEADER_FILL = 'FFB91C1C' // CDSC brand red, ARGB
 const HEADER_FONT = 'FFFFFFFF'
 
+interface LookupMaps {
+  categories: Map<string, string>
+  suppliers: Map<string, string>
+  clients: Map<string, string>
+  purchaseOrders: Map<string, string>
+  salesOrders: Map<string, string>
+  purchaseRequests: Map<string, string>
+  quotations: Map<string, string>
+  profiles: Map<string, string>
+}
+
+type SupabaseAdmin = NonNullable<ReturnType<typeof getSupabaseAdmin>>
+
+async function loadLookupMaps(supabase: SupabaseAdmin): Promise<LookupMaps> {
+  function toMap(rows: Record<string, unknown>[] | null, pick: (row: Record<string, unknown>) => unknown) {
+    return new Map((rows ?? []).map(row => [row.id as string, (pick(row) as string | null) ?? '']))
+  }
+  const [categories, suppliers, clients, purchaseOrders, salesOrders, purchaseRequests, quotations, profiles] = await Promise.all([
+    supabase.from('categories').select('id, category_name'),
+    supabase.from('suppliers').select('id, company_name'),
+    supabase.from('clients').select('id, company_name'),
+    supabase.from('purchase_orders').select('id, po_number'),
+    supabase.from('sales_orders').select('id, so_number'),
+    supabase.from('purchase_requests').select('id, pr_number'),
+    supabase.from('quotations').select('id, quote_number'),
+    supabase.from('profiles').select('id, full_name, email'),
+  ])
+  return {
+    categories: toMap(categories.data, r => r.category_name),
+    suppliers: toMap(suppliers.data, r => r.company_name),
+    clients: toMap(clients.data, r => r.company_name),
+    purchaseOrders: toMap(purchaseOrders.data, r => r.po_number),
+    salesOrders: toMap(salesOrders.data, r => r.so_number),
+    purchaseRequests: toMap(purchaseRequests.data, r => r.pr_number),
+    quotations: toMap(quotations.data, r => r.quote_number),
+    profiles: toMap(profiles.data, r => r.full_name || r.email),
+  }
+}
+
+interface ColumnOp {
+  newKey?: string
+  drop?: boolean
+  resolve?: (id: unknown, maps: LookupMaps) => string
+}
+
+// Per exported table, how to turn a raw foreign-key uuid column into a
+// human-readable one. Renaming in place preserves column order; `drop` is
+// used where the row already carries a readable snapshot of the same
+// reference (e.g. po_items.item_name, sales_orders.client_name).
+const COLUMN_OPS: Record<string, Record<string, ColumnOp>> = {
+  items: {
+    category_id: { newKey: 'category_name', resolve: (id, m) => id ? m.categories.get(id as string) ?? '' : '' },
+    supplier_id: { newKey: 'supplier_name', resolve: (id, m) => id ? m.suppliers.get(id as string) ?? '' : '' },
+  },
+  po_items: {
+    po_id: { newKey: 'po_number', resolve: (id, m) => id ? m.purchaseOrders.get(id as string) ?? '' : '' },
+    item_id: { drop: true },
+  },
+  purchase_orders: {
+    pr_id: { newKey: 'pr_number', resolve: (id, m) => id ? m.purchaseRequests.get(id as string) ?? '' : '' },
+    supplier_id: { newKey: 'supplier_name', resolve: (id, m) => id ? m.suppliers.get(id as string) ?? '' : '' },
+    client_id: { newKey: 'client_name', resolve: (id, m) => id ? m.clients.get(id as string) ?? '' : '' },
+    created_by: { newKey: 'created_by_name', resolve: (id, m) => id ? m.profiles.get(id as string) ?? '' : '' },
+  },
+  sales_orders: {
+    client_id: { drop: true },
+    quotation_id: { newKey: 'quotation_number', resolve: (id, m) => id ? m.quotations.get(id as string) ?? '' : '' },
+  },
+  so_items: {
+    so_id: { newKey: 'so_number', resolve: (id, m) => id ? m.salesOrders.get(id as string) ?? '' : '' },
+  },
+}
+
+function applyColumnOps(row: Record<string, unknown>, table: string, maps: LookupMaps) {
+  const ops = COLUMN_OPS[table]
+  if (!ops) return row
+  const out: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(row)) {
+    const op = ops[key]
+    if (!op) { out[key] = value; continue }
+    if (op.drop) continue
+    out[op.newKey ?? key] = op.resolve ? op.resolve(value, maps) : value
+  }
+  return out
+}
+
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
@@ -61,6 +147,7 @@ export async function POST() {
     }
     const { drive, folderId } = client
 
+    const maps = await loadLookupMaps(supabase)
     const wb = new ExcelJS.Workbook()
     const tableCounts: { name: string; rows: number }[] = []
 
@@ -68,13 +155,14 @@ export async function POST() {
       const rows = await fetchAllRows<Record<string, unknown>>((from, to) =>
         supabase.from(table).select('*').order('id', { ascending: true }).range(from, to)
       )
-      // Stringify nested JSON columns so they render as text instead of "[object Object]".
+      // Stringify nested JSON columns so they render as text instead of "[object Object]",
+      // then swap foreign-key uuid columns for the human-readable name they point to.
       const flat = rows.map(row => {
         const out: Record<string, unknown> = {}
         for (const [key, value] of Object.entries(row)) {
           out[key] = value && typeof value === 'object' ? JSON.stringify(value) : value
         }
-        return out
+        return applyColumnOps(out, table, maps)
       })
 
       const ws = wb.addWorksheet(tab, { views: [{ state: 'frozen', ySplit: 1 }] })
