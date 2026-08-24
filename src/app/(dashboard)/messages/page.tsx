@@ -2,13 +2,23 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { MessageSquare, Send, CheckCheck, Clock, User } from 'lucide-react'
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog'
+import { MessageSquare, Send, CheckCheck, Search, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
+
+interface ClientInfo {
+  company_name: string | null
+  contact_person: string | null
+  avatar_url: string | null
+}
 
 interface ClientMessage {
   id: string
@@ -19,16 +29,24 @@ interface ClientMessage {
   status: string
   reply: string | null
   replied_at: string | null
-  clients: { company_name: string | null; contact_person: string | null } | null
+  clients: ClientInfo | null
 }
 
 interface Conversation {
   key: string
   company: string
   contact: string | null
+  avatarUrl: string | null
   messages: ClientMessage[]
   lastMessage: ClientMessage
   unreadCount: number
+}
+
+interface ClientOption {
+  id: string
+  company_name: string
+  contact_person: string | null
+  avatar_url: string | null
 }
 
 function companyOf(msg: ClientMessage) {
@@ -39,6 +57,34 @@ function nameOf(msg: ClientMessage) {
   return msg.clients?.contact_person || null
 }
 
+function avatarOf(msg: ClientMessage) {
+  return msg.clients?.avatar_url || null
+}
+
+const AVATAR_COLORS = [
+  'bg-red-500', 'bg-orange-500', 'bg-amber-500', 'bg-green-600',
+  'bg-teal-500', 'bg-blue-600', 'bg-violet-600', 'bg-pink-600',
+]
+function avatarColor(seed: string) {
+  let h = 0
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0
+  return AVATAR_COLORS[h % AVATAR_COLORS.length]
+}
+function initials(name: string) {
+  return name.trim().split(/\s+/).map(w => w[0]).join('').toUpperCase().slice(0, 2) || '?'
+}
+
+function Avatar({ name, seed, url, size = 'h-9 w-9 text-sm' }: { name: string; seed: string; url: string | null; size?: string }) {
+  return (
+    <div className={`${size} rounded-full overflow-hidden flex items-center justify-center text-white font-semibold shrink-0 ${url ? '' : avatarColor(seed)}`}>
+      {url
+        ? // eslint-disable-next-line @next/next/no-img-element
+          <img src={url} alt={name} className="h-full w-full object-cover" />
+        : initials(name)}
+    </div>
+  )
+}
+
 export default function MessagesPage() {
   const supabase = createClient()
   const [messages, setMessages] = useState<ClientMessage[]>([])
@@ -47,12 +93,22 @@ export default function MessagesPage() {
   const [replyText, setReplyText] = useState('')
   const [replying, setReplying] = useState(false)
   const [filter, setFilter] = useState<'all' | 'unread' | 'replied'>('all')
+  const [search, setSearch] = useState('')
+
+  // New conversation
+  const [newConvOpen, setNewConvOpen] = useState(false)
+  const [clientOptions, setClientOptions] = useState<ClientOption[]>([])
+  const [clientOptionsLoading, setClientOptionsLoading] = useState(false)
+  const [clientFilter, setClientFilter] = useState('')
+  const [pickedClientId, setPickedClientId] = useState<string | null>(null)
+  const [newMessageText, setNewMessageText] = useState('')
+  const [creatingConv, setCreatingConv] = useState(false)
 
   async function load() {
     setLoading(true)
     const { data } = await supabase
       .from('client_messages')
-      .select('*, clients(company_name, contact_person)')
+      .select('*, clients(company_name, contact_person, avatar_url)')
       .order('sent_at', { ascending: false })
     setMessages((data ?? []) as ClientMessage[])
     setLoading(false)
@@ -78,6 +134,7 @@ export default function MessagesPage() {
         key,
         company: companyOf(lastMessage),
         contact: nameOf(lastMessage),
+        avatarUrl: avatarOf(lastMessage),
         messages: sorted,
         lastMessage,
         unreadCount: sorted.filter(m => m.status === 'unread').length,
@@ -117,11 +174,60 @@ export default function MessagesPage() {
     markConversationRead(conv)
   }
 
+  async function openNewConversation() {
+    setPickedClientId(null)
+    setClientFilter('')
+    setNewMessageText('')
+    setNewConvOpen(true)
+    if (clientOptions.length === 0) {
+      setClientOptionsLoading(true)
+      const { data } = await supabase
+        .from('clients')
+        .select('id, company_name, contact_person, avatar_url')
+        .order('company_name')
+      setClientOptions((data ?? []) as ClientOption[])
+      setClientOptionsLoading(false)
+    }
+  }
+
+  const filteredClientOptions = clientOptions.filter(c =>
+    !clientFilter.trim() || c.company_name.toLowerCase().includes(clientFilter.toLowerCase())
+  )
+
+  async function startNewConversation() {
+    if (!pickedClientId || !newMessageText.trim()) return
+    const client = clientOptions.find(c => c.id === pickedClientId)
+    if (!client) return
+    setCreatingConv(true)
+    const now = new Date().toISOString()
+    const { error } = await supabase.from('client_messages').insert({
+      client_id: client.id,
+      client_name: client.company_name,
+      message: '',
+      reply: newMessageText.trim(),
+      replied_at: now,
+      sent_at: now,
+      status: 'replied',
+    })
+    if (error) { toast.error(error.message); setCreatingConv(false); return }
+    toast.success('Conversation started')
+    setCreatingConv(false)
+    setNewConvOpen(false)
+    await load()
+    setSelectedKey(client.id)
+  }
+
   const unreadCount = messages.filter(m => m.status === 'unread').length
+  const repliedCount = conversations.filter(c => !!c.lastMessage.reply).length
 
   const filteredConversations = conversations.filter(c => {
-    if (filter === 'unread') return c.unreadCount > 0
-    if (filter === 'replied') return !!c.lastMessage.reply
+    if (filter === 'unread' && c.unreadCount === 0) return false
+    if (filter === 'replied' && !c.lastMessage.reply) return false
+    if (search.trim()) {
+      const q = search.toLowerCase()
+      const hay = `${c.company} ${c.contact ?? ''} ${c.lastMessage.message} ${c.lastMessage.reply ?? ''}`.toLowerCase()
+      if (!hay.includes(q)) return false
+    }
     return true
   })
 
@@ -129,6 +235,12 @@ export default function MessagesPage() {
     if (s === 'unread') return <Badge className="bg-red-100 text-red-700 text-[10px]">Unread</Badge>
     if (s === 'replied') return <Badge className="bg-green-100 text-green-700 text-[10px]">Replied</Badge>
     return <Badge className="bg-gray-100 text-gray-500 text-[10px]">Read</Badge>
+  }
+
+  const filterCounts: Record<'all' | 'unread' | 'replied', number> = {
+    all: conversations.length,
+    unread: conversations.filter(c => c.unreadCount > 0).length,
+    replied: repliedCount,
   }
 
   return (
@@ -145,39 +257,35 @@ export default function MessagesPage() {
         {unreadCount > 0 && (
           <span className="ml-2 px-2 py-0.5 rounded-full bg-red-600 text-white text-xs font-bold">{unreadCount} new</span>
         )}
-      </div>
-
-      {/* KPI */}
-      <div className="grid grid-cols-3 gap-4">
-        {[
-          { label: 'Conversations', value: conversations.length, icon: MessageSquare, color: 'text-blue-600' },
-          { label: 'Unread', value: unreadCount, icon: Clock, color: 'text-red-600' },
-          { label: 'Replied', value: messages.filter(m => m.status === 'replied').length, icon: CheckCheck, color: 'text-green-600' },
-        ].map(c => (
-          <Card key={c.label}>
-            <CardHeader className="pb-2 flex flex-row items-center justify-between">
-              <CardTitle className="text-xs font-medium text-muted-foreground">{c.label}</CardTitle>
-              <c.icon className={`h-4 w-4 ${c.color}`} />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{loading ? '—' : c.value}</div>
-            </CardContent>
-          </Card>
-        ))}
+        <Button onClick={openNewConversation} className="ml-auto gap-2 bg-red-600 hover:bg-red-700">
+          <Plus className="h-4 w-4" /> New Conversation
+        </Button>
       </div>
 
       {/* Main panel */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 min-h-[500px]">
         {/* Conversation list */}
         <Card className="lg:col-span-1 flex flex-col">
-          <CardHeader className="pb-2 border-b">
+          <CardHeader className="pb-2 border-b space-y-3">
             <div className="flex items-center gap-2">
               {(['all', 'unread', 'replied'] as const).map(f => (
                 <button key={f} onClick={() => setFilter(f)}
-                  className={`text-xs px-2.5 py-1 rounded-full font-medium transition-colors capitalize ${filter === f ? 'bg-red-600 text-white' : 'text-muted-foreground hover:bg-muted'}`}>
+                  className={`flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-medium transition-colors capitalize ${filter === f ? 'bg-red-600 text-white' : 'text-muted-foreground hover:bg-muted'}`}>
                   {f}
+                  <span className={`inline-flex items-center justify-center min-w-[16px] h-[16px] px-1 rounded-full text-[10px] font-bold ${filter === f ? 'bg-white/25 text-white' : 'bg-muted-foreground/15 text-muted-foreground'}`}>
+                    {filterCounts[f]}
+                  </span>
                 </button>
               ))}
+            </div>
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Search conversations…"
+                className="pl-8 h-8 text-sm"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+              />
             </div>
           </CardHeader>
           <div className="flex-1 overflow-y-auto divide-y">
@@ -189,12 +297,14 @@ export default function MessagesPage() {
               <button key={conv.key} onClick={() => openConversation(conv)}
                 className={`w-full text-left p-4 hover:bg-muted/50 transition-colors ${selectedKey === conv.key ? 'bg-muted' : ''}`}>
                 <div className="flex items-start justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className={`h-2 w-2 rounded-full shrink-0 mt-1 ${conv.unreadCount > 0 ? 'bg-red-500' : 'bg-transparent'}`} />
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <Avatar name={conv.company} seed={conv.key} url={conv.avatarUrl} size="h-8 w-8 text-xs" />
                     <div className="min-w-0">
                       <div className="text-sm font-medium truncate">{conv.company}</div>
                       {conv.contact && <div className="text-xs text-muted-foreground truncate">{conv.contact}</div>}
-                      <div className="text-xs text-muted-foreground truncate mt-0.5">{conv.lastMessage.message}</div>
+                      <div className="text-xs text-muted-foreground truncate mt-0.5">
+                        {conv.lastMessage.message || conv.lastMessage.reply}
+                      </div>
                     </div>
                   </div>
                   <div className="shrink-0 text-right">
@@ -227,9 +337,7 @@ export default function MessagesPage() {
               <CardHeader className="border-b">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="h-9 w-9 rounded-full bg-red-600/10 flex items-center justify-center">
-                      <User className="h-4 w-4 text-red-600" />
-                    </div>
+                    <Avatar name={selected.company} seed={selected.key} url={selected.avatarUrl} />
                     <div>
                       <div className="font-semibold text-sm">{selected.company}</div>
                       {selected.contact && <div className="text-xs text-muted-foreground">{selected.contact}</div>}
@@ -244,14 +352,16 @@ export default function MessagesPage() {
                 <div className="flex-1 overflow-y-auto space-y-3 max-h-[420px] pr-1">
                   {selected.messages.map(m => (
                     <div key={m.id} className="space-y-2">
-                      <div className="flex justify-start">
-                        <div className="max-w-[80%] bg-muted rounded-2xl rounded-bl-sm px-4 py-2.5">
-                          <p className="text-sm whitespace-pre-wrap">{m.message}</p>
-                          <p className="text-[10px] text-muted-foreground mt-1">
-                            {m.sent_at ? format(new Date(m.sent_at), 'MMM d, yyyy · h:mm a') : '—'}
-                          </p>
+                      {m.message.trim() && (
+                        <div className="flex justify-start">
+                          <div className="max-w-[80%] bg-muted rounded-2xl rounded-bl-sm px-4 py-2.5">
+                            <p className="text-sm whitespace-pre-wrap">{m.message}</p>
+                            <p className="text-[10px] text-muted-foreground mt-1">
+                              {m.sent_at ? format(new Date(m.sent_at), 'MMM d, yyyy · h:mm a') : '—'}
+                            </p>
+                          </div>
                         </div>
-                      </div>
+                      )}
                       {m.reply && (
                         <div className="flex justify-end">
                           <div className="max-w-[80%] bg-red-600 text-white rounded-2xl rounded-br-sm px-4 py-2.5">
@@ -291,6 +401,65 @@ export default function MessagesPage() {
           )}
         </Card>
       </div>
+
+      {/* New conversation dialog */}
+      <Dialog open={newConvOpen} onOpenChange={setNewConvOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New Conversation</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium">Client</p>
+              <Input
+                placeholder="Search clients…"
+                value={clientFilter}
+                onChange={e => setClientFilter(e.target.value)}
+                className="h-9"
+              />
+              <div className="border rounded-lg max-h-52 overflow-y-auto divide-y">
+                {clientOptionsLoading ? (
+                  <div className="p-4 text-center text-sm text-muted-foreground">Loading clients…</div>
+                ) : filteredClientOptions.length === 0 ? (
+                  <div className="p-4 text-center text-sm text-muted-foreground">No clients found</div>
+                ) : filteredClientOptions.map(c => (
+                  <button
+                    key={c.id}
+                    onClick={() => setPickedClientId(c.id)}
+                    className={`w-full flex items-center gap-2.5 text-left px-3 py-2 hover:bg-muted/50 transition-colors ${pickedClientId === c.id ? 'bg-muted' : ''}`}
+                  >
+                    <Avatar name={c.company_name} seed={c.id} url={c.avatar_url} size="h-7 w-7 text-[10px]" />
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium truncate">{c.company_name}</div>
+                      {c.contact_person && <div className="text-xs text-muted-foreground truncate">{c.contact_person}</div>}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <p className="text-sm font-medium">Message</p>
+              <Textarea
+                rows={4}
+                placeholder="Type your message…"
+                value={newMessageText}
+                onChange={e => setNewMessageText(e.target.value)}
+                className="resize-none"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNewConvOpen(false)}>Cancel</Button>
+            <Button
+              onClick={startNewConversation}
+              disabled={!pickedClientId || !newMessageText.trim() || creatingConv}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {creatingConv ? 'Starting…' : 'Start Conversation'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
