@@ -186,8 +186,9 @@ function LivePreview({ s }: { s: Settings }) {
     const certifications = (s.certifications ?? '').split('\n').map(c => c.trim()).filter(Boolean)
     return `<!DOCTYPE html><html><head><title>${fullName} – Company &amp; Business Profile</title>
     <style>
-      body { font-family: Arial, sans-serif; margin: 0; padding: 24px; color: #1e293b; }
-      .header { display: flex; align-items: center; justify-content: space-between; gap: 20px; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); color: #fff; padding: 22px 24px; border-radius: 10px; margin: -24px -24px 20px; }
+      @font-face { font-family: 'Questrial'; src: url('/fonts/Questrial-Regular.ttf') format('truetype'); font-weight: normal; }
+      body { font-family: 'Questrial', Arial, sans-serif; margin: 0; padding: 24px; color: #1e293b; }
+      .header { display: flex; align-items: center; justify-content: space-between; gap: 20px; background: linear-gradient(135deg, #b91c1c 0%, #7f1d1d 100%); color: #fff; padding: 22px 24px; border-radius: 10px; margin: -24px -24px 20px; }
       .logo { width: 60px; height: 60px; object-fit: contain; border-radius: 8px; background: #fff; padding: 4px; }
       .logo-placeholder { width: 60px; height: 60px; background: rgba(255,255,255,0.1); border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-size: 10px; color: rgba(255,255,255,0.6); }
       .header-info { text-align: right; }
@@ -358,9 +359,9 @@ function LivePreview({ s }: { s: Settings }) {
         </span>
       </div>
 
-      <div className="border rounded-xl overflow-hidden bg-white shadow-sm">
-        <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-3">
-          <p className="text-white/50 text-[10px] uppercase tracking-widest">Company Header</p>
+      <div className="border rounded-2xl overflow-hidden bg-white shadow-lg">
+        <div className="bg-gradient-to-r from-red-700 to-red-900 px-5 py-3">
+          <p className="text-white/60 text-[10px] uppercase tracking-widest">Company Letterhead</p>
         </div>
 
         {/* Header: logo + company info */}
@@ -695,7 +696,8 @@ function buildProposalHtml(s: Settings, p: Proposal) {
   const amountStr = p.amount ? `₱${p.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : ''
   return `<!DOCTYPE html><html><head><title>${p.proposal_number} – Business Proposal</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; padding: 24px; color: #1e293b; }
+    @font-face { font-family: 'Questrial'; src: url('/fonts/Questrial-Regular.ttf') format('truetype'); font-weight: normal; }
+    body { font-family: 'Questrial', Arial, sans-serif; margin: 0; padding: 24px; color: #1e293b; }
     .header { display: flex; align-items: flex-start; gap: 16px; border-bottom: 2px solid #dc2626; padding-bottom: 16px; margin-bottom: 16px; }
     .logo { width: 64px; height: 64px; object-fit: contain; border-radius: 8px; border: 1px solid #e2e8f0; }
     h1 { margin: 0 0 4px; font-size: 18px; color: #0f172a; }
@@ -775,8 +777,8 @@ function ProposalLivePreview({ s, client, title, amount, number }: {
         <span className="ml-auto text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">● LIVE</span>
       </div>
 
-      <div className="border rounded-xl overflow-hidden bg-white shadow-sm text-sm">
-        <div className="bg-gradient-to-r from-slate-800 to-slate-900 p-5">
+      <div className="border rounded-2xl overflow-hidden bg-white shadow-lg text-sm">
+        <div className="bg-gradient-to-r from-red-700 to-red-900 p-5">
           <div className="flex items-start gap-3">
             <div className="h-12 w-12 rounded-lg bg-white flex items-center justify-center overflow-hidden shrink-0">
               {s.logo_url ? (
