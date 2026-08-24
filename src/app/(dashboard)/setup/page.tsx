@@ -77,7 +77,7 @@ function UOMTab({ configSelector }: { configSelector: React.ReactNode }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
+      <div className="flex items-end gap-3">
         {configSelector}
         <Button onClick={openAdd} size="sm" className="bg-red-600 hover:bg-red-700 ml-auto">
           <Plus className="h-4 w-4 mr-1" /> Add UOM
@@ -215,7 +215,7 @@ function BrandsTab({ configSelector }: { configSelector: React.ReactNode }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
+      <div className="flex items-end gap-3">
         {configSelector}
         <Button onClick={openAdd} size="sm" className="bg-red-600 hover:bg-red-700 ml-auto">
           <Plus className="h-4 w-4 mr-1" /> Add Brand
@@ -378,7 +378,7 @@ function AttributesTab({ configSelector }: { configSelector: React.ReactNode }) 
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
+      <div className="flex items-end gap-3">
         {configSelector}
         <Button onClick={openAdd} size="sm" className="bg-red-600 hover:bg-red-700 ml-auto">
           <Plus className="h-4 w-4 mr-1" /> Add Attribute
@@ -556,7 +556,7 @@ function CategoriesTab({ configSelector }: { configSelector: React.ReactNode }) 
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
+      <div className="flex items-end gap-3">
         {configSelector}
         <Button onClick={openAdd} size="sm" className="bg-red-600 hover:bg-red-700 ml-auto">
           <Plus className="h-4 w-4 mr-1" /> Add Category
@@ -580,7 +580,7 @@ function CategoriesTab({ configSelector }: { configSelector: React.ReactNode }) 
             ) : rows.map(r => (
               <TableRow key={r.id}>
                 <TableCell className="font-mono text-sm">{r.category_code ?? '—'}</TableCell>
-                <TableCell className="font-medium uppercase">{r.category_name}</TableCell>
+                <TableCell className="font-medium capitalize">{r.category_name}</TableCell>
                 <TableCell>
                   <button onClick={() => toggleStatus(r)}>
                     <Badge className={`capitalize ${r.status === 'active' ? 'bg-green-100 text-green-800 cursor-pointer' : 'bg-gray-100 text-gray-600 cursor-pointer'}`}>
@@ -831,7 +831,7 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
+      <div className="flex items-end gap-3">
         {configSelector}
         <Button onClick={openAdd} size="sm" className="bg-red-600 hover:bg-red-700 ml-auto">
           <Plus className="h-4 w-4 mr-1" />Add Supplier
@@ -911,12 +911,12 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-5xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? 'Edit Supplier' : 'Add Supplier'}</DialogTitle>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-4 py-2">
-            <div className="col-span-2 space-y-1.5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 py-2">
+            <div className="sm:col-span-3 space-y-1.5">
               <Label>Logo</Label>
               <div className="flex items-center gap-3">
                 <div className="h-16 w-16 rounded-lg border bg-muted/40 flex items-center justify-center overflow-hidden shrink-0">
@@ -947,7 +947,7 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
                 </div>
               </div>
             </div>
-            <div className="col-span-2 space-y-1.5">
+            <div className="sm:col-span-3 space-y-1.5">
               <Label>Company Name <span className="text-destructive">*</span></Label>
               <Input value={form.company_name} onChange={e => setForm(p => ({ ...p, company_name: e.target.value }))} />
             </div>
@@ -959,7 +959,7 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
               <Input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} /></div>
             <div className="space-y-1.5"><Label>TIN</Label>
               <Input placeholder="000-000-000-000" value={form.tin} onChange={e => setForm(p => ({ ...p, tin: e.target.value }))} /></div>
-            <div className="col-span-2 space-y-1.5"><Label>Address</Label>
+            <div className="sm:col-span-2 space-y-1.5"><Label>Address</Label>
               <Input value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} /></div>
             <div className="space-y-1.5">
               <Label>Category</Label>
@@ -1454,7 +1454,7 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-3">
+      <div className="flex items-end gap-3">
         {configSelector}
         <div className="flex border rounded-md overflow-hidden shrink-0 ml-auto">
           <button onClick={() => setViewMode('list')}
@@ -1926,18 +1926,21 @@ function SetupPageContent() {
   }, [])
 
   const configSelector = (
-    <Select value={active} onValueChange={v => setActive(v ?? 'suppliers')}>
-      <SelectTrigger className="w-56 shrink-0">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {CONFIG_TABS.map(tab => (
-          <SelectItem key={tab.key} value={tab.key}>
-            {tab.label}{counts[tab.key] !== undefined ? ` (${counts[tab.key].toLocaleString()})` : ''}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <div className="space-y-1 shrink-0">
+      <Label className="text-xs text-muted-foreground">Section</Label>
+      <Select value={active} onValueChange={v => setActive(v ?? 'suppliers')}>
+        <SelectTrigger className="w-56 shrink-0">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {CONFIG_TABS.map(tab => (
+            <SelectItem key={tab.key} value={tab.key}>
+              {tab.label}{counts[tab.key] !== undefined ? ` (${counts[tab.key].toLocaleString()})` : ''}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   )
 
   return (
