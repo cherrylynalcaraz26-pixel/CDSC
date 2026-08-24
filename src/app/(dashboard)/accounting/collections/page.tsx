@@ -222,21 +222,19 @@ export default function CollectionsPage() {
 
       {/* New Collection Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="w-[95vw] max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>New Collection (OR)</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>OR Number</Label>
-                <Input value="" disabled className="bg-muted text-muted-foreground" placeholder="Auto-generated" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Collection Date</Label>
-                <Input type="date" value={form.collection_date} onChange={e => setForm(p => ({ ...p, collection_date: e.target.value }))} />
-              </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
+            <div className="space-y-1.5">
+              <Label>OR Number</Label>
+              <Input value="" disabled className="bg-muted text-muted-foreground" placeholder="Auto-generated" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Collection Date</Label>
+              <Input type="date" value={form.collection_date} onChange={e => setForm(p => ({ ...p, collection_date: e.target.value }))} />
             </div>
 
-            <div className="space-y-1.5">
+            <div className="sm:col-span-2 space-y-1.5">
               <Label>Client</Label>
               <Select value={form.client_id} onValueChange={v => setForm(p => ({ ...p, client_id: v ?? '', client_name: '' }))}>
                 <SelectTrigger><SelectValue placeholder="Select existing client" /></SelectTrigger>
@@ -254,21 +252,19 @@ export default function CollectionsPage() {
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>Amount (₱) <span className="text-destructive">*</span></Label>
-                <Input type="number" min={0} step="0.01" placeholder="0.00" value={form.amount}
-                  onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Payment Mode</Label>
-                <Select value={form.payment_mode} onValueChange={v => setForm(p => ({ ...p, payment_mode: v ?? 'Cash' }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {PAYMENT_MODES.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="space-y-1.5">
+              <Label>Amount (₱) <span className="text-destructive">*</span></Label>
+              <Input type="number" min={0} step="0.01" placeholder="0.00" value={form.amount}
+                onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Payment Mode</Label>
+              <Select value={form.payment_mode} onValueChange={v => setForm(p => ({ ...p, payment_mode: v ?? 'Cash' }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_MODES.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-1.5">

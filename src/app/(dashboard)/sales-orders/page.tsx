@@ -1720,29 +1720,31 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
 
       {/* Email SO Dialog */}
       <Dialog open={!!emailSO} onOpenChange={o => { if (!o && !sendingEmailSO) setEmailSO(null) }}>
-        <DialogContent className="sm:!max-w-2xl">
+        <DialogContent className="w-[95vw] max-w-3xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Mail className="h-4 w-4" />Send Sales Order</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 pt-2">
-            <div className="space-y-1.5">
-              <Label>Recipient Email <span className="text-destructive">*</span></Label>
-              <Input
-                type="email"
-                placeholder="client@example.com"
-                value={emailToSO}
-                onChange={e => setEmailToSO(e.target.value)}
-                disabled={sendingEmailSO}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Subject</Label>
-              <Input
-                placeholder="Email subject"
-                value={emailSubjectSO}
-                onChange={e => setEmailSubjectSO(e.target.value)}
-                disabled={sendingEmailSO}
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Recipient Email <span className="text-destructive">*</span></Label>
+                <Input
+                  type="email"
+                  placeholder="client@example.com"
+                  value={emailToSO}
+                  onChange={e => setEmailToSO(e.target.value)}
+                  disabled={sendingEmailSO}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Subject</Label>
+                <Input
+                  placeholder="Email subject"
+                  value={emailSubjectSO}
+                  onChange={e => setEmailSubjectSO(e.target.value)}
+                  disabled={sendingEmailSO}
+                />
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label>Message Body</Label>

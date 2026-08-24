@@ -1684,29 +1684,31 @@ export default function PurchaseOrdersPage() {
 
       {/* Send Email Dialog */}
       <Dialog open={showEmail} onOpenChange={setShowEmail}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="w-[95vw] max-w-3xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Mail className="h-4 w-4" />Send Purchase Order by Email
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 pt-2">
-            <div className="space-y-1.5">
-              <Label>To</Label>
-              <Input
-                type="email"
-                placeholder="supplier@example.com"
-                value={emailTo}
-                onChange={e => setEmailTo(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Subject</Label>
-              <Input
-                value={emailSubject}
-                onChange={e => setEmailSubject(e.target.value)}
-                placeholder="Subject…"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>To</Label>
+                <Input
+                  type="email"
+                  placeholder="supplier@example.com"
+                  value={emailTo}
+                  onChange={e => setEmailTo(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Subject</Label>
+                <Input
+                  value={emailSubject}
+                  onChange={e => setEmailSubject(e.target.value)}
+                  placeholder="Subject…"
+                />
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label>Body</Label>

@@ -1772,7 +1772,7 @@ export default function InventoryPage() {
 
           {/* Email Client Dialog */}
           <Dialog open={emailReportOpen} onOpenChange={setEmailReportOpen}>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="w-[95vw] max-w-3xl">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <Mail className="h-4 w-4 text-blue-600" />
@@ -1780,21 +1780,23 @@ export default function InventoryPage() {
                 </DialogTitle>
               </DialogHeader>
               <div className="space-y-3 py-1">
-                <div className="space-y-1.5">
-                  <Label>To (recipient email) <span className="text-destructive">*</span></Label>
-                  <Input
-                    type="email"
-                    placeholder="client@example.com"
-                    value={emailReportTo}
-                    onChange={e => setEmailReportTo(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Subject</Label>
-                  <Input
-                    value={emailReportSubject}
-                    onChange={e => setEmailReportSubject(e.target.value)}
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>To (recipient email) <span className="text-destructive">*</span></Label>
+                    <Input
+                      type="email"
+                      placeholder="client@example.com"
+                      value={emailReportTo}
+                      onChange={e => setEmailReportTo(e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Subject</Label>
+                    <Input
+                      value={emailReportSubject}
+                      onChange={e => setEmailReportSubject(e.target.value)}
+                    />
+                  </div>
                 </div>
                 <div className="space-y-1.5">
                   <Label>Message</Label>
@@ -1870,7 +1872,7 @@ export default function InventoryPage() {
       </Dialog>
 
       <Dialog open={warehouseUpdateOpen} onOpenChange={o => { if (!o) setWarehouseUpdateOpen(false) }}>
-        <DialogContent className="sm:max-w-xl">
+        <DialogContent className="w-[95vw] max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Pencil className="h-4 w-4 text-blue-600" /> Update Warehouse Stock
@@ -1894,7 +1896,7 @@ export default function InventoryPage() {
               </div>
 
               {wsMarkDelivered ? (
-                <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <Label>Quantity Delivered <span className="text-red-500">*</span></Label>
                     <Input type="number" min="0" value={wsDeliverQty} onChange={e => setWsDeliverQty(e.target.value)} placeholder="0" />
@@ -1910,13 +1912,13 @@ export default function InventoryPage() {
                     </Select>
                     <p className="text-xs text-muted-foreground">If picked, this quantity is credited to that client&apos;s own On Hand ledger.</p>
                   </div>
-                  <div className="space-y-1.5">
+                  <div className="sm:col-span-2 space-y-1.5">
                     <Label>Warehouse Note</Label>
                     <Input value={warehouseUpdateNotes} onChange={e => setWarehouseUpdateNotes(e.target.value)} placeholder="Notes about this stock entry" />
                   </div>
-                </>
+                </div>
               ) : (
-                <>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <Label>Quantity <span className="text-red-500">*</span></Label>
                     <Input type="number" min="0" value={warehouseUpdateQty} onChange={e => setWarehouseUpdateQty(e.target.value)} placeholder="0" />
@@ -1925,7 +1927,7 @@ export default function InventoryPage() {
                     <Label>Warehouse Note</Label>
                     <Input value={warehouseUpdateNotes} onChange={e => setWarehouseUpdateNotes(e.target.value)} placeholder="Notes about this stock entry" />
                   </div>
-                </>
+                </div>
               )}
             </div>
           )}

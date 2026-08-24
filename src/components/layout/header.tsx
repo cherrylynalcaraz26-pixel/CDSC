@@ -66,6 +66,21 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
 
   const isDataPage = DATA_PAGES.some(p => pathname.startsWith(p))
 
+  async function markNotifRead(n: Notif) {
+    if (n.type === 'message') {
+      await supabase.from('client_messages').update({ status: 'read' }).eq('id', n.id.replace(/^msg-/, ''))
+    }
+    setNotifs(ns => ns.map(x => x.id === n.id ? { ...x, read: true } : x))
+  }
+
+  async function markAllNotifsRead() {
+    const messageIds = notifs.filter(n => n.type === 'message' && !n.read).map(n => n.id.replace(/^msg-/, ''))
+    if (messageIds.length > 0) {
+      await supabase.from('client_messages').update({ status: 'read' }).in('id', messageIds)
+    }
+    setNotifs(ns => ns.map(n => ({ ...n, read: true })))
+  }
+
   const navResults = (!isDataPage && query.trim().length > 0)
     ? SEARCH_ITEMS.filter(item =>
         item.label.toLowerCase().includes(query.toLowerCase()) ||
@@ -198,7 +213,7 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
                 <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
                   <span className="text-sm font-semibold">Notifications</span>
                   {unreadCount > 0 && (
-                    <button onClick={() => setNotifs(ns => ns.map(n => ({ ...n, read: true })))}
+                    <button onClick={() => markAllNotifsRead()}
                       className="text-xs text-red-600 hover:underline">
                       Mark all read
                     </button>
@@ -211,7 +226,7 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
                     <button
                       key={n.id}
                       onClick={() => {
-                        setNotifs(ns => ns.map(x => x.id === n.id ? { ...x, read: true } : x))
+                        markNotifRead(n)
                         setNotifOpen(false)
                         router.push(n.href)
                       }}

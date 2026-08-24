@@ -325,23 +325,21 @@ function DisbursementsTab() {
       </Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="w-[95vw] max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>New Disbursement</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Date <span className="text-destructive">*</span></Label>
-                <Input type="date" value={form.disb_date} onChange={e => setForm(p => ({ ...p, disb_date: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Payment Mode</Label>
-                <Select value={form.payment_mode} onValueChange={v => setForm(p => ({ ...p, payment_mode: v ?? 'cash' }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {PAYMENT_MODES.map(m => <SelectItem key={m} value={m}>{m.replace('_',' ')}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Date <span className="text-destructive">*</span></Label>
+              <Input type="date" value={form.disb_date} onChange={e => setForm(p => ({ ...p, disb_date: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Payment Mode</Label>
+              <Select value={form.payment_mode} onValueChange={v => setForm(p => ({ ...p, payment_mode: v ?? 'cash' }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_MODES.map(m => <SelectItem key={m} value={m}>{m.replace('_',' ')}</SelectItem>)}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1.5">
               <Label>Payee <span className="text-destructive">*</span></Label>
@@ -351,20 +349,18 @@ function DisbursementsTab() {
               <Label>Description</Label>
               <Input placeholder="Purpose of payment" value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Expense Account</Label>
-                <Select value={form.expense_account} onValueChange={v => setForm(p => ({ ...p, expense_account: v ?? '5950' }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {EXPENSE_ACCOUNTS.map(a => <SelectItem key={a.code} value={a.code}>{a.code} – {a.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Amount (₱) <span className="text-destructive">*</span></Label>
-                <Input type="number" min={0} step="0.01" placeholder="0.00" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} />
-              </div>
+            <div className="space-y-1.5">
+              <Label>Expense Account</Label>
+              <Select value={form.expense_account} onValueChange={v => setForm(p => ({ ...p, expense_account: v ?? '5950' }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {EXPENSE_ACCOUNTS.map(a => <SelectItem key={a.code} value={a.code}>{a.code} – {a.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Amount (₱) <span className="text-destructive">*</span></Label>
+              <Input type="number" min={0} step="0.01" placeholder="0.00" value={form.amount} onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} />
             </div>
             {form.payment_mode === 'check' && (
               <div className="space-y-1.5">
@@ -372,7 +368,7 @@ function DisbursementsTab() {
                 <Input placeholder="Check #" value={form.check_number} onChange={e => setForm(p => ({ ...p, check_number: e.target.value }))} />
               </div>
             )}
-            <div className="space-y-1.5">
+            <div className="sm:col-span-2 space-y-1.5">
               <Label>Remarks</Label>
               <Textarea rows={2} placeholder="Optional notes…" value={form.remarks} onChange={e => setForm(p => ({ ...p, remarks: e.target.value }))} />
             </div>

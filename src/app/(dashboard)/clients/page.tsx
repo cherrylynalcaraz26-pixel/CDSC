@@ -592,7 +592,7 @@ export default function ClientsPage() {
 
       {/* Create / Edit Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingId ? 'Edit Client' : 'New Client Account'}</DialogTitle>
           </DialogHeader>
@@ -653,8 +653,8 @@ export default function ClientsPage() {
             {/* Company Info */}
             <div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Company Information</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="sm:col-span-2 space-y-1.5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-3 space-y-1.5">
                   <Label>Company Name <span className="text-red-500">*</span></Label>
                   <Input value={form.company_name} onChange={e => f('company_name', e.target.value)} placeholder="e.g. ABC Trading Corp." />
                 </div>
@@ -702,7 +702,7 @@ export default function ClientsPage() {
             {/* Contact */}
             <div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Contact Person</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1.5">
                   <Label>Full Name</Label>
                   <Input value={form.contact_person} onChange={e => f('contact_person', e.target.value)} placeholder="Juan dela Cruz" />
@@ -729,8 +729,8 @@ export default function ClientsPage() {
             {/* Address */}
             <div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Address</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="sm:col-span-2 space-y-1.5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-3 space-y-1.5">
                   <Label>Street Address</Label>
                   <Input value={form.address} onChange={e => f('address', e.target.value)} placeholder="Building, Street, Barangay" />
                 </div>
@@ -752,7 +752,7 @@ export default function ClientsPage() {
             {/* Commercial */}
             <div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Commercial Terms</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1.5">
                   <Label>Payment Terms</Label>
                   <Select value={form.payment_terms || '_none'} onValueChange={(v: string | null) => f('payment_terms', !v || v === '_none' ? '' : v)}>
