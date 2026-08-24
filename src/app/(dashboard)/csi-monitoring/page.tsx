@@ -1950,12 +1950,12 @@ export default function CSIMonitoringPage() {
 
       {/* Add Item Modal */}
       <Dialog open={addItemOpen} onOpenChange={setAddItemOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="w-[95vw] max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add Item</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 py-1">
-            <div className="flex items-center gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-1">
+            <div className="sm:col-span-2 flex items-center gap-3">
               <div className="relative group shrink-0">
                 <div className="h-16 w-16 rounded-lg overflow-hidden border bg-muted/30 flex items-center justify-center">
                   {newItemImageUrl
@@ -2001,7 +2001,7 @@ export default function CSIMonitoringPage() {
                 }}
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="sm:col-span-2 space-y-1.5">
               <Label>Item Name <span className="text-destructive">*</span></Label>
               <Input
                 autoFocus
@@ -2024,6 +2024,14 @@ export default function CSIMonitoringPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Selling Price (₱)</Label>
+              <Input
+                type="number" min={0} step="0.01" placeholder="0.00"
+                value={newItemForm.selling_price}
+                onChange={e => setNewItemForm(f => ({ ...f, selling_price: e.target.value }))}
+              />
             </div>
             <div className="space-y-1.5">
               <Label>Attribute</Label>
@@ -2062,14 +2070,6 @@ export default function CSIMonitoringPage() {
                 </div>
               )
             })()}
-            <div className="space-y-1.5">
-              <Label>Selling Price (₱)</Label>
-              <Input
-                type="number" min={0} step="0.01" placeholder="0.00"
-                value={newItemForm.selling_price}
-                onChange={e => setNewItemForm(f => ({ ...f, selling_price: e.target.value }))}
-              />
-            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddItemOpen(false)} disabled={savingNewItem}>Cancel</Button>
@@ -2121,7 +2121,7 @@ export default function CSIMonitoringPage() {
 
       {/* Bulk Send Email Dialog */}
       <Dialog open={emailBulkOpen} onOpenChange={o => { if (!o && !sendingBulkEmail) setEmailBulkOpen(false) }}>
-        <DialogContent className="sm:!max-w-2xl">
+        <DialogContent className="w-[95vw] max-w-3xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Mail className="h-4 w-4" />Send CSI Invoice(s)</DialogTitle>
           </DialogHeader>
@@ -2141,24 +2141,26 @@ export default function CSIMonitoringPage() {
                 </span>
               ))}
             </div>
-            <div className="space-y-1.5">
-              <Label>Recipient Email <span className="text-destructive">*</span></Label>
-              <Input
-                type="email"
-                placeholder="client@example.com"
-                value={bulkEmailTo}
-                onChange={e => setBulkEmailTo(e.target.value)}
-                disabled={sendingBulkEmail}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Subject</Label>
-              <Input
-                placeholder="Email subject"
-                value={bulkEmailSubject}
-                onChange={e => setBulkEmailSubject(e.target.value)}
-                disabled={sendingBulkEmail}
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Recipient Email <span className="text-destructive">*</span></Label>
+                <Input
+                  type="email"
+                  placeholder="client@example.com"
+                  value={bulkEmailTo}
+                  onChange={e => setBulkEmailTo(e.target.value)}
+                  disabled={sendingBulkEmail}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Subject</Label>
+                <Input
+                  placeholder="Email subject"
+                  value={bulkEmailSubject}
+                  onChange={e => setBulkEmailSubject(e.target.value)}
+                  disabled={sendingBulkEmail}
+                />
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label>Message Body</Label>

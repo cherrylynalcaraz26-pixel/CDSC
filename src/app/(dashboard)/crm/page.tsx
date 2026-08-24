@@ -581,13 +581,13 @@ export default function CRMPage() {
 
       {/* Add/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="w-[95vw] max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {editingLead ? <><Pencil className="w-4 h-4" /> Edit Lead</> : <><Plus className="w-4 h-4" /> New Lead</>}
             </DialogTitle>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-4 py-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 py-2">
             <div className="space-y-1.5">
               <Label>Company Name <span className="text-red-500">*</span></Label>
               <Input value={form.company_name} onChange={e => setForm({ ...form, company_name: e.target.value })} placeholder="Company name" />
@@ -644,11 +644,11 @@ export default function CRMPage() {
               <Label>Assigned To</Label>
               <Input value={form.assigned_to} onChange={e => setForm({ ...form, assigned_to: e.target.value })} placeholder="Sales rep name" />
             </div>
-            <div className="space-y-1.5 col-span-2">
+            <div className="space-y-1.5">
               <Label>Follow-up Date</Label>
               <Input type="date" value={form.follow_up_date} onChange={e => setForm({ ...form, follow_up_date: e.target.value })} />
             </div>
-            <div className="space-y-1.5 col-span-2">
+            <div className="space-y-1.5 sm:col-span-3">
               <Label>Notes</Label>
               <Textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} placeholder="Additional notes…" rows={3} />
             </div>

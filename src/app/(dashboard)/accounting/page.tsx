@@ -1237,21 +1237,19 @@ function CollectionsTab() {
       </Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-[95vw] max-w-3xl sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editingId ? 'Edit Collection (OR)' : 'New Collection (OR)'}</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>OR Number</Label>
-                <Input placeholder="e.g. 00031 (no OR- prefix)" value={form.or_number}
-                  onChange={e => setForm(p => ({ ...p, or_number: normalizeOrNumber(e.target.value) }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Collection Date</Label>
-                <Input type="date" value={form.collection_date} onChange={e => setForm(p => ({ ...p, collection_date: e.target.value }))} />
-              </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
+            <div className="space-y-1.5">
+              <Label>OR Number</Label>
+              <Input placeholder="e.g. 00031 (no OR- prefix)" value={form.or_number}
+                onChange={e => setForm(p => ({ ...p, or_number: normalizeOrNumber(e.target.value) }))} />
             </div>
-            <div className="space-y-1.5 relative">
+            <div className="space-y-1.5">
+              <Label>Collection Date</Label>
+              <Input type="date" value={form.collection_date} onChange={e => setForm(p => ({ ...p, collection_date: e.target.value }))} />
+            </div>
+            <div className="sm:col-span-2 space-y-1.5 relative">
               <Label>Client</Label>
               <Input
                 value={clientSearch}
@@ -1284,13 +1282,13 @@ function CollectionsTab() {
             </div>
             {editingId ? (
               form.si_number && (
-                <div className="space-y-1.5">
+                <div className="sm:col-span-2 space-y-1.5">
                   <Label>Linked CSI Invoice</Label>
                   <div className="h-9 flex items-center px-3 rounded-md border bg-muted text-sm font-mono text-muted-foreground">{form.si_number}</div>
                 </div>
               )
             ) : csiOptions.length > 0 && (
-              <div className="space-y-1.5">
+              <div className="sm:col-span-2 space-y-1.5">
                 <Label>Link to CSI Invoice (optional)</Label>
                 <Select value={form.si_number} onValueChange={v => selectCsi(v ?? '')}>
                   <SelectTrigger><SelectValue placeholder="Select an unbilled CSI invoice…" /></SelectTrigger>
@@ -1306,41 +1304,37 @@ function CollectionsTab() {
                 <p className="text-xs text-muted-foreground">Selecting an invoice fills in the Amount below automatically.</p>
               </div>
             )}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>Amount (₱) <span className="text-destructive">*</span></Label>
-                <Input type="number" min={0} step="0.01" placeholder="0.00" value={form.amount}
-                  onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Payment Mode</Label>
-                <Select value={form.payment_mode} onValueChange={v => setForm(p => ({ ...p, payment_mode: v ?? 'Cash' }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {PAYMENT_MODES_COL.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="space-y-1.5">
+              <Label>Amount (₱) <span className="text-destructive">*</span></Label>
+              <Input type="number" min={0} step="0.01" placeholder="0.00" value={form.amount}
+                onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>Form 2307 (CWT)</Label>
-                <Select value={form.cwt_type} onValueChange={v => setForm(p => ({ ...p, cwt_type: (v ?? 'none') as CWTType }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {(Object.keys(CWT_CFG) as CWTType[]).map(k => (
-                      <SelectItem key={k} value={k}>{CWT_CFG[k].label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Withheld Amount</Label>
-                <div className="h-9 flex items-center px-3 rounded-md border bg-muted text-sm text-muted-foreground">
-                  {form.cwt_type === 'none' || !form.amount
-                    ? '—'
-                    : fmt(Number(form.amount) * CWT_CFG[form.cwt_type].rate)}
-                </div>
+            <div className="space-y-1.5">
+              <Label>Payment Mode</Label>
+              <Select value={form.payment_mode} onValueChange={v => setForm(p => ({ ...p, payment_mode: v ?? 'Cash' }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {PAYMENT_MODES_COL.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Form 2307 (CWT)</Label>
+              <Select value={form.cwt_type} onValueChange={v => setForm(p => ({ ...p, cwt_type: (v ?? 'none') as CWTType }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(CWT_CFG) as CWTType[]).map(k => (
+                    <SelectItem key={k} value={k}>{CWT_CFG[k].label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Withheld Amount</Label>
+              <div className="h-9 flex items-center px-3 rounded-md border bg-muted text-sm text-muted-foreground">
+                {form.cwt_type === 'none' || !form.amount
+                  ? '—'
+                  : fmt(Number(form.amount) * CWT_CFG[form.cwt_type].rate)}
               </div>
             </div>
             <div className="space-y-1.5">
@@ -1348,7 +1342,7 @@ function CollectionsTab() {
               <Input placeholder="Check #, bank ref, transaction ID…" value={form.reference_number}
                 onChange={e => setForm(p => ({ ...p, reference_number: e.target.value }))} />
             </div>
-            <div className="space-y-1.5">
+            <div className="sm:col-span-2 space-y-1.5">
               <Label>Remarks</Label>
               <Textarea rows={2} placeholder="Optional notes…" value={form.remarks}
                 onChange={e => setForm(p => ({ ...p, remarks: e.target.value }))} />
@@ -1896,23 +1890,21 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
       </CardContent></Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-[95vw] max-w-3xl sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>New Disbursement</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Date <span className="text-destructive">*</span></Label>
-                <Input type="date" value={form.disb_date} onChange={e => setForm(p => ({ ...p, disb_date: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Payment Mode</Label>
-                <Select value={form.payment_mode} onValueChange={v => setForm(p => ({ ...p, payment_mode: v ?? 'cash' }))}>
-                  <SelectTrigger><SelectValue>{(v: string) => cap((v ?? 'cash').replace('_', ' '))}</SelectValue></SelectTrigger>
-                  <SelectContent>{PAYMENT_MODES_DISB.map(m => <SelectItem key={m} value={m}>{cap(m.replace('_',' '))}</SelectItem>)}</SelectContent>
-                </Select>
-              </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Date <span className="text-destructive">*</span></Label>
+              <Input type="date" value={form.disb_date} onChange={e => setForm(p => ({ ...p, disb_date: e.target.value }))} />
             </div>
-            <div className="space-y-1.5 relative">
+            <div className="space-y-1.5">
+              <Label>Payment Mode</Label>
+              <Select value={form.payment_mode} onValueChange={v => setForm(p => ({ ...p, payment_mode: v ?? 'cash' }))}>
+                <SelectTrigger><SelectValue>{(v: string) => cap((v ?? 'cash').replace('_', ' '))}</SelectValue></SelectTrigger>
+                <SelectContent>{PAYMENT_MODES_DISB.map(m => <SelectItem key={m} value={m}>{cap(m.replace('_',' '))}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="sm:col-span-2 space-y-1.5 relative">
               <Label>Payee <span className="text-destructive">*</span></Label>
               <Input
                 placeholder="Type to search or enter a payee name…"
@@ -1966,7 +1958,7 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
                 <Input placeholder="Check #" value={form.check_number} onChange={e => setForm(p => ({ ...p, check_number: e.target.value }))} />
               </div>
             )}
-            <div className="space-y-1.5">
+            <div className="sm:col-span-2 space-y-1.5">
               <Label>Remarks</Label>
               <Textarea rows={2} placeholder="Optional notes…" value={form.remarks} onChange={e => setForm(p => ({ ...p, remarks: e.target.value }))} />
             </div>
