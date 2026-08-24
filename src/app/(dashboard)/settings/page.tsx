@@ -18,10 +18,11 @@ import {
   Building2, Upload, RotateCcw, Save, Shield,
   FileText, Database, User, Globe, Phone, Mail, MapPin,
   CheckCircle2, Eye, EyeOff, Loader2, Plus, Trash2, X, Send,
-  ChevronDown, ChevronUp, Download,
+  ChevronDown, ChevronUp, Download, Cloud, ExternalLink, RefreshCw,
 } from 'lucide-react'
 import { sendEmail, htmlToPdfBase64 } from '@/lib/send-email'
 import { uploadImageToDrive } from '@/lib/upload-image'
+import { syncDatabaseBackup, type BackupSyncResult } from '@/lib/backup-sheets'
 
 const BUSINESS_TYPES = [
   'Sole Proprietorship', 'Partnership', 'Corporation', 'Trading Corporation',
@@ -139,11 +140,12 @@ function defaultSettings(): Settings {
   }
 }
 
-type TabId = 'profile' | 'database' | 'security'
+type TabId = 'profile' | 'database' | 'backup' | 'security'
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: 'profile',   label: 'Company & Business Profile', icon: <Building2 className="h-3.5 w-3.5" /> },
   { id: 'database',  label: 'Proposal Database',  icon: <Database className="h-3.5 w-3.5" /> },
+  { id: 'backup',    label: 'Data Backup',        icon: <Cloud className="h-3.5 w-3.5" /> },
   { id: 'security',  label: 'Security',           icon: <Shield className="h-3.5 w-3.5" /> },
 ]
 
@@ -1147,6 +1149,90 @@ function ProposalDatabaseTab({ settings, proposals, loading, onReload }: {
   )
 }
 
+// ── Data Backup Tab ────────────────────────────────────────────────────────────
+
+const BACKUP_TABLE_LABELS: Record<string, string> = {
+  items: 'Items (catalog)',
+  suppliers: 'Suppliers',
+  purchase_orders: 'Purchase Orders',
+  po_items: 'PO Line Items',
+  clients: 'Clients',
+  sales_orders: 'Sales Orders',
+  so_items: 'SO Line Items',
+  warehouse_stock: 'Warehouse Stock',
+  warehouse_stock_ledger: 'Warehouse Stock Ledger',
+}
+
+function BackupTab() {
+  const [syncing, setSyncing] = useState(false)
+  const [result, setResult] = useState<BackupSyncResult | null>(null)
+
+  async function handleSync() {
+    setSyncing(true)
+    try {
+      const data = await syncDatabaseBackup()
+      setResult(data)
+      toast.success('Database synced to Google Sheets')
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to sync backup')
+    }
+    setSyncing(false)
+  }
+
+  const totalRows = result?.tables.reduce((sum, t) => sum + t.rows, 0) ?? 0
+
+  return (
+    <div className="max-w-2xl space-y-6">
+      <div>
+        <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider mb-4">Google Sheets Backup</h3>
+        <Card>
+          <CardContent className="pt-5 space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Exports the core business tables — items, suppliers, purchase orders, sales orders,
+              clients, and warehouse stock (with its ledger) — to a single Google Sheet, one tab per
+              table. Syncing again overwrites the same Sheet in place, so the link never changes.
+            </p>
+            <Button onClick={handleSync} disabled={syncing} className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5">
+              {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              {syncing ? 'Syncing…' : 'Sync to Google Sheets'}
+            </Button>
+
+            {result && (
+              <div className="border rounded-lg p-4 bg-muted/30 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-sm font-medium text-green-700">
+                    <CheckCircle2 className="h-4 w-4" /> Last synced {new Date(result.syncedAt).toLocaleString('en-PH')}
+                  </span>
+                  <a
+                    href={result.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium"
+                  >
+                    Open Sheet <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+                <Separator />
+                <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
+                  {result.tables.map(t => (
+                    <div key={t.name} className="flex items-center justify-between">
+                      <span className="text-muted-foreground">{BACKUP_TABLE_LABELS[t.name] ?? t.name}</span>
+                      <span className="font-mono font-medium">{t.rows.toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="text-xs text-muted-foreground text-right pt-1 border-t">
+                  {totalRows.toLocaleString()} rows total
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
@@ -1288,6 +1374,8 @@ export default function SettingsPage() {
       </div>
 
       {tab === 'security' && <SecurityTab />}
+
+      {tab === 'backup' && <BackupTab />}
 
       {tab === 'database' && (
         <ProposalDatabaseTab settings={settings} proposals={proposals} loading={proposalsLoading} onReload={loadProposals} />
