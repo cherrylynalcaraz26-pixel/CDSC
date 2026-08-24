@@ -17,7 +17,7 @@ import {
   Plus, Printer, Loader2,
   Trash2, CheckCircle2, XCircle, ArrowRightLeft, X,
   Package, Search, Mail, Send, Pencil, FileText,
-  ChevronDown, ChevronUp, Wallet, Clock3, AlertCircle,
+  ChevronDown, ChevronUp, Wallet, Clock3, AlertCircle, Store,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
@@ -117,6 +117,13 @@ export default function PurchaseOrdersPage() {
   const [itemSearchIdx, setItemSearchIdx] = useState<number | null>(null)
   const [itemQuery, setItemQuery] = useState('')
 
+  // Vendor catalog browser — lets purchasing pick items straight from the
+  // selected supplier's own catalog instead of typing them from scratch.
+  const [vendorCatalogOpen, setVendorCatalogOpen] = useState(false)
+  const [vendorCatalogLoading, setVendorCatalogLoading] = useState(false)
+  const [vendorCatalogItems, setVendorCatalogItems] = useState<{ id: string; item_name: string; description: string | null; unit_of_measure: string; price: number | null; image_url: string | null }[]>([])
+  const [vendorCatalogQuery, setVendorCatalogQuery] = useState('')
+
   // Details modal (row click)
   const [viewPO, setViewPO] = useState<PO | null>(null)
   const [viewPOItems, setViewPOItems] = useState<{ item_name: string; quantity: number; unit: string | null; unit_price: number; selling_price: number | null; total_amount: number }[]>([])
@@ -196,6 +203,32 @@ export default function PurchaseOrdersPage() {
   }
 
   useEffect(() => { load() }, [])
+
+  async function openVendorCatalog() {
+    if (!supplierId) { toast.error('Select a supplier first'); return }
+    setVendorCatalogQuery('')
+    setVendorCatalogOpen(true)
+    setVendorCatalogLoading(true)
+    const { data } = await supabase.from('vendor_catalog_items')
+      .select('id, item_name, description, unit_of_measure, price, image_url')
+      .eq('supplier_id', supplierId)
+      .eq('is_active', true)
+      .order('item_name')
+    setVendorCatalogItems(data ?? [])
+    setVendorCatalogLoading(false)
+  }
+
+  // Adds a picked catalog item into the first empty line, or appends a new one —
+  // same pattern as picking from the item-search modal.
+  function addLineFromVendorCatalog(it: { item_name: string; unit_of_measure: string; price: number | null }) {
+    setLines(p => {
+      const emptyIdx = p.findIndex(l => !l.item_name)
+      const newLine: POLine = { item_name: it.item_name, quantity: '1', unit: it.unit_of_measure || 'piece', unit_price: it.price != null ? String(it.price) : '', selling_price: '' }
+      if (emptyIdx !== -1) return p.map((l, idx) => idx === emptyIdx ? newLine : l)
+      return [...p, newLine]
+    })
+    toast.success(`${it.item_name} added to line items`)
+  }
 
   // Computed totals
   const subtotal = lines.reduce((s, l) => s + (parseFloat(l.unit_price) || 0) * (parseFloat(l.quantity) || 0), 0)
@@ -1254,7 +1287,12 @@ export default function PurchaseOrdersPage() {
           {/* Line Items — full width */}
           <Card>
             <CardContent className="pt-5 space-y-2">
-              <Label>Line Items</Label>
+              <div className="flex items-center justify-between">
+                <Label>Line Items</Label>
+                <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={openVendorCatalog}>
+                  <Store className="h-3.5 w-3.5" />Browse Vendor Catalog
+                </Button>
+              </div>
               <div className="border rounded-lg overflow-hidden">
                 <Table>
                   <TableHeader>
@@ -1573,6 +1611,73 @@ export default function PurchaseOrdersPage() {
                 })}
               </tbody>
             </table>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Vendor Catalog Dialog */}
+      <Dialog open={vendorCatalogOpen} onOpenChange={setVendorCatalogOpen}>
+        <DialogContent className="w-[98vw] sm:!max-w-4xl max-h-[85vh] flex flex-col overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Store className="h-4 w-4" />{selectedSupplier?.company_name ?? 'Vendor'}&apos;s Catalog
+            </DialogTitle>
+          </DialogHeader>
+          <div className="relative mb-2">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              autoFocus
+              placeholder="Search this vendor's catalog…"
+              className="pl-9"
+              value={vendorCatalogQuery}
+              onChange={e => setVendorCatalogQuery(e.target.value)}
+            />
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            {vendorCatalogLoading ? (
+              <div className="flex justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+            ) : (() => {
+              const filtered = vendorCatalogItems.filter(it =>
+                !vendorCatalogQuery.trim() || it.item_name.toLowerCase().includes(vendorCatalogQuery.toLowerCase())
+              )
+              if (filtered.length === 0) {
+                return (
+                  <div className="text-center py-12 text-sm text-muted-foreground">
+                    {vendorCatalogItems.length === 0 ? 'This vendor hasn’t added any catalog items yet.' : 'No items match your search.'}
+                  </div>
+                )
+              }
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {filtered.map(it => (
+                    <button
+                      key={it.id}
+                      type="button"
+                      onClick={() => { addLineFromVendorCatalog(it); setVendorCatalogOpen(false) }}
+                      className="text-left border rounded-lg overflow-hidden hover:border-red-400 hover:shadow-sm transition-all bg-white"
+                    >
+                      <div className="h-24 bg-muted/40 flex items-center justify-center overflow-hidden">
+                        {it.image_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={it.image_url} alt={it.item_name} className="h-full w-full object-contain p-2" />
+                        ) : (
+                          <Package className="h-6 w-6 text-muted-foreground/30" />
+                        )}
+                      </div>
+                      <div className="p-2.5 space-y-0.5">
+                        <div className="text-xs font-semibold truncate" title={it.item_name}>{it.item_name}</div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-muted-foreground">{it.unit_of_measure}</span>
+                          <span className="text-xs font-bold text-red-600">
+                            {it.price != null ? `₱${Number(it.price).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}
+                          </span>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )
+            })()}
           </div>
         </DialogContent>
       </Dialog>
