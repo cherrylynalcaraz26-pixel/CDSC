@@ -14,13 +14,13 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose,
 } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Search, Loader2, Pencil, AlertTriangle, Plus, MoreHorizontal, Trash2, FileText, Printer, Mail, Send, Truck, Package, History, ArrowDownCircle, ArrowUpCircle, Users, List, CheckCircle2, Scale, Wallet, Boxes, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react'
+import { Search, Loader2, Pencil, AlertTriangle, Plus, MoreHorizontal, Trash2, FileText, Printer, Mail, Send, Truck, Package, History, ArrowDownCircle, ArrowUpCircle, Users, List, CheckCircle2, Scale, Wallet, Boxes, ArrowUp, ArrowDown, ArrowUpDown, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSearchContext } from '@/context/search-context'
 import { sendEmail } from '@/lib/send-email'
@@ -842,7 +842,8 @@ export default function InventoryPage() {
   const whTotalQty     = filteredWarehouseRows.reduce((s, r) => s + (Number(r.quantity) || 0), 0)
   const whUnassigned   = filteredWarehouseRows.filter(r => !r.client_name).length
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const activeCount = viewMode === 'by_item' ? byItemGroups.length : viewMode === 'by_warehouse' ? filteredWarehouseRows.length : filtered.length
+  const totalPages = Math.max(1, Math.ceil(activeCount / PAGE_SIZE))
   const pagedFiltered = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
   const pagedByItemGroups = byItemGroups.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
@@ -868,6 +869,7 @@ export default function InventoryPage() {
     const cmp = typeof av === 'number' && typeof bv === 'number' ? av - bv : String(av).localeCompare(String(bv))
     return whSortDir === 'asc' ? cmp : -cmp
   })
+  const pagedWarehouseRows = sortedWarehouseRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   function rowKey(r: InventoryRow) { return `${r.client}||${r.item_name}` }
 
@@ -1197,7 +1199,7 @@ export default function InventoryPage() {
                     <TableRow><TableCell colSpan={8} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
                   ) : warehouseRows.length === 0 ? (
                     <TableRow><TableCell colSpan={8} className="text-center py-12 text-muted-foreground">No warehouse stock records found.</TableCell></TableRow>
-                  ) : sortedWarehouseRows.map((r, i) => {
+                  ) : pagedWarehouseRows.map((r, i) => {
                     const isWhExpanded = expandedWhId === r.id
                     return (
                       <Fragment key={r.id}>
@@ -1205,7 +1207,7 @@ export default function InventoryPage() {
                         className="cursor-pointer hover:bg-muted/50"
                         onClick={() => toggleWhExpand(r)}
                       >
-                        <TableCell className="text-sm text-muted-foreground">{i + 1}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{(page - 1) * PAGE_SIZE + i + 1}</TableCell>
                         <TableCell className="text-sm">
                           {r.client_name ? (
                             <span>{r.client_name}</span>
@@ -1423,10 +1425,10 @@ export default function InventoryPage() {
         </CardContent>
       </Card>}
 
-      {/* Pagination — hidden when report is open, and not used for By Warehouse (scrollable, unpaginated) */}
-      {!reportOpen && viewMode !== 'by_warehouse' && (() => {
+      {/* Pagination — hidden when report is open */}
+      {!reportOpen && (() => {
         const activeTotalPages = totalPages
-        const activeTotal = viewMode === 'by_item' ? byItemGroups.length : filtered.length
+        const activeTotal = activeCount
         if (activeTotalPages <= 1) return null
         return (
           <div className="flex items-center justify-between text-sm">
@@ -2245,14 +2247,21 @@ export default function InventoryPage() {
       </Dialog>
 
       <Dialog open={addOpen} onOpenChange={o => { if (!o) setAddOpen(false) }}>
-        <DialogContent className="w-[95vw] max-w-2xl sm:max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {addPoId ? <Truck className="h-4 w-4 text-red-600" /> : <Plus className="h-4 w-4 text-red-600" />}
-              {addPoId ? 'Receive Stock' : 'Add Warehouse Stock'}
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
+        <DialogContent showCloseButton={false} className="w-[95vw] max-w-2xl sm:max-w-2xl p-0 overflow-hidden">
+          <div className="relative bg-gradient-to-r from-red-700 to-red-900 px-6 py-5">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-white text-lg font-semibold">
+                {addPoId ? <Truck className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                {addPoId ? 'Receive Stock' : 'Add Warehouse Stock'}
+              </DialogTitle>
+            </DialogHeader>
+            <p className="text-red-100 text-xs mt-1">Add items into CDSC&apos;s shared warehouse stock pool.</p>
+            <DialogClose className="absolute top-4 right-4 text-red-100 hover:text-white transition-colors">
+              <X className="h-5 w-5" />
+              <span className="sr-only">Close</span>
+            </DialogClose>
+          </div>
+          <div className="space-y-4 p-6">
 
             {/* PO picker — optional shortcut to pick items straight off a purchase order */}
             <div className="space-y-1.5">
@@ -2356,7 +2365,7 @@ export default function InventoryPage() {
               <Input value={addNotes} onChange={e => setAddNotes(e.target.value)} placeholder="Optional notes" />
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="mx-0 mb-0 rounded-b-2xl">
             <Button variant="outline" onClick={() => setAddOpen(false)}>Cancel</Button>
             <Button
               onClick={saveAddStock}

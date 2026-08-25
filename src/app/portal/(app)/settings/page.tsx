@@ -15,6 +15,7 @@ export default function PortalSettingsPage() {
   const supabase = createClient()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [savingBir, setSavingBir] = useState(false)
   const [changingPw, setChangingPw] = useState(false)
   const [email, setEmail] = useState('')
   const [fullName, setFullName] = useState('')
@@ -25,12 +26,15 @@ export default function PortalSettingsPage() {
   const [showPw, setShowPw] = useState(false)
   const [userId, setUserId] = useState('')
   const [clientId, setClientId] = useState('')
+  const [portalRole, setPortalRole] = useState<'client' | 'vendor'>('client')
   const [tab, setTab] = useState<Tab>('account')
   const [tin, setTin] = useState('')
   const [vatType, setVatType] = useState('')
   const [businessType, setBusinessType] = useState('')
   const [industry, setIndustry] = useState('')
   const [website, setWebsite] = useState('')
+  const [vatRegistered, setVatRegistered] = useState('true')
+  const [vatClassification, setVatClassification] = useState('vatable')
 
   // Avatar & logo
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
@@ -51,24 +55,40 @@ export default function PortalSettingsPage() {
       if (!session) return
       setEmail(session.user.email ?? '')
       setUserId(session.user.id)
-      const { data: profile } = await supabase.from('profiles').select('full_name, avatar_url').eq('id', session.user.id).single()
+      const { data: profile } = await supabase.from('profiles').select('full_name, avatar_url, role').eq('id', session.user.id).single()
       setFullName(profile?.full_name ?? '')
       setAvatarUrl((profile as any)?.avatar_url ?? null)
-      const { data: clientRow } = await supabase.from('clients')
-        .select('id, company_name, tin, vat_type, business_type, industry, logo_url, avatar_url, website')
-        .eq('auth_user_id', session.user.id).single()
-      setCompanyName(clientRow?.company_name ?? '')
-      setTin((clientRow as any)?.tin ?? '')
-      setVatType((clientRow as any)?.vat_type ?? '')
-      setBusinessType((clientRow as any)?.business_type ?? '')
-      setIndustry(clientRow?.industry ?? '')
-      setWebsite((clientRow as any)?.website ?? '')
-      const rawLogo = (clientRow as any)?.logo_url ?? (clientRow as any)?.avatar_url ?? null
-      setLogoUrl(rawLogo ? cacheBustImageUrl(rawLogo) : null)
-      if (clientRow?.id) {
-        setClientId(clientRow.id)
-        const { data: deptData } = await supabase.from('client_departments').select('id, name').eq('client_id', clientRow.id).order('name')
-        setDepartments(deptData ?? [])
+      const isVendor = profile?.role === 'vendor'
+      setPortalRole(isVendor ? 'vendor' : 'client')
+
+      if (isVendor) {
+        const { data: supplierRow } = await supabase.from('suppliers')
+          .select('id, company_name, tin, vat_registered, vat_classification, logo_url')
+          .eq('auth_user_id', session.user.id).single()
+        setCompanyName(supplierRow?.company_name ?? '')
+        setTin((supplierRow as any)?.tin ?? '')
+        setVatRegistered((supplierRow as any)?.vat_registered === false ? 'false' : 'true')
+        setVatClassification((supplierRow as any)?.vat_classification ?? 'vatable')
+        const rawLogo = (supplierRow as any)?.logo_url ?? null
+        setLogoUrl(rawLogo ? cacheBustImageUrl(rawLogo) : null)
+        if (supplierRow?.id) setClientId(supplierRow.id)
+      } else {
+        const { data: clientRow } = await supabase.from('clients')
+          .select('id, company_name, tin, vat_type, business_type, industry, logo_url, avatar_url, website')
+          .eq('auth_user_id', session.user.id).single()
+        setCompanyName(clientRow?.company_name ?? '')
+        setTin((clientRow as any)?.tin ?? '')
+        setVatType((clientRow as any)?.vat_type ?? '')
+        setBusinessType((clientRow as any)?.business_type ?? '')
+        setIndustry(clientRow?.industry ?? '')
+        setWebsite((clientRow as any)?.website ?? '')
+        const rawLogo = (clientRow as any)?.logo_url ?? (clientRow as any)?.avatar_url ?? null
+        setLogoUrl(rawLogo ? cacheBustImageUrl(rawLogo) : null)
+        if (clientRow?.id) {
+          setClientId(clientRow.id)
+          const { data: deptData } = await supabase.from('client_departments').select('id, name').eq('client_id', clientRow.id).order('name')
+          setDepartments(deptData ?? [])
+        }
       }
 
       setLoading(false)
@@ -80,12 +100,25 @@ export default function PortalSettingsPage() {
     if (!fullName.trim()) { toast.error('Name is required'); return }
     setSaving(true)
     const { error } = await supabase.from('profiles').update({ full_name: fullName.trim() }).eq('id', userId)
-    if (!error && clientId) {
+    if (!error && clientId && portalRole === 'client') {
       await supabase.from('clients').update({ website: website.trim() || null }).eq('id', clientId)
     }
     if (error) toast.error(error.message)
     else toast.success('Profile updated successfully')
     setSaving(false)
+  }
+
+  async function saveBirInfo() {
+    if (!clientId) return
+    setSavingBir(true)
+    const { error } = await supabase.from('suppliers').update({
+      tin: tin.trim() || null,
+      vat_registered: vatRegistered === 'true',
+      vat_classification: vatClassification || null,
+    }).eq('id', clientId)
+    if (error) toast.error(error.message)
+    else toast.success('BIR information updated')
+    setSavingBir(false)
   }
 
   async function uploadAvatar(file: File) {
@@ -117,7 +150,8 @@ export default function PortalSettingsPage() {
     setUploadingLogo(true)
     try {
       const url = await uploadImageToDrive(file, { displayName: companyName.trim(), folder: 'Clients' })
-      const { error: dbErr } = await supabase.from('clients').update({ logo_url: url }).eq('id', clientId)
+      const table = portalRole === 'vendor' ? 'suppliers' : 'clients'
+      const { error: dbErr } = await supabase.from(table).update({ logo_url: url }).eq('id', clientId)
       if (dbErr) throw dbErr
       setLogoUrl(url)
       window.dispatchEvent(new CustomEvent('portal-logo-updated', { detail: { url } }))
@@ -131,7 +165,8 @@ export default function PortalSettingsPage() {
   async function removeLogo() {
     if (!clientId) return
     setUploadingLogo(true)
-    await supabase.from('clients').update({ logo_url: null }).eq('id', clientId)
+    const table = portalRole === 'vendor' ? 'suppliers' : 'clients'
+    await supabase.from(table).update({ logo_url: null }).eq('id', clientId)
     setLogoUrl(null)
     toast.success('Logo removed')
     setUploadingLogo(false)
@@ -191,7 +226,7 @@ export default function PortalSettingsPage() {
   const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
     { key: 'account',    label: 'Account',        icon: <User className="h-4 w-4" /> },
     { key: 'bir',        label: 'BIR Info',        icon: <FileCheck2 className="h-4 w-4" /> },
-    { key: 'department', label: 'Department',      icon: <Tag className="h-4 w-4" /> },
+    ...(portalRole === 'client' ? [{ key: 'department' as const, label: 'Department', icon: <Tag className="h-4 w-4" /> }] : []),
     { key: 'password',   label: 'Change Password', icon: <Lock className="h-4 w-4" /> },
   ]
 
@@ -308,16 +343,18 @@ export default function PortalSettingsPage() {
                 />
               </div>
             )}
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium text-gray-700">Website</label>
-              <input
-                value={website}
-                onChange={e => setWebsite(e.target.value)}
-                placeholder="https://yourwebsite.com"
-                type="url"
-                className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
-              />
-            </div>
+            {portalRole === 'client' && (
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-gray-700">Website</label>
+                <input
+                  value={website}
+                  onChange={e => setWebsite(e.target.value)}
+                  placeholder="https://yourwebsite.com"
+                  type="url"
+                  className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                />
+              </div>
+            )}
             <button
               onClick={saveProfile}
               disabled={saving}
@@ -397,46 +434,99 @@ export default function PortalSettingsPage() {
             )}
           </div>
 
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-gray-700">TIN (Tax Identification Number)</label>
-            <input
-              value={tin}
-              disabled
-              placeholder="Not provided"
-              className="w-full h-10 px-3 rounded-lg border border-gray-200 text-sm bg-gray-50 text-gray-700 cursor-not-allowed"
-            />
-          </div>
+          {portalRole === 'vendor' ? (
+            <>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-gray-700">TIN (Tax Identification Number)</label>
+                <input
+                  value={tin}
+                  onChange={e => setTin(e.target.value)}
+                  placeholder="000-000-000-000"
+                  className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                />
+              </div>
 
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-gray-700">VAT Registration</label>
-            <input
-              value={vatType === 'vat' ? 'VAT Registered' : vatType === 'vat_exempt' ? 'VAT Exempt' : vatType === 'non_vat' ? 'Non-VAT' : vatType || '—'}
-              disabled
-              className="w-full h-10 px-3 rounded-lg border border-gray-200 text-sm bg-gray-50 text-gray-700 cursor-not-allowed"
-            />
-          </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-gray-700">VAT Status</label>
+                <select
+                  value={vatRegistered}
+                  onChange={e => setVatRegistered(e.target.value)}
+                  className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
+                >
+                  <option value="true">VAT Registered</option>
+                  <option value="false">Non-VAT</option>
+                </select>
+              </div>
 
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-gray-700">Business Type</label>
-            <input
-              value={businessType || '—'}
-              disabled
-              className="w-full h-10 px-3 rounded-lg border border-gray-200 text-sm bg-gray-50 text-gray-700 cursor-not-allowed"
-            />
-          </div>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-gray-700">VAT Classification</label>
+                <select
+                  value={vatClassification}
+                  onChange={e => setVatClassification(e.target.value)}
+                  className="w-full h-10 px-3 rounded-lg border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent bg-white"
+                >
+                  <option value="vatable">VATable (12%)</option>
+                  <option value="vat_exempt">VAT Exempt</option>
+                  <option value="zero_rated">Zero-Rated</option>
+                </select>
+              </div>
 
-          <div className="space-y-1.5">
-            <label className="text-sm font-medium text-gray-700">Industry</label>
-            <input
-              value={industry || '—'}
-              disabled
-              className="w-full h-10 px-3 rounded-lg border border-gray-200 text-sm bg-gray-50 text-gray-700 cursor-not-allowed"
-            />
-          </div>
+              <button
+                onClick={saveBirInfo}
+                disabled={savingBir}
+                className="inline-flex items-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
+                {savingBir ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                Save BIR Information
+              </button>
 
-          <p className="text-xs text-gray-400">
-            BIR information is managed by CDSC. Contact us if any details need to be updated.
-          </p>
+              <p className="text-xs text-gray-400">
+                Updates here save directly to your supplier record and are visible to CDSC in the Admin Portal.
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-gray-700">TIN (Tax Identification Number)</label>
+                <input
+                  value={tin}
+                  disabled
+                  placeholder="Not provided"
+                  className="w-full h-10 px-3 rounded-lg border border-gray-200 text-sm bg-gray-50 text-gray-700 cursor-not-allowed"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-gray-700">VAT Registration</label>
+                <input
+                  value={vatType === 'vat' ? 'VAT Registered' : vatType === 'vat_exempt' ? 'VAT Exempt' : vatType === 'non_vat' ? 'Non-VAT' : vatType || '—'}
+                  disabled
+                  className="w-full h-10 px-3 rounded-lg border border-gray-200 text-sm bg-gray-50 text-gray-700 cursor-not-allowed"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-gray-700">Business Type</label>
+                <input
+                  value={businessType || '—'}
+                  disabled
+                  className="w-full h-10 px-3 rounded-lg border border-gray-200 text-sm bg-gray-50 text-gray-700 cursor-not-allowed"
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-medium text-gray-700">Industry</label>
+                <input
+                  value={industry || '—'}
+                  disabled
+                  className="w-full h-10 px-3 rounded-lg border border-gray-200 text-sm bg-gray-50 text-gray-700 cursor-not-allowed"
+                />
+              </div>
+
+              <p className="text-xs text-gray-400">
+                BIR information is managed by CDSC. Contact us if any details need to be updated.
+              </p>
+            </>
+          )}
         </div>
       )}
 

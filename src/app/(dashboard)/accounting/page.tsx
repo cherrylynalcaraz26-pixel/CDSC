@@ -10,7 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { PaginationBar } from '@/components/ui/pagination-bar'
 import { Tabs, TabsContent } from '@/components/ui/tabs'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -22,7 +22,7 @@ import {
   Plus, Download, Loader2, BookOpen, Banknote, TrendingUp,
   Scale, FileSpreadsheet, Trash2, Calculator, Receipt, FileText, DollarSign,
   MoreHorizontal, Printer, Eye, CheckCircle2, AlertTriangle,
-  ChevronDown, ChevronRight, SlidersHorizontal, Pencil,
+  ChevronDown, ChevronRight, SlidersHorizontal, Pencil, Link2, X,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
@@ -135,9 +135,25 @@ function normalizeOrNumber(v: string): string {
 }
 
 const STATUS_CLS: Record<string, string> = {
-  posted:  'bg-green-100 text-green-700',
-  voided:  'bg-red-100 text-red-700',
-  pending: 'bg-yellow-100 text-yellow-700',
+  posted:    'bg-green-100 text-green-700',
+  voided:    'bg-red-100 text-red-700',
+  pending:   'bg-yellow-100 text-yellow-700',
+  cancelled: 'bg-gray-100 text-gray-600',
+  missing:   'bg-orange-100 text-orange-700',
+}
+
+// Suggests the next OR number by incrementing the highest existing numeric OR
+// number, zero-padded to match its width (defaults to 5 digits, e.g. "00001").
+function computeNextOrNumber(records: { or_number: string | null }[]): string {
+  let maxNum = 0
+  let width = 5
+  for (const r of records) {
+    const n = r.or_number
+    if (!n || !/^\d+$/.test(n)) continue
+    const val = parseInt(n, 10)
+    if (val > maxNum) { maxNum = val; width = n.length }
+  }
+  return String(maxNum + 1).padStart(width, '0')
 }
 
 // ── Date range filter (Preset year/quarter or Custom from/to) ─────────────────
@@ -513,6 +529,13 @@ function CollectionsTab() {
   const [clientSearch, setClientSearch] = useState('')
   const [clientDropdownOpen, setClientDropdownOpen] = useState(false)
   const [csiOptions, setCsiOptions] = useState<{ si_number: string; si_date: string; total: number }[]>([])
+  const [selectedCsis, setSelectedCsis] = useState<Set<string>>(new Set())
+  const [orStatus, setOrStatus] = useState<'normal' | 'cancelled' | 'missing'>('normal')
+  const [csiLinksByCollection, setCsiLinksByCollection] = useState<Record<string, string[]>>({})
+  const [linkCsiFor, setLinkCsiFor] = useState<Collection | null>(null)
+  const [linkCsiOptions, setLinkCsiOptions] = useState<{ si_number: string; si_date: string; total: number }[]>([])
+  const [linkCsiSelected, setLinkCsiSelected] = useState<Set<string>>(new Set())
+  const [linkingCsi, setLinkingCsi] = useState(false)
   const [readyToCollect, setReadyToCollect] = useState<{ so_number: string; client_name: string; csi_total: number; collected_total: number; outstanding: number; si_numbers: string[] }[]>([])
   const [expandedRTC, setExpandedRTC] = useState<string | null>(null)
   const [companyInfo, setCompanyInfo] = useState<{ company_name: string | null; address: string | null; phone: string | null; tin: string | null } | null>(null)
@@ -536,6 +559,14 @@ function CollectionsTab() {
     const { data: sysData } = await supabase.from('system_settings').select('company_name, address, phone, tin').single()
     if (sysData) setCompanyInfo(sysData)
 
+    const { data: linkRows } = await supabase.from('collection_csi_links').select('collection_id, si_number')
+    const linksMap: Record<string, string[]> = {}
+    for (const l of (linkRows ?? []) as { collection_id: string; si_number: string }[]) {
+      if (!linksMap[l.collection_id]) linksMap[l.collection_id] = []
+      linksMap[l.collection_id].push(l.si_number)
+    }
+    setCsiLinksByCollection(linksMap)
+
     // A Sales Order is "ready to collect" once it's both been delivered (has a DR) and
     // invoiced (has CSI records) — and still has an outstanding (uncollected) balance.
     const drPoNumbers = new Set((drRows ?? []).map(d => d.po_number).filter(Boolean))
@@ -546,9 +577,25 @@ function CollectionsTab() {
       csiByPo[r.po_number].siNumbers.add(r.si_number)
       csiByPo[r.po_number].total += Number(r.amount) || 0
     }
+    // A collection can now be linked to several CSI invoices at once (collection_csi_links)
+    // while only carrying a single total `amount` — split that amount across its linked SIs
+    // in proportion to each SI's own invoiced total so per-SI "collected" figures still sum
+    // correctly instead of double-counting the same payment against every linked SI.
+    const csiTotalBySi: Record<string, number> = {}
+    for (const r of (csiRows ?? [])) {
+      csiTotalBySi[r.si_number] = (csiTotalBySi[r.si_number] ?? 0) + (Number(r.amount) || 0)
+    }
     const collectedBySi: Record<string, number> = {}
     for (const c of ((colData ?? []) as Collection[])) {
-      if (c.status === 'posted' && c.si_number) collectedBySi[c.si_number] = (collectedBySi[c.si_number] ?? 0) + (c.amount ?? 0)
+      if (c.status !== 'posted') continue
+      const linked = linksMap[c.id] ?? (c.si_number ? [c.si_number] : [])
+      if (linked.length === 0) continue
+      const weights = linked.map(si => csiTotalBySi[si] ?? 0)
+      const weightSum = weights.reduce((s, w) => s + w, 0)
+      linked.forEach((si, i) => {
+        const share = weightSum > 0 ? (c.amount ?? 0) * (weights[i] / weightSum) : (c.amount ?? 0) / linked.length
+        collectedBySi[si] = (collectedBySi[si] ?? 0) + share
+      })
     }
     const list: typeof readyToCollect = []
     for (const [poNumber, info] of Object.entries(csiByPo)) {
@@ -567,25 +614,46 @@ function CollectionsTab() {
   useEffect(() => { load() }, [])
 
   function resetForm() {
-    setForm({ or_number: '', client_id: '', client_name: '', amount: '', si_number: '', payment_mode: 'Cash', reference_number: '', collection_date: '', remarks: '', cwt_type: 'none' })
+    setForm({ or_number: computeNextOrNumber(records), client_id: '', client_name: '', amount: '', si_number: '', payment_mode: 'Cash', reference_number: '', collection_date: '', remarks: '', cwt_type: 'none' })
     setEditingId(null)
     setClientSearch('')
     setClientDropdownOpen(false)
     setCsiOptions([])
+    setSelectedCsis(new Set())
+    setOrStatus('normal')
+  }
+
+  // True when this OR number is already used by another posted/voided record —
+  // physical OR slips can't be reused, so this blocks saving a duplicate.
+  const isDuplicateOr = !!normalizeOrNumber(form.or_number) && records.some(
+    r => r.or_number === normalizeOrNumber(form.or_number) && r.id !== editingId
+  )
+
+  // CSI numbers already linked (via collection_csi_links, or the legacy single
+  // si_number column) to one of this client's posted collections — excludes
+  // `excludeCollectionId`'s own links so re-editing that collection still shows
+  // its already-selected invoices as available/checked.
+  function linkedSiNumbersFor(clientName: string, excludeCollectionId?: string): Set<string> {
+    const set = new Set<string>()
+    for (const r of records) {
+      if (r.client_name !== clientName || r.status !== 'posted' || r.id === excludeCollectionId) continue
+      for (const si of (csiLinksByCollection[r.id] ?? (r.si_number ? [r.si_number] : []))) set.add(si)
+    }
+    return set
   }
 
   // CSI invoices for this client that aren't already spoken for — excludes any SI
   // already linked to a posted collection, and any SI whose CSI record(s) are already
   // marked collected, so the same invoice can't be selected (and collected) twice.
-  async function loadCsiOptions(clientName: string) {
+  async function loadCsiOptions(clientName: string, excludeCollectionId?: string) {
     if (!clientName) { setCsiOptions([]); return }
-    const [{ data: csiData }, { data: linkedRows }] = await Promise.all([
-      fetchAllRows((from, to) => supabase.from('csi_records').select('si_number, si_date, amount, collection_status').eq('client_name', clientName).order('id').range(from, to)).then(data => ({ data })),
-      supabase.from('collections').select('si_number').eq('client_name', clientName).eq('status', 'posted').not('si_number', 'is', null),
-    ])
-    const linkedSet = new Set((linkedRows ?? []).map(r => r.si_number))
+    const { data: csiData } = await fetchAllRows((from, to) =>
+      supabase.from('csi_records').select('si_number, si_date, amount, collection_status').eq('client_name', clientName).order('id').range(from, to)
+    ).then(data => ({ data }))
+    const linkedSet = linkedSiNumbersFor(clientName, excludeCollectionId)
+    const ownLinks = new Set(excludeCollectionId ? (csiLinksByCollection[excludeCollectionId] ?? []) : [])
     for (const r of (csiData ?? [])) {
-      if (r.si_number && r.collection_status === 'collected') linkedSet.add(r.si_number)
+      if (r.si_number && r.collection_status === 'collected' && !ownLinks.has(r.si_number)) linkedSet.add(r.si_number)
     }
     const map: Record<string, { si_number: string; si_date: string; total: number }> = {}
     for (const r of (csiData ?? [])) {
@@ -600,13 +668,21 @@ function CollectionsTab() {
     setForm(p => ({ ...p, client_id: c.id, client_name: c.company_name, si_number: '' }))
     setClientSearch(c.company_name)
     setClientDropdownOpen(false)
+    setSelectedCsis(new Set())
     loadCsiOptions(c.company_name)
   }
 
-  function selectCsi(siNumber: string) {
-    if (!siNumber) { setForm(p => ({ ...p, si_number: '' })); return }
-    const csi = csiOptions.find(c => c.si_number === siNumber)
-    setForm(p => ({ ...p, si_number: siNumber, amount: csi ? String(csi.total) : p.amount }))
+  // Toggles a CSI invoice in/out of the multi-select set for this collection and
+  // keeps Amount in sync with the sum of everything currently selected.
+  function toggleCsi(siNumber: string) {
+    setSelectedCsis(prev => {
+      const next = new Set(prev)
+      if (next.has(siNumber)) next.delete(siNumber)
+      else next.add(siNumber)
+      const total = csiOptions.filter(c => next.has(c.si_number)).reduce((s, c) => s + c.total, 0)
+      setForm(p => ({ ...p, si_number: [...next][0] ?? '', amount: next.size > 0 ? String(total) : p.amount }))
+      return next
+    })
   }
 
   // Unpaid CSI invoices for a client, same "not already linked to a posted collection,
@@ -711,12 +787,41 @@ function CollectionsTab() {
       cwt_type: cwtTypeFromAmount(amount, r.form_2307),
     })
     setClientSearch(r.client_name ?? '')
+    setSelectedCsis(new Set(csiLinksByCollection[r.id] ?? (r.si_number ? [r.si_number] : [])))
+    setOrStatus(r.status === 'cancelled' || r.status === 'missing' ? r.status : 'normal')
+    if (r.client_name) loadCsiOptions(r.client_name, r.id)
     setOpen(true)
   }
 
   const filteredClients = clients.filter(c => !clientSearch || c.company_name.toLowerCase().includes(clientSearch.toLowerCase()))
 
   async function save() {
+    const orNumber = normalizeOrNumber(form.or_number)
+    if (!orNumber) { toast.error('OR Number is required'); return }
+    if (records.some(r => r.or_number === orNumber && r.id !== editingId)) {
+      toast.error(`OR Number ${orNumber} is already used by another record`)
+      return
+    }
+
+    // Cancelled/Missing just records that this physical OR slip was voided or
+    // lost — no client, amount, or journal entry involved.
+    if (orStatus !== 'normal') {
+      setSaving(true)
+      const payload = {
+        or_number: orNumber,
+        collection_date: form.collection_date || new Date().toISOString().split('T')[0],
+        remarks: form.remarks || null,
+        status: orStatus,
+      }
+      const { error } = editingId
+        ? await supabase.from('collections').update(payload).eq('id', editingId)
+        : await supabase.from('collections').insert(payload)
+      if (error) toast.error(error.message)
+      else { toast.success(`OR ${orNumber} marked ${orStatus}`); setOpen(false); resetForm(); load() }
+      setSaving(false)
+      return
+    }
+
     if (!form.amount || Number(form.amount) <= 0) { toast.error('Enter a valid amount'); return }
     const clientName = form.client_id
       ? clients.find(c => c.id === form.client_id)?.company_name ?? form.client_name
@@ -725,7 +830,7 @@ function CollectionsTab() {
     setSaving(true)
     const form2307 = Number(form.amount) * CWT_CFG[form.cwt_type].rate
     const payload = {
-      or_number: normalizeOrNumber(form.or_number) || null,
+      or_number: orNumber,
       client_id: form.client_id || null,
       client_name: clientName.trim(),
       amount: Number(form.amount),
@@ -734,17 +839,24 @@ function CollectionsTab() {
       reference_number: form.reference_number || null,
       collection_date: form.collection_date || new Date().toISOString().split('T')[0],
       remarks: form.remarks || null,
-      si_number: form.si_number || null,
+      si_number: [...selectedCsis][0] ?? null,
     }
     if (editingId) {
       const { error } = await supabase.from('collections').update(payload).eq('id', editingId)
-      if (error) toast.error(error.message)
-      else { toast.success('Collection updated'); setOpen(false); resetForm(); load() }
+      if (error) { toast.error(error.message); setSaving(false); return }
+      await supabase.from('collection_csi_links').delete().eq('collection_id', editingId)
+      if (selectedCsis.size > 0) {
+        await supabase.from('collection_csi_links').insert([...selectedCsis].map(si_number => ({ collection_id: editingId, si_number })))
+      }
+      toast.success('Collection updated'); setOpen(false); resetForm(); load()
       setSaving(false)
       return
     }
     const { data: colData, error } = await supabase.from('collections').insert({ ...payload, status: 'posted' }).select().single()
     if (error) { toast.error(error.message); setSaving(false); return }
+    if (selectedCsis.size > 0) {
+      await supabase.from('collection_csi_links').insert([...selectedCsis].map(si_number => ({ collection_id: (colData as any).id, si_number })))
+    }
     const memo = `Collection: ${payload.or_number ?? ''} – ${clientName.trim()}`
     const { data: jeData, error: jeErr } = await supabase.from('journal_entries').insert({
       entry_date: payload.collection_date, memo, entry_type: 'sales_receipt',
@@ -762,6 +874,50 @@ function CollectionsTab() {
     }
     toast.success('Collection recorded'); setOpen(false); resetForm(); load()
     setSaving(false)
+  }
+
+  // Row-action: link one or more additional CSI invoices to an existing collection
+  // without editing its amount/payment details.
+  function openLinkCsi(r: Collection) {
+    setLinkCsiFor(r)
+    setLinkCsiSelected(new Set())
+    setLinkCsiOptions([])
+    if (r.client_name) {
+      (async () => {
+        if (!r.client_name) return
+        const { data: csiData } = await fetchAllRows((from, to) =>
+          supabase.from('csi_records').select('si_number, si_date, amount, collection_status').eq('client_name', r.client_name!).order('id').range(from, to)
+        ).then(data => ({ data }))
+        const linkedSet = linkedSiNumbersFor(r.client_name, r.id)
+        const map: Record<string, { si_number: string; si_date: string; total: number }> = {}
+        for (const row of (csiData ?? [])) {
+          if (!row.si_number || linkedSet.has(row.si_number) || row.collection_status === 'collected') continue
+          if (!map[row.si_number]) map[row.si_number] = { si_number: row.si_number, si_date: row.si_date, total: 0 }
+          map[row.si_number].total += Number(row.amount) || 0
+        }
+        setLinkCsiOptions(Object.values(map).sort((a, b) => (b.si_date ?? '').localeCompare(a.si_date ?? '')))
+      })()
+    }
+  }
+
+  function toggleLinkCsi(siNumber: string) {
+    setLinkCsiSelected(prev => {
+      const next = new Set(prev)
+      if (next.has(siNumber)) next.delete(siNumber)
+      else next.add(siNumber)
+      return next
+    })
+  }
+
+  async function saveLinkCsi() {
+    if (!linkCsiFor || linkCsiSelected.size === 0) return
+    setLinkingCsi(true)
+    const { error } = await supabase.from('collection_csi_links').insert(
+      [...linkCsiSelected].map(si_number => ({ collection_id: linkCsiFor.id, si_number }))
+    )
+    if (error) toast.error(error.message)
+    else { toast.success(`${linkCsiSelected.size} CSI invoice${linkCsiSelected.size !== 1 ? 's' : ''} linked`); setLinkCsiFor(null); load() }
+    setLinkingCsi(false)
   }
 
   async function voidRecord(id: string) {
@@ -823,7 +979,7 @@ function CollectionsTab() {
         <div class="row"><div class="lbl">Received From</div><div class="val">${r ? field(r.client_name) : field(null)}</div></div>
         <div class="row"><div class="lbl">Payment Mode</div><div class="val">${r ? field(r.payment_mode) : field(null)}</div></div>
         <div class="row"><div class="lbl">Reference No.</div><div class="val">${r ? field(r.reference_number) : field(null)}</div></div>
-        <div class="row"><div class="lbl">SI Reference</div><div class="val">${r ? field(r.si_number) : field(null)}</div></div>
+        <div class="row"><div class="lbl">SI Reference</div><div class="val">${r ? field((csiLinksByCollection[r.id] ?? (r.si_number ? [r.si_number] : [])).join(', ') || null) : field(null)}</div></div>
         <div class="row"><div class="lbl">For</div><div class="val">${r ? field(r.remarks) : field(null)}</div></div>
         <div class="amt-box">
           <div class="amt-line"><span>Gross Amount</span><span>${r ? fmt(r.amount ?? 0) : '&nbsp;'}</span></div>
@@ -903,14 +1059,15 @@ function CollectionsTab() {
   function printORBlank(r: Collection) {
     const client = clients.find(c => c.id === r.client_id) ?? clients.find(c => c.company_name === r.client_name)
     const addressLine = client ? [client.address, client.city, client.province].filter(Boolean).join(', ') : ''
+    const linkedSis = csiLinksByCollection[r.id] ?? (r.si_number ? [r.si_number] : [])
     printOrBlankForm({
       date: r.collection_date ?? '',
       receivedFrom: r.client_name ?? '',
       tin: client?.tin ?? null,
       address: addressLine || null,
       businessStyle: client?.industry ?? null,
-      paymentFor: r.remarks ?? (r.si_number ? `SI No. ${r.si_number}` : null),
-      invoices: [{ si_number: r.si_number ?? '—', amount: r.amount ?? 0 }],
+      paymentFor: r.remarks ?? (linkedSis.length > 0 ? `SI No. ${formatSiList(linkedSis)}` : null),
+      invoices: linkedSis.length > 0 ? [{ si_number: linkedSis.join(', '), amount: r.amount ?? 0 }] : [{ si_number: '—', amount: r.amount ?? 0 }],
     })
   }
 
@@ -1032,7 +1189,8 @@ function CollectionsTab() {
                 </TableCell></TableRow>
               ) : readyToCollect.map(row => {
                 const isExpanded = expandedRTC === row.so_number
-                const appliedCollections = records.filter(r => r.status === 'posted' && r.si_number && row.si_numbers.includes(r.si_number))
+                const appliedCollections = records.filter(r => r.status === 'posted' &&
+                  (csiLinksByCollection[r.id] ?? (r.si_number ? [r.si_number] : [])).some(si => row.si_numbers.includes(si)))
                 return (
                   <>
                     <TableRow
@@ -1103,7 +1261,27 @@ function CollectionsTab() {
       </Card>
 
       <div className="flex items-end gap-3 flex-wrap justify-between">
-        <DateFilterBar df={df} />
+        <div className="flex items-end gap-3 flex-wrap">
+          <DateFilterBar df={df} />
+          <div className="flex items-center gap-2">
+            <Select value={clientFilter} onValueChange={v => setClientFilter(v ?? '')}>
+              <SelectTrigger className="h-8 text-xs w-64">
+                <SelectValue>{() => clientFilter || 'All Clients'}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">All Clients</SelectItem>
+                {[...new Set(records.map(r => r.client_name).filter(Boolean))].sort().map(name => (
+                  <SelectItem key={name!} value={name!}>{name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {clientFilter && (
+              <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => setClientFilter('')}>
+                Clear
+              </Button>
+            )}
+          </div>
+        </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="icon" title="Calibrate Blank Form Print" onClick={openOrCalib}>
             <SlidersHorizontal className="h-4 w-4" />
@@ -1117,36 +1295,15 @@ function CollectionsTab() {
         </div>
       </div>
 
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="grid grid-cols-1 sm:grid-cols-3 items-center gap-3">
-            <CardTitle className="text-base flex items-center gap-2 justify-self-start">
-              <Receipt className="h-4 w-4 text-red-600" />Collection Records
-            </CardTitle>
-            <div className="flex items-center gap-2 justify-self-center">
-              <Select value={clientFilter} onValueChange={v => setClientFilter(v ?? '')}>
-                <SelectTrigger className="h-8 text-xs w-64">
-                  <SelectValue>{() => clientFilter || 'All Clients'}</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">All Clients</SelectItem>
-                  {[...new Set(records.map(r => r.client_name).filter(Boolean))].sort().map(name => (
-                    <SelectItem key={name!} value={name!}>{name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {clientFilter && (
-                <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => setClientFilter('')}>
-                  Clear
-                </Button>
-              )}
-            </div>
-            <div className="hidden sm:block" />
-          </div>
+      <Card className="border-none shadow-md shadow-black/5 ring-1 ring-black/5 rounded-2xl overflow-hidden py-0 gap-0">
+        <CardHeader className="pb-2 pt-5 px-5 bg-gradient-to-r from-muted/50 to-transparent">
+          <CardTitle className="text-base flex items-center gap-2">
+            <Receipt className="h-4 w-4 text-red-600" />Collection Records
+          </CardTitle>
         </CardHeader>
-        <CardContent className="p-0 overflow-x-auto">
+        <CardContent className="p-0 overflow-x-auto max-h-[620px] overflow-y-auto">
           <Table>
-            <TableHeader>
+            <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead className="w-12">No.</TableHead>
                 <TableHead>OR Number</TableHead>
@@ -1170,7 +1327,9 @@ function CollectionsTab() {
                 <TableRow><TableCell colSpan={11} className="text-center py-12 text-muted-foreground">
                   {clientFilter ? `No collections found for "${clientFilter}".` : 'No collections yet. Click New Collection to record one.'}
                 </TableCell></TableRow>
-              ) : pagedRecords.map((r, i) => (
+              ) : pagedRecords.map((r, i) => {
+                const linkedSis = csiLinksByCollection[r.id] ?? (r.si_number ? [r.si_number] : [])
+                return (
                 <TableRow key={r.id} className="cursor-pointer hover:bg-red-50/40 transition-colors" onClick={() => setViewRecord(r)}>
                   <TableCell className="text-sm text-muted-foreground">{(page - 1) * PAGE_SIZE + i + 1}</TableCell>
                   <TableCell className="font-mono text-xs font-semibold text-red-600">{r.or_number ?? '—'}</TableCell>
@@ -1178,7 +1337,13 @@ function CollectionsTab() {
                     {r.collection_date ? format(new Date(r.collection_date), 'MMM d, yyyy') : '—'}
                   </TableCell>
                   <TableCell className="font-medium text-sm">{r.client_name ?? '—'}</TableCell>
-                  <TableCell className="font-mono text-xs">{r.si_number ?? '—'}</TableCell>
+                  <TableCell className="font-mono text-xs">
+                    {linkedSis.length === 0 ? '—' : linkedSis.length === 1 ? linkedSis[0] : (
+                      <div className="flex flex-wrap gap-1">
+                        {linkedSis.map(si => <span key={si} className="bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded">{si}</span>)}
+                      </div>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <span className="text-xs bg-muted px-2 py-0.5 rounded-full capitalize">
                       {(r.payment_mode ?? '').replace('_', ' ')}
@@ -1204,6 +1369,11 @@ function CollectionsTab() {
                         <DropdownMenuItem onClick={() => startEdit(r)}>
                           <Pencil className="mr-2 h-4 w-4" />Edit
                         </DropdownMenuItem>
+                        {r.status === 'posted' && r.client_name && (
+                          <DropdownMenuItem onClick={() => openLinkCsi(r)}>
+                            <Link2 className="mr-2 h-4 w-4" />Link CSI
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuItem onClick={() => printOR(r)}>
                           <Printer className="mr-2 h-4 w-4" />Print OR
                         </DropdownMenuItem>
@@ -1222,7 +1392,8 @@ function CollectionsTab() {
                     </DropdownMenu>
                   </TableCell>
                 </TableRow>
-              ))}
+                )
+              })}
             </TableBody>
           </Table>
           {totalPages > 1 && (
@@ -1237,18 +1408,48 @@ function CollectionsTab() {
       </Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{editingId ? 'Edit Collection (OR)' : 'New Collection (OR)'}</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
+        <DialogContent showCloseButton={false} className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto p-0">
+          <div className="relative bg-gradient-to-r from-red-700 to-red-900 px-6 py-5">
+            <DialogHeader>
+              <DialogTitle className="text-white text-lg font-semibold">{editingId ? 'Edit Collection (OR)' : 'New Collection (OR)'}</DialogTitle>
+            </DialogHeader>
+            <p className="text-red-100 text-xs mt-1">Official Receipt for a client collection.</p>
+            <DialogClose className="absolute top-4 right-4 text-red-100 hover:text-white transition-colors">
+              <X className="h-5 w-5" />
+              <span className="sr-only">Close</span>
+            </DialogClose>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-6">
             <div className="space-y-1.5">
               <Label>OR Number</Label>
               <Input placeholder="e.g. 00031 (no OR- prefix)" value={form.or_number}
                 onChange={e => setForm(p => ({ ...p, or_number: normalizeOrNumber(e.target.value) }))} />
+              {isDuplicateOr && (
+                <p className="text-xs text-destructive">OR Number {normalizeOrNumber(form.or_number)} is already used by another record.</p>
+              )}
             </div>
             <div className="space-y-1.5">
               <Label>Collection Date</Label>
               <Input type="date" value={form.collection_date} onChange={e => setForm(p => ({ ...p, collection_date: e.target.value }))} />
             </div>
+            <div className="sm:col-span-2 space-y-1.5">
+              <Label>This OR Number is</Label>
+              <div className="flex gap-2">
+                {([['normal', 'Normal'], ['cancelled', 'Cancelled'], ['missing', 'Missing']] as const).map(([val, label]) => (
+                  <Button key={val} type="button" size="sm" variant={orStatus === val ? 'default' : 'outline'}
+                    className={orStatus === val ? 'bg-red-600 hover:bg-red-700' : ''}
+                    onClick={() => setOrStatus(val)}>
+                    {label}
+                  </Button>
+                ))}
+              </div>
+              {orStatus !== 'normal' && (
+                <p className="text-xs text-muted-foreground">
+                  Records that this OR slip was {orStatus} — no client, amount, or accounting entry is recorded.
+                </p>
+              )}
+            </div>
+            {orStatus === 'normal' && <>
             <div className="sm:col-span-2 space-y-1.5 relative">
               <Label>Client</Label>
               <Input
@@ -1259,6 +1460,7 @@ function CollectionsTab() {
                   setForm(p => ({ ...p, client_id: '', client_name: val, si_number: '' }))
                   setClientDropdownOpen(true)
                   setCsiOptions([])
+                  setSelectedCsis(new Set())
                 }}
                 onFocus={() => setClientDropdownOpen(true)}
                 onBlur={() => setTimeout(() => setClientDropdownOpen(false), 150)}
@@ -1280,28 +1482,22 @@ function CollectionsTab() {
                 </div>
               )}
             </div>
-            {editingId ? (
-              form.si_number && (
-                <div className="sm:col-span-2 space-y-1.5">
-                  <Label>Linked CSI Invoice</Label>
-                  <div className="h-9 flex items-center px-3 rounded-md border bg-muted text-sm font-mono text-muted-foreground">{form.si_number}</div>
-                </div>
-              )
-            ) : csiOptions.length > 0 && (
+            {csiOptions.length > 0 && (
               <div className="sm:col-span-2 space-y-1.5">
-                <Label>Link to CSI Invoice (optional)</Label>
-                <Select value={form.si_number} onValueChange={v => selectCsi(v ?? '')}>
-                  <SelectTrigger><SelectValue placeholder="Select an unbilled CSI invoice…" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">— None —</SelectItem>
-                    {csiOptions.map(csi => (
-                      <SelectItem key={csi.si_number} value={csi.si_number}>
-                        {csi.si_number} — {csi.si_date ? format(new Date(csi.si_date), 'MMM d, yyyy') : '—'} — {fmt(csi.total)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">Selecting an invoice fills in the Amount below automatically.</p>
+                <Label>Link to CSI Invoice(s) <span className="text-muted-foreground text-xs">(optional, select multiple)</span></Label>
+                <div className="border rounded-lg max-h-48 overflow-y-auto divide-y">
+                  {csiOptions.map(csi => (
+                    <label key={csi.si_number} className="flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-muted/50 cursor-pointer">
+                      <input type="checkbox" checked={selectedCsis.has(csi.si_number)} onChange={() => toggleCsi(csi.si_number)} className="h-4 w-4" />
+                      <span className="font-mono text-xs">{csi.si_number}</span>
+                      <span className="text-xs text-muted-foreground">{csi.si_date ? format(new Date(csi.si_date), 'MMM d, yyyy') : '—'}</span>
+                      <span className="ml-auto text-xs font-semibold">{fmt(csi.total)}</span>
+                    </label>
+                  ))}
+                </div>
+                {selectedCsis.size > 0 && (
+                  <p className="text-xs text-muted-foreground">{selectedCsis.size} invoice{selectedCsis.size !== 1 ? 's' : ''} selected — Amount below is their combined total.</p>
+                )}
               </div>
             )}
             <div className="space-y-1.5">
@@ -1342,16 +1538,49 @@ function CollectionsTab() {
               <Input placeholder="Check #, bank ref, transaction ID…" value={form.reference_number}
                 onChange={e => setForm(p => ({ ...p, reference_number: e.target.value }))} />
             </div>
+            </>}
             <div className="sm:col-span-2 space-y-1.5">
               <Label>Remarks</Label>
               <Textarea rows={2} placeholder="Optional notes…" value={form.remarks}
                 onChange={e => setForm(p => ({ ...p, remarks: e.target.value }))} />
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="mx-0 mb-0 rounded-b-2xl">
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={save} disabled={saving} className="bg-red-600 hover:bg-red-700">
-              {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : editingId ? 'Save Changes' : 'Post Collection'}
+            <Button onClick={save} disabled={saving || isDuplicateOr} className="bg-red-600 hover:bg-red-700">
+              {saving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : editingId ? 'Save Changes' : orStatus === 'normal' ? 'Post Collection' : `Mark ${orStatus === 'cancelled' ? 'Cancelled' : 'Missing'}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Link CSI Dialog — row action to attach additional CSI invoices to an existing collection */}
+      <Dialog open={!!linkCsiFor} onOpenChange={o => { if (!o) setLinkCsiFor(null) }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Link2 className="h-4 w-4 text-red-600" />Link CSI to OR {linkCsiFor?.or_number ?? ''}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <p className="text-xs text-muted-foreground">Unbilled CSI invoices for {linkCsiFor?.client_name}.</p>
+            {linkCsiOptions.length === 0 ? (
+              <p className="text-sm text-muted-foreground py-6 text-center">No unlinked CSI invoices available for this client.</p>
+            ) : (
+              <div className="border rounded-lg max-h-64 overflow-y-auto divide-y">
+                {linkCsiOptions.map(csi => (
+                  <label key={csi.si_number} className="flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-muted/50 cursor-pointer">
+                    <input type="checkbox" checked={linkCsiSelected.has(csi.si_number)} onChange={() => toggleLinkCsi(csi.si_number)} className="h-4 w-4" />
+                    <span className="font-mono text-xs">{csi.si_number}</span>
+                    <span className="text-xs text-muted-foreground">{csi.si_date ? format(new Date(csi.si_date), 'MMM d, yyyy') : '—'}</span>
+                    <span className="ml-auto text-xs font-semibold">{fmt(csi.total)}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLinkCsiFor(null)}>Cancel</Button>
+            <Button onClick={saveLinkCsi} disabled={linkingCsi || linkCsiSelected.size === 0} className="bg-red-600 hover:bg-red-700">
+              {linkingCsi ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Linking…</> : `Link ${linkCsiSelected.size || ''} CSI`}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1374,7 +1603,7 @@ function CollectionsTab() {
                 </div>
                 <div><span className="text-xs text-muted-foreground block">Payment Mode</span><span className="capitalize">{(viewRecord.payment_mode ?? '—').replace('_', ' ')}</span></div>
                 <div><span className="text-xs text-muted-foreground block">Reference No.</span><span>{viewRecord.reference_number ?? '—'}</span></div>
-                <div><span className="text-xs text-muted-foreground block">SI Reference</span><span>{viewRecord.si_number ?? '—'}</span></div>
+                <div><span className="text-xs text-muted-foreground block">SI Reference</span><span className="font-mono">{(csiLinksByCollection[viewRecord.id] ?? (viewRecord.si_number ? [viewRecord.si_number] : [])).join(', ') || '—'}</span></div>
                 <div><span className="text-xs text-muted-foreground block">For</span><span>{viewRecord.remarks ?? '—'}</span></div>
               </div>
               <div className="rounded-lg border bg-muted/30 p-3 space-y-1">
