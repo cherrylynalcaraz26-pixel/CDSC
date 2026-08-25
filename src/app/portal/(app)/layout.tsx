@@ -11,7 +11,7 @@ import { toast } from 'sonner'
 import {
   LayoutDashboard, FileText, Package, User, LogOut, Menu, X, Boxes,
   ClipboardList, Search, Bell, PanelLeftClose, PanelLeftOpen, MessageSquare, Send, ChevronRight, Globe,
-  Store, Lightbulb,
+  Store,
 } from 'lucide-react'
 import { SearchProvider, useSearchContext } from '@/context/search-context'
 
@@ -27,8 +27,7 @@ const CLIENT_NAV = [
 const VENDOR_NAV = [
   { label: 'Dashboard',       href: '/portal',                   icon: LayoutDashboard, exact: true },
   { label: 'Purchase Orders', href: '/portal/purchase-orders',   icon: ClipboardList,   exact: false },
-  { label: 'My Catalog',      href: '/portal/catalog',           icon: Store,           exact: false },
-  { label: 'Recommendations', href: '/portal/recommendations',   icon: Lightbulb,       exact: false },
+  { label: 'Item Catalog',    href: '/portal/catalog',           icon: Store,           exact: false },
   { label: 'Account',         href: '/portal/settings',          icon: User,            exact: false },
 ]
 
