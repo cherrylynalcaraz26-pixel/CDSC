@@ -22,7 +22,7 @@ import { useSearchContext } from '@/context/search-context'
 
 interface PO { id: string; po_number: string; status: string; supplier?: { company_name: string } | null; delivery_date: string | null }
 interface RR { id: string; rr_number: string; po_number: string; supplier: string | null; delivery_date: string; received_by: string; status: string; dr_number?: string | null }
-interface POItemLine { item_name: string; quantity: number; unit_of_measure: string }
+interface POItemLine { id: string; item_name: string; quantity: number; unit_of_measure: string; quantity_received: number }
 interface Supplier { id: string; company_name: string }
 interface Client { id: string; company_name: string }
 interface ItemOption { item_name: string; unit_of_measure: string }
@@ -65,6 +65,10 @@ export default function ReceivingPage() {
   const [rrDateFrom, setRrDateFrom] = useState('')
   const [rrDateTo, setRrDateTo] = useState('')
   const [poItemsByNumber, setPoItemsByNumber] = useState<Record<string, POItemLine[]>>({})
+  // Qty being received on THIS delivery, keyed by po_items.id — defaults to whatever's
+  // still outstanding (quantity - quantity_received) so a full delivery needs no editing,
+  // but any item can be dialed down when the shipment doesn't cover everything ordered.
+  const [rrReceiveQty, setRrReceiveQty] = useState<Record<string, string>>({})
 
   // Returns
   const [returnFormOpen, setReturnFormOpen] = useState(false)
@@ -150,14 +154,14 @@ export default function ReceivingPage() {
     if (poIds.length === 0) { setPoItemsByNumber({}); return }
     const { data: itemsData } = await supabase
       .from('po_items')
-      .select('po_id, item_name, quantity, unit_of_measure')
+      .select('id, po_id, item_name, quantity, unit_of_measure, quantity_received')
       .in('po_id', poIds)
     const map: Record<string, POItemLine[]> = {}
     for (const it of itemsData ?? []) {
       const poNum = poIdToNumber[it.po_id]
       if (!poNum) continue
       if (!map[poNum]) map[poNum] = []
-      map[poNum].push({ item_name: it.item_name, quantity: Number(it.quantity), unit_of_measure: it.unit_of_measure })
+      map[poNum].push({ id: it.id, item_name: it.item_name, quantity: Number(it.quantity), unit_of_measure: it.unit_of_measure, quantity_received: Number(it.quantity_received) || 0 })
     }
     setPoItemsByNumber(map)
   }
@@ -225,6 +229,17 @@ export default function ReceivingPage() {
     loadRR(); loadPoItemsMap(); loadReturns(); loadShared(); loadSalesDeliveries()
   }, [])
 
+  // Re-defaults the per-item "receiving now" quantities to whatever's still outstanding
+  // whenever the selected PO (or its item data) changes — skipped while editing an
+  // existing RR, since editing doesn't resubmit inventory (see handleSaveRR).
+  useEffect(() => {
+    if (editingRRId || !selectedPO) { setRrReceiveQty({}); return }
+    const poItems = poItemsByNumber[selectedPO] ?? []
+    setRrReceiveQty(Object.fromEntries(
+      poItems.map(it => [it.id, String(Math.max(0, it.quantity - it.quantity_received))])
+    ))
+  }, [selectedPO, poItemsByNumber, editingRRId])
+
   function resetRRForm() {
     setEditingRRId(null)
     setRrNumber('')
@@ -233,6 +248,7 @@ export default function ReceivingPage() {
     setDeliveryDate(new Date().toISOString().split('T')[0])
     setReceivedBy('')
     setRrSupplier(null)
+    setRrReceiveQty({})
   }
 
   function openEditRR(rr: RR) {
@@ -258,6 +274,44 @@ export default function ReceivingPage() {
   async function handleSaveRR() {
     if (!rrNumber.trim()) { toast.error('RR Number is required'); return }
     if (!selectedPO) { toast.error('Select a PO reference'); return }
+
+    if (editingRRId) {
+      // Editing only updates the record's own fields — it does not re-run the inventory
+      // adjustment below, since that already happened once when the RR was first saved.
+      setRrSaving(true)
+      const payload = {
+        rr_number: rrNumber.trim(),
+        po_number: selectedPO,
+        supplier: rrSupplier ?? (selectedPOData?.supplier as any)?.company_name ?? null,
+        delivery_date: deliveryDate,
+        received_by: receivedBy || null,
+        dr_number: drNumber || null,
+      }
+      const { error } = await supabase.from('receiving_reports').update(payload).eq('id', editingRRId)
+      if (error) { toast.error(error.message); setRrSaving(false); return }
+      toast.success('Receiving report updated.')
+      setRrOpen(false); resetRRForm(); loadRR()
+      setRrSaving(false)
+      return
+    }
+
+    // Not every item on a PO necessarily arrives in one shipment — `rrReceiveQty` holds
+    // what's actually being received right now per item (defaults to the full outstanding
+    // quantity, but can be dialed down), so a partial delivery only credits warehouse
+    // stock for what showed up and leaves the rest outstanding for a later RR.
+    const { data: rrPo } = await supabase.from('purchase_orders').select('id').eq('po_number', selectedPO).maybeSingle()
+    if (!rrPo?.id) { toast.error('Could not find this PO'); return }
+    const { data: poItems } = await supabase
+      .from('po_items')
+      .select('id, item_name, quantity, unit_of_measure, quantity_received')
+      .eq('po_id', rrPo.id)
+    const items = (poItems ?? []) as { id: string; item_name: string; quantity: number; unit_of_measure: string; quantity_received: number | null }[]
+
+    const receivingNow = items
+      .map(it => ({ it, qty: Math.max(0, Math.min(Number(rrReceiveQty[it.id]) || 0, it.quantity - (Number(it.quantity_received) || 0))) }))
+      .filter(r => r.qty > 0)
+    if (receivingNow.length === 0) { toast.error('Enter at least one item quantity received'); return }
+
     setRrSaving(true)
 
     const payload = {
@@ -269,67 +323,55 @@ export default function ReceivingPage() {
       dr_number: drNumber || null,
       status: 'completed',
     }
-
-    if (editingRRId) {
-      // Editing only updates the record's own fields — it does not re-run the inventory
-      // adjustment below, since that already happened once when the RR was first saved.
-      const { error } = await supabase.from('receiving_reports').update(payload).eq('id', editingRRId)
-      if (error) { toast.error(error.message); setRrSaving(false); return }
-      toast.success('Receiving report updated.')
-      setRrOpen(false); resetRRForm(); loadRR()
-      setRrSaving(false)
-      return
-    }
-
     const { error } = await supabase.from('receiving_reports').insert(payload)
     if (error) { toast.error(error.message); setRrSaving(false); return }
 
-    // Update inventory: add the PO's line-item quantities into warehouse_stock (unassigned
-    // to any client — this is general stock coming in from the supplier). Look the PO up
-    // fresh by po_number rather than relying on selectedPOData/`pos` — that list excludes
-    // already-completed POs, which is exactly the state of any PO you'd be receiving a
-    // second (or later) partial shipment against, and silently skipping this block would
-    // insert the receiving report without ever touching warehouse_stock.
-    const { data: rrPo } = await supabase.from('purchase_orders').select('id').eq('po_number', selectedPO).maybeSingle()
-    if (rrPo?.id) {
-      const { data: poItems } = await supabase
-        .from('po_items')
-        .select('item_name, quantity, unit_of_measure')
-        .eq('po_id', rrPo.id)
-      for (const it of poItems ?? []) {
-        const qty = Number(it.quantity) || 0
-        if (qty <= 0) continue
-        const { data: wsRow } = await supabase
-          .from('warehouse_stock')
-          .select('id, quantity')
-          .eq('item_name', it.item_name)
-          .is('client_name', null)
-          .maybeSingle()
-        if (wsRow) {
-          await supabase.from('warehouse_stock').update({
-            quantity: Number(wsRow.quantity) + qty,
-            updated_at: new Date().toISOString(),
-          }).eq('id', wsRow.id)
-        } else {
-          await supabase.from('warehouse_stock').insert({
-            item_name: it.item_name,
-            unit: it.unit_of_measure ?? '',
-            quantity: qty,
-            client_name: null,
-          })
-        }
-        await supabase.from('warehouse_stock_ledger').insert({
+    // Credit warehouse stock (unassigned to any client — general stock coming in from the
+    // supplier) for exactly what's being received now, and accumulate it onto the PO
+    // item's own running total so a later partial shipment sees the correct remainder.
+    for (const { it, qty } of receivingNow) {
+      const { data: wsRow } = await supabase
+        .from('warehouse_stock')
+        .select('id, quantity')
+        .eq('item_name', it.item_name)
+        .is('client_name', null)
+        .maybeSingle()
+      if (wsRow) {
+        await supabase.from('warehouse_stock').update({
+          quantity: Number(wsRow.quantity) + qty,
+          updated_at: new Date().toISOString(),
+        }).eq('id', wsRow.id)
+      } else {
+        await supabase.from('warehouse_stock').insert({
           item_name: it.item_name,
           unit: it.unit_of_measure ?? '',
-          change_qty: qty,
-          source_type: 'po_receiving',
-          reference_no: selectedPO,
+          quantity: qty,
+          client_name: null,
         })
       }
+      await supabase.from('warehouse_stock_ledger').insert({
+        item_name: it.item_name,
+        unit: it.unit_of_measure ?? '',
+        change_qty: qty,
+        source_type: 'po_receiving',
+        reference_no: selectedPO,
+      })
+      await supabase.from('po_items').update({
+        quantity_received: (Number(it.quantity_received) || 0) + qty,
+      }).eq('id', it.id)
     }
 
-    toast.success('Receiving report saved — inventory updated.')
-    setRrOpen(false); resetRRForm(); loadRR()
+    // The PO is only "completed" once every line item's cumulative received quantity
+    // meets what was ordered — otherwise it stays (or becomes) partially delivered so
+    // Receiving's Pending Deliveries list keeps offering it up for the remaining balance.
+    const receivedById = Object.fromEntries(receivingNow.map(r => [r.it.id, r.qty]))
+    const fullyReceived = items.every(it => (Number(it.quantity_received) || 0) + (receivedById[it.id] ?? 0) >= it.quantity)
+    await supabase.from('purchase_orders').update({
+      status: fullyReceived ? 'completed' : 'partially_delivered',
+    }).eq('id', rrPo.id)
+
+    toast.success(fullyReceived ? 'Receiving report saved — inventory updated.' : 'Partial delivery recorded — inventory updated, PO stays open for the remaining balance.')
+    setRrOpen(false); resetRRForm(); loadRR(); loadPoItemsMap()
     setRrSaving(false)
   }
 
@@ -680,18 +722,29 @@ export default function ReceivingPage() {
                           <thead className="bg-muted/60">
                             <tr>
                               <th className="text-left px-3 py-1.5 font-medium">Item</th>
-                              <th className="text-right px-3 py-1.5 font-medium w-20">Qty</th>
+                              <th className="text-right px-3 py-1.5 font-medium w-20">Ordered</th>
+                              <th className="text-right px-3 py-1.5 font-medium w-24">Received</th>
                               <th className="text-left px-3 py-1.5 font-medium w-24">Unit</th>
+                              <th className="text-left px-3 py-1.5 font-medium w-20">Status</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {rrItems.map((it, i) => (
-                              <tr key={i} className="border-t">
-                                <td className="px-3 py-1">{it.item_name}</td>
-                                <td className="px-3 py-1 text-right font-medium">{it.quantity}</td>
-                                <td className="px-3 py-1 text-muted-foreground">{it.unit_of_measure}</td>
-                              </tr>
-                            ))}
+                            {rrItems.map((it, i) => {
+                              const isPartial = it.quantity_received < it.quantity
+                              return (
+                                <tr key={i} className="border-t">
+                                  <td className="px-3 py-1">{it.item_name}</td>
+                                  <td className="px-3 py-1 text-right font-medium">{it.quantity}</td>
+                                  <td className="px-3 py-1 text-right font-medium">{it.quantity_received}</td>
+                                  <td className="px-3 py-1 text-muted-foreground">{it.unit_of_measure}</td>
+                                  <td className="px-3 py-1">
+                                    <span className={`px-1.5 py-0.5 rounded-full font-medium ${isPartial ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}`}>
+                                      {isPartial ? 'Partial' : 'Complete'}
+                                    </span>
+                                  </td>
+                                </tr>
+                              )
+                            })}
                           </tbody>
                         </table>
                       </div>
@@ -1028,6 +1081,46 @@ export default function ReceivingPage() {
                 </div>
               </div>
             )}
+            {selectedPO && !editingRRId && (poItemsByNumber[selectedPO] ?? []).length > 0 && (
+              <div className="sm:col-span-2 space-y-1.5">
+                <Label>Items Received <span className="text-muted-foreground text-xs font-normal">(edit if the shipment doesn&apos;t cover everything ordered)</span></Label>
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/40">
+                        <TableHead>Item</TableHead>
+                        <TableHead className="w-20 text-right">Ordered</TableHead>
+                        <TableHead className="w-24 text-right">Already In</TableHead>
+                        <TableHead className="w-28 text-right">Receiving Now</TableHead>
+                        <TableHead className="w-20 text-right">Remaining</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(poItemsByNumber[selectedPO] ?? []).map(it => {
+                        const outstanding = it.quantity - it.quantity_received
+                        const nowQty = Number(rrReceiveQty[it.id]) || 0
+                        const remaining = Math.max(0, outstanding - nowQty)
+                        return (
+                          <TableRow key={it.id}>
+                            <TableCell className="text-sm">{it.item_name}</TableCell>
+                            <TableCell className="text-right text-sm text-muted-foreground">{it.quantity}</TableCell>
+                            <TableCell className="text-right text-sm text-muted-foreground">{it.quantity_received}</TableCell>
+                            <TableCell className="py-1.5">
+                              <Input
+                                type="number" min={0} max={outstanding} className="h-8 text-sm text-right"
+                                value={rrReceiveQty[it.id] ?? ''}
+                                onChange={e => setRrReceiveQty(p => ({ ...p, [it.id]: e.target.value }))}
+                              />
+                            </TableCell>
+                            <TableCell className={`text-right text-sm font-medium ${remaining > 0 ? 'text-amber-600' : 'text-green-600'}`}>{remaining}</TableCell>
+                          </TableRow>
+                        )
+                      })}
+                    </TableBody>
+                  </Table>
+                </div>
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label>Received By</Label>
               <Input placeholder="Name of person who received" value={receivedBy} onChange={e => setReceivedBy(e.target.value)} />
@@ -1231,19 +1324,26 @@ export default function ReceivingPage() {
                       <TableRow className="bg-muted/40">
                         <TableHead>Item</TableHead>
                         <TableHead className="w-24">Unit</TableHead>
-                        <TableHead className="w-20 text-right">Qty</TableHead>
+                        <TableHead className="w-20 text-right">Ordered</TableHead>
+                        <TableHead className="w-20 text-right">Received</TableHead>
+                        <TableHead className="w-20 text-right">Remaining</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {(poItemsByNumber[poDetail.po_number] ?? []).length === 0 ? (
-                        <TableRow><TableCell colSpan={3} className="text-center py-6 text-muted-foreground text-sm">No items recorded for this PO.</TableCell></TableRow>
-                      ) : (poItemsByNumber[poDetail.po_number] ?? []).map((it, idx) => (
-                        <TableRow key={idx}>
-                          <TableCell className="text-sm">{it.item_name}</TableCell>
-                          <TableCell className="text-sm text-muted-foreground">{it.unit_of_measure ?? '—'}</TableCell>
-                          <TableCell className="text-sm text-right font-medium">{it.quantity}</TableCell>
-                        </TableRow>
-                      ))}
+                        <TableRow><TableCell colSpan={5} className="text-center py-6 text-muted-foreground text-sm">No items recorded for this PO.</TableCell></TableRow>
+                      ) : (poItemsByNumber[poDetail.po_number] ?? []).map((it, idx) => {
+                        const remaining = Math.max(0, it.quantity - it.quantity_received)
+                        return (
+                          <TableRow key={idx}>
+                            <TableCell className="text-sm">{it.item_name}</TableCell>
+                            <TableCell className="text-sm text-muted-foreground">{it.unit_of_measure ?? '—'}</TableCell>
+                            <TableCell className="text-sm text-right font-medium">{it.quantity}</TableCell>
+                            <TableCell className="text-sm text-right text-muted-foreground">{it.quantity_received}</TableCell>
+                            <TableCell className={`text-sm text-right font-medium ${remaining > 0 ? 'text-amber-600' : 'text-green-600'}`}>{remaining}</TableCell>
+                          </TableRow>
+                        )
+                      })}
                     </TableBody>
                   </Table>
                 </div>

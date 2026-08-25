@@ -17,7 +17,7 @@ import {
   Plus, Printer, Loader2,
   Trash2, CheckCircle2, XCircle, ArrowRightLeft, X,
   Package, Search, Mail, Send, Pencil, FileText,
-  ChevronDown, ChevronUp, Wallet, Clock3, AlertCircle, Store,
+  ChevronDown, ChevronUp, Wallet, Clock3, AlertCircle, Store, GripVertical,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
@@ -106,6 +106,17 @@ export default function PurchaseOrdersPage() {
   const [paymentTerms, setPaymentTerms] = useState('30 days')
   const [remarks, setRemarks] = useState('')
   const [lines, setLines] = useState<POLine[]>([emptyLine()])
+  const [dragLineIdx, setDragLineIdx] = useState<number | null>(null)
+
+  function reorderLines(from: number, to: number) {
+    if (from === to) return
+    setLines(prev => {
+      const next = [...prev]
+      const [moved] = next.splice(from, 1)
+      next.splice(to, 0, moved)
+      return next
+    })
+  }
   const [discountType, setDiscountType] = useState<'none' | '2' | '5' | 'custom'>('none')
   const [discountCustom, setDiscountCustom] = useState('')
   const discountRate = discountType === 'none' ? 0 : discountType === 'custom' ? (parseFloat(discountCustom) || 0) : parseFloat(discountType)
@@ -423,10 +434,13 @@ export default function PurchaseOrdersPage() {
   }
 
   // Inverse of autoReceivePO — moving a PO back to Pending means it hasn't actually
-  // arrived, so any Receiving Report(s) created for it (auto or manual) are removed and
-  // the warehouse stock/ledger entries they credited are reversed. Reverses once per
-  // existing RR, matching how each RR's creation credited stock once, and floors at 0
-  // in case some of that stock has already moved on (e.g. delivered out via DR Logs).
+  // arrived, so any Receiving Report(s) created for it (auto, manual, or partial) are
+  // removed and the warehouse stock/ledger entries they credited are reversed. Reverses
+  // each item's actual accumulated `quantity_received` exactly once (not the ordered
+  // quantity times the RR count — a PO can have several RRs against it from partial
+  // deliveries, and each one only ever credited what it actually received), floors at 0
+  // in case some of that stock has already moved on (e.g. delivered out via DR Logs), and
+  // resets `quantity_received` back to 0 so the PO starts clean if received again.
   async function undoReceivePO(id: string): Promise<boolean> {
     const { data: poRaw } = await supabase.from('purchase_orders').select('po_number').eq('id', id).maybeSingle()
     const po = poRaw as { po_number: string | null } | null
@@ -435,12 +449,11 @@ export default function PurchaseOrdersPage() {
     const { data: rrs } = await supabase.from('receiving_reports').select('id').eq('po_number', po.po_number)
     if (!rrs || rrs.length === 0) return false
 
-    const { data: poItems } = await supabase.from('po_items').select('item_name, quantity, unit_of_measure').eq('po_id', id)
+    const { data: poItems } = await supabase.from('po_items').select('id, item_name, quantity_received, unit_of_measure').eq('po_id', id)
 
-    for (const rr of rrs) {
-      for (const it of poItems ?? []) {
-        const qty = Number(it.quantity) || 0
-        if (qty <= 0) continue
+    for (const it of poItems ?? []) {
+      const qty = Number(it.quantity_received) || 0
+      if (qty > 0) {
         const { data: wsRow } = await supabase.from('warehouse_stock').select('id, quantity').eq('item_name', it.item_name).is('client_name', null).maybeSingle()
         if (wsRow) {
           await supabase.from('warehouse_stock').update({
@@ -457,6 +470,9 @@ export default function PurchaseOrdersPage() {
           notes: 'PO reverted to Pending — receiving undone',
         })
       }
+      await supabase.from('po_items').update({ quantity_received: 0 }).eq('id', it.id)
+    }
+    for (const rr of rrs) {
       await supabase.from('receiving_reports').delete().eq('id', rr.id)
     }
     return true
@@ -476,7 +492,7 @@ export default function PurchaseOrdersPage() {
     const { data: existingRRs } = await supabase.from('receiving_reports').select('id').eq('po_number', po.po_number).limit(1)
     if (existingRRs && existingRRs.length > 0) return false
 
-    const { data: poItems } = await supabase.from('po_items').select('item_name, quantity, unit_of_measure').eq('po_id', id)
+    const { data: poItems } = await supabase.from('po_items').select('id, item_name, quantity, unit_of_measure').eq('po_id', id)
     if (!poItems || poItems.length === 0) return false
 
     const { error: rrError } = await supabase.from('receiving_reports').insert({
@@ -508,6 +524,7 @@ export default function PurchaseOrdersPage() {
         source_type: 'po_receiving',
         reference_no: po.po_number,
       })
+      await supabase.from('po_items').update({ quantity_received: qty }).eq('id', it.id)
     }
     return true
   }
@@ -1297,6 +1314,7 @@ export default function PurchaseOrdersPage() {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/40">
+                      <TableHead className="w-6"></TableHead>
                       <TableHead className="min-w-[160px]">Item Description</TableHead>
                       <TableHead className="w-16">Qty</TableHead>
                       <TableHead className="w-16">Unit</TableHead>
@@ -1313,7 +1331,23 @@ export default function PurchaseOrdersPage() {
                       const stockQty = line.item_name ? (warehouseStock[line.item_name] ?? 0) : null
                       const needsToBuy = itemMeta && (itemMeta.status === 'low_stock' || itemMeta.status === 'out_of_stock')
                       return (
-                        <TableRow key={i}>
+                        <TableRow
+                          key={i}
+                          className={dragLineIdx === i ? 'opacity-40' : ''}
+                          onDragOver={e => { e.preventDefault() }}
+                          onDrop={e => {
+                            e.preventDefault()
+                            if (dragLineIdx !== null) reorderLines(dragLineIdx, i)
+                            setDragLineIdx(null)
+                          }}
+                        >
+                          <TableCell className="py-1.5 align-top cursor-grab active:cursor-grabbing text-muted-foreground"
+                            draggable
+                            onDragStart={() => setDragLineIdx(i)}
+                            onDragEnd={() => setDragLineIdx(null)}
+                          >
+                            <GripVertical className="h-4 w-4" />
+                          </TableCell>
                           <TableCell className="py-1.5 align-top">
                             <div className="flex gap-1 min-w-0">
                               <Select value={line.item_name} onValueChange={val => {
