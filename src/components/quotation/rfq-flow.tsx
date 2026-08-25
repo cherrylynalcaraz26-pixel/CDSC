@@ -37,8 +37,12 @@ export function RfqFlowStepper({
   return (
     <div className="flex items-center">
       {labels.map((label, i) => {
-        const isDone = i < current
-        const isCurrent = i === current
+        const isLastStep = i === labels.length - 1
+        // The final step has no step after it to prove it's finished, so reaching
+        // it (current === i) already means the flow is complete — treat it as
+        // done rather than "in progress" like every other step.
+        const isDone = i < current || (isLastStep && i === current)
+        const isCurrent = i === current && !isLastStep
         return (
           <div key={label} className="flex items-center">
             <div className="flex flex-col items-center">
