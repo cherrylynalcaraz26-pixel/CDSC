@@ -77,7 +77,7 @@ function UOMTab({ configSelector }: { configSelector: React.ReactNode }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-end gap-3">
+      <div className="flex items-center gap-3">
         {configSelector}
         <Button onClick={openAdd} size="sm" className="bg-red-600 hover:bg-red-700 ml-auto">
           <Plus className="h-4 w-4 mr-1" /> Add UOM
@@ -215,7 +215,7 @@ function BrandsTab({ configSelector }: { configSelector: React.ReactNode }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-end gap-3">
+      <div className="flex items-center gap-3">
         {configSelector}
         <Button onClick={openAdd} size="sm" className="bg-red-600 hover:bg-red-700 ml-auto">
           <Plus className="h-4 w-4 mr-1" /> Add Brand
@@ -378,7 +378,7 @@ function AttributesTab({ configSelector }: { configSelector: React.ReactNode }) 
 
   return (
     <div className="space-y-4">
-      <div className="flex items-end gap-3">
+      <div className="flex items-center gap-3">
         {configSelector}
         <Button onClick={openAdd} size="sm" className="bg-red-600 hover:bg-red-700 ml-auto">
           <Plus className="h-4 w-4 mr-1" /> Add Attribute
@@ -556,7 +556,7 @@ function CategoriesTab({ configSelector }: { configSelector: React.ReactNode }) 
 
   return (
     <div className="space-y-4">
-      <div className="flex items-end gap-3">
+      <div className="flex items-center gap-3">
         {configSelector}
         <Button onClick={openAdd} size="sm" className="bg-red-600 hover:bg-red-700 ml-auto">
           <Plus className="h-4 w-4 mr-1" /> Add Category
@@ -831,7 +831,7 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-end gap-3">
+      <div className="flex items-center gap-3">
         {configSelector}
         <Button onClick={openAdd} size="sm" className="bg-red-600 hover:bg-red-700 ml-auto">
           <Plus className="h-4 w-4 mr-1" />Add Supplier
@@ -1454,7 +1454,7 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-end gap-3">
+      <div className="flex items-center gap-3">
         {configSelector}
         <div className="flex border rounded-md overflow-hidden shrink-0 ml-auto">
           <button onClick={() => setViewMode('list')}
@@ -1926,8 +1926,8 @@ function SetupPageContent() {
   }, [])
 
   const configSelector = (
-    <div className="space-y-1 shrink-0">
-      <Label className="text-xs text-muted-foreground">Section</Label>
+    <div className="flex items-center gap-2 shrink-0">
+      <Label className="text-xs text-muted-foreground whitespace-nowrap">Section</Label>
       <Select value={active} onValueChange={v => setActive(v ?? 'suppliers')}>
         <SelectTrigger className="w-56 shrink-0">
           <SelectValue />
