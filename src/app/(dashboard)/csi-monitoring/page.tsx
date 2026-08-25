@@ -1304,7 +1304,7 @@ export default function CSIMonitoringPage() {
         const PALETTE = ['#dc2626','#2563eb','#16a34a','#d97706','#7c3aed','#0891b2','#be185d','#65a30d']
 
         const clientStats = clientOptions.map((c, i) => {
-          const clientRecs = records.filter(r => r.client_name === c.company_name)
+          const clientRecs = filtered.filter(r => r.client_name === c.company_name)
           const siSet = new Set(clientRecs.map(r => r.si_number))
           return {
             name: c.company_name,
@@ -1322,7 +1322,7 @@ export default function CSIMonitoringPage() {
 
         // Monthly trend data
         const monthMap: Record<string, number> = {}
-        for (const r of records) {
+        for (const r of filtered) {
           if (!r.si_date) continue
           const key = r.si_date.slice(0, 7) // "YYYY-MM"
           monthMap[key] = (monthMap[key] || 0) + (Number(r.amount) || 0)
@@ -1591,7 +1591,7 @@ export default function CSIMonitoringPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto max-h-[620px] overflow-y-auto">
             {viewMode === 'cross-ref' ? (() => {
               const csiForCrossRef = clientFilter ? filtered.filter(r => r.client_name === clientFilter) : filtered
               const drForCrossRef = clientFilter ? drItemsForCrossRef.filter(d => d.client_name === clientFilter) : drItemsForCrossRef
@@ -1659,7 +1659,7 @@ export default function CSIMonitoringPage() {
               )
             })() : viewMode === 'by-si' ? (
               <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     <TableHead className="w-8">
                       <Checkbox
@@ -1821,7 +1821,7 @@ export default function CSIMonitoringPage() {
               </Table>
             ) : (
               <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     <TableHead className="w-12">No.</TableHead>
                     <TableHead className="w-28">Date</TableHead>

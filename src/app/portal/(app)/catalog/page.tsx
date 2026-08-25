@@ -7,7 +7,7 @@ import { subMonths, format } from 'date-fns'
 import { toast } from 'sonner'
 import {
   Store, Plus, Loader2, Pencil, Trash2, MoreHorizontal, ImagePlus, X, Package,
-  LayoutGrid, List, ArrowLeft, Lightbulb, TrendingUp, MessageSquareQuote, History, Layers,
+  LayoutGrid, List, ArrowLeft, Lightbulb, TrendingUp, MessageSquareQuote, History, Layers, ArrowUpDown,
 } from 'lucide-react'
 import { useSearchContext } from '@/context/search-context'
 import { usePersistedState } from '@/lib/use-persisted-state'
@@ -16,7 +16,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose,
 } from '@/components/ui/dialog'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -46,6 +46,16 @@ interface UOMOption { id: string; code: string; name: string }
 
 const emptyForm = () => ({ item_name: '', description: '', unit_of_measure: 'piece', attribute: '', brand: '', price: '' })
 const CUSTOM_SENTINEL = '__custom__'
+
+type SortOption = 'newest' | 'oldest' | 'name-asc' | 'name-desc' | 'price-asc' | 'price-desc'
+const SORT_OPTIONS: { value: SortOption; label: string }[] = [
+  { value: 'newest', label: 'Newest First' },
+  { value: 'oldest', label: 'Oldest First' },
+  { value: 'name-asc', label: 'Name (A–Z)' },
+  { value: 'name-desc', label: 'Name (Z–A)' },
+  { value: 'price-asc', label: 'Price (Low–High)' },
+  { value: 'price-desc', label: 'Price (High–Low)' },
+]
 
 function fmt(n: number | null) {
   if (n === null || n === undefined) return '—'
@@ -120,6 +130,7 @@ function VendorCatalogPageContent() {
   const [brandOptions, setBrandOptions] = useState<string[]>([])
   const [attributeOptions, setAttributeOptions] = useState<string[]>([])
   const [view, setView] = usePersistedState<'card' | 'list'>('vendor-catalog:view', 'card')
+  const [sortBy, setSortBy] = usePersistedState<SortOption>('vendor-catalog:sort', 'newest')
   const [open, setOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState(emptyForm())
@@ -352,10 +363,22 @@ function VendorCatalogPageContent() {
     setAddingAll(null)
   }
 
-  const filtered = items.filter(it => {
-    const q = search.toLowerCase()
-    return !q || it.item_name.toLowerCase().includes(q) || (it.description ?? '').toLowerCase().includes(q)
-  })
+  const filtered = items
+    .filter(it => {
+      const q = search.toLowerCase()
+      return !q || it.item_name.toLowerCase().includes(q) || (it.description ?? '').toLowerCase().includes(q)
+    })
+    .sort((a, b) => {
+      switch (sortBy) {
+        case 'oldest': return new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        case 'name-asc': return a.item_name.localeCompare(b.item_name)
+        case 'name-desc': return b.item_name.localeCompare(a.item_name)
+        case 'price-asc': return (a.price ?? 0) - (b.price ?? 0)
+        case 'price-desc': return (b.price ?? 0) - (a.price ?? 0)
+        case 'newest':
+        default: return new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      }
+    })
 
   if (loading) return (
     <div className="flex justify-center py-24">
@@ -365,32 +388,13 @@ function VendorCatalogPageContent() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Item Catalog</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Items you can supply — CDSC&apos;s purchasing team picks from here when creating a Purchase Order with you.</p>
-        </div>
-        {tab === 'items' && (
-          <div className="flex items-center gap-2">
-            <div className="flex rounded-lg border border-gray-200 overflow-hidden">
-              <button onClick={() => setView('card')} title="Card view"
-                className={`h-9 w-9 flex items-center justify-center transition-colors ${view === 'card' ? 'bg-red-600 text-white' : 'bg-white text-gray-400 hover:bg-gray-50'}`}>
-                <LayoutGrid className="h-4 w-4" />
-              </button>
-              <button onClick={() => setView('list')} title="List view"
-                className={`h-9 w-9 flex items-center justify-center border-l border-gray-200 transition-colors ${view === 'list' ? 'bg-red-600 text-white' : 'bg-white text-gray-400 hover:bg-gray-50'}`}>
-                <List className="h-4 w-4" />
-              </button>
-            </div>
-            <Button onClick={openAdd} className="bg-red-600 hover:bg-red-700">
-              <Plus className="h-4 w-4 mr-2" /> Add Item
-            </Button>
-          </div>
-        )}
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">Item Catalog</h1>
+        <p className="text-sm text-gray-500 mt-0.5">Items you can supply — CDSC&apos;s purchasing team picks from here when creating a Purchase Order with you.</p>
       </div>
 
-      {/* Tabs */}
-      <div className="border-b border-gray-200">
+      {/* Tabs + toolbar, same row */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-gray-200">
         <div className="flex gap-0">
           {[
             { id: 'items' as const, label: 'My Items', icon: Store },
@@ -409,6 +413,32 @@ function VendorCatalogPageContent() {
             </button>
           ))}
         </div>
+        {tab === 'items' && (
+          <div className="flex items-center gap-2 pb-2 sm:pb-0">
+            <Select value={sortBy} onValueChange={v => setSortBy(v as SortOption)}>
+              <SelectTrigger className="w-[150px] h-9">
+                <ArrowUpDown className="h-3.5 w-3.5 mr-1.5 text-gray-400" />
+                <SelectValue placeholder="Sort" />
+              </SelectTrigger>
+              <SelectContent>
+                {SORT_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+              <button onClick={() => setView('list')} title="List view"
+                className={`h-9 w-9 flex items-center justify-center transition-colors ${view === 'list' ? 'bg-red-600 text-white' : 'bg-white text-gray-400 hover:bg-gray-50'}`}>
+                <List className="h-4 w-4" />
+              </button>
+              <button onClick={() => setView('card')} title="Box view"
+                className={`h-9 w-9 flex items-center justify-center border-l border-gray-200 transition-colors ${view === 'card' ? 'bg-red-600 text-white' : 'bg-white text-gray-400 hover:bg-gray-50'}`}>
+                <LayoutGrid className="h-4 w-4" />
+              </button>
+            </div>
+            <Button onClick={openAdd} className="bg-red-600 hover:bg-red-700">
+              <Plus className="h-4 w-4 mr-2" /> Add Item
+            </Button>
+          </div>
+        )}
       </div>
 
       {tab === 'items' ? (
@@ -677,11 +707,18 @@ function VendorCatalogPageContent() {
 
       {/* Add / Edit Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{editingId ? 'Edit Catalog Item' : 'Add Catalog Item'}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
+        <DialogContent showCloseButton={false} className="w-[95vw] max-w-2xl p-0 overflow-hidden">
+          <div className="relative bg-gradient-to-r from-red-700 to-red-900 px-6 py-5">
+            <DialogHeader>
+              <DialogTitle className="text-white text-lg font-semibold">{editingId ? 'Edit Catalog Item' : 'Add Catalog Item'}</DialogTitle>
+            </DialogHeader>
+            <p className="text-red-100 text-xs mt-1">Items you can supply — shown to CDSC&apos;s purchasing team.</p>
+            <DialogClose className="absolute top-4 right-4 text-red-100 hover:text-white transition-colors">
+              <X className="h-5 w-5" />
+              <span className="sr-only">Close</span>
+            </DialogClose>
+          </div>
+          <div className="space-y-4 p-6">
             <div className="flex items-center gap-4">
               <label className="h-20 w-20 shrink-0 rounded-lg border-2 border-dashed border-gray-300 flex items-center justify-center overflow-hidden cursor-pointer hover:border-red-400 transition-colors relative">
                 {imagePreview ? (
@@ -706,7 +743,7 @@ function VendorCatalogPageContent() {
               <Label>Description</Label>
               <Textarea rows={2} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Brand, specs, notes…" />
             </div>
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-1.5">
                 <Label>Brand</Label>
                 <ComboField
@@ -729,8 +766,6 @@ function VendorCatalogPageContent() {
                   onCustomModeChange={setAttributeCustomMode}
                 />
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Unit</Label>
                 <ComboField
@@ -742,13 +777,15 @@ function VendorCatalogPageContent() {
                   onCustomModeChange={setUnitCustomMode}
                 />
               </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-1.5">
                 <Label>Price (₱)</Label>
                 <Input type="number" min={0} step="0.01" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} placeholder="0.00" />
               </div>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="mx-0 mb-0 rounded-b-2xl">
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
             <Button onClick={save} disabled={saving} className="bg-red-600 hover:bg-red-700">
               {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}

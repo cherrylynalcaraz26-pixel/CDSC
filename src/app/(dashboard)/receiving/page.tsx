@@ -62,6 +62,8 @@ export default function ReceivingPage() {
   const [rrSaving, setRrSaving] = useState(false)
   const [rrDetailsId, setRrDetailsId] = useState<string | null>(null)
   const [deleteRRId, setDeleteRRId] = useState<string | null>(null)
+  const [rrDateFrom, setRrDateFrom] = useState('')
+  const [rrDateTo, setRrDateTo] = useState('')
   const [poItemsByNumber, setPoItemsByNumber] = useState<Record<string, POItemLine[]>>({})
 
   // Returns
@@ -522,6 +524,9 @@ export default function ReceivingPage() {
   const filteredSalesDeliveries = salesDeliveries.filter(d =>
     filterQ(`${d.delivery_number} ${(d as any).dr_number ?? ''} ${(d as any).so_number ?? ''} ${d.client_name ?? ''} ${d.status}`) && matchSalesdDate(d)
   )
+  const matchRRDate = (rr: RR) =>
+    (!rrDateFrom || rr.delivery_date >= rrDateFrom) && (!rrDateTo || rr.delivery_date <= rrDateTo)
+  const filteredRRs = rrs.filter(rr => filterQ(`${rr.rr_number} ${rr.po_number} ${rr.supplier} ${rr.status}`) && matchRRDate(rr))
 
   return (
     <div className="space-y-6">
@@ -585,45 +590,60 @@ export default function ReceivingPage() {
           </Card>
 
           <Card>
-            <CardHeader className="pb-3 flex flex-row items-center justify-between">
+            <CardHeader className="pb-3 flex flex-row items-center justify-between flex-wrap gap-3">
               <CardTitle className="text-base">Receiving Report History</CardTitle>
-              <Button onClick={() => { resetRRForm(); setRrOpen(true) }} className="bg-red-600 hover:bg-red-700">
-                <Plus className="h-4 w-4 mr-2" />New Receiving Report
-              </Button>
+              <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-1.5">
+                  <Label className="text-xs text-muted-foreground">From</Label>
+                  <Input type="date" className="h-8 w-36 text-xs" value={rrDateFrom} onChange={e => setRrDateFrom(e.target.value)} />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <Label className="text-xs text-muted-foreground">To</Label>
+                  <Input type="date" className="h-8 w-36 text-xs" value={rrDateTo} onChange={e => setRrDateTo(e.target.value)} />
+                </div>
+                {(rrDateFrom || rrDateTo) && (
+                  <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => { setRrDateFrom(''); setRrDateTo('') }}>Clear</Button>
+                )}
+                <Button onClick={() => { resetRRForm(); setRrOpen(true) }} className="bg-red-600 hover:bg-red-700">
+                  <Plus className="h-4 w-4 mr-2" />New Receiving Report
+                </Button>
+              </div>
             </CardHeader>
             <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-10">No.</TableHead>
-                    <TableHead>RR Number</TableHead>
-                    <TableHead>PO Reference</TableHead>
-                    <TableHead>Supplier</TableHead>
-                    <TableHead>Delivery Date</TableHead>
-                    <TableHead>Received By</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {loading ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
-                  ) : rrs.filter(rr => filterQ(`${rr.rr_number} ${rr.po_number} ${rr.supplier} ${rr.status}`)).length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground">No receiving reports found.</TableCell></TableRow>
-                  ) : rrs.filter(rr => filterQ(`${rr.rr_number} ${rr.po_number} ${rr.supplier} ${rr.status}`)).map((rr, idx) => (
-                    <TableRow key={rr.id} className="cursor-pointer hover:bg-red-50/40 transition-colors" onClick={() => openRRDetails(rr.id)}>
-                      <TableCell className="text-muted-foreground text-xs">{idx + 1}</TableCell>
-                      <TableCell className="font-mono text-xs font-semibold text-red-600">{rr.rr_number ?? '—'}</TableCell>
-                      <TableCell className="text-xs font-mono">{rr.po_number}</TableCell>
-                      <TableCell className="text-sm font-medium">{rr.supplier ?? '—'}</TableCell>
-                      <TableCell className="text-sm">{rr.delivery_date}</TableCell>
-                      <TableCell className="text-sm">{rr.received_by ?? '—'}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-xs text-green-700 border-green-300 capitalize">✓ {rr.status}</Badge>
-                      </TableCell>
+              <div className="max-h-[560px] overflow-y-auto">
+                <Table>
+                  <TableHeader className="sticky top-0 z-10">
+                    <TableRow>
+                      <TableHead className="w-10">No.</TableHead>
+                      <TableHead>RR Number</TableHead>
+                      <TableHead>PO Reference</TableHead>
+                      <TableHead>Supplier</TableHead>
+                      <TableHead>Delivery Date</TableHead>
+                      <TableHead>Received By</TableHead>
+                      <TableHead>Status</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {loading ? (
+                      <TableRow><TableCell colSpan={7} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
+                    ) : filteredRRs.length === 0 ? (
+                      <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground">No receiving reports found.</TableCell></TableRow>
+                    ) : filteredRRs.map((rr, idx) => (
+                      <TableRow key={rr.id} className="cursor-pointer hover:bg-red-50/40 transition-colors" onClick={() => openRRDetails(rr.id)}>
+                        <TableCell className="text-muted-foreground text-xs">{idx + 1}</TableCell>
+                        <TableCell className="font-mono text-xs font-semibold text-red-600">{rr.rr_number ?? '—'}</TableCell>
+                        <TableCell className="text-xs font-mono">{rr.po_number}</TableCell>
+                        <TableCell className="text-sm font-medium">{rr.supplier ?? '—'}</TableCell>
+                        <TableCell className="text-sm">{rr.delivery_date}</TableCell>
+                        <TableCell className="text-sm">{rr.received_by ?? '—'}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className="text-xs text-green-700 border-green-300 capitalize">✓ {rr.status}</Badge>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -721,8 +741,9 @@ export default function ReceivingPage() {
           <Card>
             <CardHeader className="pb-3"><CardTitle className="text-base flex items-center gap-2"><ShoppingBag className="h-4 w-4" />DR Log → Sales Deliveries</CardTitle></CardHeader>
             <CardContent className="p-0">
+              <div className="max-h-[560px] overflow-y-auto">
               <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-0 z-10">
                   <TableRow>
                     <TableHead>DR Number</TableHead>
                     <TableHead>SO Reference</TableHead>
@@ -762,6 +783,7 @@ export default function ReceivingPage() {
                   })}
                 </TableBody>
               </Table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -906,8 +928,9 @@ export default function ReceivingPage() {
             <Card>
               <CardHeader className="pb-3"><CardTitle className="text-base">Return History</CardTitle></CardHeader>
               <CardContent className="p-0">
+                <div className="max-h-[560px] overflow-y-auto">
                 <Table>
-                  <TableHeader>
+                  <TableHeader className="sticky top-0 z-10">
                     <TableRow>
                       <TableHead>Return #</TableHead>
                       <TableHead>Date</TableHead>
@@ -943,6 +966,7 @@ export default function ReceivingPage() {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               </CardContent>
             </Card>
           )}

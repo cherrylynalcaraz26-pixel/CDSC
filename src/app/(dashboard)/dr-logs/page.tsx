@@ -132,10 +132,11 @@ const emptyForm = (): DRForm => ({
 const emptyItem = (): DRItem => ({ dr_number: '', quantity: '', unit: '', item_name: '' })
 
 const STATUS_CFG: Record<string, { label: string; cls: string }> = {
-  received: { label: 'Received', cls: 'bg-green-100 text-green-700' },
-  partial:  { label: 'Partial',  cls: 'bg-yellow-100 text-yellow-700' },
-  rejected: { label: 'Rejected', cls: 'bg-red-100 text-red-700' },
-  returned: { label: 'Returned', cls: 'bg-gray-100 text-gray-600' },
+  received:  { label: 'Received',  cls: 'bg-green-100 text-green-700' },
+  partial:   { label: 'Partial',   cls: 'bg-yellow-100 text-yellow-700' },
+  rejected:  { label: 'Rejected',  cls: 'bg-red-100 text-red-700' },
+  returned:  { label: 'Returned',  cls: 'bg-gray-100 text-gray-600' },
+  cancelled: { label: 'Cancelled', cls: 'bg-red-100 text-red-700' },
 }
 
 export default function DRLogsPage() {
@@ -956,6 +957,7 @@ export default function DRLogsPage() {
               <SelectItem value="partial">Partial</SelectItem>
               <SelectItem value="rejected">Rejected</SelectItem>
               <SelectItem value="returned">Returned</SelectItem>
+              <SelectItem value="cancelled">Cancelled</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -988,10 +990,10 @@ export default function DRLogsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
             {viewMode === 'by-dr' ? (
               <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     <TableHead className="w-12">No.</TableHead>
                     <TableHead>Date</TableHead>
@@ -1185,7 +1187,7 @@ export default function DRLogsPage() {
               (() => {
                 return (
                   <Table>
-                    <TableHeader>
+                    <TableHeader className="sticky top-0 z-10 bg-background">
                       <TableRow>
                         <TableHead className="w-12">No.</TableHead>
                         <TableHead>DR Number</TableHead>
@@ -1236,7 +1238,7 @@ export default function DRLogsPage() {
             )}
           </div>
           {totalPages > 1 && (
-            <div className="flex items-center justify-between text-sm px-4 py-3 border-t">
+            <div className="flex items-center justify-between text-sm px-4 py-3 border-t bg-gradient-to-r from-gray-50 to-white rounded-b-xl">
               <span className="text-muted-foreground">
                 Showing {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, activeTotal)} of {activeTotal}
               </span>
@@ -1250,7 +1252,7 @@ export default function DRLogsPage() {
                   <button
                     key={p}
                     onClick={() => setPage(p)}
-                    className={`w-8 h-8 rounded-md text-sm font-medium transition-colors ${p === page ? 'bg-red-600 text-white' : 'border hover:bg-muted'}`}
+                    className={`w-8 h-8 rounded-md text-sm font-medium transition-colors shadow-sm ${p === page ? 'bg-gradient-to-br from-red-600 to-red-700 text-white shadow-red-600/30' : 'border hover:bg-muted shadow-none'}`}
                   >{p}</button>
                 ))}
                 <button
@@ -1366,6 +1368,7 @@ export default function DRLogsPage() {
                           <SelectItem value="partial">Partial</SelectItem>
                           <SelectItem value="rejected">Rejected</SelectItem>
                           <SelectItem value="returned">Returned</SelectItem>
+                          <SelectItem value="cancelled">Cancelled</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
