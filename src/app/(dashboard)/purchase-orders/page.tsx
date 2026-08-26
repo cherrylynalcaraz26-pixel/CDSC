@@ -11,7 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
 
 import {
@@ -127,6 +127,64 @@ export default function PurchaseOrdersPage() {
   // Item search modal
   const [itemSearchIdx, setItemSearchIdx] = useState<number | null>(null)
   const [itemQuery, setItemQuery] = useState('')
+
+  // Add Item — lets purchasing add a brand-new catalog item straight from the
+  // Item Inventory search modal, without leaving the PO to use Items/Categories.
+  const [addItemOpen, setAddItemOpen] = useState(false)
+  const [newItemForm, setNewItemForm] = useState({ item_name: '', unit_of_measure: 'piece', cost: '', selling_price: '' })
+  const [savingNewItem, setSavingNewItem] = useState(false)
+
+  function openAddItem() {
+    setNewItemForm({ item_name: itemQuery.trim(), unit_of_measure: 'piece', cost: '', selling_price: '' })
+    setAddItemOpen(true)
+  }
+
+  // Derives a short letters-only prefix from the item name (e.g. "Steel Pipe" -> "STE")
+  // so the auto-generated code reads as related to the item instead of a plain running number.
+  function deriveItemCodePrefix(name: string): string {
+    const cleaned = name.replace(/[^a-zA-Z]/g, '').toUpperCase()
+    return cleaned.slice(0, 3) || 'ITM'
+  }
+
+  async function saveNewItem() {
+    const name = newItemForm.item_name.trim()
+    if (!name) { toast.error('Item name is required'); return }
+    setSavingNewItem(true)
+    const prefix = deriveItemCodePrefix(name)
+    const { data: last } = await supabase
+      .from('items')
+      .select('item_code')
+      .like('item_code', `${prefix}-%`)
+      .order('item_code', { ascending: false })
+      .limit(1)
+      .single()
+    let next = 1
+    if (last?.item_code) {
+      const num = parseInt(last.item_code.replace(`${prefix}-`, ''), 10)
+      if (!isNaN(num)) next = num + 1
+    }
+    const item_code = `${prefix}-${String(next).padStart(3, '0')}`
+    const unit_of_measure = newItemForm.unit_of_measure.trim() || 'piece'
+    const cost = newItemForm.cost.trim() ? parseFloat(newItemForm.cost) : null
+    const selling_price = newItemForm.selling_price.trim() ? parseFloat(newItemForm.selling_price) : null
+
+    const { error } = await supabase.from('items').insert({
+      item_code, item_name: name, unit_of_measure, cost, selling_price, status: 'active',
+    })
+    if (error) { toast.error(error.message); setSavingNewItem(false); return }
+
+    const newOption: ItemOption = { item_code, item_name: name, unit_of_measure, status: 'active', cost, selling_price }
+    setItems(prev => [...prev, newOption].sort((a, b) => a.item_name.localeCompare(b.item_name)))
+    if (itemSearchIdx !== null) {
+      setLines(p => p.map((l, idx) => idx === itemSearchIdx
+        ? { ...l, item_name: name, quantity: l.quantity || '1', unit: unit_of_measure, unit_price: cost != null ? String(cost) : l.unit_price, selling_price: selling_price != null ? String(selling_price) : l.selling_price }
+        : l))
+    }
+    toast.success('Item added')
+    setSavingNewItem(false)
+    setAddItemOpen(false)
+    setItemSearchIdx(null)
+  }
 
   // Vendor catalog browser — lets purchasing pick items straight from the
   // selected supplier's own catalog instead of typing them from scratch.
@@ -1682,10 +1740,13 @@ export default function PurchaseOrdersPage() {
       {/* Item Search Dialog */}
       <Dialog open={itemSearchIdx !== null} onOpenChange={o => { if (!o) setItemSearchIdx(null) }}>
         <DialogContent className="w-[98vw] sm:!max-w-6xl max-h-[85vh] flex flex-col overflow-hidden">
-          <DialogHeader>
+          <DialogHeader className="flex flex-row items-center justify-between gap-2 pr-6">
             <DialogTitle className="flex items-center gap-2">
               <Package className="h-4 w-4" />Item Inventory
             </DialogTitle>
+            <Button type="button" size="sm" variant="outline" className="h-7 px-2 text-xs gap-1" onClick={openAddItem}>
+              <Plus className="h-3.5 w-3.5" />Add Item
+            </Button>
           </DialogHeader>
           <div className="relative mb-2">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -1712,7 +1773,13 @@ export default function PurchaseOrdersPage() {
               </thead>
               <tbody className="divide-y">
                 {filteredSearchItems.length === 0 ? (
-                  <tr><td colSpan={7} className="text-center py-6 text-muted-foreground text-sm">No items found.</td></tr>
+                  <tr><td colSpan={7} className="text-center py-6 space-y-2">
+                    <p className="text-muted-foreground text-sm">No items found.</p>
+                    <Button type="button" size="sm" variant="outline" className="gap-1" onClick={openAddItem}>
+                      <Plus className="h-3.5 w-3.5" />
+                      {itemQuery.trim() ? <>Add &quot;{itemQuery.trim()}&quot; as new item</> : 'Add Item'}
+                    </Button>
+                  </td></tr>
                 ) : filteredSearchItems.map(it => {
                   const sCfg = ITEM_STATUS_CFG[it.status] ?? ITEM_STATUS_CFG.active
                   const qty = warehouseStock[it.item_name] ?? 0
@@ -1760,6 +1827,47 @@ export default function PurchaseOrdersPage() {
               </tbody>
             </table>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Item Modal */}
+      <Dialog open={addItemOpen} onOpenChange={setAddItemOpen}>
+        <DialogContent className="w-[95vw] max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Add Item</DialogTitle>
+          </DialogHeader>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-1">
+            <div className="sm:col-span-2 space-y-1.5">
+              <Label>Item Name <span className="text-destructive">*</span></Label>
+              <Input
+                autoFocus
+                placeholder="e.g. Steel Pipe 1/2&quot;"
+                value={newItemForm.item_name}
+                onChange={e => setNewItemForm(f => ({ ...f, item_name: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Unit of Measure</Label>
+              <Input placeholder="e.g. piece" value={newItemForm.unit_of_measure}
+                onChange={e => setNewItemForm(f => ({ ...f, unit_of_measure: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Cost (₱)</Label>
+              <Input type="number" min={0} step="0.01" placeholder="0.00" value={newItemForm.cost}
+                onChange={e => setNewItemForm(f => ({ ...f, cost: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Selling Price (₱)</Label>
+              <Input type="number" min={0} step="0.01" placeholder="0.00" value={newItemForm.selling_price}
+                onChange={e => setNewItemForm(f => ({ ...f, selling_price: e.target.value }))} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddItemOpen(false)} disabled={savingNewItem}>Cancel</Button>
+            <Button onClick={saveNewItem} disabled={savingNewItem} className="bg-red-600 hover:bg-red-700">
+              {savingNewItem ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : 'Save'}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
