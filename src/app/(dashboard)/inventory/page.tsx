@@ -27,7 +27,7 @@ import { useSearchContext } from '@/context/search-context'
 import { sendEmail } from '@/lib/send-email'
 
 interface DrDetail  { dr_number: string; qty: number; unit: string; unit_price: number | null; show_in_portal: boolean }
-interface CsiDetail { si_number: string; qty: number; unit: string; unit_price: number | null; show_in_portal: boolean }
+interface CsiDetail { si_number: string; si_date: string | null; qty: number; unit: string; unit_price: number | null; show_in_portal: boolean }
 interface WsDetail  { id: string; notes: string | null; qty: number; unit: string; created_at: string }
 
 // Item detail modal (By Item view)
@@ -292,7 +292,7 @@ export default function InventoryPage() {
     while (true) {
       const { data } = await supabase
         .from('csi_records')
-        .select('client_name, item_name, unit, quantity, si_number, unit_price, show_in_portal')
+        .select('client_name, item_name, unit, quantity, si_number, si_date, unit_price, show_in_portal')
         .not('client_name', 'is', null)
         .order('id')
         .range(from, from + PAGE - 1)
@@ -304,6 +304,7 @@ export default function InventoryPage() {
         csiByClient[client][rec.item_name].qty += Number(rec.quantity) || 0
         csiByClient[client][rec.item_name].details.push({
           si_number: rec.si_number,
+          si_date: rec.si_date,
           qty: Number(rec.quantity) || 0,
           unit: rec.unit ?? '',
           unit_price: rec.unit_price != null ? Number(rec.unit_price) : null,
@@ -1530,13 +1531,16 @@ export default function InventoryPage() {
         const totalDr = reportRows.reduce((s, r) => s + r.dr_qty, 0)
         const totalOnHand = reportRows.reduce((s, r) => s + r.client_on_hand, 0)
         const totalCsi = reportRows.reduce((s, r) => s + r.csi_qty, 0)
-        // Est. Value uses the item's catalog Selling Price (not the latest CSI/DR unit
-        // price) multiplied by Balance, so it reflects what the remaining stock is worth
-        // to sell, not what was last transacted.
-        const reportSellingPriceMap: Record<string, number | null> = {}
-        for (const it of itemOptions) reportSellingPriceMap[it.item_name] = it.selling_price
+        // Est. Unit Price is the unit price from the item's most recent CSI Issued record
+        // (by si_date) for this client, not the catalog Selling Price — it should reflect
+        // what was actually billed last, not a static list price.
+        function latestCsiPrice(details: CsiDetail[]): number | null {
+          const priced = details.filter(d => d.unit_price != null)
+          if (priced.length === 0) return null
+          return [...priced].sort((a, b) => (b.si_date ?? '').localeCompare(a.si_date ?? ''))[0].unit_price
+        }
         const totalEstValue = reportRows.reduce((s, r) => {
-          const price = reportSellingPriceMap[r.item_name] ?? null
+          const price = latestCsiPrice(r.csi_details)
           return s + (price != null ? r.balance * price : 0)
         }, 0)
         const today = new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
@@ -1554,7 +1558,7 @@ export default function InventoryPage() {
           const rowsHtml = reportRows.length === 0
             ? `<tr><td colspan="9" style="text-align:center;padding:24px;color:#9ca3af;font-style:italic">No inventory data for this client.</td></tr>`
             : reportRows.map((r, i) => {
-              const price = reportSellingPriceMap[r.item_name] ?? null
+              const price = latestCsiPrice(r.csi_details)
               const estValue = price != null ? r.balance * price : null
               const balColor = r.balance > 0 ? '#15803d' : r.balance < 0 ? '#dc2626' : '#9ca3af'
               return `<tr>
@@ -1776,7 +1780,7 @@ export default function InventoryPage() {
                     </thead>
                     <tbody>
                       {reportRows.map((r, i) => {
-                        const latestPrice = reportSellingPriceMap[r.item_name] ?? null
+                        const latestPrice = latestCsiPrice(r.csi_details)
                         const estValue = latestPrice != null ? r.balance * latestPrice : null
                         return (
                           <tr key={r.item_name} className={i % 2 === 1 ? 'bg-gray-50' : 'bg-white'}>
@@ -1813,7 +1817,7 @@ export default function InventoryPage() {
                 </div>
               )}
               <div className="mt-8 pt-4 border-t border-gray-100 text-[10px] text-gray-400 flex justify-between flex-wrap gap-2">
-                <span>Est. Unit Price is the item&apos;s catalog Selling Price; Est. Value = Balance × Est. Unit Price. Values are for reference only.</span>
+                <span>Est. Unit Price is the item&apos;s most recent CSI Issued unit price; Est. Value = Balance × Est. Unit Price. Values are for reference only.</span>
                 <span>Generated {today} · CDSC Inventory System</span>
               </div>
             </div>
