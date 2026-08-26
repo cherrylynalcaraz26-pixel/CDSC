@@ -1276,11 +1276,10 @@ export default function DRLogsPage() {
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* LEFT column: all form fields */}
-              <div className={`space-y-5 ${drActiveTab === 'preview' ? 'hidden lg:block' : 'block'}`}>
-                <div className="space-y-3">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">DR Details</p>
-                  <div className="grid grid-cols-2 gap-4">
+              {/* LEFT: DR Details */}
+              <div className={`space-y-3 ${drActiveTab === 'preview' ? 'hidden lg:block' : 'block'}`}>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">DR Details</p>
+                <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1.5">
                       <Label>DR Number <span className="text-destructive">*</span></Label>
                       <div className="relative">
@@ -1319,7 +1318,11 @@ export default function DRLogsPage() {
                   <div className="space-y-1.5">
                     <Label>Delivered To</Label>
                     <Select value={deliveredToId} onValueChange={handleClientChange}>
-                      <SelectTrigger className="w-full"><SelectValue placeholder="Select client / delivered to" /></SelectTrigger>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select client / delivered to">
+                          {(v: string) => v ? (clients.find(c => c.id === v)?.company_name ?? v) : undefined}
+                        </SelectValue>
+                      </SelectTrigger>
                       <SelectContent className="min-w-[320px]">
                         <SelectItem value="">— None —</SelectItem>
                         {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
@@ -1372,100 +1375,9 @@ export default function DRLogsPage() {
                     <Textarea rows={2} className="resize-y" placeholder="Notes, discrepancies, condition of goods…" value={form.remarks}
                       onChange={e => setForm(f => ({ ...f, remarks: e.target.value }))} />
                   </div>
-                </div>
-
-                <div className="space-y-2">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">Delivery Items</p>
-                  <div className="border rounded-lg overflow-hidden [&_[data-slot=table-container]]:overflow-x-hidden">
-                    <Table className="table-fixed w-full">
-                      <TableHeader>
-                        <TableRow className="bg-muted/40">
-                          <TableHead>Item Description</TableHead>
-                          <TableHead className="w-20">Qty</TableHead>
-                          <TableHead className="w-24">Unit</TableHead>
-                          <TableHead className="w-8"></TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {items.map((item, i) => (
-                          <TableRow key={i}>
-                            <TableCell className="py-1.5 relative">
-                              <div className="relative">
-                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
-                                <input
-                                  value={itemSearches[i] ?? item.item_name}
-                                  onChange={e => {
-                                    setItemSearches(s => ({ ...s, [i]: e.target.value }))
-                                    setItemDropdowns(d => ({ ...d, [i]: true }))
-                                  }}
-                                  onFocus={() => setItemDropdowns(d => ({ ...d, [i]: true }))}
-                                  onBlur={() => setTimeout(() => setItemDropdowns(d => ({ ...d, [i]: false })), 150)}
-                                  placeholder="Search item…"
-                                  className="w-full h-8 pl-8 pr-3 rounded border border-input text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
-                                />
-                                {itemDropdowns[i] && (
-                                  <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-44 overflow-y-auto">
-                                    {itemOptions
-                                      .filter(it => !itemSearches[i] || it.item_name.toLowerCase().includes((itemSearches[i] ?? '').toLowerCase()))
-                                      .slice(0, 40)
-                                      .map(it => (
-                                        <button
-                                          key={it.item_code}
-                                          type="button"
-                                          onMouseDown={() => {
-                                            setItems(prev => prev.map((row, idx) => idx === i
-                                              ? { ...row, item_name: it.item_name, unit: it.unit_of_measure }
-                                              : row))
-                                            setItemSearches(s => ({ ...s, [i]: it.item_name }))
-                                            setItemDropdowns(d => ({ ...d, [i]: false }))
-                                          }}
-                                          className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between"
-                                        >
-                                          <span>{it.item_name}</span>
-                                          <span className="text-xs text-muted-foreground ml-2">{it.unit_of_measure}</span>
-                                        </button>
-                                      ))}
-                                    {itemOptions.filter(it => !itemSearches[i] || it.item_name.toLowerCase().includes((itemSearches[i] ?? '').toLowerCase())).length === 0 && (
-                                      <div className="px-3 py-2 text-xs text-muted-foreground">No items found</div>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            </TableCell>
-                            <TableCell className="py-1.5">
-                              <Input
-                                type="number" min={0} placeholder="0"
-                                value={item.quantity}
-                                onChange={e => updateItem(i, 'quantity', e.target.value)}
-                                className="h-8 text-sm w-full"
-                              />
-                            </TableCell>
-                            <TableCell className="py-1.5">
-                              <div className="h-8 flex items-center px-2 text-sm bg-muted/30 rounded border text-muted-foreground">
-                                {item.unit || '—'}
-                              </div>
-                            </TableCell>
-                            <TableCell className="py-1.5">
-                              <button
-                                type="button"
-                                onClick={() => removeItemRow(i)}
-                                className="h-8 w-8 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </button>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                  <Button type="button" variant="outline" size="sm" onClick={addItemRow} className="mt-1">
-                    <Plus className="h-3.5 w-3.5 mr-1" /> Add Item
-                  </Button>
-                </div>
               </div>
 
-              {/* RIGHT column: live preview */}
+              {/* RIGHT: Live Preview */}
               <div className={`${drActiveTab === 'form' ? 'hidden lg:block' : 'block'}`}>
                 <div className="sticky top-0">
                   <div className="flex items-center justify-between mb-2">
@@ -1564,6 +1476,98 @@ export default function DRLogsPage() {
                   </div>
                 </div>
               </div>
+
+            </div>
+
+            {/* Delivery Items — full width so all columns are visible */}
+            <div className={`space-y-2 mt-6 ${drActiveTab === 'preview' ? 'hidden lg:block' : 'block'}`}>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">Delivery Items</p>
+                  <div className="border rounded-lg overflow-hidden [&_[data-slot=table-container]]:overflow-x-hidden">
+                    <Table className="table-fixed w-full">
+                      <TableHeader>
+                        <TableRow className="bg-muted/40">
+                          <TableHead>Item Description</TableHead>
+                          <TableHead className="w-20">Qty</TableHead>
+                          <TableHead className="w-24">Unit</TableHead>
+                          <TableHead className="w-8"></TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {items.map((item, i) => (
+                          <TableRow key={i}>
+                            <TableCell className="py-1.5 relative">
+                              <div className="relative">
+                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                                <input
+                                  value={itemSearches[i] ?? item.item_name}
+                                  onChange={e => {
+                                    setItemSearches(s => ({ ...s, [i]: e.target.value }))
+                                    setItemDropdowns(d => ({ ...d, [i]: true }))
+                                  }}
+                                  onFocus={() => setItemDropdowns(d => ({ ...d, [i]: true }))}
+                                  onBlur={() => setTimeout(() => setItemDropdowns(d => ({ ...d, [i]: false })), 150)}
+                                  placeholder="Search item…"
+                                  className="w-full h-8 pl-8 pr-3 rounded border border-input text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
+                                />
+                                {itemDropdowns[i] && (
+                                  <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-44 overflow-y-auto">
+                                    {itemOptions
+                                      .filter(it => !itemSearches[i] || it.item_name.toLowerCase().includes((itemSearches[i] ?? '').toLowerCase()))
+                                      .slice(0, 40)
+                                      .map(it => (
+                                        <button
+                                          key={it.item_code}
+                                          type="button"
+                                          onMouseDown={() => {
+                                            setItems(prev => prev.map((row, idx) => idx === i
+                                              ? { ...row, item_name: it.item_name, unit: it.unit_of_measure }
+                                              : row))
+                                            setItemSearches(s => ({ ...s, [i]: it.item_name }))
+                                            setItemDropdowns(d => ({ ...d, [i]: false }))
+                                          }}
+                                          className="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between"
+                                        >
+                                          <span>{it.item_name}</span>
+                                          <span className="text-xs text-muted-foreground ml-2">{it.unit_of_measure}</span>
+                                        </button>
+                                      ))}
+                                    {itemOptions.filter(it => !itemSearches[i] || it.item_name.toLowerCase().includes((itemSearches[i] ?? '').toLowerCase())).length === 0 && (
+                                      <div className="px-3 py-2 text-xs text-muted-foreground">No items found</div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </TableCell>
+                            <TableCell className="py-1.5">
+                              <Input
+                                type="number" min={0} placeholder="0"
+                                value={item.quantity}
+                                onChange={e => updateItem(i, 'quantity', e.target.value)}
+                                className="h-8 text-sm w-full"
+                              />
+                            </TableCell>
+                            <TableCell className="py-1.5">
+                              <div className="h-8 flex items-center px-2 text-sm bg-muted/30 rounded border text-muted-foreground">
+                                {item.unit || '—'}
+                              </div>
+                            </TableCell>
+                            <TableCell className="py-1.5">
+                              <button
+                                type="button"
+                                onClick={() => removeItemRow(i)}
+                                className="h-8 w-8 flex items-center justify-center rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  <Button type="button" variant="outline" size="sm" onClick={addItemRow} className="mt-1">
+                    <Plus className="h-3.5 w-3.5 mr-1" /> Add Item
+                  </Button>
             </div>
             <div className="flex justify-end gap-2 pt-4 border-t mt-4">
               <Button variant="outline" onClick={handleCancelClick}>Cancel</Button>
