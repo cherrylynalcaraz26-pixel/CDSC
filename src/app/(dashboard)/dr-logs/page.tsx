@@ -1265,18 +1265,118 @@ export default function DRLogsPage() {
             </CardTitle>
             <div className="flex rounded-md border overflow-hidden w-fit lg:hidden">
               <button
-                onClick={() => setDrActiveTab('form')}
-                className={`px-4 py-1.5 text-sm font-medium ${drActiveTab === 'form' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
-              >Form</button>
-              <button
                 onClick={() => setDrActiveTab('preview')}
-                className={`px-4 py-1.5 text-sm font-medium border-l ${drActiveTab === 'preview' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
+                className={`px-4 py-1.5 text-sm font-medium ${drActiveTab === 'preview' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
               >Preview</button>
+              <button
+                onClick={() => setDrActiveTab('form')}
+                className={`px-4 py-1.5 text-sm font-medium border-l ${drActiveTab === 'form' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
+              >Form</button>
             </div>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* LEFT column: all form fields */}
+              {/* Live Preview (now shown first) */}
+              <div className={`${drActiveTab === 'form' ? 'hidden lg:block' : 'block'}`}>
+                <div className="sticky top-0">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Live Preview</p>
+                    <div className="flex gap-1.5">
+                      <Button type="button" variant="outline" size="sm" onClick={openCalib} className="h-7 px-2 text-xs gap-1">
+                        <SlidersHorizontal className="h-3.5 w-3.5" /> Calibrate
+                      </Button>
+                      {editing && (
+                        <Button type="button" variant="outline" size="sm" onClick={() => printDRBlank(editing)} className="h-7 px-2 text-xs gap-1">
+                          <FileOutput className="h-3.5 w-3.5" /> Blank Form
+                        </Button>
+                      )}
+                      <Button type="button" variant="outline" size="sm" onClick={handlePrint} className="h-7 px-2 text-xs gap-1">
+                        <Printer className="h-3.5 w-3.5" /> Print
+                      </Button>
+                    </div>
+                  </div>
+                  <div ref={printRef} className="border rounded-lg bg-white text-[11px] p-4 shadow-sm space-y-3 font-sans">
+                    {/* Header: logo LEFT | company name + address RIGHT */}
+                    <div className="flex justify-between items-start border-b pb-3">
+                      <div>
+                        <img src="/cdsc-logo.jpg" alt="CDSC" className="h-12 w-28 object-contain" />
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[13px] font-bold text-red-700 mb-0.5">{companyInfo?.company_name || 'CDSC Industrial Supply'}</div>
+                        {companyInfo?.address && <div className="text-[9px] text-gray-500">{companyInfo.address}</div>}
+                        {(companyInfo?.phone || companyInfo?.email) && (
+                          <div className="text-[9px] text-gray-500">
+                            {companyInfo.phone}{companyInfo.phone && companyInfo.email ? ' | ' : ''}{companyInfo.email}
+                          </div>
+                        )}
+                        {companyInfo?.tin && <div className="text-[9px] text-gray-500">TIN: {companyInfo.tin}</div>}
+                      </div>
+                    </div>
+
+                    {/* Party info: Delivered To | DELIVERY RECEIPT title | DR No/Date */}
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <div className="text-[9px] font-semibold uppercase text-gray-400 mb-0.5">Delivered To</div>
+                        <div className="font-semibold text-gray-800">{form.supplier_name || <span className="text-gray-400 italic">—</span>}</div>
+                        {form.po_number && <>
+                          <div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5 mb-0.5">SO Reference</div>
+                          <div className="font-mono text-gray-800">{form.po_number}</div>
+                        </>}
+                      </div>
+                      <div className="text-center flex items-center justify-center">
+                        <div className="text-[16px] font-extrabold text-red-700 uppercase tracking-widest">Delivery Receipt</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[9px] font-semibold uppercase text-gray-400">DR Number</div>
+                        <div className="font-mono font-bold text-gray-800">{form.dr_number || '—'}</div>
+                        <div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5">Date</div>
+                        <div className="text-gray-800">{form.dr_date ? format(parseISO(form.dr_date), 'MM/dd/yyyy') : '—'}</div>
+                      </div>
+                    </div>
+
+                    {/* Items table */}
+                    <table className="w-full border-collapse">
+                      <thead>
+                        <tr className="bg-red-700 text-white">
+                          <th className="text-left px-1.5 py-1">#</th>
+                          <th className="text-left px-1.5 py-1">Item Description</th>
+                          <th className="text-left px-1.5 py-1">Unit</th>
+                          <th className="text-right px-1.5 py-1">Qty</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {items.filter(it => it.item_name).length === 0 ? (
+                          <tr>
+                            <td colSpan={4} className="px-1.5 py-3 text-center text-gray-300 italic">No items added yet</td>
+                          </tr>
+                        ) : items.map((item, i) => (
+                          item.item_name ? (
+                            <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                              <td className="px-1.5 py-1 text-gray-400">{i + 1}</td>
+                              <td className="px-1.5 py-1">{item.item_name}</td>
+                              <td className="px-1.5 py-1 text-gray-500">{item.unit || '—'}</td>
+                              <td className="px-1.5 py-1 text-right font-medium">{Number(item.quantity) || '—'}</td>
+                            </tr>
+                          ) : null
+                        ))}
+                      </tbody>
+                    </table>
+
+                    {form.received_by_name && (
+                      <div className="border-t pt-2 text-[10px]">
+                        <span className="text-gray-400 font-semibold">Received By: </span>{form.received_by_name}
+                      </div>
+                    )}
+                    {form.remarks && (
+                      <div className={`${form.received_by_name ? '' : 'border-t '}pt-2 text-[10px]`}>
+                        <span className="text-gray-400 font-semibold">Remarks: </span>{form.remarks}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Form fields: DR Details + Delivery Items (now second) */}
               <div className={`space-y-5 ${drActiveTab === 'preview' ? 'hidden lg:block' : 'block'}`}>
                 <div className="space-y-3">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">DR Details</p>
@@ -1319,7 +1419,11 @@ export default function DRLogsPage() {
                   <div className="space-y-1.5">
                     <Label>Delivered To</Label>
                     <Select value={deliveredToId} onValueChange={handleClientChange}>
-                      <SelectTrigger className="w-full"><SelectValue placeholder="Select client / delivered to" /></SelectTrigger>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select client / delivered to">
+                          {(v: string) => v ? (clients.find(c => c.id === v)?.company_name ?? v) : undefined}
+                        </SelectValue>
+                      </SelectTrigger>
                       <SelectContent className="min-w-[320px]">
                         <SelectItem value="">— None —</SelectItem>
                         {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
@@ -1462,106 +1566,6 @@ export default function DRLogsPage() {
                   <Button type="button" variant="outline" size="sm" onClick={addItemRow} className="mt-1">
                     <Plus className="h-3.5 w-3.5 mr-1" /> Add Item
                   </Button>
-                </div>
-              </div>
-
-              {/* RIGHT column: live preview */}
-              <div className={`${drActiveTab === 'form' ? 'hidden lg:block' : 'block'}`}>
-                <div className="sticky top-0">
-                  <div className="flex items-center justify-between mb-2">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Live Preview</p>
-                    <div className="flex gap-1.5">
-                      <Button type="button" variant="outline" size="sm" onClick={openCalib} className="h-7 px-2 text-xs gap-1">
-                        <SlidersHorizontal className="h-3.5 w-3.5" /> Calibrate
-                      </Button>
-                      {editing && (
-                        <Button type="button" variant="outline" size="sm" onClick={() => printDRBlank(editing)} className="h-7 px-2 text-xs gap-1">
-                          <FileOutput className="h-3.5 w-3.5" /> Blank Form
-                        </Button>
-                      )}
-                      <Button type="button" variant="outline" size="sm" onClick={handlePrint} className="h-7 px-2 text-xs gap-1">
-                        <Printer className="h-3.5 w-3.5" /> Print
-                      </Button>
-                    </div>
-                  </div>
-                  <div ref={printRef} className="border rounded-lg bg-white text-[11px] p-4 shadow-sm space-y-3 font-sans">
-                    {/* Header: logo LEFT | company name + address RIGHT */}
-                    <div className="flex justify-between items-start border-b pb-3">
-                      <div>
-                        <img src="/cdsc-logo.jpg" alt="CDSC" className="h-12 w-28 object-contain" />
-                      </div>
-                      <div className="text-right">
-                        <div className="text-[13px] font-bold text-red-700 mb-0.5">{companyInfo?.company_name || 'CDSC Industrial Supply'}</div>
-                        {companyInfo?.address && <div className="text-[9px] text-gray-500">{companyInfo.address}</div>}
-                        {(companyInfo?.phone || companyInfo?.email) && (
-                          <div className="text-[9px] text-gray-500">
-                            {companyInfo.phone}{companyInfo.phone && companyInfo.email ? ' | ' : ''}{companyInfo.email}
-                          </div>
-                        )}
-                        {companyInfo?.tin && <div className="text-[9px] text-gray-500">TIN: {companyInfo.tin}</div>}
-                      </div>
-                    </div>
-
-                    {/* Party info: Delivered To | DELIVERY RECEIPT title | DR No/Date */}
-                    <div className="grid grid-cols-3 gap-3">
-                      <div>
-                        <div className="text-[9px] font-semibold uppercase text-gray-400 mb-0.5">Delivered To</div>
-                        <div className="font-semibold text-gray-800">{form.supplier_name || <span className="text-gray-400 italic">—</span>}</div>
-                        {form.po_number && <>
-                          <div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5 mb-0.5">SO Reference</div>
-                          <div className="font-mono text-gray-800">{form.po_number}</div>
-                        </>}
-                      </div>
-                      <div className="text-center flex items-center justify-center">
-                        <div className="text-[16px] font-extrabold text-red-700 uppercase tracking-widest">Delivery Receipt</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-[9px] font-semibold uppercase text-gray-400">DR Number</div>
-                        <div className="font-mono font-bold text-gray-800">{form.dr_number || '—'}</div>
-                        <div className="text-[9px] font-semibold uppercase text-gray-400 mt-1.5">Date</div>
-                        <div className="text-gray-800">{form.dr_date ? format(parseISO(form.dr_date), 'MM/dd/yyyy') : '—'}</div>
-                      </div>
-                    </div>
-
-                    {/* Items table */}
-                    <table className="w-full border-collapse">
-                      <thead>
-                        <tr className="bg-red-700 text-white">
-                          <th className="text-left px-1.5 py-1">#</th>
-                          <th className="text-left px-1.5 py-1">Item Description</th>
-                          <th className="text-left px-1.5 py-1">Unit</th>
-                          <th className="text-right px-1.5 py-1">Qty</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {items.filter(it => it.item_name).length === 0 ? (
-                          <tr>
-                            <td colSpan={4} className="px-1.5 py-3 text-center text-gray-300 italic">No items added yet</td>
-                          </tr>
-                        ) : items.map((item, i) => (
-                          item.item_name ? (
-                            <tr key={i} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                              <td className="px-1.5 py-1 text-gray-400">{i + 1}</td>
-                              <td className="px-1.5 py-1">{item.item_name}</td>
-                              <td className="px-1.5 py-1 text-gray-500">{item.unit || '—'}</td>
-                              <td className="px-1.5 py-1 text-right font-medium">{Number(item.quantity) || '—'}</td>
-                            </tr>
-                          ) : null
-                        ))}
-                      </tbody>
-                    </table>
-
-                    {form.received_by_name && (
-                      <div className="border-t pt-2 text-[10px]">
-                        <span className="text-gray-400 font-semibold">Received By: </span>{form.received_by_name}
-                      </div>
-                    )}
-                    {form.remarks && (
-                      <div className={`${form.received_by_name ? '' : 'border-t '}pt-2 text-[10px]`}>
-                        <span className="text-gray-400 font-semibold">Remarks: </span>{form.remarks}
-                      </div>
-                    )}
-                  </div>
                 </div>
               </div>
             </div>

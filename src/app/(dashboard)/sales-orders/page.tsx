@@ -1646,31 +1646,33 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
               )}
             </div>
 
-            {/* Link DR to SO */}
-            <div className="border rounded-lg overflow-hidden">
-              <div className="bg-muted/40 px-4 py-2.5 flex items-center gap-2">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Link a DR to this SO</span>
+            {/* Link DR to SO — hidden once a DR is already linked; reappears after unlinking */}
+            {viewSODeliveries.length === 0 && (
+              <div className="border rounded-lg overflow-hidden">
+                <div className="bg-muted/40 px-4 py-2.5 flex items-center gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Link a DR to this SO</span>
+                </div>
+                <div className="px-4 py-3 flex gap-2 items-center">
+                  <Select value={linkDRSelected} onValueChange={(v) => setLinkDRSelected(v ?? '')}>
+                    <SelectTrigger className="flex-1 text-xs h-8">
+                      <SelectValue placeholder={linkDROptions.length === 0 ? 'No unlinked DRs for this client' : 'Select DR to link…'} />
+                    </SelectTrigger>
+                    <SelectContent className="min-w-[320px]">
+                      {linkDROptions.map(dr => (
+                        <SelectItem key={dr.dr_number} value={dr.dr_number ?? ''} className="text-xs">
+                          <span className="font-mono text-red-600">{dr.dr_number}</span>
+                          <span className="ml-2 text-muted-foreground">{dr.dr_date ? new Date(dr.dr_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}</span>
+                          <span className={`ml-2 px-1.5 py-0.5 rounded-full text-[10px] font-medium capitalize ${dr.status === 'received' ? 'bg-green-100 text-green-700' : dr.status === 'partial' ? 'bg-yellow-100 text-yellow-700' : 'bg-orange-100 text-orange-700'}`}>{dr.status}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button size="sm" className="h-8 text-xs shrink-0" disabled={!linkDRSelected || linkDRSaving} onClick={linkDRToSO}>
+                    {linkDRSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Link DR'}
+                  </Button>
+                </div>
               </div>
-              <div className="px-4 py-3 flex gap-2 items-center">
-                <Select value={linkDRSelected} onValueChange={(v) => setLinkDRSelected(v ?? '')}>
-                  <SelectTrigger className="flex-1 text-xs h-8">
-                    <SelectValue placeholder={linkDROptions.length === 0 ? 'No unlinked DRs for this client' : 'Select DR to link…'} />
-                  </SelectTrigger>
-                  <SelectContent className="min-w-[320px]">
-                    {linkDROptions.map(dr => (
-                      <SelectItem key={dr.dr_number} value={dr.dr_number ?? ''} className="text-xs">
-                        <span className="font-mono text-red-600">{dr.dr_number}</span>
-                        <span className="ml-2 text-muted-foreground">{dr.dr_date ? new Date(dr.dr_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}</span>
-                        <span className={`ml-2 px-1.5 py-0.5 rounded-full text-[10px] font-medium capitalize ${dr.status === 'received' ? 'bg-green-100 text-green-700' : dr.status === 'partial' ? 'bg-yellow-100 text-yellow-700' : 'bg-orange-100 text-orange-700'}`}>{dr.status}</span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button size="sm" className="h-8 text-xs shrink-0" disabled={!linkDRSelected || linkDRSaving} onClick={linkDRToSO}>
-                  {linkDRSaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Link DR'}
-                </Button>
-              </div>
-            </div>
+            )}
 
             {/* Linked CSIs */}
             <div className="border rounded-lg overflow-hidden">
@@ -1703,30 +1705,32 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
               )}
             </div>
 
-            {/* Link CSI to SO */}
-            <div className="border rounded-lg overflow-hidden">
-              <div className="bg-muted/40 px-4 py-2.5 flex items-center gap-2">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Link a CSI to this SO</span>
+            {/* Link CSI to SO — hidden once a CSI is already linked; reappears after unlinking */}
+            {viewSOCSIs.length === 0 && (
+              <div className="border rounded-lg overflow-hidden">
+                <div className="bg-muted/40 px-4 py-2.5 flex items-center gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Link a CSI to this SO</span>
+                </div>
+                <div className="px-4 py-3 flex gap-2 items-center">
+                  <Select value={linkCSISelected} onValueChange={(v) => setLinkCSISelected(v ?? '')}>
+                    <SelectTrigger className="flex-1 text-xs h-8">
+                      <SelectValue placeholder={linkCSIOptions.length === 0 ? 'No unlinked CSIs for this client' : 'Select SI to link…'} />
+                    </SelectTrigger>
+                    <SelectContent className="min-w-[320px]">
+                      {linkCSIOptions.map(si => (
+                        <SelectItem key={si.si_number} value={si.si_number} className="text-xs">
+                          <span className="font-mono text-blue-600">{si.si_number}</span>
+                          <span className="ml-2 text-muted-foreground">{si.si_date ? new Date(si.si_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button size="sm" className="h-8 text-xs shrink-0" disabled={!linkCSISelected || linkCSISaving} onClick={linkCSIToSO}>
+                    {linkCSISaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Link CSI'}
+                  </Button>
+                </div>
               </div>
-              <div className="px-4 py-3 flex gap-2 items-center">
-                <Select value={linkCSISelected} onValueChange={(v) => setLinkCSISelected(v ?? '')}>
-                  <SelectTrigger className="flex-1 text-xs h-8">
-                    <SelectValue placeholder={linkCSIOptions.length === 0 ? 'No unlinked CSIs for this client' : 'Select SI to link…'} />
-                  </SelectTrigger>
-                  <SelectContent className="min-w-[320px]">
-                    {linkCSIOptions.map(si => (
-                      <SelectItem key={si.si_number} value={si.si_number} className="text-xs">
-                        <span className="font-mono text-blue-600">{si.si_number}</span>
-                        <span className="ml-2 text-muted-foreground">{si.si_date ? new Date(si.si_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}</span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button size="sm" className="h-8 text-xs shrink-0" disabled={!linkCSISelected || linkCSISaving} onClick={linkCSIToSO}>
-                  {linkCSISaving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Link CSI'}
-                </Button>
-              </div>
-            </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>

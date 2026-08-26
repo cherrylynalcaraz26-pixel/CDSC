@@ -897,7 +897,7 @@ export default function InventoryPage() {
     const cmp = typeof av === 'number' && typeof bv === 'number' ? av - bv : String(av).localeCompare(String(bv))
     return whSortDir === 'asc' ? cmp : -cmp
   })
-  const pagedWarehouseRows = sortedWarehouseRows.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const pagedWarehouseRows = sortedWarehouseRows
 
   function rowKey(r: InventoryRow) { return `${r.client}||${r.item_name}` }
 
@@ -1235,7 +1235,7 @@ export default function InventoryPage() {
                         className="cursor-pointer hover:bg-muted/50"
                         onClick={() => toggleWhExpand(r)}
                       >
-                        <TableCell className="text-sm text-muted-foreground">{(page - 1) * PAGE_SIZE + i + 1}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{i + 1}</TableCell>
                         <TableCell className="text-sm">
                           {r.client_name ? (
                             <span>{r.client_name}</span>
@@ -1474,8 +1474,8 @@ export default function InventoryPage() {
         </CardContent>
       </Card>}
 
-      {/* Pagination — hidden when report is open */}
-      {!reportOpen && (() => {
+      {/* Pagination — hidden when report is open or viewing By Warehouse (unpaginated) */}
+      {!reportOpen && viewMode !== 'by_warehouse' && (() => {
         const activeTotalPages = totalPages
         const activeTotal = activeCount
         if (activeTotalPages <= 1) return null
