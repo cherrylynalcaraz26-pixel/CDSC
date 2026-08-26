@@ -62,6 +62,7 @@ export default function ReceivingPage() {
   const [receivedBy, setReceivedBy] = useState('')
   const [rrSaving, setRrSaving] = useState(false)
   const [rrDetailsId, setRrDetailsId] = useState<string | null>(null)
+  const [rrAttachments, setRrAttachments] = useState<{ id: string; file_url: string; file_name: string }[]>([])
   const [deleteRRId, setDeleteRRId] = useState<string | null>(null)
   const [rrDateFrom, setRrDateFrom] = useState('')
   const [rrDateTo, setRrDateTo] = useState('')
@@ -229,6 +230,15 @@ export default function ReceivingPage() {
   useEffect(() => {
     loadRR(); loadPoItemsMap(); loadReturns(); loadShared(); loadSalesDeliveries()
   }, [])
+
+  // Attachments uploaded on the originating Purchase Order show up here too, since a
+  // Receiving Report is just that PO's delivery being recorded.
+  useEffect(() => {
+    const poNumber = rrs.find(r => r.id === rrDetailsId)?.po_number
+    if (!poNumber) { setRrAttachments([]); return }
+    supabase.from('po_attachments').select('id, file_url, file_name').eq('po_number', poNumber).order('uploaded_at')
+      .then(({ data }) => setRrAttachments(data ?? []))
+  }, [rrDetailsId, rrs])
 
   // Re-defaults the per-item "receiving now" quantities to whatever's still outstanding
   // whenever the selected PO (or its item data) changes — skipped while editing an
@@ -782,6 +792,19 @@ export default function ReceivingPage() {
                             })}
                           </tbody>
                         </table>
+                      </div>
+                    )}
+                    {rrAttachments.length > 0 && (
+                      <div className="space-y-1.5">
+                        <p className="text-xs text-muted-foreground font-medium">Attachments (from Purchase Order)</p>
+                        <div className="flex flex-wrap gap-2">
+                          {rrAttachments.map(a => (
+                            <a key={a.id} href={a.file_url} target="_blank" rel="noopener noreferrer"
+                              className="text-xs text-blue-600 hover:underline border rounded-md px-2 py-1 bg-muted/30 truncate max-w-[200px]">
+                              {a.file_name}
+                            </a>
+                          ))}
+                        </div>
                       </div>
                     )}
                     <div className="flex flex-wrap items-center gap-2 border-t pt-3">
