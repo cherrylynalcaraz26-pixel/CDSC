@@ -10,7 +10,8 @@ import {
   XCircle, ShoppingCart, Star, Truck, Globe2,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, SortableTableHead } from '@/components/ui/table'
+import { useTableSort } from '@/lib/use-table-sort'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -354,6 +355,18 @@ export default function QuotationRequestsPanel({ onQuotationCreated }: { onQuota
     return matchSearch && matchFilter
   })
 
+  type RfqSortKey = 'request_number' | 'client_name' | 'subject' | 'item_count' | 'status' | 'created_at'
+  const { sorted: sortedRequests, sortKey: rfqSortKey, sortDir: rfqSortDir, onSort: onSortRfq } = useTableSort<QuotationRequest, RfqSortKey>(displayed, (r, key) => {
+    switch (key) {
+      case 'request_number': return r.request_number ?? ''
+      case 'client_name': return r.client_name ?? ''
+      case 'subject': return r.subject ?? ''
+      case 'item_count': return r.quotation_request_items?.length ?? 0
+      case 'status': return r.status ?? ''
+      case 'created_at': return r.created_at ?? ''
+    }
+  })
+
   const stageCounts = FLOW_STAGES.reduce((acc, s) => {
     acc[s.value] = requests.filter(r => r.status === s.value).length
     return acc
@@ -674,12 +687,12 @@ export default function QuotationRequestsPanel({ onQuotationCreated }: { onQuota
             <TableHeader>
               <TableRow>
                 <TableHead className="w-10">No.</TableHead>
-                <TableHead>Request #</TableHead>
-                <TableHead>Client</TableHead>
-                <TableHead>Subject</TableHead>
-                <TableHead>Items</TableHead>
-                <TableHead>Flow</TableHead>
-                <TableHead>Submitted</TableHead>
+                <SortableTableHead label="Request #" sortKey="request_number" activeKey={rfqSortKey} direction={rfqSortDir} onSort={onSortRfq} />
+                <SortableTableHead label="Client" sortKey="client_name" activeKey={rfqSortKey} direction={rfqSortDir} onSort={onSortRfq} />
+                <SortableTableHead label="Subject" sortKey="subject" activeKey={rfqSortKey} direction={rfqSortDir} onSort={onSortRfq} />
+                <SortableTableHead label="Items" sortKey="item_count" activeKey={rfqSortKey} direction={rfqSortDir} onSort={onSortRfq} />
+                <SortableTableHead label="Flow" sortKey="status" activeKey={rfqSortKey} direction={rfqSortDir} onSort={onSortRfq} />
+                <SortableTableHead label="Submitted" sortKey="created_at" activeKey={rfqSortKey} direction={rfqSortDir} onSort={onSortRfq} />
                 <TableHead className="w-10"></TableHead>
               </TableRow>
             </TableHeader>
@@ -688,11 +701,11 @@ export default function QuotationRequestsPanel({ onQuotationCreated }: { onQuota
                 <TableRow><TableCell colSpan={8} className="text-center py-10">
                   <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                 </TableCell></TableRow>
-              ) : displayed.length === 0 ? (
+              ) : sortedRequests.length === 0 ? (
                 <TableRow><TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
                   No requests for quotation{filterStatus ? ' with this status' : ''}.
                 </TableCell></TableRow>
-              ) : displayed.map((r, idx) => (
+              ) : sortedRequests.map((r, idx) => (
                 <TableRow key={r.id} className="cursor-pointer hover:bg-red-50/40 transition-colors" onClick={() => openReview(r)}>
                   <TableCell className="text-muted-foreground text-xs">{idx + 1}</TableCell>
                   <TableCell className="font-mono text-xs font-semibold text-red-600">{r.request_number}</TableCell>

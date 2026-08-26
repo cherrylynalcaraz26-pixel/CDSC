@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, SortableTableHead } from '@/components/ui/table'
+import { useTableSort } from '@/lib/use-table-sort'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
@@ -801,6 +802,18 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
       })
     : sos
 
+  type SoSortKey = 'so_number' | 'so_date' | 'client_name' | 'client_po_number' | 'total_amount' | 'status'
+  const { sorted: sortedSOs, sortKey: soSortKey, sortDir: soSortDir, onSort: onSortSo } = useTableSort<SO, SoSortKey>(displayedSOs, (so, key) => {
+    switch (key) {
+      case 'so_number': return so.so_number ?? ''
+      case 'so_date': return so.so_date ?? so.created_at ?? ''
+      case 'client_name': return so.client_name ?? ''
+      case 'client_po_number': return so.client_po_number ?? ''
+      case 'total_amount': return so.total_amount ?? 0
+      case 'status': return so.status ?? ''
+    }
+  })
+
   const counts = {
     draft:     sos.filter(s => s.status === 'draft').length,
     active:    sos.filter(s => ['confirmed', 'processing', 'shipped'].includes(s.status)).length,
@@ -1407,12 +1420,12 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
             <TableHeader>
               <TableRow>
                 <TableHead className="w-10">No.</TableHead>
-                <TableHead>SO Number</TableHead>
-                <TableHead>Date</TableHead>
-                <TableHead>Client</TableHead>
-                <TableHead>Client PO #</TableHead>
-                <TableHead className="text-right">Amount</TableHead>
-                <TableHead>Status</TableHead>
+                <SortableTableHead label="SO Number" sortKey="so_number" activeKey={soSortKey} direction={soSortDir} onSort={onSortSo} />
+                <SortableTableHead label="Date" sortKey="so_date" activeKey={soSortKey} direction={soSortDir} onSort={onSortSo} />
+                <SortableTableHead label="Client" sortKey="client_name" activeKey={soSortKey} direction={soSortDir} onSort={onSortSo} />
+                <SortableTableHead label="Client PO #" sortKey="client_po_number" activeKey={soSortKey} direction={soSortDir} onSort={onSortSo} />
+                <SortableTableHead label="Amount" sortKey="total_amount" align="right" activeKey={soSortKey} direction={soSortDir} onSort={onSortSo} />
+                <SortableTableHead label="Status" sortKey="status" activeKey={soSortKey} direction={soSortDir} onSort={onSortSo} />
                 <TableHead>Delivery</TableHead>
                 <TableHead>Portal</TableHead>
                 <TableHead className="w-10" />
@@ -1423,11 +1436,11 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
                 <TableRow><TableCell colSpan={10} className="text-center py-10">
                   <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                 </TableCell></TableRow>
-              ) : displayedSOs.length === 0 ? (
+              ) : sortedSOs.length === 0 ? (
                 <TableRow><TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
                   No sales orders match your search.
                 </TableCell></TableRow>
-              ) : displayedSOs.map((so, idx) => {
+              ) : sortedSOs.map((so, idx) => {
                 const sCfg = STATUS_CFG[so.status] ?? STATUS_CFG.draft
                 return (
                   <TableRow key={so.id} className="cursor-pointer hover:bg-red-50/40 transition-colors" onClick={() => openViewSO(so)}>

@@ -20,8 +20,9 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from '@/components/ui/select'
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow, SortableTableHead
 } from '@/components/ui/table'
+import { useTableSort } from '@/lib/use-table-sort'
 import { Textarea } from '@/components/ui/textarea'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator
@@ -217,6 +218,19 @@ export default function CRMPage() {
     return matchSearch && matchStage && matchPriority
   })
 
+  type LeadSortKey = 'company_name' | 'contact_person' | 'product_interest' | 'stage' | 'priority' | 'estimated_value' | 'follow_up_date'
+  const { sorted: sortedLeads, sortKey: leadSortKey, sortDir: leadSortDir, onSort: onSortLead } = useTableSort<CRMLead, LeadSortKey>(filtered, (l, key) => {
+    switch (key) {
+      case 'company_name': return l.company_name ?? ''
+      case 'contact_person': return l.contact_person ?? ''
+      case 'product_interest': return l.product_interest ?? ''
+      case 'stage': return l.stage ?? ''
+      case 'priority': return l.priority ?? ''
+      case 'estimated_value': return l.estimated_value ?? 0
+      case 'follow_up_date': return l.follow_up_date ?? ''
+    }
+  })
+
   const stageCounts = PIPELINE_STAGES.reduce((acc, s) => {
     acc[s] = leads.filter(l => l.stage === s).length
     return acc
@@ -321,8 +335,8 @@ export default function CRMPage() {
 
       {/* Filters + view toggle */}
       <div className="flex flex-wrap gap-2 items-end">
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Priority</Label>
+        <div className="flex items-center gap-2">
+          <Label className="text-xs text-muted-foreground whitespace-nowrap">Priority</Label>
           <Select value={priorityFilter} onValueChange={v => setPriorityFilter(v ?? 'all')}>
             <SelectTrigger className="w-[140px] h-8 text-sm">
               {priorityFilter === 'all'
@@ -391,18 +405,18 @@ export default function CRMPage() {
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
-                <TableHead className="text-xs">Company</TableHead>
-                <TableHead className="text-xs">Contact</TableHead>
-                <TableHead className="text-xs">Product Interest</TableHead>
-                <TableHead className="text-xs">Stage</TableHead>
-                <TableHead className="text-xs">Priority</TableHead>
-                <TableHead className="text-xs text-right">Est. Value</TableHead>
-                <TableHead className="text-xs">Follow-up</TableHead>
+                <SortableTableHead label="Company" sortKey="company_name" className="text-xs" activeKey={leadSortKey} direction={leadSortDir} onSort={onSortLead} />
+                <SortableTableHead label="Contact" sortKey="contact_person" className="text-xs" activeKey={leadSortKey} direction={leadSortDir} onSort={onSortLead} />
+                <SortableTableHead label="Product Interest" sortKey="product_interest" className="text-xs" activeKey={leadSortKey} direction={leadSortDir} onSort={onSortLead} />
+                <SortableTableHead label="Stage" sortKey="stage" className="text-xs" activeKey={leadSortKey} direction={leadSortDir} onSort={onSortLead} />
+                <SortableTableHead label="Priority" sortKey="priority" className="text-xs" activeKey={leadSortKey} direction={leadSortDir} onSort={onSortLead} />
+                <SortableTableHead label="Est. Value" sortKey="estimated_value" align="right" className="text-xs" activeKey={leadSortKey} direction={leadSortDir} onSort={onSortLead} />
+                <SortableTableHead label="Follow-up" sortKey="follow_up_date" className="text-xs" activeKey={leadSortKey} direction={leadSortDir} onSort={onSortLead} />
                 <TableHead className="w-10" />
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filtered.length === 0 ? (
+              {sortedLeads.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center py-16">
                     <div className="flex flex-col items-center gap-3 text-muted-foreground">
@@ -417,7 +431,7 @@ export default function CRMPage() {
                     </div>
                   </TableCell>
                 </TableRow>
-              ) : filtered.map(lead => {
+              ) : sortedLeads.map(lead => {
                 const sm = STAGE_META[lead.stage]
                 const pm = PRIORITY_META[lead.priority]
                 return (

@@ -8,8 +8,9 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow, SortableTableHead,
 } from '@/components/ui/table'
+import { useTableSort } from '@/lib/use-table-sort'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
@@ -842,10 +843,36 @@ export default function InventoryPage() {
   const whTotalQty     = filteredWarehouseRows.reduce((s, r) => s + (Number(r.quantity) || 0), 0)
   const whUnassigned   = filteredWarehouseRows.filter(r => !r.client_name).length
 
+  type ClientRowSortKey = 'client' | 'item_name' | 'unit' | 'dr_qty' | 'ws_qty' | 'csi_qty' | 'balance'
+  const { sorted: sortedFiltered, sortKey: clientSortKey, sortDir: clientSortDir, onSort: onSortClientRow } = useTableSort<InventoryRow, ClientRowSortKey>(filtered, (r, key) => {
+    switch (key) {
+      case 'client': return r.client
+      case 'item_name': return r.item_name
+      case 'unit': return uomName(r.unit)
+      case 'dr_qty': return Number(r.dr_qty)
+      case 'ws_qty': return Number(r.client_on_hand)
+      case 'csi_qty': return Number(r.csi_qty)
+      case 'balance': return Number(r.balance)
+    }
+  })
+
+  type ItemGroupSortKey = 'item_name' | 'clients' | 'unit' | 'total_dr' | 'total_ws' | 'total_csi' | 'total_balance'
+  const { sorted: sortedByItemGroups, sortKey: itemGroupSortKey, sortDir: itemGroupSortDir, onSort: onSortItemGroup } = useTableSort<ItemGroup, ItemGroupSortKey>(byItemGroups, (g, key) => {
+    switch (key) {
+      case 'item_name': return g.item_name
+      case 'clients': return g.rows.length
+      case 'unit': return uomName(g.unit)
+      case 'total_dr': return g.total_dr
+      case 'total_ws': return g.total_ws
+      case 'total_csi': return g.total_csi
+      case 'total_balance': return g.total_balance
+    }
+  })
+
   const activeCount = viewMode === 'by_item' ? byItemGroups.length : viewMode === 'by_warehouse' ? filteredWarehouseRows.length : filtered.length
   const totalPages = Math.max(1, Math.ceil(activeCount / PAGE_SIZE))
-  const pagedFiltered = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
-  const pagedByItemGroups = byItemGroups.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const pagedFiltered = sortedFiltered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const pagedByItemGroups = sortedByItemGroups.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   // Est. Value per warehouse row — quantity × item Unit Cost.
   const itemPriceMap: Record<string, number> = {}
@@ -1065,9 +1092,9 @@ export default function InventoryPage() {
       )}
 
       {/* View toggle + Filters + Actions — hidden when report is open */}
-      {!reportOpen && <div className="flex items-end gap-3 flex-wrap">
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">View</Label>
+      {!reportOpen && <div className="flex items-center gap-3 flex-wrap">
+        <div className="flex items-center gap-1.5">
+          <Label className="text-xs text-muted-foreground whitespace-nowrap">View</Label>
           <div className="flex border rounded-md overflow-hidden">
             <button
               className={`px-4 py-1.5 text-sm font-medium transition-colors ${viewMode === 'by_client' ? 'bg-red-600 text-white' : 'hover:bg-muted text-muted-foreground'}`}
@@ -1084,8 +1111,8 @@ export default function InventoryPage() {
           </div>
         </div>
         {viewMode !== 'by_warehouse' && (
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Client</Label>
+          <div className="flex items-center gap-1.5">
+            <Label className="text-xs text-muted-foreground whitespace-nowrap">Client</Label>
             <Select value={clientFilter} onValueChange={v => setClientFilter(v ?? 'all')}>
               <SelectTrigger className="w-72">
                 <SelectValue className="truncate">{(v: string) => v === 'all' ? 'Client' : v}</SelectValue>
@@ -1097,8 +1124,8 @@ export default function InventoryPage() {
             </Select>
           </div>
         )}
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Status</Label>
+        <div className="flex items-center gap-1.5">
+          <Label className="text-xs text-muted-foreground whitespace-nowrap">Status</Label>
           <Select value={statusFilter} onValueChange={v => setStatusFilter(v ?? 'all')}>
             <SelectTrigger className="w-40">
               <SelectValue>{(v: string) => v === 'all' ? 'Status' : v === 'in_stock' ? 'In Stock' : v === 'balanced' ? 'Balanced' : v === 'deficit' ? 'Deficit' : v}</SelectValue>
@@ -1297,14 +1324,35 @@ export default function InventoryPage() {
                 <TableRow>
                   <TableHead className="w-12">No.</TableHead>
                   {viewMode === 'by_client'
-                    ? <><TableHead className="w-40">Client</TableHead><TableHead className="min-w-[300px]">Item Name</TableHead></>
-                    : <><TableHead className="min-w-[300px]">Item Name</TableHead><TableHead className="w-40">Clients</TableHead></>
+                    ? <>
+                        <SortableTableHead label="Client" sortKey="client" className="w-40" activeKey={clientSortKey} direction={clientSortDir} onSort={onSortClientRow} />
+                        <SortableTableHead label="Item Name" sortKey="item_name" className="min-w-[300px]" activeKey={clientSortKey} direction={clientSortDir} onSort={onSortClientRow} />
+                      </>
+                    : <>
+                        <SortableTableHead label="Item Name" sortKey="item_name" className="min-w-[300px]" activeKey={itemGroupSortKey} direction={itemGroupSortDir} onSort={onSortItemGroup} />
+                        <SortableTableHead label="Clients" sortKey="clients" className="w-40" activeKey={itemGroupSortKey} direction={itemGroupSortDir} onSort={onSortItemGroup} />
+                      </>
                   }
-                  <TableHead>Unit</TableHead>
-                  <TableHead className="text-right">DR Qty</TableHead>
-                  <TableHead className="text-right">WH Stock</TableHead>
-                  <TableHead className="text-right">CSI Qty</TableHead>
-                  <TableHead className="text-right">Balance</TableHead>
+                  {viewMode === 'by_client'
+                    ? <SortableTableHead label="Unit" sortKey="unit" activeKey={clientSortKey} direction={clientSortDir} onSort={onSortClientRow} />
+                    : <SortableTableHead label="Unit" sortKey="unit" activeKey={itemGroupSortKey} direction={itemGroupSortDir} onSort={onSortItemGroup} />
+                  }
+                  {viewMode === 'by_client'
+                    ? <SortableTableHead label="DR Qty" sortKey="dr_qty" align="right" activeKey={clientSortKey} direction={clientSortDir} onSort={onSortClientRow} />
+                    : <SortableTableHead label="DR Qty" sortKey="total_dr" align="right" activeKey={itemGroupSortKey} direction={itemGroupSortDir} onSort={onSortItemGroup} />
+                  }
+                  {viewMode === 'by_client'
+                    ? <SortableTableHead label="WH Stock" sortKey="ws_qty" align="right" activeKey={clientSortKey} direction={clientSortDir} onSort={onSortClientRow} />
+                    : <SortableTableHead label="WH Stock" sortKey="total_ws" align="right" activeKey={itemGroupSortKey} direction={itemGroupSortDir} onSort={onSortItemGroup} />
+                  }
+                  {viewMode === 'by_client'
+                    ? <SortableTableHead label="CSI Qty" sortKey="csi_qty" align="right" activeKey={clientSortKey} direction={clientSortDir} onSort={onSortClientRow} />
+                    : <SortableTableHead label="CSI Qty" sortKey="total_csi" align="right" activeKey={itemGroupSortKey} direction={itemGroupSortDir} onSort={onSortItemGroup} />
+                  }
+                  {viewMode === 'by_client'
+                    ? <SortableTableHead label="Balance" sortKey="balance" align="right" activeKey={clientSortKey} direction={clientSortDir} onSort={onSortClientRow} />
+                    : <SortableTableHead label="Balance" sortKey="total_balance" align="right" activeKey={itemGroupSortKey} direction={itemGroupSortDir} onSort={onSortItemGroup} />
+                  }
                   <TableHead>Status</TableHead>
                   {viewMode === 'by_client' && <TableHead className="w-28">Channel</TableHead>}
                   {viewMode === 'by_client' && <TableHead className="w-16">Action</TableHead>}
