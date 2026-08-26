@@ -1530,11 +1530,14 @@ export default function InventoryPage() {
         const totalDr = reportRows.reduce((s, r) => s + r.dr_qty, 0)
         const totalOnHand = reportRows.reduce((s, r) => s + r.client_on_hand, 0)
         const totalCsi = reportRows.reduce((s, r) => s + r.csi_qty, 0)
+        // Est. Value uses the item's catalog Selling Price (not the latest CSI/DR unit
+        // price) multiplied by Balance, so it reflects what the remaining stock is worth
+        // to sell, not what was last transacted.
+        const reportSellingPriceMap: Record<string, number | null> = {}
+        for (const it of itemOptions) reportSellingPriceMap[it.item_name] = it.selling_price
         const totalEstValue = reportRows.reduce((s, r) => {
-          const price = r.csi_details.length > 0
-            ? r.csi_details[r.csi_details.length - 1].unit_price
-            : r.dr_details.length > 0 ? r.dr_details[r.dr_details.length - 1].unit_price : null
-          return s + (price != null ? r.dr_qty * price : 0)
+          const price = reportSellingPriceMap[r.item_name] ?? null
+          return s + (price != null ? r.balance * price : 0)
         }, 0)
         const today = new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
 
@@ -1551,10 +1554,8 @@ export default function InventoryPage() {
           const rowsHtml = reportRows.length === 0
             ? `<tr><td colspan="9" style="text-align:center;padding:24px;color:#9ca3af;font-style:italic">No inventory data for this client.</td></tr>`
             : reportRows.map((r, i) => {
-              const latestPrice = r.csi_details.length > 0
-                ? r.csi_details[r.csi_details.length - 1].unit_price
-                : r.dr_details.length > 0 ? r.dr_details[r.dr_details.length - 1].unit_price : null
-              const estValue = latestPrice != null ? r.dr_qty * latestPrice : null
+              const price = reportSellingPriceMap[r.item_name] ?? null
+              const estValue = price != null ? r.balance * price : null
               const balColor = r.balance > 0 ? '#15803d' : r.balance < 0 ? '#dc2626' : '#9ca3af'
               return `<tr>
                 <td>${i + 1}</td>
@@ -1564,7 +1565,7 @@ export default function InventoryPage() {
                 <td class="r" style="color:#15803d;font-weight:600">${r.client_on_hand > 0 ? r.client_on_hand : '—'}</td>
                 <td class="r">${r.csi_qty}</td>
                 <td class="r" style="font-weight:700;color:${balColor}">${r.balance}</td>
-                <td class="r">${latestPrice != null ? `₱${latestPrice.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}</td>
+                <td class="r">${price != null ? `₱${price.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}</td>
                 <td class="r" style="font-weight:600">${estValue != null ? `₱${estValue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}</td>
               </tr>`
             }).join('')
@@ -1631,7 +1632,7 @@ export default function InventoryPage() {
               </tfoot>
             </table>
             <div class="note">
-              <span>Est. Unit Price is based on the latest CSI or DR record; Est. Value = DR Qty × Est. Unit Price. Values are for reference only.</span>
+              <span>Est. Unit Price is the item's catalog Selling Price; Est. Value = Balance × Est. Unit Price. Values are for reference only.</span>
               <span>Generated ${today} &middot; CDSC Inventory System</span>
             </div>
           </body></html>`
@@ -1775,10 +1776,8 @@ export default function InventoryPage() {
                     </thead>
                     <tbody>
                       {reportRows.map((r, i) => {
-                        const latestPrice = r.csi_details.length > 0
-                          ? r.csi_details[r.csi_details.length - 1].unit_price
-                          : r.dr_details.length > 0 ? r.dr_details[r.dr_details.length - 1].unit_price : null
-                        const estValue = latestPrice != null ? r.dr_qty * latestPrice : null
+                        const latestPrice = reportSellingPriceMap[r.item_name] ?? null
+                        const estValue = latestPrice != null ? r.balance * latestPrice : null
                         return (
                           <tr key={r.item_name} className={i % 2 === 1 ? 'bg-gray-50' : 'bg-white'}>
                             <td className="px-3 py-2 text-gray-400 border-b border-gray-100">{i + 1}</td>
@@ -1814,7 +1813,7 @@ export default function InventoryPage() {
                 </div>
               )}
               <div className="mt-8 pt-4 border-t border-gray-100 text-[10px] text-gray-400 flex justify-between flex-wrap gap-2">
-                <span>Est. Unit Price is based on the latest CSI or DR record; Est. Value = DR Qty × Est. Unit Price. Values are for reference only.</span>
+                <span>Est. Unit Price is the item&apos;s catalog Selling Price; Est. Value = Balance × Est. Unit Price. Values are for reference only.</span>
                 <span>Generated {today} · CDSC Inventory System</span>
               </div>
             </div>
