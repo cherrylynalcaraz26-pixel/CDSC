@@ -255,6 +255,7 @@ export default function CSIMonitoringPage() {
         .select('*')
         .order('si_date', { ascending: false })
         .order('si_number')
+        .order('id')
         .range(from, from + PAGE - 1)
       if (!data || data.length === 0) break
       allFetched.push(...data)
