@@ -13,6 +13,8 @@ export type UserRole =
   | 'department_head'
   | 'employee'
   | 'auditor'
+  | 'client'
+  | 'vendor'
 
 export type Status = 'active' | 'inactive' | 'archived'
 

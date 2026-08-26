@@ -79,6 +79,29 @@ function buildMonthlyData(orders: SalesOrder[]) {
 
 export default function PortalDashboard() {
   const supabase = createClient()
+  const [role, setRole] = useState<'client' | 'vendor' | null>(null)
+
+  useEffect(() => {
+    async function checkRole() {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', session.user.id).single()
+      setRole(profile?.role === 'vendor' ? 'vendor' : 'client')
+    }
+    checkRole()
+  }, [])
+
+  if (role === null) return (
+    <div className="flex justify-center py-24">
+      <Loader2 className="h-7 w-7 text-red-600 animate-spin" />
+    </div>
+  )
+
+  return role === 'vendor' ? <VendorPortalDashboard /> : <ClientPortalDashboard />
+}
+
+function ClientPortalDashboard() {
+  const supabase = createClient()
   const [orders, setOrders] = useState<SalesOrder[]>([])
   const [quotations, setQuotations] = useState<Quotation[]>([])
   const [stock, setStock] = useState<StockRow[]>([])
@@ -108,21 +131,30 @@ export default function PortalDashboard() {
 
         // Pending collection — counts only portal-visible CSI records
         // (show_in_portal = true) so the balance matches exactly what the
-        // client can see in their portal, using each invoice's own
-        // collection status.
+        // client can see in their portal. An invoice counts as collected the
+        // same way Accounting's own "Ready to Collect" list does: either its
+        // own collection_status is set, or a posted Collection (OR) in the
+        // collections table references its SI number — collection_status is
+        // never written by the Collections flow, so relying on it alone left
+        // fully-collected invoices showing as still pending here.
         setShowCsi(clientRow.show_csi_in_portal === true)
         {
-          const csiRows = await fetchAllRows((from, to) =>
-            supabase.from('csi_records')
-              .select('amount, quantity, unit_price, collection_status')
-              .eq('client_name', clientRow.company_name)
-              .eq('show_in_portal', true)
-              .order('id')
-              .range(from, to)
-          )
+          const [csiRows, { data: postedCollections }] = await Promise.all([
+            fetchAllRows((from, to) =>
+              supabase.from('csi_records')
+                .select('si_number, amount, quantity, unit_price, collection_status')
+                .eq('client_name', clientRow.company_name)
+                .eq('show_in_portal', true)
+                .order('id')
+                .range(from, to)
+            ),
+            supabase.from('collections').select('si_number').eq('client_name', clientRow.company_name).eq('status', 'posted').not('si_number', 'is', null),
+          ])
+          const collectedSiNumbers = new Set((postedCollections ?? []).map((c: any) => c.si_number))
           const rowAmount = (r: any) => Number(r.amount) || (Number(r.quantity) || 0) * (Number(r.unit_price) || 0)
+          const isCollected = (r: any) => r.collection_status === 'collected' || (r.si_number && collectedSiNumbers.has(r.si_number))
           const billed = csiRows.reduce((s: number, r: any) => s + rowAmount(r), 0)
-          const collected = csiRows.filter((r: any) => r.collection_status === 'collected').reduce((s: number, r: any) => s + rowAmount(r), 0)
+          const collected = csiRows.filter(isCollected).reduce((s: number, r: any) => s + rowAmount(r), 0)
           if (billed > 0) setBilling({ billed, collected })
         }
       }
@@ -452,6 +484,192 @@ export default function PortalDashboard() {
               )
             })}
           </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+type POStatus = 'open' | 'partially_delivered' | 'completed' | 'cancelled'
+
+interface VendorPO {
+  id: string
+  po_number: string | null
+  po_date: string | null
+  created_at: string
+  status: POStatus
+  total_amount: number
+}
+
+const PO_STATUS: Record<POStatus, { label: string; cls: string }> = {
+  open:                { label: 'Pending',          cls: 'bg-blue-100 text-blue-700' },
+  partially_delivered: { label: 'Partial Delivery', cls: 'bg-yellow-100 text-yellow-700' },
+  completed:           { label: 'Completed',        cls: 'bg-green-100 text-green-700' },
+  cancelled:           { label: 'Cancelled',        cls: 'bg-red-100 text-red-700' },
+}
+
+function buildVendorYearlyValueData(pos: VendorPO[]) {
+  const year = new Date().getFullYear()
+  const months = Array.from({ length: 12 }, (_, i) => {
+    const d = new Date(year, i, 1)
+    return { month: format(d, 'MMM'), start: startOfMonth(d), end: endOfMonth(d), count: 0, amount: 0 }
+  })
+  for (const po of pos) {
+    if (po.status === 'cancelled') continue
+    const d = new Date(po.po_date ?? po.created_at)
+    for (const m of months) {
+      if (d >= m.start && d <= m.end) { m.count++; m.amount += Number(po.total_amount) || 0 }
+    }
+  }
+  return months.map(m => ({ month: m.month, Orders: m.count, Amount: m.amount }))
+}
+
+const VENDOR_KPI_GRAD: Record<string, { grad: string; tint: string; shadow: string }> = {
+  gray: { grad: 'from-slate-400 to-slate-500', tint: 'from-slate-50', shadow: 'shadow-slate-500/30' },
+  blue: { grad: 'from-blue-500 to-blue-600', tint: 'from-blue-50', shadow: 'shadow-blue-500/30' },
+  green: { grad: 'from-green-500 to-green-600', tint: 'from-green-50', shadow: 'shadow-green-500/30' },
+  red: { grad: 'from-red-600 to-red-800', tint: 'from-red-50', shadow: 'shadow-red-600/30' },
+}
+
+function VendorPortalDashboard() {
+  const supabase = createClient()
+  const [pos, setPOs] = useState<VendorPO[]>([])
+  const [companyName, setCompanyName] = useState('')
+  const [userName, setUserName] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function init() {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+      const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', session.user.id).single()
+      setUserName(profile?.full_name ?? session.user.email?.split('@')[0] ?? '')
+      const { data: supplierRow } = await supabase.from('suppliers').select('id, company_name').eq('auth_user_id', session.user.id).single()
+      if (supplierRow) {
+        setCompanyName(supplierRow.company_name)
+        const { data } = await supabase.from('purchase_orders')
+          .select('id, po_number, po_date, created_at, status, total_amount')
+          .eq('supplier_id', supplierRow.id)
+          .order('created_at', { ascending: false })
+        setPOs((data ?? []) as VendorPO[])
+      }
+      setLoading(false)
+    }
+    init()
+  }, [])
+
+  const totalPOs = pos.length
+  const openPOs = pos.filter(p => p.status === 'open').length
+  const completedPOs = pos.filter(p => p.status === 'completed').length
+  const totalValue = pos.filter(p => p.status !== 'cancelled').reduce((s, p) => s + (Number(p.total_amount) || 0), 0)
+  const yearlyData = buildVendorYearlyValueData(pos)
+  const yearValue = yearlyData.reduce((s, m) => s + m.Amount, 0)
+  const recent = pos.slice(0, 5)
+
+  if (loading) return (
+    <div className="flex justify-center py-24">
+      <Loader2 className="h-7 w-7 text-red-600 animate-spin" />
+    </div>
+  )
+
+  return (
+    <div className="space-y-7">
+      <div>
+        <h1 className="text-2xl font-bold text-gray-900">
+          Welcome back{companyName ? `, ${companyName}` : userName ? `, ${userName}` : ''}!
+        </h1>
+        <p className="text-sm text-gray-500 mt-0.5">Here&apos;s an overview of the purchase orders CDSC has raised with you.</p>
+      </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {[
+          { label: 'Total POs',   value: totalPOs,       icon: ShoppingCart, family: 'gray' },
+          { label: 'Pending',     value: openPOs,        icon: ClipboardList, family: 'blue' },
+          { label: 'Completed',   value: completedPOs,   icon: CheckCircle2, family: 'green' },
+          { label: 'Total Value', value: fmt(totalValue), icon: TrendingUp,  family: 'red', isText: true },
+        ].map(s => {
+          const { grad, tint, shadow } = VENDOR_KPI_GRAD[s.family]
+          return (
+            <div key={s.label} className="relative overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm p-4">
+              <div className={`absolute inset-0 bg-gradient-to-br ${tint} to-transparent`} />
+              <div className="relative flex items-start justify-between gap-3">
+                <div>
+                  <div className={`font-bold text-gray-900 ${'isText' in s ? 'text-lg' : 'text-2xl'}`}>{s.value}</div>
+                  <div className="text-xs text-gray-500 mt-0.5">{s.label}</div>
+                </div>
+                <div className={`h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br ${grad} flex items-center justify-center shadow-sm ${shadow}`}>
+                  <s.icon className="h-5 w-5 text-white" />
+                </div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      <div className="relative overflow-hidden rounded-2xl border border-gray-200 shadow-lg">
+        <div className="bg-gradient-to-r from-red-700 to-red-900 px-5 py-4 flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-white">Total Value</h2>
+            <p className="text-xs text-red-100 mt-0.5">{new Date().getFullYear()} full year · {fmt(yearValue)} total</p>
+          </div>
+          <TrendingUp className="h-5 w-5 text-red-200" />
+        </div>
+        <div className="bg-white p-5">
+          {yearlyData.every(m => m.Amount === 0) ? (
+            <div className="flex items-center justify-center h-52 text-gray-300 text-sm">No PO data yet this year</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={220}>
+              <AreaChart data={yearlyData} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="vendorValueGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#dc2626" stopOpacity={0.25} />
+                    <stop offset="95%" stopColor="#dc2626" stopOpacity={0} />
+                  </linearGradient>
+                </defs>
+                <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} tickFormatter={v => `₱${(v / 1000).toLocaleString()}k`} />
+                <Tooltip
+                  contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
+                  formatter={(v) => [fmt(Number(v ?? 0)), 'Total Value']}
+                />
+                <Area type="monotone" dataKey="Amount" stroke="#dc2626" strokeWidth={2.5} fill="url(#vendorValueGrad)" dot={false} activeDot={{ r: 5 }} />
+              </AreaChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+      </div>
+
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-gray-900">Recent Purchase Orders</h2>
+          <Link href="/portal/purchase-orders" className="text-xs text-red-600 hover:text-red-700 flex items-center gap-0.5">
+            View all <ChevronRight className="h-3.5 w-3.5" />
+          </Link>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 divide-y divide-gray-100">
+          {recent.length === 0 ? (
+            <div className="py-10 text-center">
+              <ClipboardList className="h-7 w-7 text-gray-200 mx-auto mb-2" />
+              <p className="text-sm text-gray-400">No purchase orders yet</p>
+            </div>
+          ) : recent.map(po => {
+            const st = PO_STATUS[po.status] ?? { label: po.status, cls: 'bg-gray-100 text-gray-600' }
+            const date = po.po_date ?? po.created_at
+            return (
+              <Link key={po.id} href="/portal/purchase-orders" className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-gray-900 truncate">{po.po_number ?? 'PO'}</div>
+                  <div className="text-xs text-gray-400">{format(new Date(date), 'MMM d, yyyy')}</div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {po.total_amount > 0 && (
+                    <span className="text-xs font-semibold text-gray-600 hidden sm:block">{fmt(po.total_amount)}</span>
+                  )}
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${st.cls}`}>{st.label}</span>
+                </div>
+              </Link>
+            )
+          })}
         </div>
       </div>
     </div>

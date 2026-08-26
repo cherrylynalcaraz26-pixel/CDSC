@@ -11,10 +11,11 @@ import { toast } from 'sonner'
 import {
   LayoutDashboard, FileText, Package, User, LogOut, Menu, X, Boxes,
   ClipboardList, Search, Bell, PanelLeftClose, PanelLeftOpen, MessageSquare, Send, ChevronRight, Globe,
+  Store,
 } from 'lucide-react'
 import { SearchProvider, useSearchContext } from '@/context/search-context'
 
-const NAV = [
+const CLIENT_NAV = [
   { label: 'Dashboard',      href: '/portal',             icon: LayoutDashboard, exact: true },
   { label: 'Quotations',     href: '/portal/quotations',  icon: ClipboardList,   exact: false },
   { label: 'My Orders',      href: '/portal/requests',    icon: FileText,        exact: false },
@@ -23,12 +24,20 @@ const NAV = [
   { label: 'Account',        href: '/portal/settings',    icon: User,            exact: false },
 ]
 
+const VENDOR_NAV = [
+  { label: 'Dashboard',       href: '/portal',                   icon: LayoutDashboard, exact: true },
+  { label: 'Purchase Orders', href: '/portal/purchase-orders',   icon: ClipboardList,   exact: false },
+  { label: 'Item Catalog',    href: '/portal/catalog',           icon: Store,           exact: false },
+  { label: 'Account',         href: '/portal/settings',          icon: User,            exact: false },
+]
+
 function PortalLayoutInner({ children }: { children: React.ReactNode }) {
   const supabase = createClient()
   const router = useRouter()
   const pathname = usePathname()
   const { query, setQuery } = useSearchContext()
   const [loading, setLoading] = useState(true)
+  const [portalRole, setPortalRole] = useState<'client' | 'vendor'>('client')
   const [clientName, setClientName] = useState('')
   const [userName, setUserName] = useState('')
   const [userEmail, setUserEmail] = useState('')
@@ -69,7 +78,8 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
     async function refreshLogo() {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return
-      const { data: clientRow } = await supabase.from('clients').select('logo_url, avatar_url').eq('auth_user_id', session.user.id).single()
+      const table = portalRole === 'vendor' ? 'suppliers' : 'clients'
+      const { data: clientRow } = await supabase.from(table).select('logo_url, avatar_url').eq('auth_user_id', session.user.id).single()
       const rawLogo = (clientRow as any)?.logo_url ?? (clientRow as any)?.avatar_url ?? null
       setClientLogoUrl(rawLogo ? cacheBustImageUrl(rawLogo) : null)
     }
@@ -84,7 +94,7 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
       document.removeEventListener('visibilitychange', onVisible)
       window.removeEventListener('portal-logo-updated', onLogoUpdated)
     }
-  }, [])
+  }, [portalRole])
 
   function toggleCollapsed() {
     setCollapsed(c => {
@@ -98,19 +108,23 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) { router.replace('/login'); return }
       const { data: profile } = await supabase.from('profiles').select('full_name, role, avatar_url, company').eq('id', session.user.id).single()
-      if (profile?.role !== 'client') { await supabase.auth.signOut(); router.replace('/login'); return }
-      setUserName(profile?.full_name ?? session.user.email?.split('@')[0] ?? 'Client')
+      if (profile?.role !== 'client' && profile?.role !== 'vendor') { await supabase.auth.signOut(); router.replace('/login'); return }
+      const isVendor = profile.role === 'vendor'
+      setPortalRole(isVendor ? 'vendor' : 'client')
+      setUserName(profile?.full_name ?? session.user.email?.split('@')[0] ?? (isVendor ? 'Vendor' : 'Client'))
       setUserEmail(session.user.email ?? '')
       setUserAvatarUrl((profile as any)?.avatar_url ?? null)
-      let { data: clientRow } = await supabase.from('clients').select('id, company_name, logo_url, avatar_url').eq('auth_user_id', session.user.id).single()
-      // Some portal accounts were created before the client row got linked to their auth
-      // user — fall back to matching by company name and repair the link for next time,
-      // so messages/notifications/inventory don't silently fail for those accounts.
+
+      const table = isVendor ? 'suppliers' : 'clients'
+      let { data: clientRow } = await supabase.from(table).select('id, company_name, logo_url, avatar_url').eq('auth_user_id', session.user.id).single()
+      // Some portal accounts were created before the client/supplier row got linked to
+      // their auth user — fall back to matching by company name and repair the link for
+      // next time, so messages/notifications/inventory don't silently fail for those accounts.
       if (!clientRow && profile?.company) {
-        const { data: byName } = await supabase.from('clients').select('id, company_name, logo_url, avatar_url').eq('company_name', profile.company).single()
+        const { data: byName } = await supabase.from(table).select('id, company_name, logo_url, avatar_url').eq('company_name', profile.company).single()
         if (byName) {
           clientRow = byName
-          await supabase.from('clients').update({ auth_user_id: session.user.id, portal_access: true }).eq('id', byName.id)
+          await supabase.from(table).update({ auth_user_id: session.user.id, portal_access: true }).eq('id', byName.id)
         }
       }
       setClientName(clientRow?.company_name ?? '')
@@ -122,7 +136,19 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
         setClientId((clientRow as any).id)
         const companyName = (clientRow as any).company_name ?? ''
         const cid = (clientRow as any).id
-        if (companyName) {
+        if (companyName && isVendor) {
+          const { data: poRes } = await supabase.from('purchase_orders')
+            .select('po_number,po_date,status')
+            .eq('supplier_id', cid)
+            .order('po_date', { ascending: false })
+            .limit(5)
+          const notifs: typeof notifications = []
+          for (const po of (poRes ?? [])) {
+            if (po.status === 'completed') notifs.push({ id: `po-${po.po_number}`, message: `PO ${po.po_number} has been marked Completed`, read: false, time: po.po_date ?? '' })
+            else if (po.status === 'partially_delivered') notifs.push({ id: `po-${po.po_number}`, message: `PO ${po.po_number} is partially delivered`, read: false, time: po.po_date ?? '' })
+          }
+          setNotifications(notifs)
+        } else if (companyName) {
           const [drRes, stockRes, msgRes] = await Promise.all([
             supabase.from('dr_logs').select('dr_number,dr_date,status')
               .eq('supplier_name', companyName).in('status', ['received', 'partial'])
@@ -157,6 +183,7 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
     router.replace('/login')
   }
 
+  const NAV = portalRole === 'vendor' ? VENDOR_NAV : CLIENT_NAV
   const websiteHref = companyWebsite ? (companyWebsite.startsWith('http') ? companyWebsite : `https://${companyWebsite}`) : null
 
   function isActive(href: string, exact: boolean) {
@@ -266,7 +293,7 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
               </div>
               <div className="min-w-0 flex-1">
                 <div className="text-white font-semibold text-sm leading-tight truncate">CDSC Industrial Supply</div>
-                <div className="text-white/35 text-[11px] leading-tight">Client Portal</div>
+                <div className="text-white/35 text-[11px] leading-tight">{portalRole === 'vendor' ? 'Vendor Portal' : 'Client Portal'}</div>
               </div>
               <button onClick={toggleCollapsed} title="Collapse sidebar"
                 className="text-white/40 hover:text-white/80 transition-colors shrink-0">
@@ -329,7 +356,7 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
           </div>
           <div className="min-w-0 flex-1">
             <div className="text-white font-semibold text-sm leading-tight truncate">CDSC Industrial Supply</div>
-            <div className="text-white/35 text-[11px] leading-tight">Client Portal</div>
+            <div className="text-white/35 text-[11px] leading-tight">{portalRole === 'vendor' ? 'Vendor Portal' : 'Client Portal'}</div>
           </div>
           <button onClick={() => setMobileOpen(false)} className="text-white/40 hover:text-white/80 transition-colors shrink-0">
             <X className="h-4 w-4" />
@@ -516,8 +543,8 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
         })}
       </nav>
 
-      {/* Messages FAB + chat window */}
-      <div className="fixed bottom-20 lg:bottom-6 right-6 z-50 flex flex-col items-end gap-3">
+      {/* Messages FAB + chat window (client portal only — vendor messages aren't wired up yet) */}
+      {portalRole === 'client' && <div className="fixed bottom-20 lg:bottom-6 right-6 z-50 flex flex-col items-end gap-3">
         {msgOpen && (
           <div className="w-80 sm:w-96 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col" style={{ maxHeight: '520px' }}>
             <div className="bg-[#111111] px-4 py-3 flex items-center justify-between shrink-0">
@@ -611,7 +638,7 @@ function PortalLayoutInner({ children }: { children: React.ReactNode }) {
             </button>
           )
         })()}
-      </div>
+      </div>}
     </div>
   )
 }

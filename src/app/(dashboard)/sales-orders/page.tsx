@@ -23,7 +23,7 @@ import { useSearchContext } from '@/context/search-context'
 import { sendEmail, SOPdfData } from '@/lib/send-email'
 import { fetchAllRows } from '@/lib/supabase/fetch-all'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
-import { subMonths, startOfMonth, endOfMonth, format as fmtDate } from 'date-fns'
+import { format as fmtDate } from 'date-fns'
 
 type SOStatus = 'draft' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'cancelled'
 
@@ -116,6 +116,7 @@ export default function SalesOrdersPage() {
   // Pipeline
   const [pipelineOpen, setPipelineOpen] = useState(false)
   const [chartOpen, setChartOpen] = useState(true)
+  const [chartYear, setChartYear] = useState(() => new Date().getFullYear())
   // collectedClients removed — no OR/CR receipt system
 
   // Form
@@ -233,6 +234,28 @@ export default function SalesOrdersPage() {
     setSoNumber(''); setSoDate(today()); setClientId(''); setClientPONumber('')
     setDeliveryDate(''); setRemarks(''); setLines([emptyLine()]); setMobileTab('form')
     setEditingSOId(null)
+  }
+
+  // Next sequential SO-<year>-NNNNN number, continuing the highest number already
+  // used this year (falls back to 00001 if none yet).
+  async function nextSoNumber() {
+    const year = new Date().getFullYear()
+    const prefix = `SO-${year}-`
+    const { data } = await supabase
+      .from('sales_orders')
+      .select('so_number')
+      .ilike('so_number', `${prefix}%`)
+      .order('so_number', { ascending: false })
+      .limit(1)
+    const lastNum = parseInt(data?.[0]?.so_number?.slice(prefix.length) ?? '0', 10) || 0
+    return `${prefix}${String(lastNum + 1).padStart(5, '0')}`
+  }
+
+  async function handleOpenCreate() {
+    resetForm()
+    setSoNumber(await nextSoNumber())
+    setOpen(true)
+    loadWarehouseQty()
   }
 
   function handleCancelClick() {
@@ -800,18 +823,22 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
 
   const todayStr = new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
 
-  const soMonthlyData = (() => {
-    const now = new Date()
-    return Array.from({ length: 6 }, (_, i) => {
-      const d = subMonths(now, 5 - i)
-      const start = startOfMonth(d).toISOString().slice(0, 10)
-      const end = endOfMonth(d).toISOString().slice(0, 10)
-      const total = sos
-        .filter(s => s.status !== 'cancelled' && (s.so_date ?? s.created_at?.slice(0, 10) ?? '') >= start && (s.so_date ?? s.created_at?.slice(0, 10) ?? '') <= end)
-        .reduce((sum, s) => sum + (s.total_amount ?? 0), 0)
-      return { month: fmtDate(d, 'MMM'), total }
-    })
+  const chartYears = (() => {
+    const years = new Set(sos.map(s => Number((s.so_date ?? s.created_at ?? '').slice(0, 4))).filter(y => !isNaN(y)))
+    years.add(chartYear)
+    return Array.from(years).sort((a, b) => b - a)
   })()
+
+  const soMonthlyData = Array.from({ length: 12 }, (_, month) => {
+    const total = sos
+      .filter(s => {
+        if (s.status === 'cancelled') return false
+        const d = s.so_date ?? s.created_at?.slice(0, 10) ?? ''
+        return Number(d.slice(0, 4)) === chartYear && Number(d.slice(5, 7)) - 1 === month
+      })
+      .reduce((sum, s) => sum + (s.total_amount ?? 0), 0)
+    return { month: fmtDate(new Date(chartYear, month, 1), 'MMM'), total }
+  })
   const deliveryStr = deliveryDate ? new Date(deliveryDate + 'T00:00:00').toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }) : ''
 
   // Pipeline stays focused on orders with a next action — drop cancelled orders, and
@@ -891,13 +918,25 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
       {!open && (
         <Card>
           <CardHeader className="pb-0 pt-4 px-4">
-            <button
-              className="flex items-center justify-between w-full text-left"
-              onClick={() => setChartOpen(o => !o)}
-            >
-              <CardTitle className="text-sm font-medium">Monthly Sales Revenue (Last 6 Months)</CardTitle>
-              {chartOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-            </button>
+            <div className="flex items-center justify-between w-full gap-2">
+              <button
+                className="flex items-center gap-2 text-left flex-1 min-w-0"
+                onClick={() => setChartOpen(o => !o)}
+              >
+                <CardTitle className="text-sm font-medium">Monthly Sales Revenue</CardTitle>
+                {chartOpen ? <ChevronUp className="h-4 w-4 text-muted-foreground shrink-0" /> : <ChevronDown className="h-4 w-4 text-muted-foreground shrink-0" />}
+              </button>
+              {chartOpen && (
+                <Select value={String(chartYear)} onValueChange={v => setChartYear(Number(v))}>
+                  <SelectTrigger className="h-7 w-24 text-xs" onClick={e => e.stopPropagation()}><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {chartYears.map(y => (
+                      <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
           </CardHeader>
           {chartOpen && (
             <CardContent className="pt-3">
@@ -1372,7 +1411,7 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
       <Card>
         <CardHeader className="pb-3 flex flex-row items-center justify-between">
           <CardTitle className="text-base">Sales Order List</CardTitle>
-          <Button onClick={() => { resetForm(); setOpen(true); loadWarehouseQty() }} className="bg-red-600 hover:bg-red-700">
+          <Button onClick={handleOpenCreate} className="bg-red-600 hover:bg-red-700">
             <Plus className="h-4 w-4 mr-2" />New Sales Order
           </Button>
         </CardHeader>
@@ -1694,29 +1733,31 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
 
       {/* Email SO Dialog */}
       <Dialog open={!!emailSO} onOpenChange={o => { if (!o && !sendingEmailSO) setEmailSO(null) }}>
-        <DialogContent className="sm:!max-w-2xl">
+        <DialogContent className="w-[95vw] max-w-3xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Mail className="h-4 w-4" />Send Sales Order</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 pt-2">
-            <div className="space-y-1.5">
-              <Label>Recipient Email <span className="text-destructive">*</span></Label>
-              <Input
-                type="email"
-                placeholder="client@example.com"
-                value={emailToSO}
-                onChange={e => setEmailToSO(e.target.value)}
-                disabled={sendingEmailSO}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Subject</Label>
-              <Input
-                placeholder="Email subject"
-                value={emailSubjectSO}
-                onChange={e => setEmailSubjectSO(e.target.value)}
-                disabled={sendingEmailSO}
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Recipient Email <span className="text-destructive">*</span></Label>
+                <Input
+                  type="email"
+                  placeholder="client@example.com"
+                  value={emailToSO}
+                  onChange={e => setEmailToSO(e.target.value)}
+                  disabled={sendingEmailSO}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Subject</Label>
+                <Input
+                  placeholder="Email subject"
+                  value={emailSubjectSO}
+                  onChange={e => setEmailSubjectSO(e.target.value)}
+                  disabled={sendingEmailSO}
+                />
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label>Message Body</Label>

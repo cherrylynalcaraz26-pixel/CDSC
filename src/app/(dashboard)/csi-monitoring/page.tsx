@@ -8,9 +8,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow, SortableTableHead,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
-import { useTableSort } from '@/lib/use-table-sort'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
@@ -131,6 +130,31 @@ interface CSIItem {
   unit_price: string
 }
 
+type SortOption = 'date_desc' | 'date_asc' | 'si_asc' | 'si_desc' | 'amount_desc' | 'amount_asc' | 'client_asc'
+
+const SORT_OPTIONS: { value: SortOption; label: string }[] = [
+  { value: 'date_desc', label: 'Date (Newest)' },
+  { value: 'date_asc', label: 'Date (Oldest)' },
+  { value: 'si_asc', label: 'SI Number (A–Z)' },
+  { value: 'si_desc', label: 'SI Number (Z–A)' },
+  { value: 'amount_desc', label: 'Amount (High–Low)' },
+  { value: 'amount_asc', label: 'Amount (Low–High)' },
+  { value: 'client_asc', label: 'Client (A–Z)' },
+]
+
+function compareBySortOption(sort: SortOption, a: { date: string; si: string; amount: number; client: string }, b: { date: string; si: string; amount: number; client: string }) {
+  switch (sort) {
+    case 'date_asc': return a.date.localeCompare(b.date)
+    case 'date_desc': return b.date.localeCompare(a.date)
+    case 'si_asc': return a.si.localeCompare(b.si, undefined, { numeric: true })
+    case 'si_desc': return b.si.localeCompare(a.si, undefined, { numeric: true })
+    case 'amount_desc': return b.amount - a.amount
+    case 'amount_asc': return a.amount - b.amount
+    case 'client_asc': return a.client.localeCompare(b.client)
+    default: return 0
+  }
+}
+
 const emptyItem = (): CSIItem => ({ item_name: '', unit: '', quantity: '', unit_price: '' })
 
 const emptyHeader = () => ({
@@ -153,7 +177,7 @@ export default function CSIMonitoringPage() {
   const [itemOptions, setItemOptions] = useState<ItemOption[]>([])
   const [clientOptions, setClientOptions] = useState<ClientOption[]>([])
   const [soNumbers, setSoNumbers] = useState<{ id: string; so_number: string }[]>([])
-  const [drNumbers, setDrNumbers] = useState<{ id: string; dr_number: string; po_number: string | null }[]>([])
+  const [drNumbers, setDrNumbers] = useState<{ id: string; dr_number: string; po_number: string | null; client_name: string | null }[]>([])
   const [drNumberLockedFromSo, setDrNumberLockedFromSo] = useState(false)
   const [soItemsMap, setSoItemsMap] = useState<Record<string, SOItemOption[]>>({})
   const [loading, setLoading] = useState(true)
@@ -162,12 +186,14 @@ export default function CSIMonitoringPage() {
   const [editingSiNumber, setEditingSiNumber] = useState<string | null>(null)
   const [clientFilter, setClientFilter] = usePersistedState('csi-monitoring:clientFilter', '')
   const [yearFilter, setYearFilter] = usePersistedState('csi-monitoring:yearFilter', 'all')
+  const [sortOption, setSortOption] = usePersistedState<SortOption>('csi-monitoring:sortOption', 'date_desc')
   const [header, setHeader] = useState(emptyHeader())
   const [items, setItems] = useState<CSIItem[]>([emptyItem()])
   const [saving, setSaving] = useState(false)
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [viewMode, setViewMode] = usePersistedState<'by-si' | 'all-items' | 'cross-ref'>('csi-monitoring:viewMode', 'by-si')
-  const [drItemsForCrossRef, setDrItemsForCrossRef] = useState<{ dr_number: string; item_name: string; client_name: string | null }[]>([])
+  const [drItemsForCrossRef, setDrItemsForCrossRef] = useState<{ dr_number: string; item_name: string; client_name: string | null; quantity: number; unit: string | null }[]>([])
+  const [crossRefDetail, setCrossRefDetail] = useState<{ type: 'csi' | 'dr'; name: string } | null>(null)
   const [expandedSIs, setExpandedSIs] = useState<Set<string>>(new Set())
   const [page, setPage] = useState(1)
   const [itemSearchIdx, setItemSearchIdx] = useState<number | null>(null)
@@ -215,7 +241,7 @@ export default function CSIMonitoringPage() {
       supabase.from('items').select('item_name, unit_of_measure, selling_price').order('item_name'),
       supabase.from('clients').select('id, company_name, show_csi_in_portal, address, city, province, tin, industry, email').eq('status', 'active').order('company_name'),
       supabase.from('sales_orders').select('id, so_number').not('so_number', 'is', null).order('created_at', { ascending: false }),
-      fetchAllRows((from, to) => supabase.from('dr_log_items').select('dr_number, item_name').order('item_name').order('id').range(from, to)),
+      fetchAllRows((from, to) => supabase.from('dr_log_items').select('dr_number, item_name, quantity, unit').order('item_name').order('id').range(from, to)),
       fetchAllRows((from, to) => supabase.from('dr_logs').select('id, dr_number, po_number, supplier_name').order('dr_date', { ascending: false }).order('id').range(from, to)),
       supabase.from('uom_list').select('id, code, name').eq('is_active', true).order('code'),
       supabase.from('attributes').select('id, name, data_type, options').order('name'),
@@ -224,10 +250,10 @@ export default function CSIMonitoringPage() {
     setAttributeList((attrData ?? []) as AttributeOption[])
     // On DR logs the "supplier" field holds the delivered-to client.
     const drClientMap = new Map((drLogData as any[]).map(d => [d.dr_number, d.supplier_name ?? null]))
-    setDrItemsForCrossRef((drItemsData as any[]).map(d => ({ dr_number: d.dr_number, item_name: d.item_name, client_name: drClientMap.get(d.dr_number) ?? null })))
+    setDrItemsForCrossRef((drItemsData as any[]).map(d => ({ dr_number: d.dr_number, item_name: d.item_name, client_name: drClientMap.get(d.dr_number) ?? null, quantity: Number(d.quantity) || 0, unit: d.unit ?? null })))
     setItemOptions((itemOptData ?? []) as ItemOption[])
     setClientOptions((clientData ?? []) as ClientOption[])
-    setDrNumbers(drLogData as { id: string; dr_number: string; po_number: string | null }[])
+    setDrNumbers((drLogData as any[]).map(d => ({ id: d.id, dr_number: d.dr_number, po_number: d.po_number, client_name: d.supplier_name ?? null })))
     const filteredSOs = (soData ?? []).filter((s: any) => s.so_number) as { id: string; so_number: string }[]
     setSoNumbers(filteredSOs)
     const soIds = filteredSOs.map(s => s.id)
@@ -256,6 +282,7 @@ export default function CSIMonitoringPage() {
         .select('*')
         .order('si_date', { ascending: false })
         .order('si_number')
+        .order('id')
         .range(from, from + PAGE - 1)
       if (!data || data.length === 0) break
       allFetched.push(...data)
@@ -656,39 +683,20 @@ export default function CSIMonitoringPage() {
     }
   }
 
-  const PAGE_SIZE = 30
-  type SiGroupSortKey = 'date' | 'si_number' | 'po' | 'client' | 'dr' | 'items' | 'total'
-  const { sorted: sortedSiGroups, sortKey: siGroupSortKey, sortDir: siGroupSortDir, onSort: onSortSiGroup } = useTableSort<typeof siGroups[number], SiGroupSortKey>(siGroups, (g, key) => {
-    switch (key) {
-      case 'date': return g.date ?? ''
-      case 'si_number': return g.si_number ?? ''
-      case 'po': return g.po ?? ''
-      case 'client': return g.client ?? ''
-      case 'dr': return g.dr ?? ''
-      case 'items': return g.items.length
-      case 'total': return g.total
-    }
-  })
-  const pagedSiGroups = sortedSiGroups.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const sortedSiGroups = [...siGroups].sort((a, b) => compareBySortOption(sortOption,
+    { date: a.date, si: a.si_number, amount: a.total, client: a.client },
+    { date: b.date, si: b.si_number, amount: b.total, client: b.client }))
+  const sortedFiltered = [...filtered].sort((a, b) => compareBySortOption(sortOption,
+    { date: a.si_date, si: a.si_number, amount: Number(a.amount) || 0, client: a.client_name ?? '' },
+    { date: b.si_date, si: b.si_number, amount: Number(b.amount) || 0, client: b.client_name ?? '' }))
 
-  type CsiSortKey = 'si_date' | 'si_number' | 'client_name' | 'item_name' | 'quantity' | 'unit' | 'unit_price' | 'amount'
-  const { sorted: sortedFiltered, sortKey: csiSortKey, sortDir: csiSortDir, onSort: onSortCsi } = useTableSort<CSIRecord, CsiSortKey>(filtered, (r, key) => {
-    switch (key) {
-      case 'si_date': return r.si_date ?? ''
-      case 'si_number': return r.si_number ?? ''
-      case 'client_name': return r.client_name ?? ''
-      case 'item_name': return r.item_name ?? ''
-      case 'quantity': return Number(r.quantity) || 0
-      case 'unit': return r.unit ?? ''
-      case 'unit_price': return Number(r.unit_price) || 0
-      case 'amount': return Number(r.amount) || 0
-    }
-  })
+  const PAGE_SIZE = 30
+  const pagedSiGroups = sortedSiGroups.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
   const pagedFiltered = sortedFiltered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
   const activeTotal = viewMode === 'by-si' ? siGroups.length : filtered.length
   const totalPages = Math.max(1, Math.ceil(activeTotal / PAGE_SIZE))
 
-  useEffect(() => { setPage(1) }, [search, clientFilter, yearFilter, viewMode])
+  useEffect(() => { setPage(1) }, [search, clientFilter, yearFilter, viewMode, sortOption])
   useEffect(() => { if (viewMode !== 'by-si') setSelectedSIs(new Set()) }, [viewMode])
 
   function toggleSI(si: string) {
@@ -975,7 +983,14 @@ export default function CSIMonitoringPage() {
                   </div>
                   <div className="space-y-1.5">
                     <Label>Client</Label>
-                    <Select value={header.client_name} onValueChange={v => setHeader(h => ({ ...h, client_name: v ?? '' }))}>
+                    <Select
+                      value={header.client_name}
+                      onValueChange={v => setHeader(h => {
+                        const nextClient = v ?? ''
+                        const drStillValid = !h.dr_number || drNumberLockedFromSo || drNumbers.some(d => d.dr_number === h.dr_number && d.client_name === nextClient)
+                        return { ...h, client_name: nextClient, dr_number: drStillValid ? h.dr_number : '' }
+                      })}
+                    >
                       <SelectTrigger className="w-full"><SelectValue placeholder="Select client…" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="">— None —</SelectItem>
@@ -1020,7 +1035,9 @@ export default function CSIMonitoringPage() {
                         <SelectTrigger className="w-full"><SelectValue placeholder="Select DR…" /></SelectTrigger>
                         <SelectContent>
                           <SelectItem value="">— None —</SelectItem>
-                          {drNumbers.map(d => <SelectItem key={d.id} value={d.dr_number}>{d.dr_number}</SelectItem>)}
+                          {drNumbers
+                            .filter(d => !header.client_name || d.client_name === header.client_name)
+                            .map(d => <SelectItem key={d.id} value={d.dr_number}>{d.dr_number}</SelectItem>)}
                           {header.dr_number && !drNumbers.some(d => d.dr_number === header.dr_number) && (
                             <SelectItem value={header.dr_number}>{header.dr_number}</SelectItem>
                           )}
@@ -1028,6 +1045,9 @@ export default function CSIMonitoringPage() {
                       </Select>
                       {drNumberLockedFromSo && (
                         <p className="text-[11px] text-muted-foreground">Locked — matched from the loaded SO&apos;s DR.</p>
+                      )}
+                      {!drNumberLockedFromSo && header.client_name && (
+                        <p className="text-[11px] text-muted-foreground">Showing DR numbers for {header.client_name} only.</p>
                       )}
                     </div>
                   </div>
@@ -1319,7 +1339,7 @@ export default function CSIMonitoringPage() {
         const PALETTE = ['#dc2626','#2563eb','#16a34a','#d97706','#7c3aed','#0891b2','#be185d','#65a30d']
 
         const clientStats = clientOptions.map((c, i) => {
-          const clientRecs = records.filter(r => r.client_name === c.company_name)
+          const clientRecs = filtered.filter(r => r.client_name === c.company_name)
           const siSet = new Set(clientRecs.map(r => r.si_number))
           return {
             name: c.company_name,
@@ -1337,7 +1357,7 @@ export default function CSIMonitoringPage() {
 
         // Monthly trend data
         const monthMap: Record<string, number> = {}
-        for (const r of records) {
+        for (const r of filtered) {
           if (!r.si_date) continue
           const key = r.si_date.slice(0, 7) // "YYYY-MM"
           monthMap[key] = (monthMap[key] || 0) + (Number(r.amount) || 0)
@@ -1517,9 +1537,9 @@ export default function CSIMonitoringPage() {
         )
       })()}
 
-      {!open && <div className="flex flex-wrap gap-3 items-center">
-        <div className="flex items-center gap-1.5">
-          <Label className="text-xs text-muted-foreground whitespace-nowrap">Client</Label>
+      {!open && <div className="flex flex-wrap gap-3 items-end">
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Client</Label>
           <Select value={clientFilter || '__all__'} onValueChange={v => setClientFilter(!v || v === '__all__' ? '' : v)}>
             <SelectTrigger className="h-9 w-72 text-sm">
               <SelectValue className="truncate">{(v: string) => v === '__all__' ? 'Client' : v}</SelectValue>
@@ -1530,8 +1550,8 @@ export default function CSIMonitoringPage() {
             </SelectContent>
           </Select>
         </div>
-        <div className="flex items-center gap-1.5">
-          <Label className="text-xs text-muted-foreground whitespace-nowrap">Year</Label>
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Year</Label>
           <Select value={yearFilter} onValueChange={v => setYearFilter(v ?? 'all')}>
             <SelectTrigger className="h-9 w-32 text-sm">
               <SelectValue>{(v: string) => v === 'all' ? 'Filter by Year' : v}</SelectValue>
@@ -1539,6 +1559,17 @@ export default function CSIMonitoringPage() {
             <SelectContent>
               <SelectItem value="all">All Years</SelectItem>
               {availableYears.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Sort</Label>
+          <Select value={sortOption} onValueChange={v => setSortOption((v as SortOption) ?? 'date_desc')}>
+            <SelectTrigger className="h-9 w-44 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {SORT_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>
@@ -1560,8 +1591,8 @@ export default function CSIMonitoringPage() {
             </div>
           ) : null
         })()}
-        <div className="flex items-center gap-1.5">
-          <Label className="text-xs text-muted-foreground whitespace-nowrap">View</Label>
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">View</Label>
           <div className="flex border rounded-md overflow-hidden">
             <button
               onClick={() => setViewMode('by-si')}
@@ -1606,12 +1637,14 @@ export default function CSIMonitoringPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto max-h-[620px] overflow-y-auto">
             {viewMode === 'cross-ref' ? (() => {
-              const csiItems = new Set(records.map(r => r.item_name.trim().toLowerCase()))
-              const drItems = new Set(drItemsForCrossRef.map(d => d.item_name.trim().toLowerCase()))
-              const inCsiNotDr = [...new Set(records.map(r => r.item_name))].filter(n => !drItems.has(n.trim().toLowerCase()))
-              const inDrNotCsi = [...new Set(drItemsForCrossRef.map(d => d.item_name))].filter(n => !csiItems.has(n.trim().toLowerCase()))
+              const csiForCrossRef = clientFilter ? filtered.filter(r => r.client_name === clientFilter) : filtered
+              const drForCrossRef = clientFilter ? drItemsForCrossRef.filter(d => d.client_name === clientFilter) : drItemsForCrossRef
+              const csiItems = new Set(csiForCrossRef.map(r => r.item_name.trim().toLowerCase()))
+              const drItems = new Set(drForCrossRef.map(d => d.item_name.trim().toLowerCase()))
+              const inCsiNotDr = [...new Set(csiForCrossRef.map(r => r.item_name))].filter(n => !drItems.has(n.trim().toLowerCase()))
+              const inDrNotCsi = [...new Set(drForCrossRef.map(d => d.item_name))].filter(n => !csiItems.has(n.trim().toLowerCase()))
               return (
                 <div className="p-4 space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1626,14 +1659,18 @@ export default function CSIMonitoringPage() {
                         <Table>
                           <TableHeader><TableRow>
                             <TableHead>Item Name</TableHead>
-                            <TableHead className="text-right">CSI Count</TableHead>
+                            <TableHead className="text-right">Qty</TableHead>
                           </TableRow></TableHeader>
                           <TableBody>
                             {inCsiNotDr.map(name => (
-                              <TableRow key={name}>
+                              <TableRow
+                                key={name}
+                                className="cursor-pointer hover:bg-amber-50/60"
+                                onClick={() => setCrossRefDetail({ type: 'csi', name })}
+                              >
                                 <TableCell className="text-sm">{name}</TableCell>
                                 <TableCell className="text-right text-xs text-muted-foreground">
-                                  {records.filter(r => r.item_name === name).length}
+                                  {csiForCrossRef.filter(r => r.item_name === name).reduce((s, r) => s + (Number(r.quantity) || 0), 0)}
                                 </TableCell>
                               </TableRow>
                             ))}
@@ -1652,14 +1689,18 @@ export default function CSIMonitoringPage() {
                         <Table>
                           <TableHeader><TableRow>
                             <TableHead>Item Name</TableHead>
-                            <TableHead className="text-right">DR Count</TableHead>
+                            <TableHead className="text-right">Qty</TableHead>
                           </TableRow></TableHeader>
                           <TableBody>
                             {inDrNotCsi.map(name => (
-                              <TableRow key={name}>
+                              <TableRow
+                                key={name}
+                                className="cursor-pointer hover:bg-blue-50/60"
+                                onClick={() => setCrossRefDetail({ type: 'dr', name })}
+                              >
                                 <TableCell className="text-sm">{name}</TableCell>
                                 <TableCell className="text-right text-xs text-muted-foreground">
-                                  {drItemsForCrossRef.filter(d => d.item_name === name).length}
+                                  {drForCrossRef.filter(d => d.item_name === name).reduce((s, d) => s + (Number(d.quantity) || 0), 0)}
                                 </TableCell>
                               </TableRow>
                             ))}
@@ -1672,7 +1713,7 @@ export default function CSIMonitoringPage() {
               )
             })() : viewMode === 'by-si' ? (
               <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     <TableHead className="w-8">
                       <Checkbox
@@ -1683,13 +1724,13 @@ export default function CSIMonitoringPage() {
                       />
                     </TableHead>
                     <TableHead className="w-12">No.</TableHead>
-                    <SortableTableHead label="Date" sortKey="date" className="w-28" activeKey={siGroupSortKey} direction={siGroupSortDir} onSort={onSortSiGroup} />
-                    <SortableTableHead label="SI Number" sortKey="si_number" className="w-32" activeKey={siGroupSortKey} direction={siGroupSortDir} onSort={onSortSiGroup} />
-                    <SortableTableHead label="SO Number" sortKey="po" className="w-32" activeKey={siGroupSortKey} direction={siGroupSortDir} onSort={onSortSiGroup} />
-                    <SortableTableHead label="Client" sortKey="client" className="min-w-[160px]" activeKey={siGroupSortKey} direction={siGroupSortDir} onSort={onSortSiGroup} />
-                    <SortableTableHead label="DR Number" sortKey="dr" className="w-28" activeKey={siGroupSortKey} direction={siGroupSortDir} onSort={onSortSiGroup} />
-                    <SortableTableHead label="Items" sortKey="items" align="right" className="w-16" activeKey={siGroupSortKey} direction={siGroupSortDir} onSort={onSortSiGroup} />
-                    <SortableTableHead label="Total Amount" sortKey="total" align="right" className="w-32" activeKey={siGroupSortKey} direction={siGroupSortDir} onSort={onSortSiGroup} />
+                    <TableHead className="w-28">Date</TableHead>
+                    <TableHead className="w-32">SI Number</TableHead>
+                    <TableHead className="w-32">SO Number</TableHead>
+                    <TableHead className="min-w-[160px]">Client</TableHead>
+                    <TableHead className="w-28">DR Number</TableHead>
+                    <TableHead className="text-right w-16">Items</TableHead>
+                    <TableHead className="text-right w-32">Total Amount</TableHead>
                     <TableHead className="w-16 text-center">Photo</TableHead>
                     <TableHead className="w-24 text-center">Portal</TableHead>
                     <TableHead className="w-10" />
@@ -1834,17 +1875,17 @@ export default function CSIMonitoringPage() {
               </Table>
             ) : (
               <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     <TableHead className="w-12">No.</TableHead>
-                    <SortableTableHead label="Date" sortKey="si_date" className="w-28" activeKey={csiSortKey} direction={csiSortDir} onSort={onSortCsi} />
-                    <SortableTableHead label="SI Number" sortKey="si_number" className="w-32" activeKey={csiSortKey} direction={csiSortDir} onSort={onSortCsi} />
-                    <SortableTableHead label="Client" sortKey="client_name" className="min-w-[160px]" activeKey={csiSortKey} direction={csiSortDir} onSort={onSortCsi} />
-                    <SortableTableHead label="Item/s" sortKey="item_name" activeKey={csiSortKey} direction={csiSortDir} onSort={onSortCsi} />
-                    <SortableTableHead label="QTY" sortKey="quantity" align="right" className="w-16" activeKey={csiSortKey} direction={csiSortDir} onSort={onSortCsi} />
-                    <SortableTableHead label="Unit" sortKey="unit" className="w-20" activeKey={csiSortKey} direction={csiSortDir} onSort={onSortCsi} />
-                    <SortableTableHead label="Unit Price" sortKey="unit_price" align="right" className="w-32" activeKey={csiSortKey} direction={csiSortDir} onSort={onSortCsi} />
-                    <SortableTableHead label="Amount" sortKey="amount" align="right" className="w-28" activeKey={csiSortKey} direction={csiSortDir} onSort={onSortCsi} />
+                    <TableHead className="w-28">Date</TableHead>
+                    <TableHead className="w-32">SI Number</TableHead>
+                    <TableHead className="min-w-[160px]">Client</TableHead>
+                    <TableHead>Item/s</TableHead>
+                    <TableHead className="text-right w-16">QTY</TableHead>
+                    <TableHead className="w-20">Unit</TableHead>
+                    <TableHead className="text-right w-32">Unit Price</TableHead>
+                    <TableHead className="text-right w-28">Amount</TableHead>
                     <TableHead className="w-10" />
                   </TableRow>
                 </TableHeader>
@@ -1855,7 +1896,7 @@ export default function CSIMonitoringPage() {
                         <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                       </TableCell>
                     </TableRow>
-                  ) : sortedFiltered.length === 0 ? (
+                  ) : filtered.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
                         No records found. Click <strong>New Record</strong> to add one.
@@ -1963,12 +2004,12 @@ export default function CSIMonitoringPage() {
 
       {/* Add Item Modal */}
       <Dialog open={addItemOpen} onOpenChange={setAddItemOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="w-[95vw] max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add Item</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 py-1">
-            <div className="flex items-center gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-1">
+            <div className="sm:col-span-2 flex items-center gap-3">
               <div className="relative group shrink-0">
                 <div className="h-16 w-16 rounded-lg overflow-hidden border bg-muted/30 flex items-center justify-center">
                   {newItemImageUrl
@@ -2014,7 +2055,7 @@ export default function CSIMonitoringPage() {
                 }}
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="sm:col-span-2 space-y-1.5">
               <Label>Item Name <span className="text-destructive">*</span></Label>
               <Input
                 autoFocus
@@ -2037,6 +2078,14 @@ export default function CSIMonitoringPage() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Selling Price (₱)</Label>
+              <Input
+                type="number" min={0} step="0.01" placeholder="0.00"
+                value={newItemForm.selling_price}
+                onChange={e => setNewItemForm(f => ({ ...f, selling_price: e.target.value }))}
+              />
             </div>
             <div className="space-y-1.5">
               <Label>Attribute</Label>
@@ -2075,14 +2124,6 @@ export default function CSIMonitoringPage() {
                 </div>
               )
             })()}
-            <div className="space-y-1.5">
-              <Label>Selling Price (₱)</Label>
-              <Input
-                type="number" min={0} step="0.01" placeholder="0.00"
-                value={newItemForm.selling_price}
-                onChange={e => setNewItemForm(f => ({ ...f, selling_price: e.target.value }))}
-              />
-            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddItemOpen(false)} disabled={savingNewItem}>Cancel</Button>
@@ -2103,6 +2144,65 @@ export default function CSIMonitoringPage() {
             // eslint-disable-next-line @next/next/no-img-element
             <img src={previewAttachmentUrl} alt="SI attachment" className="w-full max-h-[70vh] object-contain rounded-lg border" />
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* CSI vs DR — Item Detail Breakdown */}
+      <Dialog open={crossRefDetail !== null} onOpenChange={o => { if (!o) setCrossRefDetail(null) }}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{crossRefDetail?.name}</DialogTitle>
+          </DialogHeader>
+          {crossRefDetail && (() => {
+            const csiForCrossRef = clientFilter ? filtered.filter(r => r.client_name === clientFilter) : filtered
+            const drForCrossRef = clientFilter ? drItemsForCrossRef.filter(d => d.client_name === clientFilter) : drItemsForCrossRef
+            if (crossRefDetail.type === 'csi') {
+              const rows = csiForCrossRef.filter(r => r.item_name === crossRefDetail.name)
+              return (
+                <Table>
+                  <TableHeader><TableRow>
+                    <TableHead>SI Number</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Client</TableHead>
+                    <TableHead className="text-right">Qty</TableHead>
+                    <TableHead>Unit</TableHead>
+                  </TableRow></TableHeader>
+                  <TableBody>
+                    {rows.map(r => (
+                      <TableRow key={r.id}>
+                        <TableCell className="font-mono text-sm text-red-600">{r.si_number}</TableCell>
+                        <TableCell className="text-sm whitespace-nowrap">{r.si_date ? format(parseISO(r.si_date), 'MMM d, yyyy') : '—'}</TableCell>
+                        <TableCell className="text-sm">{r.client_name ?? '—'}</TableCell>
+                        <TableCell className="text-right text-sm">{Number(r.quantity) || 0}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{r.unit ?? '—'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )
+            }
+            const rows = drForCrossRef.filter(d => d.item_name === crossRefDetail.name)
+            return (
+              <Table>
+                <TableHeader><TableRow>
+                  <TableHead>DR Number</TableHead>
+                  <TableHead>Client</TableHead>
+                  <TableHead className="text-right">Qty</TableHead>
+                  <TableHead>Unit</TableHead>
+                </TableRow></TableHeader>
+                <TableBody>
+                  {rows.map((d, i) => (
+                    <TableRow key={`${d.dr_number}-${i}`}>
+                      <TableCell className="font-mono text-sm">{d.dr_number}</TableCell>
+                      <TableCell className="text-sm">{d.client_name ?? '—'}</TableCell>
+                      <TableCell className="text-right text-sm">{Number(d.quantity) || 0}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{d.unit ?? '—'}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )
+          })()}
         </DialogContent>
       </Dialog>
 
@@ -2134,7 +2234,7 @@ export default function CSIMonitoringPage() {
 
       {/* Bulk Send Email Dialog */}
       <Dialog open={emailBulkOpen} onOpenChange={o => { if (!o && !sendingBulkEmail) setEmailBulkOpen(false) }}>
-        <DialogContent className="sm:!max-w-2xl">
+        <DialogContent className="w-[95vw] max-w-3xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Mail className="h-4 w-4" />Send CSI Invoice(s)</DialogTitle>
           </DialogHeader>
@@ -2154,24 +2254,26 @@ export default function CSIMonitoringPage() {
                 </span>
               ))}
             </div>
-            <div className="space-y-1.5">
-              <Label>Recipient Email <span className="text-destructive">*</span></Label>
-              <Input
-                type="email"
-                placeholder="client@example.com"
-                value={bulkEmailTo}
-                onChange={e => setBulkEmailTo(e.target.value)}
-                disabled={sendingBulkEmail}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Subject</Label>
-              <Input
-                placeholder="Email subject"
-                value={bulkEmailSubject}
-                onChange={e => setBulkEmailSubject(e.target.value)}
-                disabled={sendingBulkEmail}
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Recipient Email <span className="text-destructive">*</span></Label>
+                <Input
+                  type="email"
+                  placeholder="client@example.com"
+                  value={bulkEmailTo}
+                  onChange={e => setBulkEmailTo(e.target.value)}
+                  disabled={sendingBulkEmail}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Subject</Label>
+                <Input
+                  placeholder="Email subject"
+                  value={bulkEmailSubject}
+                  onChange={e => setBulkEmailSubject(e.target.value)}
+                  disabled={sendingBulkEmail}
+                />
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label>Message Body</Label>

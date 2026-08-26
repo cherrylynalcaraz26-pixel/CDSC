@@ -20,7 +20,7 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Plus, Pencil, Trash2, X, MoreHorizontal, LayoutGrid, List, ImagePlus, Loader2, Package, Building2, Sparkles, Check, ChevronDown, ChevronUp } from 'lucide-react'
+import { Plus, Pencil, Trash2, X, MoreHorizontal, LayoutGrid, List, ImagePlus, Loader2, Package, Building2, Sparkles, Check, ChevronDown, ChevronUp, KeyRound, Copy, ShieldCheck, Eye, EyeOff, CheckCircle2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { uploadImageToDrive } from '@/lib/upload-image'
@@ -580,7 +580,7 @@ function CategoriesTab({ configSelector }: { configSelector: React.ReactNode }) 
             ) : rows.map(r => (
               <TableRow key={r.id}>
                 <TableCell className="font-mono text-sm">{r.category_code ?? '—'}</TableCell>
-                <TableCell className="font-medium uppercase">{r.category_name}</TableCell>
+                <TableCell className="font-medium capitalize">{r.category_name}</TableCell>
                 <TableCell>
                   <button onClick={() => toggleStatus(r)}>
                     <Badge className={`capitalize ${r.status === 'active' ? 'bg-green-100 text-green-800 cursor-pointer' : 'bg-gray-100 text-gray-600 cursor-pointer'}`}>
@@ -658,6 +658,7 @@ interface Supplier {
   payment_terms: string | null; lead_time_days: number | null
   atc_code: string | null; ewt_rate: number | null; is_active: boolean
   logo_url: string | null
+  auth_user_id: string | null; portal_access: boolean | null
 }
 const emptySupplierForm = () => ({
   company_name: '', contact_person: '', mobile_number: '', email: '',
@@ -679,6 +680,12 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
   const [logoFile, setLogoFile] = useState<File | null>(null)
   const [logoPreview, setLogoPreview] = useState<string | null>(null)
   const [uploadingLogo, setUploadingLogo] = useState(false)
+  const [inviteSupplier, setInviteSupplier] = useState<Supplier | null>(null)
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [invitePassword, setInvitePassword] = useState('')
+  const [showInvitePw, setShowInvitePw] = useState(false)
+  const [inviting, setInviting] = useState(false)
+  const [inviteResult, setInviteResult] = useState<{ email: string } | null>(null)
 
   async function load() {
     setLoading(true)
@@ -687,6 +694,51 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
     setLoading(false)
   }
   useEffect(() => { load() }, [])
+
+  function openInvite(s: Supplier) {
+    setInviteSupplier(s)
+    setInviteEmail(s.email ?? '')
+    setInvitePassword('')
+    setShowInvitePw(false)
+    setInviteResult(null)
+    setInviting(false)
+  }
+
+  async function handleInvite() {
+    if (!inviteSupplier || !inviteEmail.trim()) { toast.error('Email is required'); return }
+    if (!invitePassword.trim()) { toast.error('Password is required'); return }
+    if (invitePassword.length < 8) { toast.error('Password must be at least 8 characters'); return }
+    setInviting(true)
+    try {
+      // Created via the service-role admin API (email_confirm: true) rather than
+      // client-side signUp, so the account can log in immediately instead of
+      // bouncing off "Your account email has not been confirmed" until the
+      // project's confirmation email is sent and clicked.
+      const res = await fetch('/api/create-portal-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: inviteEmail.trim().toLowerCase(),
+          password: invitePassword,
+          full_name: inviteSupplier.contact_person || inviteSupplier.company_name,
+          company: inviteSupplier.company_name,
+          role: 'vendor',
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Failed to create portal account')
+      await supabase.from('suppliers').update({
+        auth_user_id: json.userId ?? null,
+        portal_access: true,
+        email: inviteEmail.trim().toLowerCase(),
+      }).eq('id', inviteSupplier.id)
+      setInviteResult({ email: inviteEmail.trim().toLowerCase() })
+      load()
+    } catch (err: any) {
+      toast.error(err.message ?? 'Failed to create portal account')
+    }
+    setInviting(false)
+  }
 
   const filtered = rows.filter(s =>
     s.company_name.toLowerCase().includes(search.toLowerCase()) ||
@@ -825,11 +877,18 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
                 <TableCell className="font-mono text-sm">{s.tin ?? '—'}</TableCell>
                 <TableCell className="text-sm">{s.supplier_category ?? '—'}</TableCell>
                 <TableCell>
-                  <button onClick={() => toggleActive(s)}>
-                    <Badge className={s.is_active ? 'bg-green-100 text-green-800 cursor-pointer' : 'bg-gray-100 text-gray-600 cursor-pointer'}>
-                      {s.is_active ? 'Active' : 'Inactive'}
-                    </Badge>
-                  </button>
+                  <div className="flex flex-col gap-1 items-start">
+                    <button onClick={() => toggleActive(s)}>
+                      <Badge className={s.is_active ? 'bg-green-100 text-green-800 cursor-pointer' : 'bg-gray-100 text-gray-600 cursor-pointer'}>
+                        {s.is_active ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </button>
+                    {s.portal_access && (
+                      <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-100 text-emerald-700 flex items-center gap-1 w-fit">
+                        <ShieldCheck className="h-3 w-3" /> Portal
+                      </span>
+                    )}
+                  </div>
                 </TableCell>
                 <TableCell>
                   <DropdownMenu>
@@ -838,6 +897,9 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={() => openEdit(s)}><Pencil className="h-3.5 w-3.5 mr-2" />Edit</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => openInvite(s)}>
+                        <KeyRound className="h-3.5 w-3.5 mr-2" />{s.portal_access ? 'Reset Portal Access' : 'Invite to Portal'}
+                      </DropdownMenuItem>
                       <DropdownMenuItem className="text-destructive" onClick={() => setDeleteId(s.id)}><Trash2 className="h-3.5 w-3.5 mr-2" />Delete</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -849,12 +911,12 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-5xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editing ? 'Edit Supplier' : 'Add Supplier'}</DialogTitle>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-4 py-2">
-            <div className="col-span-2 space-y-1.5">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 py-2">
+            <div className="sm:col-span-3 space-y-1.5">
               <Label>Logo</Label>
               <div className="flex items-center gap-3">
                 <div className="h-16 w-16 rounded-lg border bg-muted/40 flex items-center justify-center overflow-hidden shrink-0">
@@ -885,7 +947,7 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
                 </div>
               </div>
             </div>
-            <div className="col-span-2 space-y-1.5">
+            <div className="sm:col-span-3 space-y-1.5">
               <Label>Company Name <span className="text-destructive">*</span></Label>
               <Input value={form.company_name} onChange={e => setForm(p => ({ ...p, company_name: e.target.value }))} />
             </div>
@@ -897,7 +959,7 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
               <Input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} /></div>
             <div className="space-y-1.5"><Label>TIN</Label>
               <Input placeholder="000-000-000-000" value={form.tin} onChange={e => setForm(p => ({ ...p, tin: e.target.value }))} /></div>
-            <div className="col-span-2 space-y-1.5"><Label>Address</Label>
+            <div className="sm:col-span-2 space-y-1.5"><Label>Address</Label>
               <Input value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} /></div>
             <div className="space-y-1.5">
               <Label>Category</Label>
@@ -974,6 +1036,95 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Invite to Vendor Portal Dialog */}
+      <Dialog open={!!inviteSupplier} onOpenChange={o => { if (!o) { setInviteSupplier(null); setInviteResult(null) } }}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>
+              {inviteResult ? 'Portal Account Created' : 'Create Vendor Portal Account'}
+            </DialogTitle>
+          </DialogHeader>
+
+          {!inviteResult ? (
+            <>
+              <div className="space-y-4 py-2">
+                <p className="text-sm text-muted-foreground">
+                  Set the login credentials for <span className="font-semibold text-foreground">{inviteSupplier?.company_name}</span>.
+                  They will use these to access the Vendor Portal.
+                </p>
+                <div className="space-y-1.5">
+                  <Label>Email Address</Label>
+                  <Input
+                    type="email"
+                    value={inviteEmail}
+                    onChange={e => setInviteEmail(e.target.value)}
+                    placeholder="vendor@company.com"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Password</Label>
+                  <div className="relative">
+                    <Input
+                      type={showInvitePw ? 'text' : 'password'}
+                      value={invitePassword}
+                      onChange={e => setInvitePassword(e.target.value)}
+                      placeholder="Minimum 8 characters"
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowInvitePw(v => !v)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                    >
+                      {showInvitePw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Must be at least 8 characters.</p>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setInviteSupplier(null)}>Cancel</Button>
+                <Button onClick={handleInvite} disabled={inviting} className="bg-emerald-600 hover:bg-emerald-700">
+                  {inviting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <KeyRound className="h-4 w-4 mr-2" />}
+                  Create Account
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <div className="space-y-4 py-2">
+                <div className="flex items-center gap-2 text-green-600 font-medium text-sm">
+                  <CheckCircle2 className="h-5 w-5" /> Account created successfully
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  The vendor can now log in to the portal using the credentials you set.
+                </p>
+                <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Portal URL</div>
+                    <div className="flex items-center gap-2">
+                      <code className="text-xs font-mono flex-1">{typeof window !== 'undefined' ? window.location.origin : ''}/portal/login</code>
+                      <button onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/portal/login`); toast.success('Copied') }}><Copy className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" /></button>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-muted-foreground mb-1">Email</div>
+                    <div className="flex items-center gap-2">
+                      <code className="text-xs font-mono flex-1">{inviteResult.email}</code>
+                      <button onClick={() => { navigator.clipboard.writeText(inviteResult!.email); toast.success('Copied') }}><Copy className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" /></button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button onClick={() => { setInviteSupplier(null); setInviteResult(null) }}>Done</Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
         <DialogContent>
           <DialogHeader><DialogTitle>Delete Supplier?</DialogTitle></DialogHeader>
@@ -1775,18 +1926,21 @@ function SetupPageContent() {
   }, [])
 
   const configSelector = (
-    <Select value={active} onValueChange={v => setActive(v ?? 'suppliers')}>
-      <SelectTrigger className="w-56 shrink-0">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {CONFIG_TABS.map(tab => (
-          <SelectItem key={tab.key} value={tab.key}>
-            {tab.label}{counts[tab.key] !== undefined ? ` (${counts[tab.key].toLocaleString()})` : ''}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+    <div className="flex items-center gap-2 shrink-0">
+      <Label className="text-xs text-muted-foreground whitespace-nowrap">Section</Label>
+      <Select value={active} onValueChange={v => setActive(v ?? 'suppliers')}>
+        <SelectTrigger className="w-56 shrink-0">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {CONFIG_TABS.map(tab => (
+            <SelectItem key={tab.key} value={tab.key}>
+              {tab.label}{counts[tab.key] !== undefined ? ` (${counts[tab.key].toLocaleString()})` : ''}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
   )
 
   return (

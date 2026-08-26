@@ -18,10 +18,11 @@ import {
   Building2, Upload, RotateCcw, Save, Shield,
   FileText, Database, User, Globe, Phone, Mail, MapPin,
   CheckCircle2, Eye, EyeOff, Loader2, Plus, Trash2, X, Send,
-  ChevronDown, ChevronUp, Download,
+  ChevronDown, ChevronUp, Download, Cloud, ExternalLink, RefreshCw,
 } from 'lucide-react'
 import { sendEmail, htmlToPdfBase64 } from '@/lib/send-email'
 import { uploadImageToDrive } from '@/lib/upload-image'
+import { syncDatabaseBackup, type BackupSyncResult } from '@/lib/backup-sheets'
 
 const BUSINESS_TYPES = [
   'Sole Proprietorship', 'Partnership', 'Corporation', 'Trading Corporation',
@@ -139,11 +140,12 @@ function defaultSettings(): Settings {
   }
 }
 
-type TabId = 'profile' | 'database' | 'security'
+type TabId = 'profile' | 'database' | 'backup' | 'security'
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: 'profile',   label: 'Company & Business Profile', icon: <Building2 className="h-3.5 w-3.5" /> },
   { id: 'database',  label: 'Proposal Database',  icon: <Database className="h-3.5 w-3.5" /> },
+  { id: 'backup',    label: 'Data Backup',        icon: <Cloud className="h-3.5 w-3.5" /> },
   { id: 'security',  label: 'Security',           icon: <Shield className="h-3.5 w-3.5" /> },
 ]
 
@@ -184,8 +186,9 @@ function LivePreview({ s }: { s: Settings }) {
     const certifications = (s.certifications ?? '').split('\n').map(c => c.trim()).filter(Boolean)
     return `<!DOCTYPE html><html><head><title>${fullName} – Company &amp; Business Profile</title>
     <style>
-      body { font-family: Arial, sans-serif; margin: 0; padding: 24px; color: #1e293b; }
-      .header { display: flex; align-items: center; justify-content: space-between; gap: 20px; background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%); color: #fff; padding: 22px 24px; border-radius: 10px; margin: -24px -24px 20px; }
+      @font-face { font-family: 'Questrial'; src: url('/fonts/Questrial-Regular.ttf') format('truetype'); font-weight: normal; }
+      body { font-family: 'Questrial', Arial, sans-serif; margin: 0; padding: 24px; color: #1e293b; }
+      .header { display: flex; align-items: center; justify-content: space-between; gap: 20px; background: linear-gradient(135deg, #b91c1c 0%, #7f1d1d 100%); color: #fff; padding: 22px 24px; border-radius: 10px; margin: -24px -24px 20px; }
       .logo { width: 60px; height: 60px; object-fit: contain; border-radius: 8px; background: #fff; padding: 4px; }
       .logo-placeholder { width: 60px; height: 60px; background: rgba(255,255,255,0.1); border-radius: 8px; border: 1px solid rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-size: 10px; color: rgba(255,255,255,0.6); }
       .header-info { text-align: right; }
@@ -356,9 +359,9 @@ function LivePreview({ s }: { s: Settings }) {
         </span>
       </div>
 
-      <div className="border rounded-xl overflow-hidden bg-white shadow-sm">
-        <div className="bg-gradient-to-r from-slate-800 to-slate-900 px-5 py-3">
-          <p className="text-white/50 text-[10px] uppercase tracking-widest">Company Header</p>
+      <div className="border rounded-2xl overflow-hidden bg-white shadow-lg">
+        <div className="bg-gradient-to-r from-red-700 to-red-900 px-5 py-3">
+          <p className="text-white/60 text-[10px] uppercase tracking-widest">Company Letterhead</p>
         </div>
 
         {/* Header: logo + company info */}
@@ -693,7 +696,8 @@ function buildProposalHtml(s: Settings, p: Proposal) {
   const amountStr = p.amount ? `₱${p.amount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : ''
   return `<!DOCTYPE html><html><head><title>${p.proposal_number} – Business Proposal</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; padding: 24px; color: #1e293b; }
+    @font-face { font-family: 'Questrial'; src: url('/fonts/Questrial-Regular.ttf') format('truetype'); font-weight: normal; }
+    body { font-family: 'Questrial', Arial, sans-serif; margin: 0; padding: 24px; color: #1e293b; }
     .header { display: flex; align-items: flex-start; gap: 16px; border-bottom: 2px solid #dc2626; padding-bottom: 16px; margin-bottom: 16px; }
     .logo { width: 64px; height: 64px; object-fit: contain; border-radius: 8px; border: 1px solid #e2e8f0; }
     h1 { margin: 0 0 4px; font-size: 18px; color: #0f172a; }
@@ -773,8 +777,8 @@ function ProposalLivePreview({ s, client, title, amount, number }: {
         <span className="ml-auto text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">● LIVE</span>
       </div>
 
-      <div className="border rounded-xl overflow-hidden bg-white shadow-sm text-sm">
-        <div className="bg-gradient-to-r from-slate-800 to-slate-900 p-5">
+      <div className="border rounded-2xl overflow-hidden bg-white shadow-lg text-sm">
+        <div className="bg-gradient-to-r from-red-700 to-red-900 p-5">
           <div className="flex items-start gap-3">
             <div className="h-12 w-12 rounded-lg bg-white flex items-center justify-center overflow-hidden shrink-0">
               {s.logo_url ? (
@@ -1089,7 +1093,7 @@ function ProposalDatabaseTab({ settings, proposals, loading, onReload }: {
 
       {/* Email Dialog */}
       <Dialog open={emailDialogOpen} onOpenChange={setEmailDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="w-[95vw] max-w-3xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Send className="h-4 w-4 text-blue-600" />
@@ -1102,21 +1106,23 @@ function ProposalDatabaseTab({ settings, proposals, loading, onReload }: {
             </div>
           )}
           <div className="space-y-3 py-1">
-            <div className="space-y-1.5">
-              <Label>To (recipient email) <span className="text-destructive">*</span></Label>
-              <Input
-                type="email"
-                placeholder="client@example.com"
-                value={emailTo}
-                onChange={e => setEmailTo(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Subject</Label>
-              <Input
-                value={emailSubject}
-                onChange={e => setEmailSubject(e.target.value)}
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>To (recipient email) <span className="text-destructive">*</span></Label>
+                <Input
+                  type="email"
+                  placeholder="client@example.com"
+                  value={emailTo}
+                  onChange={e => setEmailTo(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Subject</Label>
+                <Input
+                  value={emailSubject}
+                  onChange={e => setEmailSubject(e.target.value)}
+                />
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label>Message</Label>
@@ -1143,6 +1149,153 @@ function ProposalDatabaseTab({ settings, proposals, loading, onReload }: {
     <div className="hidden xl:block">
       <ProposalLivePreview s={settings} client={form.client} title={form.title} amount={form.amount} number={nextNumber} />
     </div>
+    </div>
+  )
+}
+
+// ── Data Backup Tab ────────────────────────────────────────────────────────────
+
+const BACKUP_TABLE_LABELS: Record<string, string> = {
+  items: 'Items (catalog)',
+  suppliers: 'Suppliers',
+  purchase_orders: 'Purchase Orders',
+  po_items: 'PO Line Items',
+  clients: 'Clients',
+  sales_orders: 'Sales Orders',
+  so_items: 'SO Line Items',
+  warehouse_stock: 'Warehouse Stock',
+  warehouse_stock_ledger: 'Warehouse Stock Ledger',
+}
+
+interface BackupLogEntry {
+  id: string
+  synced_at: string
+  url: string
+  total_rows: number
+  tables: { name: string; rows: number }[]
+  triggered_by_email: string | null
+}
+
+function BackupTab() {
+  const supabase = createClient()
+  const [syncing, setSyncing] = useState(false)
+  const [result, setResult] = useState<BackupSyncResult | null>(null)
+  const [history, setHistory] = useState<BackupLogEntry[]>([])
+  const [historyLoading, setHistoryLoading] = useState(true)
+
+  async function loadHistory() {
+    setHistoryLoading(true)
+    const { data, error } = await supabase
+      .from('backup_sync_log')
+      .select('*')
+      .order('synced_at', { ascending: false })
+      .limit(20)
+    if (error) toast.error(error.message)
+    else setHistory(data ?? [])
+    setHistoryLoading(false)
+  }
+
+  useEffect(() => { loadHistory() }, [])
+
+  async function handleSync() {
+    setSyncing(true)
+    try {
+      const data = await syncDatabaseBackup()
+      setResult(data)
+      toast.success('Database synced to Google Sheets')
+      await loadHistory()
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to sync backup')
+    }
+    setSyncing(false)
+  }
+
+  const totalRows = result?.tables.reduce((sum, t) => sum + t.rows, 0) ?? 0
+
+  return (
+    <div className="max-w-2xl space-y-6">
+      <div>
+        <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider mb-4">Google Sheets Backup</h3>
+        <Card>
+          <CardContent className="pt-5 space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Exports the core business tables — items, suppliers, purchase orders, sales orders,
+              clients, and warehouse stock (with its ledger) — to a single Google Sheet, one tab per
+              table. Syncing again overwrites the same Sheet in place, so the link never changes.
+            </p>
+            <Button onClick={handleSync} disabled={syncing} className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5">
+              {syncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+              {syncing ? 'Syncing…' : 'Sync to Google Sheets'}
+            </Button>
+
+            {result && (
+              <div className="border rounded-lg p-4 bg-muted/30 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-sm font-medium text-green-700">
+                    <CheckCircle2 className="h-4 w-4" /> Last synced {new Date(result.syncedAt).toLocaleString('en-PH')}
+                  </span>
+                  <a
+                    href={result.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium"
+                  >
+                    Open Sheet <ExternalLink className="h-3 w-3" />
+                  </a>
+                </div>
+                <Separator />
+                <div className="grid grid-cols-2 gap-x-6 gap-y-1.5 text-xs">
+                  {result.tables.map(t => (
+                    <div key={t.name} className="flex items-center justify-between">
+                      <span className="text-muted-foreground">{BACKUP_TABLE_LABELS[t.name] ?? t.name}</span>
+                      <span className="font-mono font-medium">{t.rows.toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="text-xs text-muted-foreground text-right pt-1 border-t">
+                  {totalRows.toLocaleString()} rows total
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div>
+        <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider mb-4">Sync History</h3>
+        <Card>
+          <CardContent className="pt-5">
+            {historyLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            ) : history.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">No syncs yet.</p>
+            ) : (
+              <div className="space-y-0">
+                {history.map(h => (
+                  <div key={h.id} className="flex items-center justify-between gap-3 py-2.5 border-b last:border-0 text-sm">
+                    <div className="min-w-0">
+                      <div className="font-medium">{new Date(h.synced_at).toLocaleString('en-PH')}</div>
+                      <div className="text-xs text-muted-foreground truncate">
+                        {h.total_rows.toLocaleString()} rows{h.triggered_by_email ? ` · ${h.triggered_by_email}` : ''}
+                      </div>
+                    </div>
+                    <a
+                      href={h.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium shrink-0"
+                    >
+                      Open <ExternalLink className="h-3 w-3" />
+                    </a>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }
@@ -1288,6 +1441,8 @@ export default function SettingsPage() {
       </div>
 
       {tab === 'security' && <SecurityTab />}
+
+      {tab === 'backup' && <BackupTab />}
 
       {tab === 'database' && (
         <ProposalDatabaseTab settings={settings} proposals={proposals} loading={proposalsLoading} onReload={loadProposals} />

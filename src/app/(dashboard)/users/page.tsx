@@ -35,6 +35,7 @@ const ROLES = [
   { value: 'employee',            label: 'Employee',            color: 'bg-gray-100 text-gray-700' },
   { value: 'auditor',             label: 'Auditor',             color: 'bg-purple-100 text-purple-800' },
   { value: 'client',              label: 'Client',              color: 'bg-blue-100 text-blue-800' },
+  { value: 'vendor',              label: 'Vendor',              color: 'bg-emerald-100 text-emerald-800' },
 ]
 
 const roleOf = (v: string) => ROLES.find(r => r.value === v) ?? { label: v, color: 'bg-gray-100 text-gray-700' }
@@ -73,20 +74,23 @@ export default function UsersPage() {
   const [inviteForm, setInviteForm] = useState({ email: '', full_name: '', role: 'employee', department: '', company: '', employee_id: '' })
   const [editForm, setEditForm] = useState({ full_name: '', role: 'employee', department: '', company: '', employee_id: '' })
   const [portalOpen, setPortalOpen] = useState(false)
-  const [portalForm, setPortalForm] = useState({ email: '', full_name: '', company: '', password: '', confirmPassword: '' })
+  const [portalForm, setPortalForm] = useState({ email: '', full_name: '', company: '', password: '', confirmPassword: '', role: 'client' as 'client' | 'vendor' })
   const [portalCreating, setPortalCreating] = useState(false)
   const [showPortalPw, setShowPortalPw] = useState(false)
   const [clientNames, setClientNames] = useState<string[]>([])
+  const [supplierNames, setSupplierNames] = useState<string[]>([])
 
   async function load() {
     setLoading(true)
-    const [{ data, error }, { data: cliData }] = await Promise.all([
+    const [{ data, error }, { data: cliData }, { data: supData }] = await Promise.all([
       supabase.from('profiles').select('id, full_name, email, role, department, company, status, created_at, employee_id, avatar_url').order('created_at', { ascending: false }),
       supabase.from('clients').select('company_name').eq('status', 'active').order('company_name'),
+      supabase.from('suppliers').select('company_name').eq('is_active', true).order('company_name'),
     ])
     if (error) toast.error(error.message)
     else setProfiles(data ?? [])
     setClientNames((cliData ?? []).map((c: any) => c.company_name))
+    setSupplierNames((supData ?? []).map((s: any) => s.company_name))
     setLoading(false)
   }
 
@@ -154,19 +158,21 @@ export default function UsersPage() {
           password: portalForm.password,
           full_name: portalForm.full_name.trim() || null,
           company: portalForm.company || null,
+          role: portalForm.role,
         }),
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error ?? 'Failed to create account')
       if (portalForm.company) {
-        await supabase.from('clients').update({
+        const table = portalForm.role === 'vendor' ? 'suppliers' : 'clients'
+        await supabase.from(table).update({
           portal_access: true,
           auth_user_id: json.userId ?? null,
         }).eq('company_name', portalForm.company)
       }
       toast.success(`Portal account created for ${portalForm.email}`)
       setPortalOpen(false)
-      setPortalForm({ email: '', full_name: '', company: '', password: '', confirmPassword: '' })
+      setPortalForm({ email: '', full_name: '', company: '', password: '', confirmPassword: '', role: 'client' })
       load()
     } catch (err: any) {
       toast.error(err.message ?? 'Failed to create portal account')
@@ -205,7 +211,8 @@ export default function UsersPage() {
   const active     = profiles.filter(p => p.status === 'active').length
   const admins     = profiles.filter(p => p.role === 'super_admin' || p.role === 'admin').length
   const clients    = profiles.filter(p => p.role === 'client').length
-  const staff      = profiles.filter(p => !['super_admin','admin','client'].includes(p.role)).length
+  const vendors    = profiles.filter(p => p.role === 'vendor').length
+  const staff      = profiles.filter(p => !['super_admin','admin','client','vendor'].includes(p.role)).length
 
   return (
     <div className="space-y-6">
@@ -231,13 +238,14 @@ export default function UsersPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
         {[
           { label: 'Total Users', value: total,   color: '' },
           { label: 'Active',      value: active,  color: 'text-green-600' },
           { label: 'Admins',      value: admins,  color: 'text-red-600' },
           { label: 'Staff',       value: staff,   color: 'text-amber-600' },
           { label: 'Clients',     value: clients, color: 'text-blue-600' },
+          { label: 'Vendors',     value: vendors, color: 'text-emerald-600' },
         ].map(s => (
           <Card key={s.label}>
             <CardContent className="pt-4 pb-3">
@@ -342,64 +350,79 @@ export default function UsersPage() {
 
       {/* Create Portal Account Dialog */}
       <Dialog open={portalOpen} onOpenChange={setPortalOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="w-[95vw] max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <KeyRound className="h-5 w-5 text-blue-600" />Create Client Portal Account
+              <KeyRound className="h-5 w-5 text-blue-600" />Create Portal Account
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3 text-sm text-blue-800">
-              The account will be activated immediately. Share the email and password with the client — they can log in right away without email confirmation.
+              The account will be activated immediately. Share the email and password with the {portalForm.role === 'vendor' ? 'vendor' : 'client'} — they can log in right away without email confirmation.
             </div>
             <div className="space-y-1.5">
-              <Label>Email Address <span className="text-destructive">*</span></Label>
-              <Input type="email" placeholder="client@company.com" value={portalForm.email}
-                onChange={e => setPortalForm(f => ({ ...f, email: e.target.value }))} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Full Name</Label>
-              <Input placeholder="Client contact person" value={portalForm.full_name}
-                onChange={e => setPortalForm(f => ({ ...f, full_name: e.target.value }))} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Company</Label>
-              <Select value={portalForm.company || '_none'} onValueChange={v => setPortalForm(f => ({ ...f, company: v === '_none' ? '' : (v ?? '') }))}>
-                <SelectTrigger><SelectValue placeholder="Select company…" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="_none">— None —</SelectItem>
-                  {clientNames.map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Password <span className="text-destructive">*</span></Label>
-              <div className="relative">
-                <Input
-                  type={showPortalPw ? 'text' : 'password'}
-                  placeholder="Minimum 6 characters"
-                  value={portalForm.password}
-                  onChange={e => setPortalForm(f => ({ ...f, password: e.target.value }))}
-                  className="pr-10"
-                />
-                <button type="button" onClick={() => setShowPortalPw(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                  {showPortalPw ? <span className="text-xs">Hide</span> : <span className="text-xs">Show</span>}
+              <Label>Portal Type</Label>
+              <div className="flex rounded-md border overflow-hidden w-fit">
+                <button type="button" onClick={() => setPortalForm(f => ({ ...f, role: 'client', company: '' }))}
+                  className={`px-4 py-1.5 text-sm font-medium ${portalForm.role === 'client' ? 'bg-blue-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}>
+                  Client
+                </button>
+                <button type="button" onClick={() => setPortalForm(f => ({ ...f, role: 'vendor', company: '' }))}
+                  className={`px-4 py-1.5 text-sm font-medium border-l ${portalForm.role === 'vendor' ? 'bg-emerald-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}>
+                  Vendor
                 </button>
               </div>
             </div>
-            <div className="space-y-1.5">
-              <Label>Confirm Password <span className="text-destructive">*</span></Label>
-              <Input
-                type={showPortalPw ? 'text' : 'password'}
-                placeholder="Re-enter password"
-                value={portalForm.confirmPassword}
-                onChange={e => setPortalForm(f => ({ ...f, confirmPassword: e.target.value }))}
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Email Address <span className="text-destructive">*</span></Label>
+                <Input type="email" placeholder={portalForm.role === 'vendor' ? 'vendor@company.com' : 'client@company.com'} value={portalForm.email}
+                  onChange={e => setPortalForm(f => ({ ...f, email: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Full Name</Label>
+                <Input placeholder={portalForm.role === 'vendor' ? 'Vendor contact person' : 'Client contact person'} value={portalForm.full_name}
+                  onChange={e => setPortalForm(f => ({ ...f, full_name: e.target.value }))} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Company</Label>
+                <Select value={portalForm.company || '_none'} onValueChange={v => setPortalForm(f => ({ ...f, company: v === '_none' ? '' : (v ?? '') }))}>
+                  <SelectTrigger><SelectValue placeholder="Select company…" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">— None —</SelectItem>
+                    {(portalForm.role === 'vendor' ? supplierNames : clientNames).map(n => <SelectItem key={n} value={n}>{n}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Password <span className="text-destructive">*</span></Label>
+                <div className="relative">
+                  <Input
+                    type={showPortalPw ? 'text' : 'password'}
+                    placeholder="Minimum 6 characters"
+                    value={portalForm.password}
+                    onChange={e => setPortalForm(f => ({ ...f, password: e.target.value }))}
+                    className="pr-10"
+                  />
+                  <button type="button" onClick={() => setShowPortalPw(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                    {showPortalPw ? <span className="text-xs">Hide</span> : <span className="text-xs">Show</span>}
+                  </button>
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Confirm Password <span className="text-destructive">*</span></Label>
+                <Input
+                  type={showPortalPw ? 'text' : 'password'}
+                  placeholder="Re-enter password"
+                  value={portalForm.confirmPassword}
+                  onChange={e => setPortalForm(f => ({ ...f, confirmPassword: e.target.value }))}
+                />
+              </div>
             </div>
             <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted px-3 py-2 rounded-md">
               <span className="bg-blue-100 text-blue-700 text-[10px] font-bold px-1.5 py-0.5 rounded">ROLE</span>
-              Automatically set to <strong>Client</strong> — portal access only
+              Automatically set to <strong>{portalForm.role === 'vendor' ? 'Vendor' : 'Client'}</strong> — portal access only
             </div>
           </div>
           <DialogFooter>
@@ -413,13 +436,13 @@ export default function UsersPage() {
 
       {/* Invite Dialog */}
       <Dialog open={inviteOpen} onOpenChange={setInviteOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="w-[95vw] max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <UserPlus className="h-5 w-5 text-red-600" />Invite User
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
             <div className="space-y-1.5">
               <Label>Email Address <span className="text-destructive">*</span></Label>
               <Input type="email" placeholder="user@cdsc.com" value={inviteForm.email}
@@ -430,17 +453,15 @@ export default function UsersPage() {
               <Input placeholder="Juan dela Cruz" value={inviteForm.full_name}
                 onChange={e => setInviteForm(f => ({ ...f, full_name: e.target.value }))} />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Employee ID</Label>
-                <Input placeholder="e.g. EMP-001" value={inviteForm.employee_id}
-                  onChange={e => setInviteForm(f => ({ ...f, employee_id: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Department</Label>
-                <Input placeholder="e.g. Operations" value={inviteForm.department}
-                  onChange={e => setInviteForm(f => ({ ...f, department: e.target.value }))} />
-              </div>
+            <div className="space-y-1.5">
+              <Label>Employee ID</Label>
+              <Input placeholder="e.g. EMP-001" value={inviteForm.employee_id}
+                onChange={e => setInviteForm(f => ({ ...f, employee_id: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Department</Label>
+              <Input placeholder="e.g. Operations" value={inviteForm.department}
+                onChange={e => setInviteForm(f => ({ ...f, department: e.target.value }))} />
             </div>
             <div className="space-y-1.5">
               <Label>Role</Label>
@@ -461,7 +482,7 @@ export default function UsersPage() {
                 </SelectContent>
               </Select>
             </div>
-            <p className="text-xs text-muted-foreground bg-muted p-3 rounded-md">
+            <p className="sm:col-span-2 text-xs text-muted-foreground bg-muted p-3 rounded-md">
               A confirmation email will be sent. The user must confirm their email and set their password before logging in.
             </p>
           </div>
@@ -476,7 +497,7 @@ export default function UsersPage() {
 
       {/* Edit Dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-w-xl">
+        <DialogContent className="w-[95vw] max-w-2xl">
           <DialogHeader>
             <DialogTitle>Edit User</DialogTitle>
           </DialogHeader>
@@ -491,31 +512,27 @@ export default function UsersPage() {
               </div>
             </div>
           )}
-          <div className="space-y-4 py-1">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Full Name</Label>
-                <Input value={editForm.full_name} onChange={e => setEditForm(f => ({ ...f, full_name: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Employee ID</Label>
-                <Input placeholder="e.g. EMP-001" value={editForm.employee_id} onChange={e => setEditForm(f => ({ ...f, employee_id: e.target.value }))} />
-              </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-1">
+            <div className="space-y-1.5">
+              <Label>Full Name</Label>
+              <Input value={editForm.full_name} onChange={e => setEditForm(f => ({ ...f, full_name: e.target.value }))} />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Role</Label>
-                <Select value={editForm.role} onValueChange={v => setEditForm(f => ({ ...f, role: v ?? 'employee' }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {ROLES.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Department</Label>
-                <Input value={editForm.department} onChange={e => setEditForm(f => ({ ...f, department: e.target.value }))} />
-              </div>
+            <div className="space-y-1.5">
+              <Label>Employee ID</Label>
+              <Input placeholder="e.g. EMP-001" value={editForm.employee_id} onChange={e => setEditForm(f => ({ ...f, employee_id: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Role</Label>
+              <Select value={editForm.role} onValueChange={v => setEditForm(f => ({ ...f, role: v ?? 'employee' }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {ROLES.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Department</Label>
+              <Input value={editForm.department} onChange={e => setEditForm(f => ({ ...f, department: e.target.value }))} />
             </div>
             <div className="space-y-1.5">
               <Label>Company</Label>

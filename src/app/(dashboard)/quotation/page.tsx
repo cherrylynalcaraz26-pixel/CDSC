@@ -1291,29 +1291,31 @@ export default function QuotationPage() {
 
       {/* Email Dialog */}
       <Dialog open={showEmailQ} onOpenChange={setShowEmailQ}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="w-[95vw] max-w-3xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Mail className="h-4 w-4" />Send Quotation by Email
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 pt-2">
-            <div className="space-y-1.5">
-              <Label>To</Label>
-              <Input
-                type="email"
-                placeholder="client@example.com"
-                value={emailToQ}
-                onChange={e => setEmailToQ(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Subject</Label>
-              <Input
-                value={emailSubjectQ}
-                onChange={e => setEmailSubjectQ(e.target.value)}
-                placeholder="Subject…"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>To</Label>
+                <Input
+                  type="email"
+                  placeholder="client@example.com"
+                  value={emailToQ}
+                  onChange={e => setEmailToQ(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Subject</Label>
+                <Input
+                  value={emailSubjectQ}
+                  onChange={e => setEmailSubjectQ(e.target.value)}
+                  placeholder="Subject…"
+                />
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label>Body</Label>
@@ -1420,20 +1422,22 @@ ${emailBodyQ.replace(/\n/g, '<br/>')}
 
       {/* List Send Email Dialog */}
       <Dialog open={!!listEmailQ} onOpenChange={o => { if (!o) setListEmailQ(null) }}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="w-[95vw] max-w-3xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Mail className="h-4 w-4" />Send Quotation by Email
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 pt-2">
-            <div className="space-y-1.5">
-              <Label>To</Label>
-              <Input type="email" placeholder="client@example.com" value={listEmailTo} onChange={e => setListEmailTo(e.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Subject</Label>
-              <Input value={listEmailSubject} onChange={e => setListEmailSubject(e.target.value)} placeholder="Subject…" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>To</Label>
+                <Input type="email" placeholder="client@example.com" value={listEmailTo} onChange={e => setListEmailTo(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Subject</Label>
+                <Input value={listEmailSubject} onChange={e => setListEmailSubject(e.target.value)} placeholder="Subject…" />
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label>Body</Label>
@@ -1558,12 +1562,12 @@ ${listEmailBody.replace(/\n/g, '<br/>')}
 
       {/* Add Item Modal */}
       <Dialog open={addItemOpen} onOpenChange={setAddItemOpen}>
-        <DialogContent className="sm:max-w-lg">
+        <DialogContent className="w-[95vw] max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Add Item</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3 py-1">
-            <div className="flex items-center gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-1">
+            <div className="sm:col-span-2 flex items-center gap-3">
               <div className="relative group shrink-0">
                 <div className="h-16 w-16 rounded-lg overflow-hidden border bg-muted/30 flex items-center justify-center">
                   {newItemImageUrl
@@ -1609,7 +1613,7 @@ ${listEmailBody.replace(/\n/g, '<br/>')}
                 }}
               />
             </div>
-            <div className="space-y-1.5">
+            <div className="sm:col-span-2 space-y-1.5">
               <Label>Item Name <span className="text-destructive">*</span></Label>
               <Input
                 autoFocus
@@ -1670,23 +1674,21 @@ ${listEmailBody.replace(/\n/g, '<br/>')}
                 </div>
               )
             })()}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Cost (₱)</Label>
-                <Input
-                  type="number" min={0} step="0.01" placeholder="0.00"
-                  value={newItemForm.cost}
-                  onChange={e => setNewItemForm(f => ({ ...f, cost: e.target.value }))}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Selling Price (₱)</Label>
-                <Input
-                  type="number" min={0} step="0.01" placeholder="0.00"
-                  value={newItemForm.selling_price}
-                  onChange={e => setNewItemForm(f => ({ ...f, selling_price: e.target.value }))}
-                />
-              </div>
+            <div className="space-y-1.5">
+              <Label>Cost (₱)</Label>
+              <Input
+                type="number" min={0} step="0.01" placeholder="0.00"
+                value={newItemForm.cost}
+                onChange={e => setNewItemForm(f => ({ ...f, cost: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Selling Price (₱)</Label>
+              <Input
+                type="number" min={0} step="0.01" placeholder="0.00"
+                value={newItemForm.selling_price}
+                onChange={e => setNewItemForm(f => ({ ...f, selling_price: e.target.value }))}
+              />
             </div>
           </div>
           <DialogFooter>

@@ -18,7 +18,7 @@ import {
   Plus, Printer, Loader2,
   Trash2, CheckCircle2, XCircle, ArrowRightLeft, X,
   Package, Search, Mail, Send, Pencil, FileText,
-  ChevronDown, ChevronUp, Wallet, Clock3, AlertCircle,
+  ChevronDown, ChevronUp, Wallet, Clock3, AlertCircle, Store, GripVertical,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
@@ -107,6 +107,17 @@ export default function PurchaseOrdersPage() {
   const [paymentTerms, setPaymentTerms] = useState('30 days')
   const [remarks, setRemarks] = useState('')
   const [lines, setLines] = useState<POLine[]>([emptyLine()])
+  const [dragLineIdx, setDragLineIdx] = useState<number | null>(null)
+
+  function reorderLines(from: number, to: number) {
+    if (from === to) return
+    setLines(prev => {
+      const next = [...prev]
+      const [moved] = next.splice(from, 1)
+      next.splice(to, 0, moved)
+      return next
+    })
+  }
   const [discountType, setDiscountType] = useState<'none' | '2' | '5' | 'custom'>('none')
   const [discountCustom, setDiscountCustom] = useState('')
   const discountRate = discountType === 'none' ? 0 : discountType === 'custom' ? (parseFloat(discountCustom) || 0) : parseFloat(discountType)
@@ -117,6 +128,13 @@ export default function PurchaseOrdersPage() {
   // Item search modal
   const [itemSearchIdx, setItemSearchIdx] = useState<number | null>(null)
   const [itemQuery, setItemQuery] = useState('')
+
+  // Vendor catalog browser — lets purchasing pick items straight from the
+  // selected supplier's own catalog instead of typing them from scratch.
+  const [vendorCatalogOpen, setVendorCatalogOpen] = useState(false)
+  const [vendorCatalogLoading, setVendorCatalogLoading] = useState(false)
+  const [vendorCatalogItems, setVendorCatalogItems] = useState<{ id: string; item_name: string; description: string | null; unit_of_measure: string; price: number | null; image_url: string | null }[]>([])
+  const [vendorCatalogQuery, setVendorCatalogQuery] = useState('')
 
   // Details modal (row click)
   const [viewPO, setViewPO] = useState<PO | null>(null)
@@ -198,6 +216,32 @@ export default function PurchaseOrdersPage() {
 
   useEffect(() => { load() }, [])
 
+  async function openVendorCatalog() {
+    if (!supplierId) { toast.error('Select a supplier first'); return }
+    setVendorCatalogQuery('')
+    setVendorCatalogOpen(true)
+    setVendorCatalogLoading(true)
+    const { data } = await supabase.from('vendor_catalog_items')
+      .select('id, item_name, description, unit_of_measure, price, image_url')
+      .eq('supplier_id', supplierId)
+      .eq('is_active', true)
+      .order('item_name')
+    setVendorCatalogItems(data ?? [])
+    setVendorCatalogLoading(false)
+  }
+
+  // Adds a picked catalog item into the first empty line, or appends a new one —
+  // same pattern as picking from the item-search modal.
+  function addLineFromVendorCatalog(it: { item_name: string; unit_of_measure: string; price: number | null }) {
+    setLines(p => {
+      const emptyIdx = p.findIndex(l => !l.item_name)
+      const newLine: POLine = { item_name: it.item_name, quantity: '1', unit: it.unit_of_measure || 'piece', unit_price: it.price != null ? String(it.price) : '', selling_price: '' }
+      if (emptyIdx !== -1) return p.map((l, idx) => idx === emptyIdx ? newLine : l)
+      return [...p, newLine]
+    })
+    toast.success(`${it.item_name} added to line items`)
+  }
+
   // Computed totals
   const subtotal = lines.reduce((s, l) => s + (parseFloat(l.unit_price) || 0) * (parseFloat(l.quantity) || 0), 0)
   const selectedSupplier = suppliers.find(s => s.id === supplierId)
@@ -220,6 +264,28 @@ export default function PurchaseOrdersPage() {
     setPaymentTerms('30 days'); setRemarks(''); setLines([emptyLine()])
     setActiveTab('form'); setDiscountType('none'); setDiscountCustom('')
     setEwtType('services'); setPreparedBy(''); setApprovedBy(''); setVatInclusive(false)
+  }
+
+  // Next sequential PO-<year>-NNNNN number, continuing the highest number already
+  // used this year (falls back to 00001 if none yet) — same convention as the
+  // existing PO-2026-000xx records.
+  async function nextPoNumber() {
+    const year = new Date().getFullYear()
+    const prefix = `PO-${year}-`
+    const { data } = await supabase
+      .from('purchase_orders')
+      .select('po_number')
+      .ilike('po_number', `${prefix}%`)
+      .order('po_number', { ascending: false })
+      .limit(1)
+    const lastNum = parseInt(data?.[0]?.po_number?.slice(prefix.length) ?? '0', 10) || 0
+    return `${prefix}${String(lastNum + 1).padStart(5, '0')}`
+  }
+
+  async function handleOpenCreate() {
+    resetForm()
+    setPoNumber(await nextPoNumber())
+    setOpen(true)
   }
 
   function handleCancelClick() {
@@ -369,10 +435,13 @@ export default function PurchaseOrdersPage() {
   }
 
   // Inverse of autoReceivePO — moving a PO back to Pending means it hasn't actually
-  // arrived, so any Receiving Report(s) created for it (auto or manual) are removed and
-  // the warehouse stock/ledger entries they credited are reversed. Reverses once per
-  // existing RR, matching how each RR's creation credited stock once, and floors at 0
-  // in case some of that stock has already moved on (e.g. delivered out via DR Logs).
+  // arrived, so any Receiving Report(s) created for it (auto, manual, or partial) are
+  // removed and the warehouse stock/ledger entries they credited are reversed. Reverses
+  // each item's actual accumulated `quantity_received` exactly once (not the ordered
+  // quantity times the RR count — a PO can have several RRs against it from partial
+  // deliveries, and each one only ever credited what it actually received), floors at 0
+  // in case some of that stock has already moved on (e.g. delivered out via DR Logs), and
+  // resets `quantity_received` back to 0 so the PO starts clean if received again.
   async function undoReceivePO(id: string): Promise<boolean> {
     const { data: poRaw } = await supabase.from('purchase_orders').select('po_number').eq('id', id).maybeSingle()
     const po = poRaw as { po_number: string | null } | null
@@ -381,12 +450,11 @@ export default function PurchaseOrdersPage() {
     const { data: rrs } = await supabase.from('receiving_reports').select('id').eq('po_number', po.po_number)
     if (!rrs || rrs.length === 0) return false
 
-    const { data: poItems } = await supabase.from('po_items').select('item_name, quantity, unit_of_measure').eq('po_id', id)
+    const { data: poItems } = await supabase.from('po_items').select('id, item_name, quantity_received, unit_of_measure').eq('po_id', id)
 
-    for (const rr of rrs) {
-      for (const it of poItems ?? []) {
-        const qty = Number(it.quantity) || 0
-        if (qty <= 0) continue
+    for (const it of poItems ?? []) {
+      const qty = Number(it.quantity_received) || 0
+      if (qty > 0) {
         const { data: wsRow } = await supabase.from('warehouse_stock').select('id, quantity').eq('item_name', it.item_name).is('client_name', null).maybeSingle()
         if (wsRow) {
           await supabase.from('warehouse_stock').update({
@@ -403,6 +471,9 @@ export default function PurchaseOrdersPage() {
           notes: 'PO reverted to Pending — receiving undone',
         })
       }
+      await supabase.from('po_items').update({ quantity_received: 0 }).eq('id', it.id)
+    }
+    for (const rr of rrs) {
       await supabase.from('receiving_reports').delete().eq('id', rr.id)
     }
     return true
@@ -422,7 +493,7 @@ export default function PurchaseOrdersPage() {
     const { data: existingRRs } = await supabase.from('receiving_reports').select('id').eq('po_number', po.po_number).limit(1)
     if (existingRRs && existingRRs.length > 0) return false
 
-    const { data: poItems } = await supabase.from('po_items').select('item_name, quantity, unit_of_measure').eq('po_id', id)
+    const { data: poItems } = await supabase.from('po_items').select('id, item_name, quantity, unit_of_measure').eq('po_id', id)
     if (!poItems || poItems.length === 0) return false
 
     const { error: rrError } = await supabase.from('receiving_reports').insert({
@@ -454,6 +525,7 @@ export default function PurchaseOrdersPage() {
         source_type: 'po_receiving',
         reference_no: po.po_number,
       })
+      await supabase.from('po_items').update({ quantity_received: qty }).eq('id', it.id)
     }
     return true
   }
@@ -739,7 +811,7 @@ export default function PurchaseOrdersPage() {
             <X className="h-4 w-4 mr-2" />Cancel
           </Button>
         ) : (
-          <Button onClick={() => setOpen(true)} className="bg-red-600 hover:bg-red-700">
+          <Button onClick={handleOpenCreate} className="bg-red-600 hover:bg-red-700">
             <Plus className="h-4 w-4 mr-2" />Create PO
           </Button>
         )}
@@ -933,6 +1005,7 @@ export default function PurchaseOrdersPage() {
 
       {/* ── Inline Create PO Form ── */}
       {open && (
+        <>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
           {/* LEFT: Form */}
@@ -960,7 +1033,7 @@ export default function PurchaseOrdersPage() {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <Label>PO Number</Label>
-                      <Input placeholder="Enter PO number" value={poNumber} onChange={e => setPoNumber(e.target.value)} />
+                      <Input placeholder="Auto-generated" value={poNumber} onChange={e => setPoNumber(e.target.value)} />
                     </div>
                     <div className="space-y-1.5">
                       <Label>Delivery Date</Label>
@@ -1107,124 +1180,6 @@ export default function PurchaseOrdersPage() {
                     )}
                   </div>
 
-                  {/* Line Items */}
-                  <div className="space-y-2">
-                    <Label>Line Items</Label>
-                    <div className="border rounded-lg overflow-hidden">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="bg-muted/40">
-                            <TableHead className="min-w-[160px]">Item Description</TableHead>
-                            <TableHead className="w-16">Qty</TableHead>
-                            <TableHead className="w-16">Unit</TableHead>
-                            <TableHead className="w-36">Unit Price</TableHead>
-                            <TableHead className="w-24 text-right">Amount</TableHead>
-                            <TableHead className="w-8"></TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {lines.map((line, i) => {
-                            const lineTotal = (parseFloat(line.unit_price) || 0) * (parseFloat(line.quantity) || 0)
-                            const itemMeta = items.find(it => it.item_name === line.item_name)
-                            const statusCfg = itemMeta ? (ITEM_STATUS_CFG[itemMeta.status] ?? ITEM_STATUS_CFG.active) : null
-                            const stockQty = line.item_name ? (warehouseStock[line.item_name] ?? 0) : null
-                            const needsToBuy = itemMeta && (itemMeta.status === 'low_stock' || itemMeta.status === 'out_of_stock')
-                            return (
-                              <TableRow key={i}>
-                                <TableCell className="py-1.5 align-top">
-                                  <div className="flex gap-1 min-w-0">
-                                    <Select value={line.item_name} onValueChange={val => {
-                                      const selected = activeItems.find(it => it.item_name === val)
-                                      const autoSell = selected?.selling_price ?? null
-                                      setLines(p => p.map((l, idx) => idx === i ? {
-                                        ...l, item_name: val ?? '',
-                                        quantity: l.quantity || '1',
-                                        unit: selected?.unit_of_measure || l.unit,
-                                        unit_price: selected?.cost != null ? String(selected.cost) : l.unit_price,
-                                        selling_price: autoSell !== null ? String(autoSell) : l.selling_price,
-                                      } : l))
-                                    }}>
-                                      <SelectTrigger className="h-8 text-xs flex-1"><SelectValue placeholder="Select item…" /></SelectTrigger>
-                                      <SelectContent>
-                                        {activeItems.map(it => <SelectItem key={it.item_code} value={it.item_name}>{it.item_name}</SelectItem>)}
-                                      </SelectContent>
-                                    </Select>
-                                    <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" title="Search inventory"
-                                      onClick={() => { setItemSearchIdx(i); setItemQuery('') }}>
-                                      <Package className="h-3.5 w-3.5" />
-                                    </Button>
-                                  </div>
-                                  {(statusCfg || stockQty !== null) && (
-                                    <div className="mt-1 flex flex-wrap gap-1">
-                                      {statusCfg && <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${statusCfg.cls}`}>{statusCfg.label}</span>}
-                                      {stockQty !== null && <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${stockQty > 0 ? 'bg-slate-100 text-slate-600' : 'bg-red-50 text-red-600'}`}>{stockQty > 0 ? `${stockQty.toLocaleString()} in stock` : 'Out of stock'}</span>}
-                                      {needsToBuy && <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-orange-50 text-orange-700 border border-orange-200">⚠ Need to buy from Supplier</span>}
-                                    </div>
-                                  )}
-                                </TableCell>
-                                <TableCell className="py-1.5">
-                                  <Input type="number" min={1} className="h-8 text-xs w-full min-w-[64px]" placeholder="1" value={line.quantity}
-                                    onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, quantity: e.target.value } : l))} />
-                                </TableCell>
-                                <TableCell className="py-1.5">
-                                  <div className="h-8 flex items-center px-2 text-xs bg-muted/40 rounded border text-muted-foreground">{line.unit || '—'}</div>
-                                </TableCell>
-                                <TableCell className="py-1.5">
-                                  <div className="flex gap-1 items-center">
-                                    <Input type="number" min={0} step="0.01" className="h-8 text-xs flex-1 min-w-0" placeholder="0.00" value={line.unit_price}
-                                      onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, unit_price: e.target.value } : l))} />
-                                    <Button type="button" variant="ghost" size="icon" className="h-8 w-7 shrink-0 text-muted-foreground hover:text-blue-600"
-                                      title="Update item default unit price (affects future records only)"
-                                      onClick={() => updateItemUnitPrice(line.item_name, line.unit_price)}>
-                                      <Pencil className="h-3 w-3" />
-                                    </Button>
-                                  </div>
-                                </TableCell>
-                                <TableCell className="py-1.5 text-right text-xs font-medium">{fmt(lineTotal)}</TableCell>
-                                <TableCell className="py-1.5">
-                                  {lines.length > 1 && (
-                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                      onClick={() => setLines(p => p.filter((_, idx) => idx !== i))}>
-                                      <Trash2 className="h-3.5 w-3.5" />
-                                    </Button>
-                                  )}
-                                </TableCell>
-                              </TableRow>
-                            )
-                          })}
-                        </TableBody>
-                      </Table>
-                    </div>
-                    <Button variant="outline" size="sm" onClick={() => setLines(p => [...p, emptyLine()])}>
-                      <Plus className="h-3.5 w-3.5 mr-1.5" />Add Item
-                    </Button>
-                  </div>
-
-                  {/* Totals summary */}
-                  <div className="rounded-lg bg-muted/30 p-4 space-y-1 text-sm">
-                    <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{fmt(subtotal)}</span></div>
-                    {discountRate > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Discount ({discountRate}%)</span><span className="text-orange-600">− {fmt(discountAmount)}</span></div>}
-                    {discountRate > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Net Subtotal</span><span>{fmt(netSubtotal)}</span></div>}
-                    <div className="flex justify-between"><span className="text-muted-foreground">Input VAT (12%)</span><span className="text-blue-600">{fmt(vatAmount)}</span></div>
-                    {ewtType !== 'none' && <div className="flex justify-between"><span className="text-muted-foreground">{taxLabel} ({ewtCfg.rate * 100}%)</span><span className="text-red-700">− {fmt(taxAmount)}</span></div>}
-                    <div className="h-px bg-border my-1" />
-                    <div className="flex justify-between font-bold"><span>Net Payable</span><span className="text-red-600">{fmt(netPayable)}</span></div>
-                  </div>
-
-                  <div className="flex justify-end gap-2 pt-2">
-                    <Button variant="outline" onClick={handleCancelClick}>Cancel</Button>
-                    <Button type="button" variant="outline" className="gap-1.5" onClick={handlePrint}>
-                      <Printer className="h-4 w-4" />Print
-                    </Button>
-                    <Button type="button" variant="outline" className="gap-1.5" onClick={() => openEmailDialog()}>
-                      <Mail className="h-4 w-4" />Email
-                    </Button>
-                    <Button onClick={submitPO} disabled={saving} className="bg-red-600 hover:bg-red-700">
-                      {saving
-                        ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />{editingId ? 'Saving…' : 'Creating…'}</>
-                        : editingId ? 'Save Update' : 'Create Purchase Order'}
-                    </Button>
-                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -1363,6 +1318,153 @@ export default function PurchaseOrdersPage() {
               </div>
             </div>
 
+          {/* Line Items — full width */}
+          <Card>
+            <CardContent className="pt-5 space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Line Items</Label>
+                <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={openVendorCatalog}>
+                  <Store className="h-3.5 w-3.5" />Browse Vendor Catalog
+                </Button>
+              </div>
+              <div className="border rounded-lg overflow-hidden">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/40">
+                      <TableHead className="w-6"></TableHead>
+                      <TableHead className="min-w-[160px]">Item Description</TableHead>
+                      <TableHead className="w-16">Qty</TableHead>
+                      <TableHead className="w-16">Unit</TableHead>
+                      <TableHead className="w-36">Unit Price</TableHead>
+                      <TableHead className="w-24 text-right">Amount</TableHead>
+                      <TableHead className="w-8"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {lines.map((line, i) => {
+                      const lineTotal = (parseFloat(line.unit_price) || 0) * (parseFloat(line.quantity) || 0)
+                      const itemMeta = items.find(it => it.item_name === line.item_name)
+                      const statusCfg = itemMeta ? (ITEM_STATUS_CFG[itemMeta.status] ?? ITEM_STATUS_CFG.active) : null
+                      const stockQty = line.item_name ? (warehouseStock[line.item_name] ?? 0) : null
+                      const needsToBuy = itemMeta && (itemMeta.status === 'low_stock' || itemMeta.status === 'out_of_stock')
+                      return (
+                        <TableRow
+                          key={i}
+                          className={dragLineIdx === i ? 'opacity-40' : ''}
+                          onDragOver={e => { e.preventDefault() }}
+                          onDrop={e => {
+                            e.preventDefault()
+                            if (dragLineIdx !== null) reorderLines(dragLineIdx, i)
+                            setDragLineIdx(null)
+                          }}
+                        >
+                          <TableCell className="py-1.5 align-top cursor-grab active:cursor-grabbing text-muted-foreground"
+                            draggable
+                            onDragStart={() => setDragLineIdx(i)}
+                            onDragEnd={() => setDragLineIdx(null)}
+                          >
+                            <GripVertical className="h-4 w-4" />
+                          </TableCell>
+                          <TableCell className="py-1.5 align-top">
+                            <div className="flex gap-1 min-w-0">
+                              <Select value={line.item_name} onValueChange={val => {
+                                const selected = activeItems.find(it => it.item_name === val)
+                                const autoSell = selected?.selling_price ?? null
+                                setLines(p => p.map((l, idx) => idx === i ? {
+                                  ...l, item_name: val ?? '',
+                                  quantity: l.quantity || '1',
+                                  unit: selected?.unit_of_measure || l.unit,
+                                  unit_price: selected?.cost != null ? String(selected.cost) : l.unit_price,
+                                  selling_price: autoSell !== null ? String(autoSell) : l.selling_price,
+                                } : l))
+                              }}>
+                                <SelectTrigger className="h-8 text-xs flex-1"><SelectValue placeholder="Select item…" /></SelectTrigger>
+                                <SelectContent>
+                                  {activeItems.map(it => <SelectItem key={it.item_code} value={it.item_name}>{it.item_name}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                              <Button type="button" variant="outline" size="icon" className="h-8 w-8 shrink-0" title="Search inventory"
+                                onClick={() => { setItemSearchIdx(i); setItemQuery('') }}>
+                                <Package className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
+                            {(statusCfg || stockQty !== null) && (
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {statusCfg && <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${statusCfg.cls}`}>{statusCfg.label}</span>}
+                                {stockQty !== null && <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${stockQty > 0 ? 'bg-slate-100 text-slate-600' : 'bg-red-50 text-red-600'}`}>{stockQty > 0 ? `${stockQty.toLocaleString()} in stock` : 'Out of stock'}</span>}
+                                {needsToBuy && <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-orange-50 text-orange-700 border border-orange-200">⚠ Need to buy from Supplier</span>}
+                              </div>
+                            )}
+                          </TableCell>
+                          <TableCell className="py-1.5">
+                            <Input type="number" min={1} className="h-8 text-xs w-full min-w-[64px]" placeholder="1" value={line.quantity}
+                              onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, quantity: e.target.value } : l))} />
+                          </TableCell>
+                          <TableCell className="py-1.5">
+                            <div className="h-8 flex items-center px-2 text-xs bg-muted/40 rounded border text-muted-foreground">{line.unit || '—'}</div>
+                          </TableCell>
+                          <TableCell className="py-1.5">
+                            <div className="flex gap-1 items-center">
+                              <Input type="number" min={0} step="0.01" className="h-8 text-xs flex-1 min-w-0" placeholder="0.00" value={line.unit_price}
+                                onChange={e => setLines(p => p.map((l, idx) => idx === i ? { ...l, unit_price: e.target.value } : l))} />
+                              <Button type="button" variant="ghost" size="icon" className="h-8 w-7 shrink-0 text-muted-foreground hover:text-blue-600"
+                                title="Update item default unit price (affects future records only)"
+                                onClick={() => updateItemUnitPrice(line.item_name, line.unit_price)}>
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                          <TableCell className="py-1.5 text-right text-xs font-medium">{fmt(lineTotal)}</TableCell>
+                          <TableCell className="py-1.5">
+                            {lines.length > 1 && (
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                onClick={() => setLines(p => p.filter((_, idx) => idx !== i))}>
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+              <Button variant="outline" size="sm" onClick={() => setLines(p => [...p, emptyLine()])}>
+                <Plus className="h-3.5 w-3.5 mr-1.5" />Add Item
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Totals & actions — full width */}
+          <Card>
+            <CardContent className="pt-5 space-y-4">
+              <div className="rounded-lg bg-muted/30 p-4 space-y-1 text-sm max-w-sm ml-auto">
+                <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{fmt(subtotal)}</span></div>
+                {discountRate > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Discount ({discountRate}%)</span><span className="text-orange-600">− {fmt(discountAmount)}</span></div>}
+                {discountRate > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Net Subtotal</span><span>{fmt(netSubtotal)}</span></div>}
+                <div className="flex justify-between"><span className="text-muted-foreground">Input VAT (12%)</span><span className="text-blue-600">{fmt(vatAmount)}</span></div>
+                {ewtType !== 'none' && <div className="flex justify-between"><span className="text-muted-foreground">{taxLabel} ({ewtCfg.rate * 100}%)</span><span className="text-red-700">− {fmt(taxAmount)}</span></div>}
+                <div className="h-px bg-border my-1" />
+                <div className="flex justify-between font-bold"><span>Net Payable</span><span className="text-red-600">{fmt(netPayable)}</span></div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t mt-4">
+                <Button variant="outline" onClick={handleCancelClick}>Cancel</Button>
+                <Button type="button" variant="outline" className="gap-1.5" onClick={handlePrint}>
+                  <Printer className="h-4 w-4" />Print
+                </Button>
+                <Button type="button" variant="outline" className="gap-1.5" onClick={() => openEmailDialog()}>
+                  <Mail className="h-4 w-4" />Email
+                </Button>
+                <Button onClick={submitPO} disabled={saving} className="bg-red-600 hover:bg-red-700">
+                  {saving
+                    ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />{editingId ? 'Saving…' : 'Creating…'}</>
+                    : editingId ? 'Save Update' : 'Create Purchase Order'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </>
       )}
 
       {/* PO Details Dialog */}
@@ -1564,31 +1666,100 @@ export default function PurchaseOrdersPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Vendor Catalog Dialog */}
+      <Dialog open={vendorCatalogOpen} onOpenChange={setVendorCatalogOpen}>
+        <DialogContent className="w-[98vw] sm:!max-w-4xl max-h-[85vh] flex flex-col overflow-hidden">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Store className="h-4 w-4" />{selectedSupplier?.company_name ?? 'Vendor'}&apos;s Catalog
+            </DialogTitle>
+          </DialogHeader>
+          <div className="relative mb-2">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              autoFocus
+              placeholder="Search this vendor's catalog…"
+              className="pl-9"
+              value={vendorCatalogQuery}
+              onChange={e => setVendorCatalogQuery(e.target.value)}
+            />
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            {vendorCatalogLoading ? (
+              <div className="flex justify-center py-12"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+            ) : (() => {
+              const filtered = vendorCatalogItems.filter(it =>
+                !vendorCatalogQuery.trim() || it.item_name.toLowerCase().includes(vendorCatalogQuery.toLowerCase())
+              )
+              if (filtered.length === 0) {
+                return (
+                  <div className="text-center py-12 text-sm text-muted-foreground">
+                    {vendorCatalogItems.length === 0 ? 'This vendor hasn’t added any catalog items yet.' : 'No items match your search.'}
+                  </div>
+                )
+              }
+              return (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {filtered.map(it => (
+                    <button
+                      key={it.id}
+                      type="button"
+                      onClick={() => { addLineFromVendorCatalog(it); setVendorCatalogOpen(false) }}
+                      className="text-left border rounded-lg overflow-hidden hover:border-red-400 hover:shadow-sm transition-all bg-white"
+                    >
+                      <div className="h-24 bg-muted/40 flex items-center justify-center overflow-hidden">
+                        {it.image_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={it.image_url} alt={it.item_name} className="h-full w-full object-contain p-2" />
+                        ) : (
+                          <Package className="h-6 w-6 text-muted-foreground/30" />
+                        )}
+                      </div>
+                      <div className="p-2.5 space-y-0.5">
+                        <div className="text-xs font-semibold truncate" title={it.item_name}>{it.item_name}</div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] text-muted-foreground">{it.unit_of_measure}</span>
+                          <span className="text-xs font-bold text-red-600">
+                            {it.price != null ? `₱${Number(it.price).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}
+                          </span>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )
+            })()}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Send Email Dialog */}
       <Dialog open={showEmail} onOpenChange={setShowEmail}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="w-[95vw] max-w-3xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Mail className="h-4 w-4" />Send Purchase Order by Email
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 pt-2">
-            <div className="space-y-1.5">
-              <Label>To</Label>
-              <Input
-                type="email"
-                placeholder="supplier@example.com"
-                value={emailTo}
-                onChange={e => setEmailTo(e.target.value)}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Subject</Label>
-              <Input
-                value={emailSubject}
-                onChange={e => setEmailSubject(e.target.value)}
-                placeholder="Subject…"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>To</Label>
+                <Input
+                  type="email"
+                  placeholder="supplier@example.com"
+                  value={emailTo}
+                  onChange={e => setEmailTo(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Subject</Label>
+                <Input
+                  value={emailSubject}
+                  onChange={e => setEmailSubject(e.target.value)}
+                  placeholder="Subject…"
+                />
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label>Body</Label>

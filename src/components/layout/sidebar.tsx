@@ -48,7 +48,7 @@ const navigation: NavItem[] = [
     label: 'Accounting', icon: Calculator,
     children: [
       { label: 'Overview', href: '/accounting?tab=overview', icon: Calculator },
-      { label: 'Accounting - Collections', href: '/accounting?tab=collections', icon: Receipt },
+      { label: 'Collections', href: '/accounting?tab=collections', icon: Receipt },
       { label: 'BIR Compliance', href: '/accounting?tab=bir', icon: FileText },
     ],
   },
@@ -284,12 +284,13 @@ function SidebarContent({
   useEffect(() => {
     const supabase = createClient()
     async function loadBadges() {
-      const [messages, quotationRequests, draftOrders, newLeads, itemSuggestions] = await Promise.all([
+      const [messages, quotationRequests, draftOrders, newLeads, itemSuggestions, pendingPOs] = await Promise.all([
         supabase.from('client_messages').select('id', { count: 'exact', head: true }).eq('status', 'unread'),
         supabase.from('quotation_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
         supabase.from('sales_orders').select('id', { count: 'exact', head: true }).eq('status', 'draft'),
         supabase.from('crm_leads').select('id', { count: 'exact', head: true }).eq('stage', 'new_lead'),
         supabase.from('item_suggestions').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+        supabase.from('purchase_orders').select('id', { count: 'exact', head: true }).eq('status', 'open'),
       ])
       setBadges({
         '/messages': messages.count ?? 0,
@@ -297,6 +298,7 @@ function SidebarContent({
         '/sales-orders': draftOrders.count ?? 0,
         '/crm': newLeads.count ?? 0,
         '/setup': itemSuggestions.count ?? 0,
+        '/purchase-orders': pendingPOs.count ?? 0,
       })
     }
     loadBadges()

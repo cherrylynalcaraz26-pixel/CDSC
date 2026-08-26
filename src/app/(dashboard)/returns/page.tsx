@@ -164,17 +164,19 @@ export default function ReturnsPage() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <div className="space-y-1.5">
-              <Label>Supplier <span className="text-destructive">*</span></Label>
-              <Select value={form.supplier_id} onValueChange={v => setForm(f => ({ ...f, supplier_id: v ?? '' }))}>
-                <SelectTrigger><SelectValue placeholder="Select supplier" /></SelectTrigger>
-                <SelectContent>{suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.company_name}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Supplier <span className="text-destructive">*</span></Label>
+                <Select value={form.supplier_id} onValueChange={v => setForm(f => ({ ...f, supplier_id: v ?? '' }))}>
+                  <SelectTrigger><SelectValue placeholder="Select supplier" /></SelectTrigger>
+                  <SelectContent>{suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.company_name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
 
-            <div className="space-y-1.5">
-              <Label>Reason for Return</Label>
-              <Input placeholder="e.g. Defective, Wrong item, Overage" value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} />
+              <div className="space-y-1.5">
+                <Label>Reason for Return</Label>
+                <Input placeholder="e.g. Defective, Wrong item, Overage" value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} />
+              </div>
             </div>
 
             <div className="space-y-2">

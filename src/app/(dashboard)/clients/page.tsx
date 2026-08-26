@@ -293,25 +293,28 @@ export default function ClientsPage() {
     if (invitePassword.length < 8) { toast.error('Password must be at least 8 characters'); return }
     setInviting(true)
     try {
-      const { data, error } = await supabase.auth.signUp({
-        email: inviteEmail.trim().toLowerCase(),
-        password: invitePassword,
-        options: { data: { full_name: inviteClient.company_name, role: 'client', client_id: inviteClient.id } },
-      })
-      if (error) throw error
-      if (data.user) {
-        await supabase.from('profiles').upsert({
-          id: data.user.id,
+      // Created via the service-role admin API (email_confirm: true) rather than
+      // client-side signUp, so the account can log in immediately instead of
+      // bouncing off "Your account email has not been confirmed" until the
+      // project's confirmation email is sent and clicked.
+      const res = await fetch('/api/create-portal-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           email: inviteEmail.trim().toLowerCase(),
+          password: invitePassword,
           full_name: inviteClient.contact_person || inviteClient.company_name,
+          company: inviteClient.company_name,
           role: 'client',
-        })
-        await supabase.from('clients').update({
-          auth_user_id: data.user.id,
-          portal_access: true,
-          email: inviteEmail.trim().toLowerCase(),
-        }).eq('id', inviteClient.id)
-      }
+        }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error ?? 'Failed to create portal account')
+      await supabase.from('clients').update({
+        auth_user_id: json.userId ?? null,
+        portal_access: true,
+        email: inviteEmail.trim().toLowerCase(),
+      }).eq('id', inviteClient.id)
       setInviteResult({ email: inviteEmail.trim().toLowerCase() })
       load()
     } catch (err: any) {
@@ -589,7 +592,7 @@ export default function ClientsPage() {
 
       {/* Create / Edit Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingId ? 'Edit Client' : 'New Client Account'}</DialogTitle>
           </DialogHeader>
@@ -650,8 +653,8 @@ export default function ClientsPage() {
             {/* Company Info */}
             <div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Company Information</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="sm:col-span-2 space-y-1.5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-3 space-y-1.5">
                   <Label>Company Name <span className="text-red-500">*</span></Label>
                   <Input value={form.company_name} onChange={e => f('company_name', e.target.value)} placeholder="e.g. ABC Trading Corp." />
                 </div>
@@ -699,7 +702,7 @@ export default function ClientsPage() {
             {/* Contact */}
             <div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Contact Person</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1.5">
                   <Label>Full Name</Label>
                   <Input value={form.contact_person} onChange={e => f('contact_person', e.target.value)} placeholder="Juan dela Cruz" />
@@ -726,8 +729,8 @@ export default function ClientsPage() {
             {/* Address */}
             <div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Address</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="sm:col-span-2 space-y-1.5">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="sm:col-span-3 space-y-1.5">
                   <Label>Street Address</Label>
                   <Input value={form.address} onChange={e => f('address', e.target.value)} placeholder="Building, Street, Barangay" />
                 </div>
@@ -749,7 +752,7 @@ export default function ClientsPage() {
             {/* Commercial */}
             <div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Commercial Terms</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="space-y-1.5">
                   <Label>Payment Terms</Label>
                   <Select value={form.payment_terms || '_none'} onValueChange={(v: string | null) => f('payment_terms', !v || v === '_none' ? '' : v)}>
