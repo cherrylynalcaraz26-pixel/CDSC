@@ -394,6 +394,12 @@ export default function PurchaseOrdersPage() {
 
     // Save line items to po_items
     if (savedPoId) {
+      // Editing rewrites every line item from scratch — remember what was already
+      // received per item name first, so that history isn't lost for lines that
+      // still exist after the edit.
+      const { data: oldItems } = await supabase.from('po_items').select('item_name, quantity_received').eq('po_id', savedPoId)
+      const receivedMap = new Map((oldItems ?? []).map(r => [r.item_name, Number(r.quantity_received) || 0]))
+
       await supabase.from('po_items').delete().eq('po_id', savedPoId)
       const validLines = lines.filter(l => l.item_name.trim())
       if (validLines.length > 0) {
@@ -405,8 +411,41 @@ export default function PurchaseOrdersPage() {
           unit_cost: parseFloat(l.unit_price) || 0,
           selling_price: parseFloat(l.selling_price) || null,
           total_cost: (parseFloat(l.unit_price) || 0) * (parseFloat(l.quantity) || 1),
+          quantity_received: receivedMap.get(l.item_name) ?? 0,
         }))
-        await supabase.from('po_items').insert(itemRows)
+        const { data: insertedItems } = await supabase.from('po_items').insert(itemRows).select('id, item_name, quantity, unit_of_measure')
+
+        // If this PO was already marked Completed, autoReceivePO already ran and won't
+        // run again (it skips once a Receiving Report exists for the PO number) — so a
+        // brand-new line added in this edit would otherwise sit uncredited forever.
+        // Receive just that line now, the same way autoReceivePO would have.
+        if (editingId && insertedItems) {
+          const { data: poRow } = await supabase.from('purchase_orders').select('po_number, status').eq('id', savedPoId).maybeSingle()
+          if (poRow?.status === 'completed') {
+            for (const it of insertedItems) {
+              if (receivedMap.has(it.item_name)) continue
+              const qty = Number(it.quantity) || 0
+              if (qty <= 0) continue
+              const { data: wsRow } = await supabase.from('warehouse_stock').select('id, quantity').eq('item_name', it.item_name).is('client_name', null).maybeSingle()
+              if (wsRow) {
+                await supabase.from('warehouse_stock').update({
+                  quantity: Number(wsRow.quantity) + qty,
+                  updated_at: new Date().toISOString(),
+                }).eq('id', wsRow.id)
+              } else {
+                await supabase.from('warehouse_stock').insert({ item_name: it.item_name, unit: it.unit_of_measure ?? '', quantity: qty, client_name: null })
+              }
+              await supabase.from('warehouse_stock_ledger').insert({
+                item_name: it.item_name,
+                unit: it.unit_of_measure ?? '',
+                change_qty: qty,
+                source_type: 'po_receiving',
+                reference_no: poRow.po_number,
+              })
+              await supabase.from('po_items').update({ quantity_received: qty }).eq('id', it.id)
+            }
+          }
+        }
       }
     }
 

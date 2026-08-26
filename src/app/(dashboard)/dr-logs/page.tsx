@@ -1265,18 +1265,119 @@ export default function DRLogsPage() {
             </CardTitle>
             <div className="flex rounded-md border overflow-hidden w-fit lg:hidden">
               <button
-                onClick={() => setDrActiveTab('preview')}
-                className={`px-4 py-1.5 text-sm font-medium ${drActiveTab === 'preview' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
-              >Preview</button>
-              <button
                 onClick={() => setDrActiveTab('form')}
-                className={`px-4 py-1.5 text-sm font-medium border-l ${drActiveTab === 'form' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
+                className={`px-4 py-1.5 text-sm font-medium ${drActiveTab === 'form' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
               >Form</button>
+              <button
+                onClick={() => setDrActiveTab('preview')}
+                className={`px-4 py-1.5 text-sm font-medium border-l ${drActiveTab === 'preview' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
+              >Preview</button>
             </div>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Live Preview (now shown first) */}
+              {/* LEFT: DR Details */}
+              <div className={`space-y-3 ${drActiveTab === 'preview' ? 'hidden lg:block' : 'block'}`}>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">DR Details</p>
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label>DR Number <span className="text-destructive">*</span></Label>
+                      <div className="relative">
+                        <Input
+                          placeholder="e.g. DR-2025-00001"
+                          value={form.dr_number}
+                          onChange={e => setForm(f => ({ ...f, dr_number: e.target.value }))}
+                          onFocus={() => setDrNumberDropdownOpen(true)}
+                          onBlur={() => setTimeout(() => setDrNumberDropdownOpen(false), 150)}
+                        />
+                        {drNumberDropdownOpen && drNumberOptions.length > 0 && (
+                          <div className="absolute z-20 w-full mt-1 bg-popover border rounded-lg shadow-lg max-h-44 overflow-y-auto min-w-[220px]">
+                            {drNumberOptions.map(opt => (
+                              <button
+                                key={opt.value}
+                                type="button"
+                                onMouseDown={() => { setForm(f => ({ ...f, dr_number: opt.value })); setDrNumberDropdownOpen(false) }}
+                                className="w-full text-left px-3 py-2 text-sm hover:bg-muted border-b last:border-0 flex items-center justify-between"
+                              >
+                                <span className="font-mono">{opt.value}</span>
+                                {opt.tag === 'current' && <span className="text-xs text-muted-foreground ml-1.5">(Current)</span>}
+                                {opt.tag === 'next' && <span className="text-xs text-muted-foreground ml-1.5">(Next)</span>}
+                                {opt.tag === 'missing' && <span className="text-xs text-amber-600 ml-1.5">(Missing)</span>}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>DR Date <span className="text-destructive">*</span></Label>
+                      <Input type="date" value={form.dr_date}
+                        onChange={e => setForm(f => ({ ...f, dr_date: e.target.value }))} />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Delivered To</Label>
+                    <Select value={deliveredToId} onValueChange={handleClientChange}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select client / delivered to">
+                          {(v: string) => v ? (clients.find(c => c.id === v)?.company_name ?? v) : undefined}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent className="min-w-[320px]">
+                        <SelectItem value="">— None —</SelectItem>
+                        {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-[2fr_1fr] gap-4">
+                    <div className="space-y-1.5">
+                      <Label>SO Reference</Label>
+                      <Select value={form.po_number} onValueChange={v => setForm(f => ({ ...f, po_number: v ?? '' }))}>
+                        <SelectTrigger className="w-full"><SelectValue placeholder="Select SO…" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="">— None —</SelectItem>
+                          {availableSoNumbers.map(s => <SelectItem key={s.id} value={s.so_number}>{s.so_number}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      {form.po_number && soItemsMap[form.po_number]?.length > 0 && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="w-full h-7 text-xs mt-1"
+                          onClick={() => setItems(soItemsMap[form.po_number].map(i => ({ dr_number: '', item_name: i.item_name, unit: i.unit, quantity: String(i.quantity) })))}
+                        >
+                          Load from SO
+                        </Button>
+                      )}
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Status</Label>
+                      <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v ?? 'received' }))}>
+                        <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="received">Received</SelectItem>
+                          <SelectItem value="partial">Partial</SelectItem>
+                          <SelectItem value="rejected">Rejected</SelectItem>
+                          <SelectItem value="returned">Returned</SelectItem>
+                          <SelectItem value="cancelled">Cancelled</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Received By</Label>
+                    <Input placeholder="Name of receiver" value={form.received_by_name}
+                      onChange={e => setForm(f => ({ ...f, received_by_name: e.target.value }))} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Remarks</Label>
+                    <Textarea rows={2} className="resize-y" placeholder="Notes, discrepancies, condition of goods…" value={form.remarks}
+                      onChange={e => setForm(f => ({ ...f, remarks: e.target.value }))} />
+                  </div>
+              </div>
+
+              {/* RIGHT: Live Preview */}
               <div className={`${drActiveTab === 'form' ? 'hidden lg:block' : 'block'}`}>
                 <div className="sticky top-0">
                   <div className="flex items-center justify-between mb-2">
@@ -1376,109 +1477,10 @@ export default function DRLogsPage() {
                 </div>
               </div>
 
-              {/* Form fields: DR Details + Delivery Items (now second) */}
-              <div className={`space-y-5 ${drActiveTab === 'preview' ? 'hidden lg:block' : 'block'}`}>
-                <div className="space-y-3">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">DR Details</p>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1.5">
-                      <Label>DR Number <span className="text-destructive">*</span></Label>
-                      <div className="relative">
-                        <Input
-                          placeholder="e.g. DR-2025-00001"
-                          value={form.dr_number}
-                          onChange={e => setForm(f => ({ ...f, dr_number: e.target.value }))}
-                          onFocus={() => setDrNumberDropdownOpen(true)}
-                          onBlur={() => setTimeout(() => setDrNumberDropdownOpen(false), 150)}
-                        />
-                        {drNumberDropdownOpen && drNumberOptions.length > 0 && (
-                          <div className="absolute z-20 w-full mt-1 bg-popover border rounded-lg shadow-lg max-h-44 overflow-y-auto min-w-[220px]">
-                            {drNumberOptions.map(opt => (
-                              <button
-                                key={opt.value}
-                                type="button"
-                                onMouseDown={() => { setForm(f => ({ ...f, dr_number: opt.value })); setDrNumberDropdownOpen(false) }}
-                                className="w-full text-left px-3 py-2 text-sm hover:bg-muted border-b last:border-0 flex items-center justify-between"
-                              >
-                                <span className="font-mono">{opt.value}</span>
-                                {opt.tag === 'current' && <span className="text-xs text-muted-foreground ml-1.5">(Current)</span>}
-                                {opt.tag === 'next' && <span className="text-xs text-muted-foreground ml-1.5">(Next)</span>}
-                                {opt.tag === 'missing' && <span className="text-xs text-amber-600 ml-1.5">(Missing)</span>}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>DR Date <span className="text-destructive">*</span></Label>
-                      <Input type="date" value={form.dr_date}
-                        onChange={e => setForm(f => ({ ...f, dr_date: e.target.value }))} />
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Delivered To</Label>
-                    <Select value={deliveredToId} onValueChange={handleClientChange}>
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select client / delivered to">
-                          {(v: string) => v ? (clients.find(c => c.id === v)?.company_name ?? v) : undefined}
-                        </SelectValue>
-                      </SelectTrigger>
-                      <SelectContent className="min-w-[320px]">
-                        <SelectItem value="">— None —</SelectItem>
-                        {clients.map(c => <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid grid-cols-[2fr_1fr] gap-4">
-                    <div className="space-y-1.5">
-                      <Label>SO Reference</Label>
-                      <Select value={form.po_number} onValueChange={v => setForm(f => ({ ...f, po_number: v ?? '' }))}>
-                        <SelectTrigger className="w-full"><SelectValue placeholder="Select SO…" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="">— None —</SelectItem>
-                          {availableSoNumbers.map(s => <SelectItem key={s.id} value={s.so_number}>{s.so_number}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                      {form.po_number && soItemsMap[form.po_number]?.length > 0 && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="w-full h-7 text-xs mt-1"
-                          onClick={() => setItems(soItemsMap[form.po_number].map(i => ({ dr_number: '', item_name: i.item_name, unit: i.unit, quantity: String(i.quantity) })))}
-                        >
-                          Load from SO
-                        </Button>
-                      )}
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label>Status</Label>
-                      <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v ?? 'received' }))}>
-                        <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="received">Received</SelectItem>
-                          <SelectItem value="partial">Partial</SelectItem>
-                          <SelectItem value="rejected">Rejected</SelectItem>
-                          <SelectItem value="returned">Returned</SelectItem>
-                          <SelectItem value="cancelled">Cancelled</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Received By</Label>
-                    <Input placeholder="Name of receiver" value={form.received_by_name}
-                      onChange={e => setForm(f => ({ ...f, received_by_name: e.target.value }))} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Remarks</Label>
-                    <Textarea rows={2} className="resize-y" placeholder="Notes, discrepancies, condition of goods…" value={form.remarks}
-                      onChange={e => setForm(f => ({ ...f, remarks: e.target.value }))} />
-                  </div>
-                </div>
+            </div>
 
-                <div className="space-y-2">
+            {/* Delivery Items — full width so all columns are visible */}
+            <div className={`space-y-2 mt-6 ${drActiveTab === 'preview' ? 'hidden lg:block' : 'block'}`}>
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">Delivery Items</p>
                   <div className="border rounded-lg overflow-hidden [&_[data-slot=table-container]]:overflow-x-hidden">
                     <Table className="table-fixed w-full">
@@ -1566,8 +1568,6 @@ export default function DRLogsPage() {
                   <Button type="button" variant="outline" size="sm" onClick={addItemRow} className="mt-1">
                     <Plus className="h-3.5 w-3.5 mr-1" /> Add Item
                   </Button>
-                </div>
-              </div>
             </div>
             <div className="flex justify-end gap-2 pt-4 border-t mt-4">
               <Button variant="outline" onClick={handleCancelClick}>Cancel</Button>

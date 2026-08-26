@@ -877,7 +877,7 @@ export default function InventoryPage() {
 
   // Est. Value per warehouse row — quantity × item Unit Cost.
   const itemPriceMap: Record<string, number> = {}
-  for (const it of itemOptions) itemPriceMap[it.item_name] = it.cost ?? 0
+  for (const it of itemOptions) itemPriceMap[it.item_name] = it.selling_price ?? it.cost ?? 0
   const warehouseEstValue = (r: { item_name: string; quantity: number }) => r.quantity * (itemPriceMap[r.item_name] ?? 0)
   const whTotalEstValue = filteredWarehouseRows.reduce((s, r) => s + warehouseEstValue(r), 0)
 
