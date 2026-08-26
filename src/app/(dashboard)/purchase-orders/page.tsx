@@ -24,6 +24,7 @@ import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
 import { sendEmail, POPdfData } from '@/lib/send-email'
+import { uploadFileToDrive } from '@/lib/upload-image'
 
 interface ItemOption {
   item_code: string
@@ -67,8 +68,7 @@ interface PO {
   payment_terms: string | null
   remarks: string | null
   supplier?: { company_name: string } | null
-  pr?: { pr_number: string } | null
-  pr_id?: string | null
+  invoice_no?: string | null
 }
 
 interface Supplier { id: string; company_name: string; payment_terms: string | null; ewt_rate: number | null; email: string | null }
@@ -101,8 +101,7 @@ export default function PurchaseOrdersPage() {
   // Form state
   const [supplierId, setSupplierId] = useState('')
   const [poNumber, setPoNumber] = useState('')
-  const [prId, setPrId] = useState('')
-  const [purchaseRequests, setPurchaseRequests] = useState<{ id: string; pr_number: string | null }[]>([])
+  const [invoiceNo, setInvoiceNo] = useState('')
   const [deliveryDate, setDeliveryDate] = useState('')
   const [paymentTerms, setPaymentTerms] = useState('30 days')
   const [remarks, setRemarks] = useState('')
@@ -139,11 +138,43 @@ export default function PurchaseOrdersPage() {
   // Details modal (row click)
   const [viewPO, setViewPO] = useState<PO | null>(null)
   const [viewPOItems, setViewPOItems] = useState<{ item_name: string; quantity: number; quantity_received: number; unit: string | null; unit_price: number; selling_price: number | null; total_amount: number }[]>([])
+  const [viewPOAttachments, setViewPOAttachments] = useState<{ id: string; file_url: string; file_name: string }[]>([])
+  const [uploadingPOAttachment, setUploadingPOAttachment] = useState(false)
 
   async function openDetails(po: PO) {
     setViewPO(po)
     const { data } = await supabase.from('po_items').select('item_name,quantity,quantity_received,unit_of_measure,unit_cost,selling_price,total_cost').eq('po_id', po.id).order('created_at')
     setViewPOItems((data ?? []).map(r => ({ item_name: r.item_name, quantity: r.quantity, quantity_received: Number(r.quantity_received) || 0, unit: r.unit_of_measure, unit_price: r.unit_cost, selling_price: r.selling_price, total_amount: r.total_cost })))
+    await loadPOAttachments(po.po_number)
+  }
+
+  async function loadPOAttachments(poNumber: string | null) {
+    if (!poNumber) { setViewPOAttachments([]); return }
+    const { data } = await supabase.from('po_attachments').select('id, file_url, file_name').eq('po_number', poNumber).order('uploaded_at')
+    setViewPOAttachments(data ?? [])
+  }
+
+  async function uploadPOAttachments(poNumber: string | null, files: FileList | null) {
+    if (!poNumber || !files || files.length === 0) return
+    setUploadingPOAttachment(true)
+    try {
+      for (const file of Array.from(files)) {
+        const { url, name } = await uploadFileToDrive(file, { folder: 'PO Attachments' })
+        await supabase.from('po_attachments').insert({ po_number: poNumber, file_url: url, file_name: name })
+      }
+      await loadPOAttachments(poNumber)
+      toast.success('Attachment(s) uploaded')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to upload attachment')
+    } finally {
+      setUploadingPOAttachment(false)
+    }
+  }
+
+  async function deletePOAttachment(id: string, poNumber: string | null) {
+    const { error } = await supabase.from('po_attachments').delete().eq('id', id)
+    if (error) { toast.error(error.message); return }
+    await loadPOAttachments(poNumber)
   }
 
   // Edit
@@ -180,7 +211,7 @@ export default function PurchaseOrdersPage() {
     const [{ data: poData }, { data: supData }, { data: itemData }] = await Promise.all([
       supabase
         .from('purchase_orders')
-        .select('*, supplier:suppliers(company_name), pr:purchase_requests(pr_number)')
+        .select('*, supplier:suppliers(company_name)')
         .order('created_at', { ascending: false }),
       supabase.from('suppliers').select('id, company_name, payment_terms, ewt_rate, email').eq('is_active', true).order('company_name'),
       supabase.from('items').select('item_code, item_name, unit_of_measure, status, cost, selling_price').order('item_name'),
@@ -188,8 +219,6 @@ export default function PurchaseOrdersPage() {
     setPOs((poData ?? []) as PO[])
     setSuppliers(supData ?? [])
     setItems((itemData ?? []) as ItemOption[])
-    const { data: prData } = await supabase.from('purchase_requests').select('id, pr_number').order('created_at', { ascending: false })
-    setPurchaseRequests(prData ?? [])
     const { data: sysData } = await supabase.from('system_settings').select('company_name, address, phone, email, tin, logo_url').single()
     if (sysData) setCompanyInfo(sysData)
     const { data: wsData } = await supabase.from('warehouse_stock').select('item_name, quantity')
@@ -260,7 +289,7 @@ export default function PurchaseOrdersPage() {
 
   function resetForm() {
     setEditingId(null)
-    setSupplierId(''); setPoNumber(''); setDeliveryDate(''); setPrId('')
+    setSupplierId(''); setPoNumber(''); setDeliveryDate(''); setInvoiceNo('')
     setPaymentTerms('30 days'); setRemarks(''); setLines([emptyLine()])
     setActiveTab('form'); setDiscountType('none'); setDiscountCustom('')
     setEwtType('services'); setPreparedBy(''); setApprovedBy(''); setVatInclusive(false)
@@ -306,7 +335,7 @@ export default function PurchaseOrdersPage() {
     setSupplierId((po.supplier as any)?.id ?? (po as any).supplier_id ?? '')
     setPoNumber(po.po_number ?? '')
     setDeliveryDate(po.delivery_date ?? '')
-    setPrId(po.pr_id ?? '')
+    setInvoiceNo(po.invoice_no ?? '')
     setPaymentTerms(po.payment_terms ?? '30 days')
     setRemarks(po.remarks ?? '')
 
@@ -361,7 +390,7 @@ export default function PurchaseOrdersPage() {
     const payload = {
       po_number: poNumber || null,
       supplier_id: supplierId || null,
-      pr_id: prId || null,
+      invoice_no: invoiceNo || null,
       delivery_date: deliveryDate || null,
       payment_terms: paymentTerms || null,
       remarks: remarks || null,
@@ -797,16 +826,16 @@ export default function PurchaseOrdersPage() {
         const q = query.toLowerCase()
         return (p.po_number ?? '').toLowerCase().includes(q) ||
           (p.supplier?.company_name ?? '').toLowerCase().includes(q) ||
-          (p.pr?.pr_number ?? '').toLowerCase().includes(q) ||
+          (p.invoice_no ?? '').toLowerCase().includes(q) ||
           (p.status ?? '').toLowerCase().includes(q)
       })
     : pos
 
-  type PoSortKey = 'po_number' | 'pr_number' | 'supplier' | 'po_date' | 'delivery_date' | 'subtotal' | 'vat_amount' | 'ewt_amount' | 'net_payable' | 'status'
+  type PoSortKey = 'po_number' | 'invoice_no' | 'supplier' | 'po_date' | 'delivery_date' | 'subtotal' | 'vat_amount' | 'ewt_amount' | 'net_payable' | 'status'
   const { sorted: sortedPos, sortKey: poSortKey, sortDir: poSortDir, onSort: onSortPo } = useTableSort<PO, PoSortKey>(displayedPos, (po, key) => {
     switch (key) {
       case 'po_number': return po.po_number ?? ''
-      case 'pr_number': return po.pr?.pr_number ?? ''
+      case 'invoice_no': return po.invoice_no ?? ''
       case 'supplier': return po.supplier?.company_name ?? ''
       case 'po_date': return po.po_date ?? ''
       case 'delivery_date': return po.delivery_date ?? ''
@@ -988,7 +1017,7 @@ export default function PurchaseOrdersPage() {
                 <TableRow>
                   <TableHead className="w-10">No.</TableHead>
                   <SortableTableHead label="PO Number" sortKey="po_number" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
-                  <SortableTableHead label="PR Ref" sortKey="pr_number" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
+                  <SortableTableHead label="Invoice No." sortKey="invoice_no" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
                   <SortableTableHead label="Supplier" sortKey="supplier" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
                   <SortableTableHead label="PO Date" sortKey="po_date" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
                   <SortableTableHead label="Delivery Date" sortKey="delivery_date" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
@@ -1018,7 +1047,7 @@ export default function PurchaseOrdersPage() {
                     <TableRow key={po.id} className="cursor-pointer hover:bg-red-50/40 transition-colors" onClick={() => openDetails(po)}>
                       <TableCell className="text-muted-foreground text-xs">{idx + 1}</TableCell>
                       <TableCell className="font-mono text-xs font-semibold text-red-600">{po.po_number ?? '—'}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{(po.pr as any)?.pr_number ?? '—'}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{po.invoice_no ?? '—'}</TableCell>
                       <TableCell className="font-medium text-sm">{(po.supplier as any)?.company_name ?? '—'}</TableCell>
                       <TableCell className="text-sm whitespace-nowrap">
                         {po.po_date ? format(new Date(po.po_date), 'MMM d, yyyy') : '—'}
@@ -1080,20 +1109,10 @@ export default function PurchaseOrdersPage() {
                     </div>
                   </div>
 
-                  {/* PR Ref */}
+                  {/* Invoice No. */}
                   <div className="space-y-1.5">
-                    <Label>PR Ref</Label>
-                    <div className="flex gap-1">
-                      <Select value={prId || '_none'} onValueChange={v => setPrId(!v || v === '_none' ? '' : v)}>
-                        <SelectTrigger className="flex-1">
-                          <SelectValue>{(v: string) => v === '_none' ? 'No linked PR' : (purchaseRequests.find(p => p.id === v)?.pr_number ?? '—')}</SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="_none">— None —</SelectItem>
-                          {purchaseRequests.map(pr => <SelectItem key={pr.id} value={pr.id}>{pr.pr_number ?? pr.id}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    <Label>Invoice No.</Label>
+                    <Input placeholder="Supplier's invoice number" value={invoiceNo} onChange={e => setInvoiceNo(e.target.value)} />
                   </div>
 
                   {/* Supplier */}
@@ -1507,7 +1526,7 @@ export default function PurchaseOrdersPage() {
       )}
 
       {/* PO Details Dialog */}
-      <Dialog open={!!viewPO} onOpenChange={o => { if (!o) { setViewPO(null); setViewPOItems([]) } }}>
+      <Dialog open={!!viewPO} onOpenChange={o => { if (!o) { setViewPO(null); setViewPOItems([]); setViewPOAttachments([]) } }}>
         <DialogContent className="w-[98vw] sm:!max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -1542,13 +1561,44 @@ export default function PurchaseOrdersPage() {
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs bg-muted/30 rounded-xl p-3">
                 <div><span className="text-muted-foreground block">Supplier</span><span className="font-medium">{viewPO.supplier?.company_name ?? '—'}</span></div>
-                <div><span className="text-muted-foreground block">PR Ref</span><span className="font-medium">{viewPO.pr?.pr_number ?? '—'}</span></div>
+                <div><span className="text-muted-foreground block">Invoice No.</span><span className="font-medium">{viewPO.invoice_no ?? '—'}</span></div>
                 <div><span className="text-muted-foreground block">PO Date</span><span className="font-medium">{viewPO.po_date ? format(new Date(viewPO.po_date), 'MMM d, yyyy') : '—'}</span></div>
                 <div><span className="text-muted-foreground block">Delivery Date</span><span className="font-medium">{viewPO.delivery_date ? format(new Date(viewPO.delivery_date), 'MMM d, yyyy') : '—'}</span></div>
                 <div><span className="text-muted-foreground block">Payment Terms</span><span className="font-medium">{viewPO.payment_terms ?? '—'}</span></div>
                 <div><span className="text-muted-foreground block">Discount</span><span className="font-medium">{viewPO.discount_rate ? `${viewPO.discount_rate}% (${fmt(viewPO.discount_amount ?? 0)})` : '—'}</span></div>
                 <div><span className="text-muted-foreground block">CWT</span><span className="font-medium">{fmt(viewPO.cwt_amount ?? 0)}</span></div>
                 <div><span className="text-muted-foreground block">Remarks</span><span className="font-medium">{viewPO.remarks || '—'}</span></div>
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label>Attachments</Label>
+                  <Button
+                    type="button" variant="outline" size="sm" className="h-7 px-2 text-xs gap-1" disabled={uploadingPOAttachment}
+                    onClick={() => document.getElementById('po-attachment-input')?.click()}
+                  >
+                    {uploadingPOAttachment ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                    Add File
+                  </Button>
+                  <input
+                    id="po-attachment-input" type="file" multiple className="hidden"
+                    onChange={e => { uploadPOAttachments(viewPO.po_number, e.target.files); e.target.value = '' }}
+                  />
+                </div>
+                {viewPOAttachments.length === 0 ? (
+                  <p className="text-xs text-muted-foreground italic">No attachments yet.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {viewPOAttachments.map(a => (
+                      <div key={a.id} className="flex items-center gap-1.5 border rounded-md pl-2 pr-1 py-1 text-xs bg-muted/30">
+                        <a href={a.file_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline truncate max-w-[160px]">{a.file_name}</a>
+                        <button type="button" onClick={() => deletePOAttachment(a.id, viewPO.po_number)} className="text-muted-foreground hover:text-destructive p-0.5">
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="border rounded-xl overflow-hidden text-xs">
