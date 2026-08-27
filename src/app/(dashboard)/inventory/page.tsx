@@ -100,7 +100,7 @@ function KpiCard({ value, label, valueClass, icon: Icon, tint, grad, shadow }: {
   )
 }
 
-type WhSortKey = 'client_name' | 'item_name' | 'unit' | 'quantity' | 'est_value' | 'notes' | 'created_at'
+type WhSortKey = 'client_name' | 'item_name' | 'unit' | 'quantity' | 'unit_price' | 'selling_price' | 'unit_price_amount' | 'selling_price_amount' | 'notes' | 'created_at'
 
 function SortableWhHead({ label, sortKey, whSortKey, whSortDir, onSort, className, align }: {
   label: string; sortKey: WhSortKey; whSortKey: WhSortKey | null; whSortDir: 'asc' | 'desc'
@@ -875,11 +875,19 @@ export default function InventoryPage() {
   const pagedFiltered = sortedFiltered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
   const pagedByItemGroups = sortedByItemGroups.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
-  // Est. Value per warehouse row — quantity × item Unit Cost.
-  const itemPriceMap: Record<string, number> = {}
-  for (const it of itemOptions) itemPriceMap[it.item_name] = it.selling_price ?? it.cost ?? 0
-  const warehouseEstValue = (r: { item_name: string; quantity: number }) => r.quantity * (itemPriceMap[r.item_name] ?? 0)
-  const whTotalEstValue = filteredWarehouseRows.reduce((s, r) => s + warehouseEstValue(r), 0)
+  // Unit Price (catalog cost) and Selling Price per warehouse row, plus each × Qty amount.
+  const itemUnitPriceMap: Record<string, number> = {}
+  const itemSellingPriceMap: Record<string, number> = {}
+  for (const it of itemOptions) {
+    itemUnitPriceMap[it.item_name] = it.cost ?? 0
+    itemSellingPriceMap[it.item_name] = it.selling_price ?? 0
+  }
+  const whUnitPrice = (r: { item_name: string }) => itemUnitPriceMap[r.item_name] ?? 0
+  const whSellingPrice = (r: { item_name: string }) => itemSellingPriceMap[r.item_name] ?? 0
+  const whUnitPriceAmount = (r: { item_name: string; quantity: number }) => r.quantity * whUnitPrice(r)
+  const whSellingPriceAmount = (r: { item_name: string; quantity: number }) => r.quantity * whSellingPrice(r)
+  const whTotalUnitPriceAmount = filteredWarehouseRows.reduce((s, r) => s + whUnitPriceAmount(r), 0)
+  const whTotalSellingPriceAmount = filteredWarehouseRows.reduce((s, r) => s + whSellingPriceAmount(r), 0)
 
   const sortedWarehouseRows = [...filteredWarehouseRows].sort((a, b) => {
     if (!whSortKey) return 0
@@ -890,7 +898,10 @@ export default function InventoryPage() {
       case 'item_name':   av = a.item_name; bv = b.item_name; break
       case 'unit':        av = uomName(a.unit); bv = uomName(b.unit); break
       case 'quantity':    av = a.quantity; bv = b.quantity; break
-      case 'est_value':   av = warehouseEstValue(a); bv = warehouseEstValue(b); break
+      case 'unit_price':            av = whUnitPrice(a); bv = whUnitPrice(b); break
+      case 'selling_price':         av = whSellingPrice(a); bv = whSellingPrice(b); break
+      case 'unit_price_amount':     av = whUnitPriceAmount(a); bv = whUnitPriceAmount(b); break
+      case 'selling_price_amount':  av = whSellingPriceAmount(a); bv = whSellingPriceAmount(b); break
       case 'notes':       av = a.notes ?? ''; bv = b.notes ?? ''; break
       case 'created_at':  av = a.created_at; bv = b.created_at; break
     }
@@ -1089,16 +1100,19 @@ export default function InventoryPage() {
           </tr>`
         }).join('')
     } else {
-      theadHtml = `<tr><th style="width:24px">#</th><th>Owner</th><th>Item Name</th><th style="width:70px">Unit</th><th class="r" style="width:60px">Qty</th><th class="r" style="width:90px">Est. Value</th><th>Warehouse Note</th></tr>`
+      theadHtml = `<tr><th style="width:24px">#</th><th>Owner</th><th>Item Name</th><th style="width:60px">Unit</th><th class="r" style="width:50px">Qty</th><th class="r" style="width:80px">Unit Price</th><th class="r" style="width:80px">Selling Price</th><th class="r" style="width:90px">Amount (Unit Price × Qty)</th><th class="r" style="width:90px">Amount (Selling Price × Qty)</th><th>Warehouse Note</th></tr>`
       rowsHtml = sortedWarehouseRows.length === 0
-        ? `<tr><td colspan="7" style="text-align:center;padding:24px;color:#9ca3af;font-style:italic">No warehouse stock records found.</td></tr>`
+        ? `<tr><td colspan="10" style="text-align:center;padding:24px;color:#9ca3af;font-style:italic">No warehouse stock records found.</td></tr>`
         : sortedWarehouseRows.map((r, i) => `<tr>
             <td>${i + 1}</td>
             <td>${r.client_name || 'CDSC Stock'}</td>
             <td style="font-weight:600;color:#1f2937">${r.item_name}</td>
             <td>${r.unit ? uomName(r.unit) : '—'}</td>
             <td class="r" style="color:#15803d;font-weight:600">${r.quantity}</td>
-            <td class="r">${r.item_name in itemPriceMap ? `₱${warehouseEstValue(r).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}</td>
+            <td class="r">${r.item_name in itemUnitPriceMap ? `₱${whUnitPrice(r).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}</td>
+            <td class="r">${r.item_name in itemSellingPriceMap ? `₱${whSellingPrice(r).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}</td>
+            <td class="r">${r.item_name in itemUnitPriceMap ? `₱${whUnitPriceAmount(r).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}</td>
+            <td class="r" style="color:#15803d">${r.item_name in itemSellingPriceMap ? `₱${whSellingPriceAmount(r).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}</td>
             <td>${r.notes || '—'}</td>
           </tr>`).join('')
     }
@@ -1176,13 +1190,15 @@ export default function InventoryPage() {
       )}
 
       {viewMode === 'by_warehouse' && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <KpiCard value={loading ? '—' : filteredWarehouseRows.length} label="Stock Entries"
             icon={Package} tint="from-red-50" grad="from-red-500 to-red-600" shadow="shadow-red-500/30" />
-          <KpiCard value={loading ? '—' : `₱${whTotalEstValue.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`} label="Est. Value" valueClass="text-green-600"
-            icon={Wallet} tint="from-green-50" grad="from-green-500 to-green-600" shadow="shadow-green-500/30" />
           <KpiCard value={loading ? '—' : whTotalQty.toLocaleString('en-PH')} label="Total On Hand" valueClass="text-blue-600"
             icon={Boxes} tint="from-blue-50" grad="from-blue-500 to-blue-600" shadow="shadow-blue-500/30" />
+          <KpiCard value={loading ? '—' : `₱${whTotalUnitPriceAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`} label="Total Unit Price Amount" valueClass="text-gray-700"
+            icon={Wallet} tint="from-slate-50" grad="from-slate-400 to-slate-500" shadow="shadow-slate-500/30" />
+          <KpiCard value={loading ? '—' : `₱${whTotalSellingPriceAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`} label="Total Selling Price Amount" valueClass="text-green-600"
+            icon={Wallet} tint="from-green-50" grad="from-green-500 to-green-600" shadow="shadow-green-500/30" />
           <KpiCard value={loading ? '—' : whUnassigned} label="General (No Client)" valueClass="text-amber-600"
             icon={AlertTriangle} tint="from-amber-50" grad="from-amber-500 to-amber-600" shadow="shadow-amber-500/30" />
         </div>
@@ -1316,16 +1332,19 @@ export default function InventoryPage() {
                     <SortableWhHead label="Item Name" sortKey="item_name" className="min-w-[280px]" whSortKey={whSortKey} whSortDir={whSortDir} onSort={toggleWhSort} />
                     <SortableWhHead label="Unit" sortKey="unit" whSortKey={whSortKey} whSortDir={whSortDir} onSort={toggleWhSort} />
                     <SortableWhHead label="Qty" sortKey="quantity" align="right" whSortKey={whSortKey} whSortDir={whSortDir} onSort={toggleWhSort} />
-                    <SortableWhHead label="Est. Value" sortKey="est_value" align="right" whSortKey={whSortKey} whSortDir={whSortDir} onSort={toggleWhSort} />
+                    <SortableWhHead label="Unit Price" sortKey="unit_price" align="right" whSortKey={whSortKey} whSortDir={whSortDir} onSort={toggleWhSort} />
+                    <SortableWhHead label="Selling Price" sortKey="selling_price" align="right" whSortKey={whSortKey} whSortDir={whSortDir} onSort={toggleWhSort} />
+                    <SortableWhHead label="Amount (Unit Price × Qty)" sortKey="unit_price_amount" align="right" whSortKey={whSortKey} whSortDir={whSortDir} onSort={toggleWhSort} />
+                    <SortableWhHead label="Amount (Selling Price × Qty)" sortKey="selling_price_amount" align="right" whSortKey={whSortKey} whSortDir={whSortDir} onSort={toggleWhSort} />
                     <SortableWhHead label="Warehouse Note" sortKey="notes" whSortKey={whSortKey} whSortDir={whSortDir} onSort={toggleWhSort} />
                     <SortableWhHead label="Date Added" sortKey="created_at" whSortKey={whSortKey} whSortDir={whSortDir} onSort={toggleWhSort} />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading ? (
-                    <TableRow><TableCell colSpan={8} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
+                    <TableRow><TableCell colSpan={11} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
                   ) : warehouseRows.length === 0 ? (
-                    <TableRow><TableCell colSpan={8} className="text-center py-12 text-muted-foreground">No warehouse stock records found.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={11} className="text-center py-12 text-muted-foreground">No warehouse stock records found.</TableCell></TableRow>
                   ) : pagedWarehouseRows.map((r, i) => {
                     const isWhExpanded = expandedWhId === r.id
                     return (
@@ -1345,8 +1364,17 @@ export default function InventoryPage() {
                         <TableCell className="text-sm font-medium">{r.item_name}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">{r.unit ? uomName(r.unit) : '—'}</TableCell>
                         <TableCell className="text-right text-sm font-semibold text-green-700">{r.quantity}</TableCell>
+                        <TableCell className="text-right text-sm text-gray-700">
+                          {r.item_name in itemUnitPriceMap ? `₱${whUnitPrice(r).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : <span className="text-gray-300">—</span>}
+                        </TableCell>
+                        <TableCell className="text-right text-sm text-gray-700">
+                          {r.item_name in itemSellingPriceMap ? `₱${whSellingPrice(r).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : <span className="text-gray-300">—</span>}
+                        </TableCell>
                         <TableCell className="text-right text-sm font-medium text-gray-700">
-                          {r.item_name in itemPriceMap ? `₱${warehouseEstValue(r).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : <span className="text-gray-300">—</span>}
+                          {r.item_name in itemUnitPriceMap ? `₱${whUnitPriceAmount(r).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : <span className="text-gray-300">—</span>}
+                        </TableCell>
+                        <TableCell className="text-right text-sm font-medium text-green-700">
+                          {r.item_name in itemSellingPriceMap ? `₱${whSellingPriceAmount(r).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : <span className="text-gray-300">—</span>}
                         </TableCell>
                         <TableCell className="text-sm max-w-[220px]">
                           <span className="text-muted-foreground text-xs">{r.notes || '—'}</span>
@@ -1355,13 +1383,16 @@ export default function InventoryPage() {
                       </TableRow>
                       {isWhExpanded && (
                         <TableRow className="bg-muted/30 hover:bg-muted/30">
-                          <TableCell colSpan={8} className="py-4 px-6">
+                          <TableCell colSpan={11} className="py-4 px-6">
                             <div className="space-y-4">
                               <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-2 text-xs">
                                 <div><div className="text-muted-foreground uppercase tracking-wide text-[10px] mb-0.5">Owner</div><div className="text-foreground">{r.client_name || 'CDSC Stock'}</div></div>
                                 <div><div className="text-muted-foreground uppercase tracking-wide text-[10px] mb-0.5">Unit</div><div className="text-foreground">{r.unit ? uomName(r.unit) : '—'}</div></div>
                                 <div><div className="text-muted-foreground uppercase tracking-wide text-[10px] mb-0.5">Quantity</div><div className="text-foreground font-semibold">{r.quantity}</div></div>
-                                <div><div className="text-muted-foreground uppercase tracking-wide text-[10px] mb-0.5">Est. Value</div><div className="text-foreground">{r.item_name in itemPriceMap ? `₱${warehouseEstValue(r).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}</div></div>
+                                <div><div className="text-muted-foreground uppercase tracking-wide text-[10px] mb-0.5">Unit Price</div><div className="text-foreground">{r.item_name in itemUnitPriceMap ? `₱${whUnitPrice(r).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}</div></div>
+                                <div><div className="text-muted-foreground uppercase tracking-wide text-[10px] mb-0.5">Selling Price</div><div className="text-foreground">{r.item_name in itemSellingPriceMap ? `₱${whSellingPrice(r).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}</div></div>
+                                <div><div className="text-muted-foreground uppercase tracking-wide text-[10px] mb-0.5">Amount (Unit Price × Qty)</div><div className="text-foreground">{r.item_name in itemUnitPriceMap ? `₱${whUnitPriceAmount(r).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}</div></div>
+                                <div><div className="text-muted-foreground uppercase tracking-wide text-[10px] mb-0.5">Amount (Selling Price × Qty)</div><div className="text-foreground">{r.item_name in itemSellingPriceMap ? `₱${whSellingPriceAmount(r).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}</div></div>
                                 <div className="col-span-2 sm:col-span-2"><div className="text-muted-foreground uppercase tracking-wide text-[10px] mb-0.5">Warehouse Note</div><div className="text-foreground">{r.notes || '—'}</div></div>
                                 <div><div className="text-muted-foreground uppercase tracking-wide text-[10px] mb-0.5">Date Added</div><div className="text-foreground">{new Date(r.created_at).toLocaleDateString('en-PH')}</div></div>
                               </div>
