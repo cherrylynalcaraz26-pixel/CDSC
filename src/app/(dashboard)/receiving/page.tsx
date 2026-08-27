@@ -16,10 +16,11 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import {
   Plus, MoreHorizontal, CheckCircle2, Package, Loader2, Trash2, X,
-  ShoppingBag, ArrowLeftRight, Pencil, Printer, Search,
+  ShoppingBag, ArrowLeftRight, Pencil, Printer, Search, FileText,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSearchContext } from '@/context/search-context'
+import { isImageAttachment, isPdfAttachment, driveImageSrc, driveEmbedUrl } from '@/lib/upload-image'
 
 interface PO { id: string; po_number: string; status: string; supplier?: { company_name: string } | null; delivery_date: string | null }
 interface RR { id: string; rr_number: string; po_number: string; supplier: string | null; delivery_date: string; received_by: string; status: string; dr_number?: string | null }
@@ -63,6 +64,7 @@ export default function ReceivingPage() {
   const [rrSaving, setRrSaving] = useState(false)
   const [rrDetailsId, setRrDetailsId] = useState<string | null>(null)
   const [rrAttachments, setRrAttachments] = useState<{ id: string; file_url: string; file_name: string }[]>([])
+  const [previewAttachment, setPreviewAttachment] = useState<{ url: string; name: string } | null>(null)
   const [deleteRRId, setDeleteRRId] = useState<string | null>(null)
   const [rrDateFrom, setRrDateFrom] = useState('')
   const [rrDateTo, setRrDateTo] = useState('')
@@ -799,10 +801,16 @@ export default function ReceivingPage() {
                         <p className="text-xs text-muted-foreground font-medium">Attachments (from Purchase Order)</p>
                         <div className="flex flex-wrap gap-2">
                           {rrAttachments.map(a => (
-                            <a key={a.id} href={a.file_url} target="_blank" rel="noopener noreferrer"
-                              className="text-xs text-blue-600 hover:underline border rounded-md px-2 py-1 bg-muted/30 truncate max-w-[200px]">
-                              {a.file_name}
-                            </a>
+                            <button
+                              key={a.id} type="button" onClick={() => setPreviewAttachment({ url: a.file_url, name: a.file_name })}
+                              className="flex items-center gap-1.5 text-xs border rounded-md pl-1 pr-2 py-1 bg-muted/30 hover:bg-muted/50"
+                            >
+                              {isImageAttachment(a.file_name)
+                                ? // eslint-disable-next-line @next/next/no-img-element
+                                  <img src={driveImageSrc(a.file_url)} alt="" className="h-6 w-6 object-cover rounded" />
+                                : <FileText className="h-3.5 w-3.5 text-muted-foreground shrink-0" />}
+                              <span className="text-blue-600 truncate max-w-[160px]">{a.file_name}</span>
+                            </button>
                           ))}
                         </div>
                       </div>
@@ -822,6 +830,31 @@ export default function ReceivingPage() {
                 </>
               )
             })()}
+          </DialogContent>
+        </Dialog>
+
+        {/* Attachment Preview */}
+        <Dialog open={!!previewAttachment} onOpenChange={o => { if (!o) setPreviewAttachment(null) }}>
+          <DialogContent className="w-[95vw] sm:!max-w-3xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="truncate pr-6">{previewAttachment?.name}</DialogTitle>
+            </DialogHeader>
+            {previewAttachment && (
+              isImageAttachment(previewAttachment.name) ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={driveImageSrc(previewAttachment.url)} alt={previewAttachment.name} className="w-full max-h-[70vh] object-contain rounded-lg border" />
+              ) : isPdfAttachment(previewAttachment.name) ? (
+                <iframe src={driveEmbedUrl(previewAttachment.url)} className="w-full h-[70vh] rounded-lg border" />
+              ) : (
+                <div className="flex flex-col items-center justify-center gap-3 py-10 text-sm text-muted-foreground">
+                  <FileText className="h-10 w-10" />
+                  <p>Preview isn&apos;t available for this file type.</p>
+                  <Button type="button" variant="outline" size="sm" onClick={() => window.open(previewAttachment.url, '_blank', 'noopener,noreferrer')}>
+                    Open File
+                  </Button>
+                </div>
+              )
+            )}
           </DialogContent>
         </Dialog>
 

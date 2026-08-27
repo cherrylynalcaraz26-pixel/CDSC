@@ -59,3 +59,22 @@ export async function uploadFileToDrive(file: File, options?: { folder?: string 
   if (!res.ok) throw new Error(data.error ?? 'Failed to upload file')
   return { url: `https://drive.google.com/file/d/${data.fileId}/view`, name: file.name }
 }
+
+/** File-name based checks used to decide how an uploaded attachment previews inline
+ *  (in a modal) instead of being opened in a new tab. */
+export const isImageAttachment = (name: string) => /\.(jpe?g|png|gif|webp|bmp|svg)$/i.test(name)
+export const isPdfAttachment = (name: string) => /\.pdf$/i.test(name)
+
+/** Normalizes any Drive link (a raw thumbnail URL, or an older /view viewer link) into
+ *  a src that actually renders as an <img>, by pulling out the file id either way. */
+export function driveImageSrc(url: string): string {
+  const m = url.match(/\/file\/d\/([^/]+)/) || url.match(/[?&]id=([^&]+)/)
+  return m ? `https://drive.google.com/thumbnail?id=${m[1]}&sz=w1000` : url
+}
+
+/** Drive's /view page refuses to render inside an iframe — /preview is the
+ *  embeddable variant, used for in-modal PDF previews. */
+export function driveEmbedUrl(url: string): string {
+  const m = url.match(/\/file\/d\/([^/]+)/)
+  return m ? `https://drive.google.com/file/d/${m[1]}/preview` : url
+}

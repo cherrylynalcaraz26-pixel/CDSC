@@ -24,7 +24,7 @@ import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
 import { sendEmail, POPdfData } from '@/lib/send-email'
-import { uploadFileToDrive } from '@/lib/upload-image'
+import { uploadFileToDrive, uploadImageToDrive, isImageAttachment, isPdfAttachment, driveImageSrc, driveEmbedUrl } from '@/lib/upload-image'
 
 interface ItemOption {
   item_code: string
@@ -198,6 +198,7 @@ export default function PurchaseOrdersPage() {
   const [viewPOItems, setViewPOItems] = useState<{ item_name: string; quantity: number; quantity_received: number; unit: string | null; unit_price: number; selling_price: number | null; total_amount: number }[]>([])
   const [viewPOAttachments, setViewPOAttachments] = useState<{ id: string; file_url: string; file_name: string }[]>([])
   const [uploadingPOAttachment, setUploadingPOAttachment] = useState(false)
+  const [previewAttachment, setPreviewAttachment] = useState<{ url: string; name: string } | null>(null)
 
   async function openDetails(po: PO) {
     setViewPO(po)
@@ -217,8 +218,12 @@ export default function PurchaseOrdersPage() {
     setUploadingPOAttachment(true)
     try {
       for (const file of Array.from(files)) {
-        const { url, name } = await uploadFileToDrive(file, { folder: 'PO Attachments' })
-        await supabase.from('po_attachments').insert({ po_number: poNumber, file_url: url, file_name: name })
+        // Images go through uploadImageToDrive so file_url is a directly-renderable
+        // thumbnail src; everything else keeps the generic Drive viewer link.
+        const url = file.type.startsWith('image/')
+          ? await uploadImageToDrive(file, { folder: 'PO Attachments' })
+          : (await uploadFileToDrive(file, { folder: 'PO Attachments' })).url
+        await supabase.from('po_attachments').insert({ po_number: poNumber, file_url: url, file_name: file.name })
       }
       await loadPOAttachments(poNumber)
       toast.success('Attachment(s) uploaded')
@@ -1648,8 +1653,18 @@ export default function PurchaseOrdersPage() {
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     {viewPOAttachments.map(a => (
-                      <div key={a.id} className="flex items-center gap-1.5 border rounded-md pl-2 pr-1 py-1 text-xs bg-muted/30">
-                        <a href={a.file_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline truncate max-w-[160px]">{a.file_name}</a>
+                      <div key={a.id} className="flex items-center gap-1.5 border rounded-md pl-1 pr-1 py-1 text-xs bg-muted/30">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewAttachment({ url: a.file_url, name: a.file_name })}
+                          className="flex items-center gap-1.5 hover:underline"
+                        >
+                          {isImageAttachment(a.file_name)
+                            ? // eslint-disable-next-line @next/next/no-img-element
+                              <img src={driveImageSrc(a.file_url)} alt="" className="h-7 w-7 object-cover rounded" />
+                            : <FileText className="h-4 w-4 text-muted-foreground shrink-0" />}
+                          <span className="text-blue-600 truncate max-w-[140px]">{a.file_name}</span>
+                        </button>
                         <button type="button" onClick={() => deletePOAttachment(a.id, viewPO.po_number)} className="text-muted-foreground hover:text-destructive p-0.5">
                           <X className="h-3 w-3" />
                         </button>
@@ -1733,6 +1748,31 @@ export default function PurchaseOrdersPage() {
                 </Button>
               </div>
             </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Attachment Preview */}
+      <Dialog open={!!previewAttachment} onOpenChange={o => { if (!o) setPreviewAttachment(null) }}>
+        <DialogContent className="w-[95vw] sm:!max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="truncate pr-6">{previewAttachment?.name}</DialogTitle>
+          </DialogHeader>
+          {previewAttachment && (
+            isImageAttachment(previewAttachment.name) ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={driveImageSrc(previewAttachment.url)} alt={previewAttachment.name} className="w-full max-h-[70vh] object-contain rounded-lg border" />
+            ) : isPdfAttachment(previewAttachment.name) ? (
+              <iframe src={driveEmbedUrl(previewAttachment.url)} className="w-full h-[70vh] rounded-lg border" />
+            ) : (
+              <div className="flex flex-col items-center justify-center gap-3 py-10 text-sm text-muted-foreground">
+                <FileText className="h-10 w-10" />
+                <p>Preview isn&apos;t available for this file type.</p>
+                <Button type="button" variant="outline" size="sm" onClick={() => window.open(previewAttachment.url, '_blank', 'noopener,noreferrer')}>
+                  Open File
+                </Button>
+              </div>
+            )
           )}
         </DialogContent>
       </Dialog>
