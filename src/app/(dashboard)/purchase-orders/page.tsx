@@ -624,32 +624,41 @@ export default function PurchaseOrdersPage() {
   // Deliveries" forever, since receiving was otherwise a separate manual step — this
   // creates the Receiving Report (and credits warehouse stock) automatically, the same
   // way manually receiving it would, so completing a PO here is enough on its own.
-  // Skips silently if it's already been received (manually or by an earlier call here),
-  // or if the PO has no number/items to receive against.
+  // Only credits what's still outstanding per line (quantity - quantity_received) and
+  // skips silently once nothing is left to receive. A single manual/partial Receiving
+  // Report against some of a PO's lines must not block the rest from ever being
+  // auto-received — checking "does any RR exist for this PO" (instead of "does this
+  // line still have an outstanding quantity") used to do exactly that, permanently
+  // stranding every other line at quantity_received = 0 even once the PO was marked
+  // completed.
   async function autoReceivePO(id: string): Promise<boolean> {
     const { data: poRaw } = await supabase.from('purchase_orders').select('po_number, supplier:suppliers(company_name)').eq('id', id).maybeSingle()
     const po = poRaw as unknown as { po_number: string | null; supplier: { company_name: string } | null } | null
     if (!po?.po_number) return false
 
-    const { data: existingRRs } = await supabase.from('receiving_reports').select('id').eq('po_number', po.po_number).limit(1)
-    if (existingRRs && existingRRs.length > 0) return false
-
-    const { data: poItems } = await supabase.from('po_items').select('id, item_name, quantity, unit_of_measure').eq('po_id', id)
+    const { data: poItems } = await supabase.from('po_items').select('id, item_name, quantity, unit_of_measure, quantity_received').eq('po_id', id)
     if (!poItems || poItems.length === 0) return false
 
-    const { error: rrError } = await supabase.from('receiving_reports').insert({
-      rr_number: `AUTO-${po.po_number}`,
-      po_number: po.po_number,
-      supplier: po.supplier?.company_name ?? null,
-      delivery_date: new Date().toISOString().split('T')[0],
-      received_by: 'System (Auto)',
-      status: 'completed',
-    })
-    if (rrError) return false
+    const outstanding = poItems
+      .map(it => ({ it, qty: (Number(it.quantity) || 0) - (Number(it.quantity_received) || 0) }))
+      .filter(r => r.qty > 0)
+    if (outstanding.length === 0) return false
 
-    for (const it of poItems) {
-      const qty = Number(it.quantity) || 0
-      if (qty <= 0) continue
+    const autoRrNumber = `AUTO-${po.po_number}`
+    const { data: existingAutoRR } = await supabase.from('receiving_reports').select('id').eq('po_number', po.po_number).eq('rr_number', autoRrNumber).limit(1)
+    if (!existingAutoRR || existingAutoRR.length === 0) {
+      const { error: rrError } = await supabase.from('receiving_reports').insert({
+        rr_number: autoRrNumber,
+        po_number: po.po_number,
+        supplier: po.supplier?.company_name ?? null,
+        delivery_date: new Date().toISOString().split('T')[0],
+        received_by: 'System (Auto)',
+        status: 'completed',
+      })
+      if (rrError) return false
+    }
+
+    for (const { it, qty } of outstanding) {
       const { data: wsRow } = await supabase.from('warehouse_stock').select('id, quantity').eq('item_name', it.item_name).is('client_name', null).maybeSingle()
       if (wsRow) {
         await supabase.from('warehouse_stock').update({
@@ -666,7 +675,7 @@ export default function PurchaseOrdersPage() {
         source_type: 'po_receiving',
         reference_no: po.po_number,
       })
-      await supabase.from('po_items').update({ quantity_received: qty }).eq('id', it.id)
+      await supabase.from('po_items').update({ quantity_received: (Number(it.quantity_received) || 0) + qty }).eq('id', it.id)
     }
     return true
   }
