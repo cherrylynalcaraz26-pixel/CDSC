@@ -45,6 +45,9 @@ interface ItemDetailCsiRow { id: string | number; si_date: string | null; si_num
 const peso = (v: number | null | undefined) =>
   '₱' + Number(v ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
+const fmtQty = (v: number | null | undefined) =>
+  Number(v ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
 interface InventoryRow {
   client: string
   item_name: string
@@ -1354,20 +1357,20 @@ export default function InventoryPage() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="bg-white rounded-lg border border-blue-100 px-3 py-2">
                 <div className="text-xs text-muted-foreground">Total DR Qty</div>
-                <div className="text-lg font-bold text-blue-700">{filtered.reduce((s, r) => s + r.dr_qty, 0)}</div>
+                <div className="text-lg font-bold text-blue-700">{fmtQty(filtered.reduce((s, r) => s + r.dr_qty, 0))}</div>
               </div>
               <div className="bg-white rounded-lg border border-blue-100 px-3 py-2">
                 <div className="text-xs text-muted-foreground">WH Stock</div>
-                <div className="text-lg font-bold text-green-600">{filtered.reduce((s, r) => s + r.client_on_hand, 0)}</div>
+                <div className="text-lg font-bold text-green-600">{fmtQty(filtered.reduce((s, r) => s + r.client_on_hand, 0))}</div>
               </div>
               <div className="bg-white rounded-lg border border-blue-100 px-3 py-2">
                 <div className="text-xs text-muted-foreground">CSI Charged</div>
-                <div className="text-lg font-bold text-red-600">{filtered.reduce((s, r) => s + r.csi_qty, 0)}</div>
+                <div className="text-lg font-bold text-red-600">{fmtQty(filtered.reduce((s, r) => s + r.csi_qty, 0))}</div>
               </div>
               <div className="bg-white rounded-lg border border-blue-100 px-3 py-2">
                 <div className="text-xs text-muted-foreground">Net Balance</div>
                 <div className={`text-lg font-bold ${filtered.reduce((s, r) => s + r.balance, 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {filtered.reduce((s, r) => s + r.balance, 0)}
+                  {fmtQty(filtered.reduce((s, r) => s + r.balance, 0))}
                 </div>
               </div>
             </div>
@@ -1739,7 +1742,7 @@ export default function InventoryPage() {
             { label: 'Client WH Stock', value: totalOnHand, cls: 'green' },
             { label: 'CSI Issued', value: totalCsi, cls: 'orange' },
             { label: 'Net Balance', value: totalBalance, cls: totalBalance >= 0 ? 'green' : 'red' },
-          ].map(c => `<div class="card"><div class="card-label">${c.label}</div><div class="card-val ${c.cls}">${c.value}</div></div>`).join('')
+          ].map(c => `<div class="card"><div class="card-label">${c.label}</div><div class="card-val ${c.cls}">${fmtQty(c.value)}</div></div>`).join('')
           const rowsHtml = reportRows.length === 0
             ? `<tr><td colspan="9" style="text-align:center;padding:24px;color:#9ca3af;font-style:italic">No inventory data for this client.</td></tr>`
             : reportRows.map((r, i) => {
@@ -1941,7 +1944,7 @@ export default function InventoryPage() {
                 ].map(c => (
                   <div key={c.label} className="border border-gray-200 rounded-lg px-4 py-3 bg-gray-50">
                     <div className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">{c.label}</div>
-                    <div className={`text-2xl font-bold mt-1 ${c.cls}`}>{c.value}</div>
+                    <div className={`text-2xl font-bold mt-1 ${c.cls}`}>{fmtQty(c.value)}</div>
                   </div>
                 ))}
               </div>
