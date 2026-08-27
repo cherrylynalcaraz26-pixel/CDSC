@@ -143,9 +143,9 @@ const STATUS_CLS: Record<string, string> = {
   missing:   'bg-orange-100 text-orange-700',
 }
 
-// Suggests the next OR number by incrementing the highest existing numeric OR
-// number, zero-padded to match its width (defaults to 5 digits, e.g. "00001").
-function computeNextOrNumber(records: { or_number: string | null }[]): string {
+// Highest existing numeric OR number and its zero-padded width (defaults to
+// 5 digits, e.g. "00001") — shared by computeNextOrNumber and buildOrSequence.
+function maxNumericOr(records: { or_number: string | null }[]): { maxNum: number; width: number } {
   let maxNum = 0
   let width = 5
   for (const r of records) {
@@ -154,7 +154,30 @@ function computeNextOrNumber(records: { or_number: string | null }[]): string {
     const val = parseInt(n, 10)
     if (val > maxNum) { maxNum = val; width = n.length }
   }
+  return { maxNum, width }
+}
+
+// Suggests the next OR number by incrementing the highest existing numeric OR
+// number, zero-padded to match its width (defaults to 5 digits, e.g. "00001").
+function computeNextOrNumber(records: { or_number: string | null }[]): string {
+  const { maxNum, width } = maxNumericOr(records)
   return String(maxNum + 1).padStart(width, '0')
+}
+
+// Builds the full OR sequence for the picker dropdown: every number from 1 up
+// to (highest existing + 20 headroom), each paired with the record already
+// using it (if any) so gaps in the physical booklet sequence — numbers never
+// logged at all — are visible alongside numbers already posted/cancelled/missing.
+function buildOrSequence(records: { id: string; or_number: string | null; status: string }[]): { value: string; record: { id: string; status: string } | undefined }[] {
+  const { maxNum, width } = maxNumericOr(records)
+  const byNumber = new Map(records.filter(r => r.or_number).map(r => [r.or_number as string, r]))
+  const upper = maxNum + 20
+  const out: { value: string; record: { id: string; status: string } | undefined }[] = []
+  for (let i = 1; i <= upper; i++) {
+    const value = String(i).padStart(width, '0')
+    out.push({ value, record: byNumber.get(value) })
+  }
+  return out
 }
 
 // ── Date range filter (Preset year/quarter or Custom from/to) ─────────────────
@@ -637,6 +660,8 @@ function CollectionsTab() {
   const isDuplicateOr = !!normalizeOrNumber(form.or_number) && records.some(
     r => r.or_number === normalizeOrNumber(form.or_number) && r.id !== editingId
   )
+
+  const orSequence = buildOrSequence(records)
 
   // CSI numbers already linked (via collection_csi_links, or the legacy single
   // si_number column) to one of this client's posted collections — excludes
@@ -1446,8 +1471,27 @@ function CollectionsTab() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-6">
             <div className="space-y-1.5">
               <Label>OR Number</Label>
-              <Input placeholder="e.g. 00031 (no OR- prefix)" value={form.or_number}
-                onChange={e => setForm(p => ({ ...p, or_number: normalizeOrNumber(e.target.value) }))} />
+              <Select value={normalizeOrNumber(form.or_number) || undefined} onValueChange={v => setForm(p => ({ ...p, or_number: v ?? '' }))}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select OR number" className="font-mono" />
+                </SelectTrigger>
+                <SelectContent className="max-h-72">
+                  {orSequence.map(({ value, record }) => {
+                    const isSelf = record?.id === editingId
+                    const taken = !!record && !isSelf
+                    return (
+                      <SelectItem key={value} value={value} disabled={taken}>
+                        <span className="font-mono">{value}</span>
+                        {record && (
+                          <span className={`ml-2 text-[10px] px-1.5 py-0.5 rounded-full ${STATUS_CLS[record.status] ?? ''}`}>
+                            {cap(record.status)}{isSelf ? ' · current' : ''}
+                          </span>
+                        )}
+                      </SelectItem>
+                    )
+                  })}
+                </SelectContent>
+              </Select>
               {isDuplicateOr && (
                 <p className="text-xs text-destructive">OR Number {normalizeOrNumber(form.or_number)} is already used by another record.</p>
               )}
