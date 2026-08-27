@@ -155,6 +155,8 @@ export default function InventoryPage() {
   const [wsDeliverQty, setWsDeliverQty] = useState('')
   const [wsPersonalUse, setWsPersonalUse] = useState(false)
   const [wsPersonalQty, setWsPersonalQty] = useState('')
+  const [wsEditUnitPrice, setWsEditUnitPrice] = useState('')
+  const [wsEditSellingPrice, setWsEditSellingPrice] = useState('')
   const [clientOptions, setClientOptions] = useState<{ id: string; company_name: string }[]>([])
   const [channelOptions, setChannelOptions] = useState<{ id: string; name: string; color: string }[]>([])
   const [assignChannelRow, setAssignChannelRow] = useState<InventoryRow | null>(null)
@@ -544,6 +546,8 @@ export default function InventoryPage() {
     setWsDeliverQty(String(row.quantity))
     setWsPersonalUse(false)
     setWsPersonalQty('')
+    setWsEditUnitPrice(row.item_name in itemUnitPriceMap ? String(itemUnitPriceMap[row.item_name]) : '')
+    setWsEditSellingPrice(row.item_name in itemSellingPriceMap ? String(itemSellingPriceMap[row.item_name]) : '')
     setWarehouseUpdateOpen(true)
   }
 
@@ -656,6 +660,16 @@ export default function InventoryPage() {
           notes: warehouseUpdateNotes.trim() || 'Quantity corrected manually',
         })
       }
+      // Unit Price / Selling Price live on the item's catalog entry (Configuration), not
+      // this warehouse row — update them there so every view that reads from Configuration
+      // stays in sync, same as the other per-item price editors in this app.
+      const newUnitPrice = wsEditUnitPrice.trim() ? parseFloat(wsEditUnitPrice) : null
+      const newSellingPrice = wsEditSellingPrice.trim() ? parseFloat(wsEditSellingPrice) : null
+      await supabase.from('items').update({
+        cost: newUnitPrice,
+        selling_price: newSellingPrice,
+      }).eq('item_name', warehouseUpdateRow.item_name)
+      await loadItemOptions()
       toast.success('Warehouse stock updated')
       setWarehouseUpdateOpen(false)
       load()
@@ -2168,6 +2182,15 @@ export default function InventoryPage() {
                     <Label>Warehouse Note</Label>
                     <Input value={warehouseUpdateNotes} onChange={e => setWarehouseUpdateNotes(e.target.value)} placeholder="Notes about this stock entry" />
                   </div>
+                  <div className="space-y-1.5">
+                    <Label>Unit Price (₱)</Label>
+                    <Input type="number" min="0" step="0.01" value={wsEditUnitPrice} onChange={e => setWsEditUnitPrice(e.target.value)} placeholder="0.00" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Selling Price (₱)</Label>
+                    <Input type="number" min="0" step="0.01" value={wsEditSellingPrice} onChange={e => setWsEditSellingPrice(e.target.value)} placeholder="0.00" />
+                  </div>
+                  <p className="sm:col-span-2 text-xs text-muted-foreground -mt-1">Unit Price and Selling Price update this item&apos;s catalog entry in Configuration, so they apply everywhere it&apos;s used — not just this warehouse row.</p>
                 </div>
               )}
             </div>
