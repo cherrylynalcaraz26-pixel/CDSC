@@ -471,7 +471,13 @@ export default function InventoryPage() {
     if (data) setItemOptions(data)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+    // By Warehouse's Unit Price / Selling Price columns read from this catalog list —
+    // previously it only loaded when the Add Stock dialog was opened, so those columns
+    // stayed blank on a fresh page load until then.
+    loadItemOptions()
+  }, [])
   useEffect(() => { setPage(1) }, [clientFilter, statusFilter, search, viewMode])
 
   // Keep WH Stock (and DR/CSI totals) live — e.g. once a delivery is recorded
