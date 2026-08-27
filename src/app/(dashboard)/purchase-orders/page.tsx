@@ -18,13 +18,13 @@ import {
   Plus, Printer, Loader2,
   Trash2, CheckCircle2, XCircle, ArrowRightLeft, X,
   Package, Search, Mail, Send, Pencil, FileText,
-  ChevronDown, ChevronUp, Wallet, Clock3, AlertCircle, Store, GripVertical,
+  ChevronDown, ChevronUp, Wallet, Clock3, AlertCircle, Store, GripVertical, Paperclip,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
 import { sendEmail, POPdfData } from '@/lib/send-email'
-import { uploadFileToDrive } from '@/lib/upload-image'
+import { uploadFileToDrive, uploadImageToDrive, isImageAttachment, isPdfAttachment, driveImageSrc, driveEmbedUrl } from '@/lib/upload-image'
 
 interface ItemOption {
   item_code: string
@@ -198,6 +198,8 @@ export default function PurchaseOrdersPage() {
   const [viewPOItems, setViewPOItems] = useState<{ item_name: string; quantity: number; quantity_received: number; unit: string | null; unit_price: number; selling_price: number | null; total_amount: number }[]>([])
   const [viewPOAttachments, setViewPOAttachments] = useState<{ id: string; file_url: string; file_name: string }[]>([])
   const [uploadingPOAttachment, setUploadingPOAttachment] = useState(false)
+  const [previewAttachment, setPreviewAttachment] = useState<{ url: string; name: string } | null>(null)
+  const [poAttachmentCounts, setPoAttachmentCounts] = useState<Record<string, number>>({})
 
   async function openDetails(po: PO) {
     setViewPO(po)
@@ -217,10 +219,15 @@ export default function PurchaseOrdersPage() {
     setUploadingPOAttachment(true)
     try {
       for (const file of Array.from(files)) {
-        const { url, name } = await uploadFileToDrive(file, { folder: 'PO Attachments' })
-        await supabase.from('po_attachments').insert({ po_number: poNumber, file_url: url, file_name: name })
+        // Images go through uploadImageToDrive so file_url is a directly-renderable
+        // thumbnail src; everything else keeps the generic Drive viewer link.
+        const url = file.type.startsWith('image/')
+          ? await uploadImageToDrive(file, { folder: 'PO Attachments' })
+          : (await uploadFileToDrive(file, { folder: 'PO Attachments' })).url
+        await supabase.from('po_attachments').insert({ po_number: poNumber, file_url: url, file_name: file.name })
       }
       await loadPOAttachments(poNumber)
+      setPoAttachmentCounts(prev => ({ ...prev, [poNumber]: (prev[poNumber] ?? 0) + files.length }))
       toast.success('Attachment(s) uploaded')
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to upload attachment')
@@ -233,6 +240,7 @@ export default function PurchaseOrdersPage() {
     const { error } = await supabase.from('po_attachments').delete().eq('id', id)
     if (error) { toast.error(error.message); return }
     await loadPOAttachments(poNumber)
+    if (poNumber) setPoAttachmentCounts(prev => ({ ...prev, [poNumber]: Math.max(0, (prev[poNumber] ?? 1) - 1) }))
   }
 
   // Edit
@@ -297,6 +305,11 @@ export default function PurchaseOrdersPage() {
     setReceivedPONums(new Set((rrData ?? []).map((r: any) => r.po_number).filter(Boolean)))
     setCsiSuppliers(new Set((csiData ?? []).map((r: any) => (r.client_name ?? '').trim()).filter(Boolean)))
     setCollectedSuppliers(new Set((colData ?? []).map((r: any) => (r.client_name ?? '').trim()).filter(Boolean)))
+
+    const { data: attData } = await supabase.from('po_attachments').select('po_number')
+    const attCounts: Record<string, number> = {}
+    for (const r of attData ?? []) attCounts[r.po_number] = (attCounts[r.po_number] ?? 0) + 1
+    setPoAttachmentCounts(attCounts)
 
     setLoading(false)
   }
@@ -372,6 +385,7 @@ export default function PurchaseOrdersPage() {
   async function handleOpenCreate() {
     resetForm()
     setPoNumber(await nextPoNumber())
+    setViewPOAttachments([])
     setOpen(true)
   }
 
@@ -428,6 +442,7 @@ export default function PurchaseOrdersPage() {
       toast.info('No saved line items found for this PO. Please re-enter and save to persist them.')
     }
 
+    await loadPOAttachments(po.po_number)
     setOpen(true)
   }
 
@@ -1105,7 +1120,14 @@ export default function PurchaseOrdersPage() {
                     <TableRow key={po.id} className="cursor-pointer hover:bg-red-50/40 transition-colors" onClick={() => openDetails(po)}>
                       <TableCell className="text-muted-foreground text-xs">{idx + 1}</TableCell>
                       <TableCell className="font-mono text-xs font-semibold text-red-600">{po.po_number ?? '—'}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{po.invoice_no ?? '—'}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        <span className="inline-flex items-center gap-1">
+                          {po.invoice_no ?? '—'}
+                          {!!poAttachmentCounts[po.po_number ?? ''] && (
+                            <Paperclip className="h-3 w-3 text-muted-foreground shrink-0" />
+                          )}
+                        </span>
+                      </TableCell>
                       <TableCell className="font-medium text-sm">{(po.supplier as any)?.company_name ?? '—'}</TableCell>
                       <TableCell className="text-sm whitespace-nowrap">
                         {po.po_date ? format(new Date(po.po_date), 'MMM d, yyyy') : '—'}
@@ -1169,8 +1191,57 @@ export default function PurchaseOrdersPage() {
 
                   {/* Invoice No. */}
                   <div className="space-y-1.5">
-                    <Label>Invoice No.</Label>
+                    <div className="flex items-center gap-1.5">
+                      <Label>Invoice No.</Label>
+                      {viewPOAttachments.length > 0 && (
+                        <span className="inline-flex items-center gap-0.5 text-[10px] text-green-700 bg-green-50 border border-green-200 rounded-full px-1.5 py-0.5">
+                          <Paperclip className="h-2.5 w-2.5" />{viewPOAttachments.length} uploaded
+                        </span>
+                      )}
+                    </div>
                     <Input placeholder="Supplier's invoice number" value={invoiceNo} onChange={e => setInvoiceNo(e.target.value)} />
+                  </div>
+
+                  {/* Attachments */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label>Attachments</Label>
+                      <Button
+                        type="button" variant="outline" size="sm" className="h-7 px-2 text-xs gap-1" disabled={uploadingPOAttachment}
+                        onClick={() => document.getElementById('po-form-attachment-input')?.click()}
+                      >
+                        {uploadingPOAttachment ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                        Add File
+                      </Button>
+                      <input
+                        id="po-form-attachment-input" type="file" multiple className="hidden"
+                        onChange={e => { uploadPOAttachments(poNumber, e.target.files); e.target.value = '' }}
+                      />
+                    </div>
+                    {viewPOAttachments.length === 0 ? (
+                      <p className="text-xs text-muted-foreground italic">No attachments yet.</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {viewPOAttachments.map(a => (
+                          <div key={a.id} className="flex items-center gap-1.5 border rounded-md pl-1 pr-1 py-1 text-xs bg-muted/30">
+                            <button
+                              type="button"
+                              onClick={() => setPreviewAttachment({ url: a.file_url, name: a.file_name })}
+                              className="flex items-center gap-1.5 hover:underline"
+                            >
+                              {isImageAttachment(a.file_name)
+                                ? // eslint-disable-next-line @next/next/no-img-element
+                                  <img src={driveImageSrc(a.file_url)} alt="" className="h-7 w-7 object-cover rounded" />
+                                : <FileText className="h-4 w-4 text-muted-foreground shrink-0" />}
+                              <span className="text-blue-600 truncate max-w-[140px]">{a.file_name}</span>
+                            </button>
+                            <button type="button" onClick={() => deletePOAttachment(a.id, poNumber)} className="text-muted-foreground hover:text-destructive p-0.5">
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   {/* Supplier */}
@@ -1619,7 +1690,7 @@ export default function PurchaseOrdersPage() {
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs bg-muted/30 rounded-xl p-3">
                 <div><span className="text-muted-foreground block">Supplier</span><span className="font-medium">{viewPO.supplier?.company_name ?? '—'}</span></div>
-                <div><span className="text-muted-foreground block">Invoice No.</span><span className="font-medium">{viewPO.invoice_no ?? '—'}</span></div>
+                <div><span className="text-muted-foreground block">Invoice No.</span><span className="font-medium inline-flex items-center gap-1">{viewPO.invoice_no ?? '—'}{viewPOAttachments.length > 0 && <Paperclip className="h-3 w-3 text-green-700" />}</span></div>
                 <div><span className="text-muted-foreground block">PO Date</span><span className="font-medium">{viewPO.po_date ? format(new Date(viewPO.po_date), 'MMM d, yyyy') : '—'}</span></div>
                 <div><span className="text-muted-foreground block">Delivery Date</span><span className="font-medium">{viewPO.delivery_date ? format(new Date(viewPO.delivery_date), 'MMM d, yyyy') : '—'}</span></div>
                 <div><span className="text-muted-foreground block">Payment Terms</span><span className="font-medium">{viewPO.payment_terms ?? '—'}</span></div>
@@ -1648,8 +1719,18 @@ export default function PurchaseOrdersPage() {
                 ) : (
                   <div className="flex flex-wrap gap-2">
                     {viewPOAttachments.map(a => (
-                      <div key={a.id} className="flex items-center gap-1.5 border rounded-md pl-2 pr-1 py-1 text-xs bg-muted/30">
-                        <a href={a.file_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline truncate max-w-[160px]">{a.file_name}</a>
+                      <div key={a.id} className="flex items-center gap-1.5 border rounded-md pl-1 pr-1 py-1 text-xs bg-muted/30">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewAttachment({ url: a.file_url, name: a.file_name })}
+                          className="flex items-center gap-1.5 hover:underline"
+                        >
+                          {isImageAttachment(a.file_name)
+                            ? // eslint-disable-next-line @next/next/no-img-element
+                              <img src={driveImageSrc(a.file_url)} alt="" className="h-7 w-7 object-cover rounded" />
+                            : <FileText className="h-4 w-4 text-muted-foreground shrink-0" />}
+                          <span className="text-blue-600 truncate max-w-[140px]">{a.file_name}</span>
+                        </button>
                         <button type="button" onClick={() => deletePOAttachment(a.id, viewPO.po_number)} className="text-muted-foreground hover:text-destructive p-0.5">
                           <X className="h-3 w-3" />
                         </button>
@@ -1733,6 +1814,31 @@ export default function PurchaseOrdersPage() {
                 </Button>
               </div>
             </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Attachment Preview */}
+      <Dialog open={!!previewAttachment} onOpenChange={o => { if (!o) setPreviewAttachment(null) }}>
+        <DialogContent className="w-[95vw] sm:!max-w-3xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="truncate pr-6">{previewAttachment?.name}</DialogTitle>
+          </DialogHeader>
+          {previewAttachment && (
+            isImageAttachment(previewAttachment.name) ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={driveImageSrc(previewAttachment.url)} alt={previewAttachment.name} className="w-full max-h-[70vh] object-contain rounded-lg border" />
+            ) : isPdfAttachment(previewAttachment.name) ? (
+              <iframe src={driveEmbedUrl(previewAttachment.url)} className="w-full h-[70vh] rounded-lg border" />
+            ) : (
+              <div className="flex flex-col items-center justify-center gap-3 py-10 text-sm text-muted-foreground">
+                <FileText className="h-10 w-10" />
+                <p>Preview isn&apos;t available for this file type.</p>
+                <Button type="button" variant="outline" size="sm" onClick={() => window.open(previewAttachment.url, '_blank', 'noopener,noreferrer')}>
+                  Open File
+                </Button>
+              </div>
+            )
           )}
         </DialogContent>
       </Dialog>
