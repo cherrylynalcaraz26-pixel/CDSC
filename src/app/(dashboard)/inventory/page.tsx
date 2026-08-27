@@ -1038,6 +1038,102 @@ export default function InventoryPage() {
     if (balance === 0) return <Badge variant="outline" className="text-gray-500 border-gray-300 bg-gray-50">Balanced</Badge>
     return <Badge variant="outline" className="text-red-600 border-red-300 bg-red-50">Deficit</Badge>
   }
+  function balanceStatusLabel(balance: number) {
+    return balance > 0 ? 'In Stock' : balance === 0 ? 'Balanced' : 'Deficit'
+  }
+
+  // Prints whichever view (By Client / By Item / By Warehouse) is currently active, with
+  // its current filters and sort applied — built from plain HTML/CSS in a blank window
+  // (like the Generate Report print), since Tailwind classes don't exist there.
+  function printInventoryList() {
+    const title = viewMode === 'by_client' ? 'Inventory — By Client' : viewMode === 'by_item' ? 'Inventory — By Item' : 'Inventory — By Warehouse'
+    const today = new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
+
+    let theadHtml = ''
+    let rowsHtml = ''
+
+    if (viewMode === 'by_client') {
+      theadHtml = `<tr><th style="width:24px">#</th><th>Client</th><th>Item Name</th><th style="width:70px">Unit</th><th class="r" style="width:60px">DR Qty</th><th class="r" style="width:80px">WH Stock</th><th class="r" style="width:70px">CSI Qty</th><th class="r" style="width:60px">Balance</th><th style="width:80px">Status</th></tr>`
+      rowsHtml = sortedFiltered.length === 0
+        ? `<tr><td colspan="9" style="text-align:center;padding:24px;color:#9ca3af;font-style:italic">No inventory data found.</td></tr>`
+        : sortedFiltered.map((r, i) => {
+          const balColor = r.balance > 0 ? '#15803d' : r.balance < 0 ? '#dc2626' : '#9ca3af'
+          return `<tr>
+            <td>${i + 1}</td>
+            <td>${r.client}</td>
+            <td style="font-weight:600;color:#1f2937">${r.item_name}</td>
+            <td>${uomName(r.unit)}</td>
+            <td class="r">${r.dr_qty}</td>
+            <td class="r" style="color:#15803d;font-weight:600">${r.client_on_hand > 0 ? r.client_on_hand : '—'}</td>
+            <td class="r">${r.csi_qty}</td>
+            <td class="r" style="font-weight:700;color:${balColor}">${r.balance}</td>
+            <td>${balanceStatusLabel(r.balance)}</td>
+          </tr>`
+        }).join('')
+    } else if (viewMode === 'by_item') {
+      theadHtml = `<tr><th style="width:24px">#</th><th>Item Name</th><th style="width:90px">Clients</th><th style="width:70px">Unit</th><th class="r" style="width:60px">DR Qty</th><th class="r" style="width:80px">WH Stock</th><th class="r" style="width:70px">CSI Qty</th><th class="r" style="width:60px">Balance</th><th style="width:80px">Status</th></tr>`
+      rowsHtml = sortedByItemGroups.length === 0
+        ? `<tr><td colspan="9" style="text-align:center;padding:24px;color:#9ca3af;font-style:italic">No inventory data found.</td></tr>`
+        : sortedByItemGroups.map((g, i) => {
+          const balColor = g.total_balance > 0 ? '#15803d' : g.total_balance < 0 ? '#dc2626' : '#9ca3af'
+          return `<tr>
+            <td>${i + 1}</td>
+            <td style="font-weight:600;color:#1f2937">${g.item_name}</td>
+            <td>${g.rows.length}</td>
+            <td>${uomName(g.unit)}</td>
+            <td class="r">${g.total_dr}</td>
+            <td class="r" style="color:#15803d;font-weight:600">${g.total_ws > 0 ? g.total_ws : '—'}</td>
+            <td class="r">${g.total_csi}</td>
+            <td class="r" style="font-weight:700;color:${balColor}">${g.total_balance}</td>
+            <td>${balanceStatusLabel(g.total_balance)}</td>
+          </tr>`
+        }).join('')
+    } else {
+      theadHtml = `<tr><th style="width:24px">#</th><th>Owner</th><th>Item Name</th><th style="width:70px">Unit</th><th class="r" style="width:60px">Qty</th><th class="r" style="width:90px">Est. Value</th><th>Warehouse Note</th></tr>`
+      rowsHtml = sortedWarehouseRows.length === 0
+        ? `<tr><td colspan="7" style="text-align:center;padding:24px;color:#9ca3af;font-style:italic">No warehouse stock records found.</td></tr>`
+        : sortedWarehouseRows.map((r, i) => `<tr>
+            <td>${i + 1}</td>
+            <td>${r.client_name || 'CDSC Stock'}</td>
+            <td style="font-weight:600;color:#1f2937">${r.item_name}</td>
+            <td>${r.unit ? uomName(r.unit) : '—'}</td>
+            <td class="r" style="color:#15803d;font-weight:600">${r.quantity}</td>
+            <td class="r">${r.item_name in itemPriceMap ? `₱${warehouseEstValue(r).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}</td>
+            <td>${r.notes || '—'}</td>
+          </tr>`).join('')
+    }
+
+    const win = window.open('', '_blank', 'width=1100,height=800')
+    if (!win) return
+    win.document.write(`<!DOCTYPE html><html><head><title>${title}</title><style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: Arial, sans-serif; background: #fff; color: #111; padding: 32px; }
+      .accent { background: #dc2626; height: 5px; border-radius: 3px; margin-bottom: 20px; }
+      .letterhead { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; padding-bottom: 14px; border-bottom: 1px solid #e5e7eb; }
+      .co-sub { font-size: 11px; font-weight: 600; color: #374151; margin-top: 4px; }
+      .rpt-title { text-align: right; font-size: 15px; font-weight: 700; }
+      .rpt-date { text-align: right; font-size: 10px; color: #9ca3af; margin-top: 2px; }
+      table { width: 100%; border-collapse: collapse; font-size: 11px; }
+      th { background: #1f2937; color: #fff; text-align: left; padding: 7px 10px; font-weight: 600; font-size: 10px; text-transform: uppercase; letter-spacing: 0.4px; }
+      th.r { text-align: right; }
+      td { padding: 6px 10px; border-bottom: 1px solid #f3f4f6; }
+      td.r { text-align: right; }
+      tr:nth-child(even) td { background: #f9fafb; }
+      .note { margin-top: 16px; padding-top: 10px; border-top: 1px solid #f3f4f6; font-size: 9px; color: #9ca3af; }
+      @media print { @page { margin: 12mm; size: A4 landscape; } }
+    </style></head><body>
+      <div class="accent"></div>
+      <div class="letterhead">
+        <div><img src="/cdsc-logo.jpg" style="height:50px;width:auto;display:block;" /><div class="co-sub">CDSC Industrial Supply</div></div>
+        <div><div class="rpt-title">${title}</div><div class="rpt-date">As of ${today}</div></div>
+      </div>
+      <table><thead>${theadHtml}</thead><tbody>${rowsHtml}</tbody></table>
+      <div class="note">Generated ${today} &middot; CDSC Inventory System</div>
+    </body></html>`)
+    win.document.close()
+    win.focus()
+    setTimeout(() => { win.print() }, 400)
+  }
 
   return (
     <div className="space-y-6">
@@ -1140,6 +1236,9 @@ export default function InventoryPage() {
           </Select>
         </div>
         <div className="flex gap-2 ml-auto">
+          <Button variant="outline" onClick={printInventoryList} className="border-gray-300 text-gray-700 gap-1.5">
+            <Printer className="h-4 w-4" /> Print
+          </Button>
           <Button
             variant="outline"
             onClick={() => {
