@@ -1433,6 +1433,16 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
     }
     if (error) { toast.error(error.message); setSaving(false); return }
 
+    // Warehouse stock and its stock-history ledger key items by name, not by item_id, so
+    // renaming an item here would otherwise orphan its existing stock row and hide all of
+    // its past receiving/delivery history from Inventory's "Stock History" (they'd stay
+    // filed under the old name while the item now shows under the new one). Cascade the
+    // rename so the same item stays traceable to the same stock and history after a rename.
+    if (editing && editing.item_name !== payload.item_name) {
+      await supabase.from('warehouse_stock').update({ item_name: payload.item_name }).eq('item_name', editing.item_name)
+      await supabase.from('warehouse_stock_ledger').update({ item_name: payload.item_name }).eq('item_name', editing.item_name)
+    }
+
     if (pendingSuggestionId && newItemId) {
       const { data: { user } } = await supabase.auth.getUser()
       await supabase.from('item_suggestions').update({
