@@ -7,8 +7,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow, SortableTableHead,
 } from '@/components/ui/table'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
@@ -121,6 +122,7 @@ interface CSIRecord {
   created_at: string
   show_in_portal: boolean
   attachment_url: string | null
+  collection_status: string | null
 }
 
 interface CSIItem {
@@ -130,7 +132,7 @@ interface CSIItem {
   unit_price: string
 }
 
-type SortOption = 'date_desc' | 'date_asc' | 'si_asc' | 'si_desc' | 'amount_desc' | 'amount_asc' | 'client_asc'
+type SortOption = 'date_desc' | 'date_asc' | 'si_asc' | 'si_desc' | 'amount_desc' | 'amount_asc' | 'client_asc' | 'client_desc'
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: 'date_desc', label: 'Date (Newest)' },
@@ -140,6 +142,7 @@ const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: 'amount_desc', label: 'Amount (High–Low)' },
   { value: 'amount_asc', label: 'Amount (Low–High)' },
   { value: 'client_asc', label: 'Client (A–Z)' },
+  { value: 'client_desc', label: 'Client (Z–A)' },
 ]
 
 function compareBySortOption(sort: SortOption, a: { date: string; si: string; amount: number; client: string }, b: { date: string; si: string; amount: number; client: string }) {
@@ -151,8 +154,22 @@ function compareBySortOption(sort: SortOption, a: { date: string; si: string; am
     case 'amount_desc': return b.amount - a.amount
     case 'amount_asc': return a.amount - b.amount
     case 'client_asc': return a.client.localeCompare(b.client)
+    case 'client_desc': return b.client.localeCompare(a.client)
     default: return 0
   }
+}
+
+// Bridges the header-click sort UI onto the same persisted `sortOption` used by
+// the Sort dropdown, so both controls stay in sync instead of tracking separate state.
+type SortCol = 'date' | 'si' | 'amount' | 'client'
+function sortColOf(opt: SortOption): SortCol {
+  if (opt.startsWith('date')) return 'date'
+  if (opt.startsWith('si')) return 'si'
+  if (opt.startsWith('amount')) return 'amount'
+  return 'client'
+}
+function sortDirOf(opt: SortOption): 'asc' | 'desc' {
+  return opt.endsWith('desc') ? 'desc' : 'asc'
 }
 
 const emptyItem = (): CSIItem => ({ item_name: '', unit: '', quantity: '', unit_price: '' })
@@ -164,6 +181,15 @@ const emptyHeader = () => ({
   client_name: '',
   dr_number: '',
 })
+
+function csiStatusBadge(status: string | null) {
+  switch (status) {
+    case 'cancelled': return { label: 'Cancelled', cls: 'bg-red-100 text-red-700' }
+    case 'collected': return { label: 'Collected', cls: 'bg-green-100 text-green-800' }
+    case 'for_collection': return { label: 'For Collection', cls: 'bg-amber-100 text-amber-800' }
+    default: return { label: 'Active', cls: 'bg-gray-100 text-gray-600' }
+  }
+}
 
 function formatPeso(val: number) {
   if (!val) return '—'
@@ -675,7 +701,7 @@ export default function CSIMonitoringPage() {
   const totalAmount = filtered.reduce((s, r) => s + (Number(r.amount) || 0), 0)
   const uniqueSIs = new Set(filtered.map(r => r.si_number)).size
 
-  const siGroups: { si_number: string; date: string; client: string; po: string | null; dr: string | null; items: CSIRecord[]; total: number; show_in_portal: boolean; attachment_url: string | null }[] = []
+  const siGroups: { si_number: string; date: string; client: string; po: string | null; dr: string | null; items: CSIRecord[]; total: number; show_in_portal: boolean; attachment_url: string | null; collection_status: string | null }[] = []
   const siSeen = new Set<string>()
   for (const rec of filtered) {
     if (!siSeen.has(rec.si_number)) {
@@ -691,6 +717,7 @@ export default function CSIMonitoringPage() {
         total: siItems.reduce((s, r) => s + (Number(r.amount) || 0), 0),
         show_in_portal: rec.show_in_portal !== false,
         attachment_url: rec.attachment_url ?? null,
+        collection_status: rec.collection_status ?? null,
       })
     }
   }
@@ -710,6 +737,12 @@ export default function CSIMonitoringPage() {
 
   useEffect(() => { setPage(1) }, [search, clientFilter, yearFilter, viewMode, sortOption])
   useEffect(() => { if (viewMode !== 'by-si') setSelectedSIs(new Set()) }, [viewMode])
+
+  function onSortCol(col: SortCol) {
+    const isActive = sortColOf(sortOption) === col
+    const nextDir: 'asc' | 'desc' = isActive && sortDirOf(sortOption) === 'asc' ? 'desc' : 'asc'
+    setSortOption(`${col}_${nextDir}` as SortOption)
+  }
 
   function toggleSI(si: string) {
     setExpandedSIs(prev => {
@@ -1739,13 +1772,14 @@ export default function CSIMonitoringPage() {
                       />
                     </TableHead>
                     <TableHead className="w-12">No.</TableHead>
-                    <TableHead className="w-28">Date</TableHead>
-                    <TableHead className="w-32">SI Number</TableHead>
+                    <SortableTableHead label="Date" sortKey="date" activeKey={sortColOf(sortOption)} direction={sortDirOf(sortOption)} onSort={onSortCol} className="w-28" />
+                    <SortableTableHead label="SI Number" sortKey="si" activeKey={sortColOf(sortOption)} direction={sortDirOf(sortOption)} onSort={onSortCol} className="w-32" />
                     <TableHead className="w-32">SO Number</TableHead>
-                    <TableHead className="min-w-[160px]">Client</TableHead>
+                    <SortableTableHead label="Client" sortKey="client" activeKey={sortColOf(sortOption)} direction={sortDirOf(sortOption)} onSort={onSortCol} className="min-w-[160px]" />
                     <TableHead className="w-28">DR Number</TableHead>
                     <TableHead className="text-right w-16">Items</TableHead>
-                    <TableHead className="text-right w-32">Total Amount</TableHead>
+                    <SortableTableHead label="Total Amount" sortKey="amount" align="right" activeKey={sortColOf(sortOption)} direction={sortDirOf(sortOption)} onSort={onSortCol} className="w-32" />
+                    <TableHead className="w-28">Status</TableHead>
                     <TableHead className="w-16 text-center">Photo</TableHead>
                     <TableHead className="w-24 text-center">Portal</TableHead>
                     <TableHead className="w-10" />
@@ -1754,13 +1788,13 @@ export default function CSIMonitoringPage() {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={11} className="text-center py-10">
+                      <TableCell colSpan={12} className="text-center py-10">
                         <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                       </TableCell>
                     </TableRow>
                   ) : siGroups.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={11} className="text-center py-12 text-muted-foreground">
+                      <TableCell colSpan={12} className="text-center py-12 text-muted-foreground">
                         No records found. Click <strong>New Record</strong> to add one.
                       </TableCell>
                     </TableRow>
@@ -1787,6 +1821,9 @@ export default function CSIMonitoringPage() {
                         <TableCell className="text-sm font-mono">{group.dr ?? '—'}</TableCell>
                         <TableCell className="text-right text-sm">{group.items.length}</TableCell>
                         <TableCell className="text-right text-sm font-medium">{formatPeso(group.total)}</TableCell>
+                        <TableCell>
+                          <Badge className={csiStatusBadge(group.collection_status).cls}>{csiStatusBadge(group.collection_status).label}</Badge>
+                        </TableCell>
                         <TableCell className="text-center" onClick={e => e.stopPropagation()}>
                           {group.attachment_url ? (
                             <button
@@ -1844,7 +1881,7 @@ export default function CSIMonitoringPage() {
                       </TableRow>
                       {expandedSIs.has(group.si_number) && (
                         <TableRow key={`${group.si_number}-items`}>
-                          <TableCell colSpan={11} className="p-0 bg-muted/20">
+                          <TableCell colSpan={12} className="p-0 bg-muted/20">
                             <div className="px-8 py-2">
                               <Table>
                                 <TableHeader>
@@ -1893,27 +1930,28 @@ export default function CSIMonitoringPage() {
                 <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     <TableHead className="w-12">No.</TableHead>
-                    <TableHead className="w-28">Date</TableHead>
-                    <TableHead className="w-32">SI Number</TableHead>
-                    <TableHead className="min-w-[160px]">Client</TableHead>
+                    <SortableTableHead label="Date" sortKey="date" activeKey={sortColOf(sortOption)} direction={sortDirOf(sortOption)} onSort={onSortCol} className="w-28" />
+                    <SortableTableHead label="SI Number" sortKey="si" activeKey={sortColOf(sortOption)} direction={sortDirOf(sortOption)} onSort={onSortCol} className="w-32" />
+                    <SortableTableHead label="Client" sortKey="client" activeKey={sortColOf(sortOption)} direction={sortDirOf(sortOption)} onSort={onSortCol} className="min-w-[160px]" />
                     <TableHead>Item/s</TableHead>
                     <TableHead className="text-right w-16">QTY</TableHead>
                     <TableHead className="w-20">Unit</TableHead>
                     <TableHead className="text-right w-32">Unit Price</TableHead>
-                    <TableHead className="text-right w-28">Amount</TableHead>
+                    <SortableTableHead label="Amount" sortKey="amount" align="right" activeKey={sortColOf(sortOption)} direction={sortDirOf(sortOption)} onSort={onSortCol} className="w-28" />
+                    <TableHead className="w-28">Status</TableHead>
                     <TableHead className="w-10" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={10} className="text-center py-10">
+                      <TableCell colSpan={11} className="text-center py-10">
                         <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                       </TableCell>
                     </TableRow>
                   ) : filtered.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
+                      <TableCell colSpan={11} className="text-center py-12 text-muted-foreground">
                         No records found. Click <strong>New Record</strong> to add one.
                       </TableCell>
                     </TableRow>
@@ -1930,6 +1968,9 @@ export default function CSIMonitoringPage() {
                       <TableCell className="text-sm text-muted-foreground">{rec.unit ?? '—'}</TableCell>
                       <TableCell className="text-right text-sm">{rec.unit_price ? formatPeso(Number(rec.unit_price)) : '—'}</TableCell>
                       <TableCell className="text-right text-sm font-medium">{rec.amount ? formatPeso(Number(rec.amount)) : '—'}</TableCell>
+                      <TableCell>
+                        <Badge className={csiStatusBadge(rec.collection_status).cls}>{csiStatusBadge(rec.collection_status).label}</Badge>
+                      </TableCell>
                       <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger className="h-8 w-8 flex items-center justify-center rounded hover:bg-accent">

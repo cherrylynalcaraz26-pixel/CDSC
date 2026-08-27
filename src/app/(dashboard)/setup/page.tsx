@@ -167,6 +167,7 @@ function UOMTab({ configSelector }: { configSelector: React.ReactNode }) {
 
 /* ─── Brands ──────────────────────────────────────────── */
 interface Brand { id: string; name: string; description: string | null; is_active: boolean }
+type BrandSortKey = 'name' | 'description' | 'is_active'
 
 function BrandsTab({ configSelector }: { configSelector: React.ReactNode }) {
   const supabase = createClient()
@@ -214,6 +215,14 @@ function BrandsTab({ configSelector }: { configSelector: React.ReactNode }) {
     setDeleteId(null)
   }
 
+  const { sorted: sortedRows, sortKey: brandSortKey, sortDir: brandSortDir, onSort: onSortBrands } = useTableSort<Brand, BrandSortKey>(rows, (r, key) => {
+    switch (key) {
+      case 'name': return r.name
+      case 'description': return r.description ?? ''
+      case 'is_active': return r.is_active ? 1 : 0
+    }
+  })
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
@@ -226,18 +235,18 @@ function BrandsTab({ configSelector }: { configSelector: React.ReactNode }) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Brand Name</TableHead>
-              <TableHead>Description</TableHead>
-              <TableHead>Status</TableHead>
+              <SortableTableHead label="Brand Name" sortKey="name" activeKey={brandSortKey} direction={brandSortDir} onSort={onSortBrands} />
+              <SortableTableHead label="Description" sortKey="description" activeKey={brandSortKey} direction={brandSortDir} onSort={onSortBrands} />
+              <SortableTableHead label="Status" sortKey="is_active" activeKey={brandSortKey} direction={brandSortDir} onSort={onSortBrands} />
               <TableHead className="w-24">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow><TableCell colSpan={4} className="text-center py-6 text-muted-foreground">Loading…</TableCell></TableRow>
-            ) : rows.length === 0 ? (
+            ) : sortedRows.length === 0 ? (
               <TableRow><TableCell colSpan={4} className="text-center py-6 text-muted-foreground">No brands yet</TableCell></TableRow>
-            ) : rows.map(r => (
+            ) : sortedRows.map(r => (
               <TableRow key={r.id}>
                 <TableCell className="font-medium">{r.name}</TableCell>
                 <TableCell className="text-sm text-muted-foreground">{r.description ?? '—'}</TableCell>
@@ -299,6 +308,7 @@ function BrandsTab({ configSelector }: { configSelector: React.ReactNode }) {
 
 /* ─── Attributes ──────────────────────────────────────── */
 interface Attribute { id: string; name: string; data_type: string; options: string[] | null; is_active: boolean }
+type AttributeSortKey = 'name' | 'data_type' | 'is_active'
 
 function AttributesTab({ configSelector }: { configSelector: React.ReactNode }) {
   const supabase = createClient()
@@ -377,6 +387,14 @@ function AttributesTab({ configSelector }: { configSelector: React.ReactNode }) 
     setDeleteId(null)
   }
 
+  const { sorted: sortedRows, sortKey: attrSortKey, sortDir: attrSortDir, onSort: onSortAttrs } = useTableSort<Attribute, AttributeSortKey>(rows, (r, key) => {
+    switch (key) {
+      case 'name': return r.name
+      case 'data_type': return r.data_type
+      case 'is_active': return r.is_active ? 1 : 0
+    }
+  })
+
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
@@ -389,19 +407,19 @@ function AttributesTab({ configSelector }: { configSelector: React.ReactNode }) 
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Attribute Name</TableHead>
-              <TableHead>Type</TableHead>
+              <SortableTableHead label="Attribute Name" sortKey="name" activeKey={attrSortKey} direction={attrSortDir} onSort={onSortAttrs} />
+              <SortableTableHead label="Type" sortKey="data_type" activeKey={attrSortKey} direction={attrSortDir} onSort={onSortAttrs} />
               <TableHead>Options</TableHead>
-              <TableHead>Status</TableHead>
+              <SortableTableHead label="Status" sortKey="is_active" activeKey={attrSortKey} direction={attrSortDir} onSort={onSortAttrs} />
               <TableHead className="w-24">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow><TableCell colSpan={5} className="text-center py-6 text-muted-foreground">Loading…</TableCell></TableRow>
-            ) : rows.length === 0 ? (
+            ) : sortedRows.length === 0 ? (
               <TableRow><TableCell colSpan={5} className="text-center py-6 text-muted-foreground">No attributes yet</TableCell></TableRow>
-            ) : rows.map(r => (
+            ) : sortedRows.map(r => (
               <TableRow key={r.id}>
                 <TableCell className="font-medium">{r.name}</TableCell>
                 <TableCell>
