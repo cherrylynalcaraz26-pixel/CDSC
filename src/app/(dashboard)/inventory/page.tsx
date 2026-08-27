@@ -21,7 +21,7 @@ import { Badge } from '@/components/ui/badge'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Search, Loader2, Pencil, AlertTriangle, Plus, MoreHorizontal, Trash2, FileText, Printer, Mail, Send, Truck, Package, History, ArrowDownCircle, ArrowUpCircle, Users, List, CheckCircle2, Scale, Wallet, Boxes, ArrowUp, ArrowDown, ArrowUpDown, X } from 'lucide-react'
+import { Search, Loader2, Pencil, AlertTriangle, Plus, MoreHorizontal, Trash2, FileText, Printer, Mail, Send, Truck, Package, History, ArrowDownCircle, ArrowUpCircle, Users, List, CheckCircle2, Scale, Wallet, Boxes, ArrowUp, ArrowDown, ArrowUpDown, X, User } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSearchContext } from '@/context/search-context'
 import { sendEmail } from '@/lib/send-email'
@@ -66,7 +66,7 @@ interface ItemOption {
   cost: number | null; selling_price: number | null; status: string
 }
 
-type LedgerSourceType = 'po_receiving' | 'manual_add' | 'manual_edit' | 'dr_delivery' | 'return_to_warehouse'
+type LedgerSourceType = 'po_receiving' | 'manual_add' | 'manual_edit' | 'dr_delivery' | 'return_to_warehouse' | 'personal_use'
 interface LedgerRow {
   id: string; change_qty: number; source_type: LedgerSourceType
   reference_no: string | null; client_name: string | null; notes: string | null; created_at: string
@@ -78,6 +78,7 @@ const LEDGER_SOURCE_LABEL: Record<LedgerSourceType, string> = {
   manual_edit: 'Manual Correction',
   dr_delivery: 'Delivered to Client',
   return_to_warehouse: 'Returned to Warehouse',
+  personal_use: 'Personal Use',
 }
 
 function KpiCard({ value, label, valueClass, icon: Icon, tint, grad, shadow }: {
@@ -152,6 +153,8 @@ export default function InventoryPage() {
   const [wsMarkDelivered, setWsMarkDelivered] = useState(false)
   const [wsDeliverClientId, setWsDeliverClientId] = useState('')
   const [wsDeliverQty, setWsDeliverQty] = useState('')
+  const [wsPersonalUse, setWsPersonalUse] = useState(false)
+  const [wsPersonalQty, setWsPersonalQty] = useState('')
   const [clientOptions, setClientOptions] = useState<{ id: string; company_name: string }[]>([])
   const [channelOptions, setChannelOptions] = useState<{ id: string; name: string; color: string }[]>([])
   const [assignChannelRow, setAssignChannelRow] = useState<InventoryRow | null>(null)
@@ -539,12 +542,44 @@ export default function InventoryPage() {
     setWsMarkDelivered(false)
     setWsDeliverClientId('')
     setWsDeliverQty(String(row.quantity))
+    setWsPersonalUse(false)
+    setWsPersonalQty('')
     setWarehouseUpdateOpen(true)
   }
 
   async function saveWarehouseUpdate() {
     if (!warehouseUpdateRow) return
     setWarehouseUpdateSaving(true)
+
+    // Personal Use — someone took stock out for their own use rather than a client
+    // delivery. Removes it from this warehouse row and logs it distinctly in the
+    // item's history (with notes and how many were taken), instead of looking like
+    // an unexplained quantity correction.
+    if (wsPersonalUse) {
+      const qty = Number(wsPersonalQty)
+      if (!qty || qty <= 0) { toast.error('Enter how many you got'); setWarehouseUpdateSaving(false); return }
+      const { data: wsRow } = await supabase.from('warehouse_stock').select('quantity').eq('id', warehouseUpdateRow.id).maybeSingle()
+      const newQty = Math.max(0, (Number(wsRow?.quantity) || 0) - qty)
+      const { error } = await supabase.from('warehouse_stock').update({
+        quantity: newQty,
+        notes: warehouseUpdateNotes.trim() || null,
+        updated_at: new Date().toISOString(),
+      }).eq('id', warehouseUpdateRow.id)
+      if (error) { toast.error(error.message); setWarehouseUpdateSaving(false); return }
+
+      await supabase.from('warehouse_stock_ledger').insert({
+        item_name: warehouseUpdateRow.item_name,
+        unit: warehouseUpdateRow.unit || null,
+        change_qty: -qty,
+        source_type: 'personal_use',
+        notes: warehouseUpdateNotes.trim() || 'Taken for personal use',
+      })
+      toast.success('Personal use logged — warehouse stock updated')
+      setWarehouseUpdateOpen(false)
+      load()
+      setWarehouseUpdateSaving(false)
+      return
+    }
 
     // "Already delivered" is a manual fallback for when a DR's auto-decrement doesn't find
     // a matching row (e.g. an item-name mismatch) — it removes the delivered quantity from
@@ -1417,7 +1452,7 @@ export default function InventoryPage() {
                                           ? <ArrowUpCircle className="h-3.5 w-3.5 text-green-600 shrink-0" />
                                           : <ArrowDownCircle className="h-3.5 w-3.5 text-red-600 shrink-0" />}
                                         <span className={`font-semibold ${h.change_qty >= 0 ? 'text-green-700' : 'text-red-600'}`}>{h.change_qty >= 0 ? '+' : ''}{h.change_qty}</span>
-                                        <span className={h.source_type === 'manual_add' || h.source_type === 'manual_edit' ? 'inline-flex items-center rounded-full bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 font-medium' : 'text-foreground'}>
+                                        <span className={h.source_type === 'manual_add' || h.source_type === 'manual_edit' || h.source_type === 'personal_use' ? 'inline-flex items-center rounded-full bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 font-medium' : 'text-foreground'}>
                                           {LEDGER_SOURCE_LABEL[h.source_type]}
                                         </span>
                                         <span className="text-muted-foreground">{[h.reference_no, h.client_name].filter(Boolean).join(' → ') || h.notes || ''}</span>
@@ -2074,17 +2109,34 @@ export default function InventoryPage() {
               <div className="flex border rounded-md overflow-hidden">
                 <button
                   type="button"
-                  onClick={() => setWsMarkDelivered(false)}
-                  className={`flex-1 h-8 text-xs font-medium transition-colors ${!wsMarkDelivered ? 'bg-blue-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
+                  onClick={() => { setWsMarkDelivered(false); setWsPersonalUse(false) }}
+                  className={`flex-1 h-8 text-xs font-medium transition-colors ${!wsMarkDelivered && !wsPersonalUse ? 'bg-blue-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
                 >Update Quantity</button>
                 <button
                   type="button"
-                  onClick={() => setWsMarkDelivered(true)}
+                  onClick={() => { setWsMarkDelivered(true); setWsPersonalUse(false) }}
                   className={`flex-1 h-8 text-xs font-medium border-l transition-colors flex items-center justify-center gap-1.5 ${wsMarkDelivered ? 'bg-blue-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
                 ><Truck className="h-3.5 w-3.5" />Already Delivered</button>
+                <button
+                  type="button"
+                  onClick={() => { setWsMarkDelivered(false); setWsPersonalUse(true) }}
+                  className={`flex-1 h-8 text-xs font-medium border-l transition-colors flex items-center justify-center gap-1.5 ${wsPersonalUse ? 'bg-blue-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
+                ><User className="h-3.5 w-3.5" />Personal Use</button>
               </div>
 
-              {wsMarkDelivered ? (
+              {wsPersonalUse ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label>How Many Did You Get? <span className="text-red-500">*</span></Label>
+                    <Input type="number" min="0" value={wsPersonalQty} onChange={e => setWsPersonalQty(e.target.value)} placeholder="0" />
+                    <p className="text-xs text-muted-foreground">Subtracted from this warehouse row&apos;s on-hand quantity and logged as Personal Use in its history.</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Notes</Label>
+                    <Input value={warehouseUpdateNotes} onChange={e => setWarehouseUpdateNotes(e.target.value)} placeholder="What was it for?" />
+                  </div>
+                </div>
+              ) : wsMarkDelivered ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-1.5">
                     <Label>Quantity Delivered <span className="text-red-500">*</span></Label>
@@ -2124,10 +2176,10 @@ export default function InventoryPage() {
             <Button variant="outline" onClick={() => setWarehouseUpdateOpen(false)}>Cancel</Button>
             <Button
               onClick={saveWarehouseUpdate}
-              disabled={warehouseUpdateSaving || (wsMarkDelivered ? !wsDeliverQty.trim() : !warehouseUpdateQty.trim())}
+              disabled={warehouseUpdateSaving || (wsPersonalUse ? !wsPersonalQty.trim() : wsMarkDelivered ? !wsDeliverQty.trim() : !warehouseUpdateQty.trim())}
               className="bg-blue-600 hover:bg-blue-700 text-white"
             >
-              {warehouseUpdateSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : wsMarkDelivered ? 'Mark as Delivered' : 'Update Stock'}
+              {warehouseUpdateSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : wsPersonalUse ? 'Log Personal Use' : wsMarkDelivered ? 'Mark as Delivered' : 'Update Stock'}
             </Button>
           </DialogFooter>
         </DialogContent>
