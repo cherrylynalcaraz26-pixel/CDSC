@@ -1569,6 +1569,46 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
                 style={{ width: '100%', minHeight: '480px', border: 'none' }}
               />
             )}
+            {/* Delivery Progress — per-item ordered vs. received across every linked DR,
+                so a partial delivery on one line is visible even when other lines (or the
+                DR itself) are already marked fully delivered. */}
+            {viewSODeliveries.length > 0 && (() => {
+              const receivedMap: Record<string, number> = {}
+              for (const d of viewSODeliveries) {
+                for (const it of d.items) {
+                  receivedMap[it.item_name] = (receivedMap[it.item_name] ?? 0) + (Number(it.quantity) || 0)
+                }
+              }
+              const rows = viewSOItems.map(it => ({
+                item_name: it.item_name,
+                unit: it.unit,
+                ordered: it.quantity,
+                received: receivedMap[it.item_name] ?? 0,
+              }))
+              return (
+                <div className="border rounded-lg overflow-hidden">
+                  <div className="bg-muted/40 px-4 py-2 flex items-center gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Delivery Progress</span>
+                  </div>
+                  <div className="divide-y text-xs">
+                    {rows.map((r, i) => {
+                      const isPartial = r.received < r.ordered
+                      return (
+                        <div key={i} className="px-4 py-2 flex items-center gap-3">
+                          <span className="flex-1 font-medium">{r.item_name}</span>
+                          <span className="text-muted-foreground">{r.unit}</span>
+                          <span className={`font-semibold ${isPartial ? 'text-amber-600' : 'text-green-600'}`}>{r.received} / {r.ordered} received</span>
+                          {isPartial && (
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 border border-amber-200">Partial Delivery</span>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )
+            })()}
+
             {/* Pending / Incomplete Deliveries */}
             {(() => {
               const pending = viewSODeliveries.filter(d => d.status !== 'delivered' && d.status !== 'received')
