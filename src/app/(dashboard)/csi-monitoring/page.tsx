@@ -497,6 +497,18 @@ export default function CSIMonitoringPage() {
     return `CSI-Invoices-${groups.length}-invoices.pdf`
   }
 
+  // Prints the currently filtered CSI list (respecting search/client/year filters,
+  // across all pages) grouped by SI — reuses the same builder as the bulk-email PDF
+  // attachment so the printed layout matches what clients receive.
+  function printCsiList() {
+    if (sortedSiGroups.length === 0) { toast.error('No CSI records to print'); return }
+    const win = window.open('', '_blank', 'width=900,height=700')
+    if (!win) return
+    win.document.write(buildCsiEmailPdfHtml(sortedSiGroups))
+    win.document.close()
+    setTimeout(() => { win.focus(); win.print(); win.close() }, 800)
+  }
+
   function toggleSelectSI(si: string) {
     setSelectedSIs(prev => {
       const next = new Set(prev)
@@ -1614,7 +1626,10 @@ export default function CSIMonitoringPage() {
             </button>
           </div>
         </div>
-        <Button onClick={openAdd} className="bg-red-600 hover:bg-red-700 ml-auto">
+        <Button variant="outline" onClick={printCsiList} className="ml-auto border-gray-300 text-gray-700 gap-1.5">
+          <Printer className="h-4 w-4" /> Print
+        </Button>
+        <Button onClick={openAdd} className="bg-red-600 hover:bg-red-700">
           <Plus className="h-4 w-4 mr-2" /> New Record
         </Button>
         {viewMode === 'by-si' && selectedSIs.size > 0 && (

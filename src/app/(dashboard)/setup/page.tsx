@@ -12,8 +12,9 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow, SortableTableHead,
 } from '@/components/ui/table'
+import { useTableSort } from '@/lib/use-table-sort'
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select'
@@ -1147,6 +1148,7 @@ interface ItemRow {
   image_url: string | null
   image_urls: string[] | null
 }
+type ItemSortKey = 'item_code' | 'item_name' | 'brand' | 'attribute' | 'unit_of_measure' | 'cost' | 'selling_price' | 'status'
 interface ItemImage { url?: string; file?: File; preview: string }
 function itemImageUrls(r: Pick<ItemRow, 'image_url' | 'image_urls'>): string[] {
   return r.image_urls?.length ? r.image_urls : (r.image_url ? [r.image_url] : [])
@@ -1159,23 +1161,6 @@ interface ItemSuggestion {
   brand: string | null; unit_of_measure: string | null; attribute: string | null
   selling_price: number | null; image_urls: string[]; notes: string | null; created_at: string
 }
-
-// Windowed page list — always shows first/last, current ±1, with '…' gaps —
-// so pagination stays compact even with dozens of pages.
-function paginationRange(current: number, total: number): (number | '…')[] {
-  const pages = new Set([1, total, current, current - 1, current + 1])
-  const sorted = [...pages].filter(p => p >= 1 && p <= total).sort((a, b) => a - b)
-  const result: (number | '…')[] = []
-  let prev = 0
-  for (const p of sorted) {
-    if (prev && p - prev > 1) result.push('…')
-    result.push(p)
-    prev = p
-  }
-  return result
-}
-
-const ITEM_LIST_PAGE_SIZE = 24
 
 // Derives a short letters-only prefix from an item name (e.g. "Laptop Stand" -> "LAP")
 // so generated codes read as related to the item instead of a plain running number.
@@ -1192,7 +1177,6 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
   const [brandList, setBrandList] = useState<BrandOption[]>([])
   const [attributeList, setAttributeList] = useState<AttributeOption[]>([])
   const [loading, setLoading] = useState(true)
-  const [page, setPage] = useState(1)
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<ItemRow | null>(null)
   const [form, setForm] = useState({ item_code: '', item_name: '', description: '', brand: '', unit_of_measure: '', cost: '', selling_price: '', attribute: '' })
@@ -1312,9 +1296,18 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
     r.item_code.toLowerCase().includes(search.toLowerCase()) ||
     (r.brand ?? '').toLowerCase().includes(search.toLowerCase())
   )
-  useEffect(() => { setPage(1) }, [search, viewMode])
-  const totalPages = Math.max(1, Math.ceil(filtered.length / ITEM_LIST_PAGE_SIZE))
-  const paged = filtered.slice((page - 1) * ITEM_LIST_PAGE_SIZE, page * ITEM_LIST_PAGE_SIZE)
+  const { sorted: sortedRows, sortKey: itemSortKey, sortDir: itemSortDir, onSort: onSortItems } = useTableSort<ItemRow, ItemSortKey>(filtered, (r, key) => {
+    switch (key) {
+      case 'item_code': return r.item_code
+      case 'item_name': return r.item_name
+      case 'brand': return r.brand ?? ''
+      case 'attribute': return r.attribute ?? ''
+      case 'unit_of_measure': return r.unit_of_measure
+      case 'cost': return r.cost
+      case 'selling_price': return r.selling_price ?? 0
+      case 'status': return r.status
+    }
+  })
 
   function openAdd() {
     setEditing(null)
@@ -1533,7 +1526,7 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
             <div className="col-span-full text-center py-6 text-muted-foreground">Loading…</div>
           ) : filtered.length === 0 ? (
             <div className="col-span-full text-center py-6 text-muted-foreground">No items found</div>
-          ) : paged.map(r => {
+          ) : sortedRows.map(r => {
             const imgs = itemImageUrls(r)
             return (
             <div key={r.id} className="rounded-lg border bg-card overflow-hidden flex flex-col">
@@ -1582,15 +1575,15 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
           <TableHeader>
             <TableRow>
               <TableHead className="w-14">Image</TableHead>
-              <TableHead>Code</TableHead>
-              <TableHead>Name</TableHead>
+              <SortableTableHead label="Code" sortKey="item_code" activeKey={itemSortKey} direction={itemSortDir} onSort={onSortItems} />
+              <SortableTableHead label="Name" sortKey="item_name" activeKey={itemSortKey} direction={itemSortDir} onSort={onSortItems} />
               <TableHead>Description</TableHead>
-              <TableHead>Brand</TableHead>
-              <TableHead>Attribute</TableHead>
-              <TableHead>Unit</TableHead>
-              <TableHead className="text-right">Unit Cost</TableHead>
-              <TableHead className="text-right">Selling Price</TableHead>
-              <TableHead>Status</TableHead>
+              <SortableTableHead label="Brand" sortKey="brand" activeKey={itemSortKey} direction={itemSortDir} onSort={onSortItems} />
+              <SortableTableHead label="Attribute" sortKey="attribute" activeKey={itemSortKey} direction={itemSortDir} onSort={onSortItems} />
+              <SortableTableHead label="Unit" sortKey="unit_of_measure" activeKey={itemSortKey} direction={itemSortDir} onSort={onSortItems} />
+              <SortableTableHead label="Unit Cost" sortKey="cost" align="right" activeKey={itemSortKey} direction={itemSortDir} onSort={onSortItems} />
+              <SortableTableHead label="Selling Price" sortKey="selling_price" align="right" activeKey={itemSortKey} direction={itemSortDir} onSort={onSortItems} />
+              <SortableTableHead label="Status" sortKey="status" activeKey={itemSortKey} direction={itemSortDir} onSort={onSortItems} />
               <TableHead className="w-10">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -1599,7 +1592,7 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
               <TableRow><TableCell colSpan={11} className="text-center py-6 text-muted-foreground">Loading…</TableCell></TableRow>
             ) : filtered.length === 0 ? (
               <TableRow><TableCell colSpan={11} className="text-center py-6 text-muted-foreground">No items found</TableCell></TableRow>
-            ) : paged.map(r => {
+            ) : sortedRows.map(r => {
               const imgs = itemImageUrls(r)
               return (
               <TableRow key={r.id}>
@@ -1651,34 +1644,6 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
           </TableBody>
         </Table>
       </div>
-      )}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">
-            Showing {((page - 1) * ITEM_LIST_PAGE_SIZE) + 1}–{Math.min(page * ITEM_LIST_PAGE_SIZE, filtered.length)} of {filtered.length}
-          </span>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page === 1}
-              className="px-3 py-1.5 rounded-md border text-sm font-medium disabled:opacity-40 hover:bg-muted transition-colors"
-            >← Prev</button>
-            {paginationRange(page, totalPages).map((p, i) => p === '…' ? (
-              <span key={`gap-${i}`} className="w-8 h-8 flex items-center justify-center text-sm text-muted-foreground">…</span>
-            ) : (
-              <button
-                key={p}
-                onClick={() => setPage(p)}
-                className={`w-8 h-8 rounded-md text-sm font-medium transition-colors ${p === page ? 'bg-red-600 text-white' : 'border hover:bg-muted'}`}
-              >{p}</button>
-            ))}
-            <button
-              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-              disabled={page === totalPages}
-              className="px-3 py-1.5 rounded-md border text-sm font-medium disabled:opacity-40 hover:bg-muted transition-colors"
-            >Next →</button>
-          </div>
-        </div>
       )}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="w-[98vw] sm:!max-w-4xl max-h-[90vh] overflow-y-auto">
