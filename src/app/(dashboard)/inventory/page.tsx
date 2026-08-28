@@ -81,7 +81,7 @@ const LEDGER_SOURCE_LABEL: Record<LedgerSourceType, string> = {
   manual_edit: 'Manual Correction',
   dr_delivery: 'Delivered to Client',
   return_to_warehouse: 'Returned to Warehouse',
-  personal_use: 'Personal Use',
+  personal_use: 'Used',
 }
 
 function KpiCard({ value, label, valueClass, icon: Icon, tint, grad, shadow }: {
@@ -609,14 +609,19 @@ export default function InventoryPage() {
       }).eq('id', warehouseUpdateRow.id)
       if (error) { toast.error(error.message); setWarehouseUpdateSaving(false); return }
 
-      await supabase.from('warehouse_stock_ledger').insert({
+      // The quantity is already deducted above regardless — surface a failure here
+      // rather than swallowing it, since a silently-failed insert (e.g. a constraint
+      // this source_type doesn't satisfy) would otherwise leave the deduction with no
+      // trace in Stock History.
+      const { error: ledgerError } = await supabase.from('warehouse_stock_ledger').insert({
         item_name: warehouseUpdateRow.item_name,
         unit: warehouseUpdateRow.unit || null,
         change_qty: -qty,
         source_type: 'personal_use',
         notes: warehouseUpdateNotes.trim() || 'Taken for personal use',
       })
-      toast.success('Personal use logged — warehouse stock updated')
+      if (ledgerError) toast.warning(`Stock updated, but history wasn't recorded: ${ledgerError.message}`)
+      else toast.success('Personal use logged — warehouse stock updated')
       setWarehouseUpdateOpen(false)
       load()
       setWarehouseUpdateSaving(false)
@@ -640,7 +645,7 @@ export default function InventoryPage() {
       if (error) { toast.error(error.message); setWarehouseUpdateSaving(false); return }
 
       const deliverClient = clientOptions.find(c => c.id === wsDeliverClientId)
-      await supabase.from('warehouse_stock_ledger').insert({
+      const { error: ledgerError } = await supabase.from('warehouse_stock_ledger').insert({
         item_name: warehouseUpdateRow.item_name,
         unit: warehouseUpdateRow.unit || null,
         change_qty: -qty,
@@ -648,6 +653,7 @@ export default function InventoryPage() {
         client_name: deliverClient?.company_name ?? null,
         notes: 'Manually marked delivered from Warehouse',
       })
+      if (ledgerError) toast.warning(`Stock updated, but history wasn't recorded: ${ledgerError.message}`)
       if (deliverClient) {
         const { data: ciRow } = await supabase.from('client_inventory').select('id, quantity_on_hand').eq('client_id', deliverClient.id).eq('item_name', warehouseUpdateRow.item_name).maybeSingle()
         if (ciRow) {
@@ -690,13 +696,14 @@ export default function InventoryPage() {
       toast.error(error.message)
     } else {
       if (delta !== 0) {
-        await supabase.from('warehouse_stock_ledger').insert({
+        const { error: ledgerError } = await supabase.from('warehouse_stock_ledger').insert({
           item_name: warehouseUpdateRow.item_name,
           unit: warehouseUpdateRow.unit || null,
           change_qty: delta,
           source_type: 'manual_edit',
           notes: warehouseUpdateNotes.trim() || 'Quantity corrected manually',
         })
+        if (ledgerError) toast.warning(`Stock updated, but history wasn't recorded: ${ledgerError.message}`)
       }
       // Unit Price / Selling Price live on the item's catalog entry (Configuration), not
       // this warehouse row — update them there so every view that reads from Configuration
