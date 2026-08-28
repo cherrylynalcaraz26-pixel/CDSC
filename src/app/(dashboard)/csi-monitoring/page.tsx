@@ -21,7 +21,6 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Checkbox } from '@/components/ui/checkbox'
-import { PaginationBar } from '@/components/ui/pagination-bar'
 import { Plus, X, Search, Box, MoreHorizontal, Loader2, FileText, LayoutGrid, List, ChevronDown, ChevronUp, Trash2, Printer, SlidersHorizontal, FileOutput, Mail, Camera, Image as ImageIcon, GripVertical, RefreshCw, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
@@ -225,7 +224,6 @@ export default function CSIMonitoringPage() {
   const [drItemsForCrossRef, setDrItemsForCrossRef] = useState<{ dr_number: string; item_name: string; client_name: string | null; quantity: number; unit: string | null }[]>([])
   const [crossRefDetail, setCrossRefDetail] = useState<{ type: 'csi' | 'dr'; name: string } | null>(null)
   const [expandedSIs, setExpandedSIs] = useState<Set<string>>(new Set())
-  const [page, setPage] = useState(1)
   const [itemSearchIdx, setItemSearchIdx] = useState<number | null>(null)
   const [dragItemIndex, setDragItemIndex] = useState<number | null>(null)
   const [uploadingAttachmentSi, setUploadingAttachmentSi] = useState<string | null>(null)
@@ -615,8 +613,8 @@ export default function CSIMonitoringPage() {
     })
   }
 
-  function toggleSelectAllOnPage() {
-    const pageSIs = pagedSiGroups.map(g => g.si_number)
+  function toggleSelectAll() {
+    const pageSIs = sortedSiGroups.map(g => g.si_number)
     const allSelected = pageSIs.length > 0 && pageSIs.every(si => selectedSIs.has(si))
     setSelectedSIs(prev => {
       const next = new Set(prev)
@@ -810,13 +808,6 @@ export default function CSIMonitoringPage() {
   const inCsiNotDr = [...new Set(csiForCrossRef.map(r => r.item_name))].filter(n => !crossRefDrItemSet.has(n.trim().toLowerCase()))
   const inDrNotCsi = [...new Set(drForCrossRef.map(d => d.item_name))].filter(n => !crossRefCsiItemSet.has(n.trim().toLowerCase()))
 
-  const PAGE_SIZE = 30
-  const pagedSiGroups = sortedSiGroups.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
-  const pagedFiltered = sortedFiltered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
-  const activeTotal = viewMode === 'by-si' ? siGroups.length : filtered.length
-  const totalPages = Math.max(1, Math.ceil(activeTotal / PAGE_SIZE))
-
-  useEffect(() => { setPage(1) }, [search, clientFilter, yearFilter, viewMode, sortOption])
   useEffect(() => { if (viewMode !== 'by-si') setSelectedSIs(new Set()) }, [viewMode])
 
   function onSortCol(col: SortCol) {
@@ -1861,10 +1852,10 @@ export default function CSIMonitoringPage() {
                   <TableRow>
                     <TableHead className="w-8">
                       <Checkbox
-                        checked={pagedSiGroups.length > 0 && pagedSiGroups.every(g => selectedSIs.has(g.si_number))}
-                        indeterminate={pagedSiGroups.some(g => selectedSIs.has(g.si_number)) && !pagedSiGroups.every(g => selectedSIs.has(g.si_number))}
-                        onCheckedChange={() => toggleSelectAllOnPage()}
-                        aria-label="Select all on this page"
+                        checked={sortedSiGroups.length > 0 && sortedSiGroups.every(g => selectedSIs.has(g.si_number))}
+                        indeterminate={sortedSiGroups.some(g => selectedSIs.has(g.si_number)) && !sortedSiGroups.every(g => selectedSIs.has(g.si_number))}
+                        onCheckedChange={() => toggleSelectAll()}
+                        aria-label="Select all"
                       />
                     </TableHead>
                     <TableHead className="w-12">No.</TableHead>
@@ -1894,7 +1885,7 @@ export default function CSIMonitoringPage() {
                         No records found. Click <strong>New Record</strong> to add one.
                       </TableCell>
                     </TableRow>
-                  ) : pagedSiGroups.map((group, i) => (
+                  ) : sortedSiGroups.map((group, i) => (
                     <Fragment key={group.si_number}>
                       <TableRow
                         className="cursor-pointer hover:bg-red-50/40 transition-colors"
@@ -1907,7 +1898,7 @@ export default function CSIMonitoringPage() {
                             aria-label={`Select SI ${group.si_number}`}
                           />
                         </TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{(page - 1) * PAGE_SIZE + i + 1}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{i + 1}</TableCell>
                         <TableCell className="text-sm whitespace-nowrap">
                           {format(parseISO(group.date), 'MMM d, yyyy')}
                         </TableCell>
@@ -2051,9 +2042,9 @@ export default function CSIMonitoringPage() {
                         No records found. Click <strong>New Record</strong> to add one.
                       </TableCell>
                     </TableRow>
-                  ) : pagedFiltered.map((rec, i) => (
+                  ) : sortedFiltered.map((rec, i) => (
                     <TableRow key={rec.id}>
-                      <TableCell className="text-sm text-muted-foreground">{(page - 1) * PAGE_SIZE + i + 1}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{i + 1}</TableCell>
                       <TableCell className="text-sm whitespace-nowrap">
                         {format(parseISO(rec.si_date), 'MMM d, yyyy')}
                       </TableCell>
@@ -2089,14 +2080,6 @@ export default function CSIMonitoringPage() {
               </Table>
             )}
           </div>
-          {viewMode !== 'cross-ref' && totalPages > 1 && (
-            <div className="flex items-center justify-between text-sm px-4 py-3 border-t">
-              <span className="text-muted-foreground">
-                Showing {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, activeTotal)} of {activeTotal}
-              </span>
-              <PaginationBar page={page} totalPages={totalPages} onPageChange={setPage} />
-            </div>
-          )}
         </CardContent>
       </Card>
       }
