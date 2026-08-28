@@ -180,6 +180,9 @@ const emptyHeader = () => ({
   po_number: '',
   client_name: '',
   dr_number: '',
+  collection_status: '',
+  show_in_portal: true,
+  attachment_url: null as string | null,
 })
 
 function csiStatusBadge(status: string | null) {
@@ -187,6 +190,7 @@ function csiStatusBadge(status: string | null) {
     case 'cancelled': return { label: 'Cancelled', cls: 'bg-red-100 text-red-700' }
     case 'collected': return { label: 'Collected', cls: 'bg-green-100 text-green-800' }
     case 'for_collection': return { label: 'For Collection', cls: 'bg-amber-100 text-amber-800' }
+    case 'missing': return { label: 'Missing', cls: 'bg-orange-100 text-orange-800' }
     default: return { label: 'Active', cls: 'bg-gray-100 text-gray-600' }
   }
 }
@@ -884,6 +888,9 @@ export default function CSIMonitoringPage() {
       po_number: first.po_number ?? '',
       client_name: first.client_name ?? '',
       dr_number: first.dr_number ?? '',
+      collection_status: first.collection_status ?? '',
+      show_in_portal: first.show_in_portal,
+      attachment_url: first.attachment_url,
     })
     setItems(siRecords.map(r => ({
       item_name: r.item_name,
@@ -1025,6 +1032,9 @@ export default function CSIMonitoringPage() {
       unit_price: Number(it.unit_price) || 0,
       amount: (Number(it.quantity) || 0) * (Number(it.unit_price) || 0),
       dr_number: header.dr_number || null,
+      collection_status: header.collection_status || null,
+      show_in_portal: header.show_in_portal,
+      attachment_url: header.attachment_url,
     }))
 
     const { error } = await supabase.from('csi_records').insert(rows)
@@ -1174,6 +1184,19 @@ export default function CSIMonitoringPage() {
                         <p className="text-[11px] text-muted-foreground">Showing DR numbers for {header.client_name} only.</p>
                       )}
                     </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Status</Label>
+                    <Select value={header.collection_status || 'active'} onValueChange={v => setHeader(h => ({ ...h, collection_status: (v ?? 'active') === 'active' ? '' : (v ?? '') }))}>
+                      <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="for_collection">For Collection</SelectItem>
+                        <SelectItem value="collected">Collected</SelectItem>
+                        <SelectItem value="missing">Missing</SelectItem>
+                        <SelectItem value="cancelled">Cancelled</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               </div>
