@@ -81,7 +81,7 @@ const LEDGER_SOURCE_LABEL: Record<LedgerSourceType, string> = {
   manual_edit: 'Manual Correction',
   dr_delivery: 'Delivered to Client',
   return_to_warehouse: 'Returned to Warehouse',
-  personal_use: 'Personal Use',
+  personal_use: 'Used',
 }
 
 function KpiCard({ value, label, valueClass, icon: Icon, tint, grad, shadow }: {
@@ -104,7 +104,7 @@ function KpiCard({ value, label, valueClass, icon: Icon, tint, grad, shadow }: {
   )
 }
 
-type WhSortKey = 'client_name' | 'item_name' | 'unit' | 'quantity' | 'committed' | 'available' | 'unit_price' | 'selling_price' | 'unit_price_amount' | 'selling_price_amount' | 'notes' | 'created_at'
+type WhSortKey = 'client_name' | 'item_name' | 'unit' | 'quantity' | 'unit_price' | 'selling_price' | 'unit_price_amount' | 'selling_price_amount' | 'notes' | 'created_at'
 
 function SortableWhHead({ label, sortKey, whSortKey, whSortDir, onSort, className, align }: {
   label: string; sortKey: WhSortKey; whSortKey: WhSortKey | null; whSortDir: 'asc' | 'desc'
@@ -138,7 +138,7 @@ export default function InventoryPage() {
   const [detailCsiRows, setDetailCsiRows] = useState<ItemDetailCsiRow[]>([])
   const [detailLoading, setDetailLoading] = useState(false)
 
-  const [warehouseRows, setWarehouseRows] = useState<{id: string; client_name: string | null; item_name: string; unit: string; quantity: number; committed: number; notes: string | null; created_at: string}[]>([])
+  const [warehouseRows, setWarehouseRows] = useState<{id: string; client_name: string | null; item_name: string; unit: string; quantity: number; notes: string | null; created_at: string}[]>([])
   const [whSortKey, setWhSortKey] = useState<WhSortKey | null>(null)
   const [whSortDir, setWhSortDir] = useState<'asc' | 'desc'>('asc')
   const [expandedWhId, setExpandedWhId] = useState<string | null>(null)
@@ -434,38 +434,6 @@ export default function InventoryPage() {
     result.sort((a, b) => a.client.localeCompare(b.client) || a.item_name.localeCompare(b.item_name))
     setRows(result)
 
-    // Committed = quantity on open (not yet delivered, not cancelled) Sales Orders,
-    // summed per item. This is deliberately kept separate from physical quantity —
-    // placing an SO doesn't move real stock (only an actual DR delivery does), so
-    // folding it into `quantity` would make Warehouse Stock stop reflecting what's
-    // really on the shelf. Available (quantity - committed) is computed per-row below
-    // so a stack of open SOs against the same item is visible before it's delivered.
-    const committedMap: Record<string, number> = {}
-    {
-      const openSoIds = new Set<string>()
-      let f = 0
-      while (true) {
-        const { data } = await supabase.from('sales_orders').select('id, status').order('id').range(f, f + PAGE - 1)
-        if (!data || data.length === 0) break
-        for (const so of data) {
-          if (so.status !== 'delivered' && so.status !== 'cancelled') openSoIds.add(so.id)
-        }
-        if (data.length < PAGE) break
-        f += PAGE
-      }
-      f = 0
-      while (true) {
-        const { data } = await supabase.from('so_items').select('so_id, item_name, quantity').order('id').range(f, f + PAGE - 1)
-        if (!data || data.length === 0) break
-        for (const it of data) {
-          if (!openSoIds.has(it.so_id)) continue
-          committedMap[it.item_name] = (committedMap[it.item_name] ?? 0) + (Number(it.quantity) || 0)
-        }
-        if (data.length < PAGE) break
-        f += PAGE
-      }
-    }
-
     // Build warehouse view rows — By Warehouse is CDSC's own unassigned stock only
     // (client_name IS NULL, the general pool Receiving always adds into). Once an
     // item has been fully delivered out of that pool its quantity is decremented
@@ -491,7 +459,6 @@ export default function InventoryPage() {
           item_name: rec.item_name,
           unit: rec.unit ?? '',
           quantity: qty,
-          committed: committedMap[rec.item_name] ?? 0,
           notes: rec.notes ?? null,
           created_at: rec.created_at,
         })
@@ -531,8 +498,6 @@ export default function InventoryPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'dr_logs' }, () => load())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'dr_log_items' }, () => load())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'csi_records' }, () => load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'sales_orders' }, () => load())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'so_items' }, () => load())
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [])
@@ -609,14 +574,19 @@ export default function InventoryPage() {
       }).eq('id', warehouseUpdateRow.id)
       if (error) { toast.error(error.message); setWarehouseUpdateSaving(false); return }
 
-      await supabase.from('warehouse_stock_ledger').insert({
+      // The quantity is already deducted above regardless — surface a failure here
+      // rather than swallowing it, since a silently-failed insert (e.g. a constraint
+      // this source_type doesn't satisfy) would otherwise leave the deduction with no
+      // trace in Stock History.
+      const { error: ledgerError } = await supabase.from('warehouse_stock_ledger').insert({
         item_name: warehouseUpdateRow.item_name,
         unit: warehouseUpdateRow.unit || null,
         change_qty: -qty,
         source_type: 'personal_use',
         notes: warehouseUpdateNotes.trim() || 'Taken for personal use',
       })
-      toast.success('Personal use logged — warehouse stock updated')
+      if (ledgerError) toast.warning(`Stock updated, but history wasn't recorded: ${ledgerError.message}`)
+      else toast.success('Personal use logged — warehouse stock updated')
       setWarehouseUpdateOpen(false)
       load()
       setWarehouseUpdateSaving(false)
@@ -640,7 +610,7 @@ export default function InventoryPage() {
       if (error) { toast.error(error.message); setWarehouseUpdateSaving(false); return }
 
       const deliverClient = clientOptions.find(c => c.id === wsDeliverClientId)
-      await supabase.from('warehouse_stock_ledger').insert({
+      const { error: ledgerError } = await supabase.from('warehouse_stock_ledger').insert({
         item_name: warehouseUpdateRow.item_name,
         unit: warehouseUpdateRow.unit || null,
         change_qty: -qty,
@@ -648,6 +618,7 @@ export default function InventoryPage() {
         client_name: deliverClient?.company_name ?? null,
         notes: 'Manually marked delivered from Warehouse',
       })
+      if (ledgerError) toast.warning(`Stock updated, but history wasn't recorded: ${ledgerError.message}`)
       if (deliverClient) {
         const { data: ciRow } = await supabase.from('client_inventory').select('id, quantity_on_hand').eq('client_id', deliverClient.id).eq('item_name', warehouseUpdateRow.item_name).maybeSingle()
         if (ciRow) {
@@ -690,13 +661,14 @@ export default function InventoryPage() {
       toast.error(error.message)
     } else {
       if (delta !== 0) {
-        await supabase.from('warehouse_stock_ledger').insert({
+        const { error: ledgerError } = await supabase.from('warehouse_stock_ledger').insert({
           item_name: warehouseUpdateRow.item_name,
           unit: warehouseUpdateRow.unit || null,
           change_qty: delta,
           source_type: 'manual_edit',
           notes: warehouseUpdateNotes.trim() || 'Quantity corrected manually',
         })
+        if (ledgerError) toast.warning(`Stock updated, but history wasn't recorded: ${ledgerError.message}`)
       }
       // Unit Price / Selling Price live on the item's catalog entry (Configuration), not
       // this warehouse row — update them there so every view that reads from Configuration
@@ -975,7 +947,6 @@ export default function InventoryPage() {
     itemUnitPriceMap[it.item_name] = it.cost ?? 0
     itemSellingPriceMap[it.item_name] = it.selling_price ?? 0
   }
-  const whAvailable = (r: { quantity: number; committed: number }) => r.quantity - r.committed
   const whUnitPrice = (r: { item_name: string }) => itemUnitPriceMap[r.item_name] ?? 0
   const whSellingPrice = (r: { item_name: string }) => itemSellingPriceMap[r.item_name] ?? 0
   const whUnitPriceAmount = (r: { item_name: string; quantity: number }) => r.quantity * whUnitPrice(r)
@@ -992,8 +963,6 @@ export default function InventoryPage() {
       case 'item_name':   av = a.item_name; bv = b.item_name; break
       case 'unit':        av = uomName(a.unit); bv = uomName(b.unit); break
       case 'quantity':    av = a.quantity; bv = b.quantity; break
-      case 'committed':   av = a.committed; bv = b.committed; break
-      case 'available':   av = whAvailable(a); bv = whAvailable(b); break
       case 'unit_price':            av = whUnitPrice(a); bv = whUnitPrice(b); break
       case 'selling_price':         av = whSellingPrice(a); bv = whSellingPrice(b); break
       case 'unit_price_amount':     av = whUnitPriceAmount(a); bv = whUnitPriceAmount(b); break
@@ -1196,17 +1165,15 @@ export default function InventoryPage() {
           </tr>`
         }).join('')
     } else {
-      theadHtml = `<tr><th style="width:24px">#</th><th>Owner</th><th>Item Name</th><th style="width:60px">Unit</th><th class="r" style="width:50px">Qty</th><th class="r" style="width:70px">Committed</th><th class="r" style="width:70px">Available</th><th class="r" style="width:80px">Unit Price</th><th class="r" style="width:80px">Selling Price</th><th class="r" style="width:90px">Amount (Unit Price × Qty)</th><th class="r" style="width:90px">Amount (Selling Price × Qty)</th><th>Warehouse Note</th></tr>`
+      theadHtml = `<tr><th style="width:24px">#</th><th>Owner</th><th>Item Name</th><th style="width:60px">Unit</th><th class="r" style="width:50px">Qty</th><th class="r" style="width:80px">Unit Price</th><th class="r" style="width:80px">Selling Price</th><th class="r" style="width:90px">Amount (Unit Price × Qty)</th><th class="r" style="width:90px">Amount (Selling Price × Qty)</th><th>Warehouse Note</th></tr>`
       rowsHtml = sortedWarehouseRows.length === 0
-        ? `<tr><td colspan="12" style="text-align:center;padding:24px;color:#9ca3af;font-style:italic">No warehouse stock records found.</td></tr>`
+        ? `<tr><td colspan="10" style="text-align:center;padding:24px;color:#9ca3af;font-style:italic">No warehouse stock records found.</td></tr>`
         : sortedWarehouseRows.map((r, i) => `<tr>
             <td>${i + 1}</td>
             <td>${r.client_name || 'CDSC Stock'}</td>
             <td style="font-weight:600;color:#1f2937">${r.item_name}</td>
             <td>${r.unit ? uomName(r.unit) : '—'}</td>
             <td class="r" style="color:#15803d;font-weight:600">${r.quantity}</td>
-            <td class="r" style="color:#b45309">${r.committed > 0 ? r.committed : '—'}</td>
-            <td class="r" style="font-weight:600;color:${whAvailable(r) < 0 ? '#dc2626' : '#1f2937'}">${whAvailable(r)}</td>
             <td class="r">${r.item_name in itemUnitPriceMap ? `₱${whUnitPrice(r).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}</td>
             <td class="r">${r.item_name in itemSellingPriceMap ? `₱${whSellingPrice(r).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}</td>
             <td class="r">${r.item_name in itemUnitPriceMap ? `₱${whUnitPriceAmount(r).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}</td>
@@ -1430,8 +1397,6 @@ export default function InventoryPage() {
                     <SortableWhHead label="Item Name" sortKey="item_name" className="min-w-[280px]" whSortKey={whSortKey} whSortDir={whSortDir} onSort={toggleWhSort} />
                     <SortableWhHead label="Unit" sortKey="unit" whSortKey={whSortKey} whSortDir={whSortDir} onSort={toggleWhSort} />
                     <SortableWhHead label="Qty" sortKey="quantity" align="right" whSortKey={whSortKey} whSortDir={whSortDir} onSort={toggleWhSort} />
-                    <SortableWhHead label="Committed (Open SOs)" sortKey="committed" align="right" whSortKey={whSortKey} whSortDir={whSortDir} onSort={toggleWhSort} />
-                    <SortableWhHead label="Available" sortKey="available" align="right" whSortKey={whSortKey} whSortDir={whSortDir} onSort={toggleWhSort} />
                     <SortableWhHead label="Unit Price" sortKey="unit_price" align="right" whSortKey={whSortKey} whSortDir={whSortDir} onSort={toggleWhSort} />
                     <SortableWhHead label="Selling Price" sortKey="selling_price" align="right" whSortKey={whSortKey} whSortDir={whSortDir} onSort={toggleWhSort} />
                     <SortableWhHead label="Amount (Unit Price × Qty)" sortKey="unit_price_amount" align="right" whSortKey={whSortKey} whSortDir={whSortDir} onSort={toggleWhSort} />
@@ -1442,9 +1407,9 @@ export default function InventoryPage() {
                 </TableHeader>
                 <TableBody>
                   {loading ? (
-                    <TableRow><TableCell colSpan={13} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
+                    <TableRow><TableCell colSpan={11} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
                   ) : warehouseRows.length === 0 ? (
-                    <TableRow><TableCell colSpan={13} className="text-center py-12 text-muted-foreground">No warehouse stock records found.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={11} className="text-center py-12 text-muted-foreground">No warehouse stock records found.</TableCell></TableRow>
                   ) : pagedWarehouseRows.map((r, i) => {
                     const isWhExpanded = expandedWhId === r.id
                     return (
@@ -1464,8 +1429,6 @@ export default function InventoryPage() {
                         <TableCell className="text-sm font-medium">{r.item_name}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">{r.unit ? uomName(r.unit) : '—'}</TableCell>
                         <TableCell className="text-right text-sm font-semibold text-green-700">{r.quantity}</TableCell>
-                        <TableCell className="text-right text-sm text-amber-700">{r.committed > 0 ? r.committed : <span className="text-gray-300">—</span>}</TableCell>
-                        <TableCell className={`text-right text-sm font-semibold ${whAvailable(r) < 0 ? 'text-red-600' : 'text-gray-700'}`}>{whAvailable(r)}</TableCell>
                         <TableCell className="text-right text-sm text-gray-700">
                           {r.item_name in itemUnitPriceMap ? `₱${whUnitPrice(r).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : <span className="text-gray-300">—</span>}
                         </TableCell>
@@ -1485,14 +1448,12 @@ export default function InventoryPage() {
                       </TableRow>
                       {isWhExpanded && (
                         <TableRow className="bg-muted/30 hover:bg-muted/30">
-                          <TableCell colSpan={13} className="py-4 px-6">
+                          <TableCell colSpan={11} className="py-4 px-6">
                             <div className="space-y-4">
                               <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-6 gap-y-2 text-xs">
                                 <div><div className="text-muted-foreground uppercase tracking-wide text-[10px] mb-0.5">Owner</div><div className="text-foreground">{r.client_name || 'CDSC Stock'}</div></div>
                                 <div><div className="text-muted-foreground uppercase tracking-wide text-[10px] mb-0.5">Unit</div><div className="text-foreground">{r.unit ? uomName(r.unit) : '—'}</div></div>
                                 <div><div className="text-muted-foreground uppercase tracking-wide text-[10px] mb-0.5">Quantity</div><div className="text-foreground font-semibold">{r.quantity}</div></div>
-                                <div><div className="text-muted-foreground uppercase tracking-wide text-[10px] mb-0.5">Committed (Open SOs)</div><div className="text-foreground">{r.committed > 0 ? r.committed : '—'}</div></div>
-                                <div><div className="text-muted-foreground uppercase tracking-wide text-[10px] mb-0.5">Available</div><div className={`font-semibold ${whAvailable(r) < 0 ? 'text-red-600' : 'text-foreground'}`}>{whAvailable(r)}</div></div>
                                 <div><div className="text-muted-foreground uppercase tracking-wide text-[10px] mb-0.5">Unit Price</div><div className="text-foreground">{r.item_name in itemUnitPriceMap ? `₱${whUnitPrice(r).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}</div></div>
                                 <div><div className="text-muted-foreground uppercase tracking-wide text-[10px] mb-0.5">Selling Price</div><div className="text-foreground">{r.item_name in itemSellingPriceMap ? `₱${whSellingPrice(r).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}</div></div>
                                 <div><div className="text-muted-foreground uppercase tracking-wide text-[10px] mb-0.5">Amount (Unit Price × Qty)</div><div className="text-foreground">{r.item_name in itemUnitPriceMap ? `₱${whUnitPriceAmount(r).toLocaleString('en-PH', { minimumFractionDigits: 2 })}` : '—'}</div></div>
