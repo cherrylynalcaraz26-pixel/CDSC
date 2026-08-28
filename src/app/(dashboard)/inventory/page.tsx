@@ -1773,15 +1773,20 @@ export default function InventoryPage() {
         const totalOnHand = reportRows.reduce((s, r) => s + r.client_on_hand, 0)
         const totalCsi = reportRows.reduce((s, r) => s + r.csi_qty, 0)
         // Est. Unit Price is the unit price from the item's most recent CSI Issued record
-        // (by si_date) for this client, not the catalog Selling Price — it should reflect
-        // what was actually billed last, not a static list price.
+        // (by si_date) for this client — it should reflect what was actually billed last,
+        // not a static list price. Items with no CSI Issued yet (csi_qty = 0) have nothing
+        // to derive that from, so fall back to the item's catalog Selling Price instead of
+        // leaving the row blank.
         function latestCsiPrice(details: CsiDetail[]): number | null {
           const priced = details.filter(d => d.unit_price != null)
           if (priced.length === 0) return null
           return [...priced].sort((a, b) => (b.si_date ?? '').localeCompare(a.si_date ?? ''))[0].unit_price
         }
+        function estUnitPrice(r: { item_name: string; csi_details: CsiDetail[] }): number | null {
+          return latestCsiPrice(r.csi_details) ?? (itemSellingPriceMap[r.item_name] || null)
+        }
         const totalEstValue = reportRows.reduce((s, r) => {
-          const price = latestCsiPrice(r.csi_details)
+          const price = estUnitPrice(r)
           return s + (price != null ? r.balance * price : 0)
         }, 0)
         const today = new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
@@ -1799,7 +1804,7 @@ export default function InventoryPage() {
           const rowsHtml = reportRows.length === 0
             ? `<tr><td colspan="9" style="text-align:center;padding:24px;color:#9ca3af;font-style:italic">No inventory data for this client.</td></tr>`
             : reportRows.map((r, i) => {
-              const price = latestCsiPrice(r.csi_details)
+              const price = estUnitPrice(r)
               const estValue = price != null ? r.balance * price : null
               const balColor = r.balance > 0 ? '#15803d' : r.balance < 0 ? '#dc2626' : '#9ca3af'
               return `<tr>
@@ -1877,7 +1882,7 @@ export default function InventoryPage() {
               </tfoot>
             </table>
             <div class="note">
-              <span>Est. Unit Price is the item's catalog Selling Price; Est. Value = Balance × Est. Unit Price. Values are for reference only.</span>
+              <span>Est. Unit Price is the item's most recent CSI Issued unit price, or its catalog Selling Price if it has no CSI Issued yet; Est. Value = Balance × Est. Unit Price. Values are for reference only.</span>
               <span>Generated ${today} &middot; CDSC Inventory System</span>
             </div>
           </body></html>`
@@ -2021,7 +2026,7 @@ export default function InventoryPage() {
                     </thead>
                     <tbody>
                       {reportRows.map((r, i) => {
-                        const latestPrice = latestCsiPrice(r.csi_details)
+                        const latestPrice = estUnitPrice(r)
                         const estValue = latestPrice != null ? r.balance * latestPrice : null
                         return (
                           <tr key={r.item_name} className={i % 2 === 1 ? 'bg-gray-50' : 'bg-white'}>
@@ -2058,7 +2063,7 @@ export default function InventoryPage() {
                 </div>
               )}
               <div className="mt-8 pt-4 border-t border-gray-100 text-[10px] text-gray-400 flex justify-between flex-wrap gap-2">
-                <span>Est. Unit Price is the item&apos;s most recent CSI Issued unit price; Est. Value = Balance × Est. Unit Price. Values are for reference only.</span>
+                <span>Est. Unit Price is the item&apos;s most recent CSI Issued unit price, or its catalog Selling Price if it has no CSI Issued yet; Est. Value = Balance × Est. Unit Price. Values are for reference only.</span>
                 <span>Generated {today} · CDSC Inventory System</span>
               </div>
             </div>
