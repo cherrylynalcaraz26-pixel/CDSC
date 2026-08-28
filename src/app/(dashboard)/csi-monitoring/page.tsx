@@ -542,6 +542,66 @@ export default function CSIMonitoringPage() {
     setTimeout(() => { win.focus(); win.print(); win.close() }, 800)
   }
 
+  // Prints the CSI vs DR cross-reference currently on screen — the two "In CSI, not
+  // in DR" / "In DR, not in CSI" lists, respecting the same client filter as the view.
+  function buildCrossRefPrintHtml() {
+    const co = companyInfo
+    const today = new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
+    const qtyFor = (name: string, side: 'csi' | 'dr') => side === 'csi'
+      ? csiForCrossRef.filter(r => r.item_name === name).reduce((s, r) => s + (Number(r.quantity) || 0), 0)
+      : drForCrossRef.filter(d => d.item_name === name).reduce((s, d) => s + (Number(d.quantity) || 0), 0)
+    const listHtml = (title: string, color: string, names: string[], side: 'csi' | 'dr', emptyText: string) => `
+      <div class="col">
+        <div class="col-title" style="color:${color}">${title} <span class="count">${names.length}</span></div>
+        ${names.length === 0 ? `<p class="empty">${emptyText}</p>` : `
+        <table>
+          <thead><tr><th>Item Name</th><th class="r">Qty</th></tr></thead>
+          <tbody>${names.map(n => `<tr><td>${n}</td><td class="r">${qtyFor(n, side)}</td></tr>`).join('')}</tbody>
+        </table>`}
+      </div>`
+    return `<!DOCTYPE html><html><head><meta charset="utf-8"><title>CSI vs DR</title><style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body { font-family: Arial, sans-serif; background: #fff; color: #111; padding: 28px; font-size: 11px; }
+      .letterhead { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 1px solid #e5e7eb; padding-bottom: 12px; margin-bottom: 16px; }
+      .co-name { font-size: 15px; font-weight: 800; color: #b91c1c; text-align: right; }
+      .co-sub { font-size: 9px; color: #6b7280; text-align: right; margin-top: 2px; }
+      .title { font-size: 16px; font-weight: 800; color: #b91c1c; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 2px; }
+      .subtitle { font-size: 10px; color: #9ca3af; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+      .col-title { font-size: 12px; font-weight: 700; margin-bottom: 8px; }
+      .count { font-size: 10px; font-weight: 600; color: #6b7280; }
+      .empty { font-size: 10px; color: #9ca3af; font-style: italic; }
+      table { width: 100%; border-collapse: collapse; }
+      th { background: #1f2937; color: #fff; text-align: left; padding: 6px 8px; font-size: 10px; }
+      th.r, td.r { text-align: right; }
+      td { padding: 6px 8px; border-bottom: 1px solid #f3f4f6; }
+      tr:nth-child(even) td { background: #f9fafb; }
+      .note { margin-top: 20px; padding-top: 10px; border-top: 1px solid #f3f4f6; font-size: 9px; color: #9ca3af; }
+    </style></head><body>
+      <div class="letterhead">
+        <div><div class="title">CSI vs DR</div><div class="subtitle">${clientFilter ? `Client: ${clientFilter}` : 'All Clients'}</div></div>
+        <div>
+          <div class="co-name">${co?.company_name ?? 'CDSC Industrial Supply'}</div>
+          ${co?.address ? `<div class="co-sub">${co.address}</div>` : ''}
+        </div>
+      </div>
+      <div class="grid">
+        ${listHtml('In CSI — Not in DR Logs', '#b45309', inCsiNotDr, 'csi', 'All CSI items are covered by DR logs.')}
+        ${listHtml('In DR Logs — Not in CSI', '#1d4ed8', inDrNotCsi, 'dr', 'All DR items are covered by CSI records.')}
+      </div>
+      <div class="note">Generated ${today} · CDSC Inventory System</div>
+    </body></html>`
+  }
+
+  function printCrossRefList() {
+    if (inCsiNotDr.length === 0 && inDrNotCsi.length === 0) { toast.error('Nothing to print — both lists are empty'); return }
+    const win = window.open('', '_blank', 'width=900,height=700')
+    if (!win) return
+    win.document.write(buildCrossRefPrintHtml())
+    win.document.close()
+    setTimeout(() => { win.focus(); win.print(); win.close() }, 800)
+  }
+
   function toggleSelectSI(si: string) {
     setSelectedSIs(prev => {
       const next = new Set(prev)
@@ -735,6 +795,16 @@ export default function CSIMonitoringPage() {
   const sortedFiltered = [...filtered].sort((a, b) => compareBySortOption(sortOption,
     { date: a.si_date, si: a.si_number, amount: Number(a.amount) || 0, client: a.client_name ?? '' },
     { date: b.si_date, si: b.si_number, amount: Number(b.amount) || 0, client: b.client_name ?? '' }))
+
+  // CSI vs DR cross-reference — hoisted out of the view render so the toolbar Print
+  // button can print this same data when that view is active, instead of always
+  // printing the by-SI invoice list regardless of which view is on screen.
+  const csiForCrossRef = clientFilter ? filtered.filter(r => r.client_name === clientFilter) : filtered
+  const drForCrossRef = clientFilter ? drItemsForCrossRef.filter(d => d.client_name === clientFilter) : drItemsForCrossRef
+  const crossRefCsiItemSet = new Set(csiForCrossRef.map(r => r.item_name.trim().toLowerCase()))
+  const crossRefDrItemSet = new Set(drForCrossRef.map(d => d.item_name.trim().toLowerCase()))
+  const inCsiNotDr = [...new Set(csiForCrossRef.map(r => r.item_name))].filter(n => !crossRefDrItemSet.has(n.trim().toLowerCase()))
+  const inDrNotCsi = [...new Set(drForCrossRef.map(d => d.item_name))].filter(n => !crossRefCsiItemSet.has(n.trim().toLowerCase()))
 
   const PAGE_SIZE = 30
   const pagedSiGroups = sortedSiGroups.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
@@ -1668,7 +1738,7 @@ export default function CSIMonitoringPage() {
             </button>
           </div>
         </div>
-        <Button variant="outline" onClick={printCsiList} className="ml-auto border-gray-300 text-gray-700 gap-1.5">
+        <Button variant="outline" onClick={viewMode === 'cross-ref' ? printCrossRefList : printCsiList} className="ml-auto border-gray-300 text-gray-700 gap-1.5">
           <Printer className="h-4 w-4" /> Print
         </Button>
         <Button onClick={openAdd} className="bg-red-600 hover:bg-red-700">
@@ -1696,12 +1766,6 @@ export default function CSIMonitoringPage() {
         <CardContent className="p-0">
           <div className="overflow-x-auto max-h-[620px] overflow-y-auto">
             {viewMode === 'cross-ref' ? (() => {
-              const csiForCrossRef = clientFilter ? filtered.filter(r => r.client_name === clientFilter) : filtered
-              const drForCrossRef = clientFilter ? drItemsForCrossRef.filter(d => d.client_name === clientFilter) : drItemsForCrossRef
-              const csiItems = new Set(csiForCrossRef.map(r => r.item_name.trim().toLowerCase()))
-              const drItems = new Set(drForCrossRef.map(d => d.item_name.trim().toLowerCase()))
-              const inCsiNotDr = [...new Set(csiForCrossRef.map(r => r.item_name))].filter(n => !drItems.has(n.trim().toLowerCase()))
-              const inDrNotCsi = [...new Set(drForCrossRef.map(d => d.item_name))].filter(n => !csiItems.has(n.trim().toLowerCase()))
               return (
                 <div className="p-4 space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1825,7 +1889,28 @@ export default function CSIMonitoringPage() {
                           {format(parseISO(group.date), 'MMM d, yyyy')}
                         </TableCell>
                         <TableCell className="font-mono text-sm font-semibold text-red-600">{group.si_number}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{group.po ?? '—'}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground" onClick={e => e.stopPropagation()}>
+                          <div>{group.po ?? '—'}</div>
+                          {group.collection_status === 'cancelled' ? (
+                            <button
+                              type="button"
+                              onClick={() => setCsiCollectionStatus(group.si_number, null)}
+                              className="mt-1 inline-flex items-center text-[11px] font-medium px-2 py-0.5 rounded-full border bg-gray-100 border-gray-200 text-gray-500 hover:bg-gray-200 transition-colors"
+                              title="Reactivate this SI"
+                            >
+                              Reactivate SI
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setCsiCollectionStatus(group.si_number, 'cancelled')}
+                              className="mt-1 inline-flex items-center text-[11px] font-medium px-2 py-0.5 rounded-full border bg-red-50 border-red-200 text-red-600 hover:bg-red-100 transition-colors"
+                              title="Cancel this SI"
+                            >
+                              Cancel SI
+                            </button>
+                          )}
+                        </TableCell>
                         <TableCell className="text-sm">{group.client}</TableCell>
                         <TableCell className="text-sm font-mono">{group.dr ?? '—'}</TableCell>
                         <TableCell className="text-right text-sm">{group.items.length}</TableCell>
@@ -1883,11 +1968,6 @@ export default function CSIMonitoringPage() {
                               <DropdownMenuItem onClick={() => printCSI(group)}><Printer className="h-3.5 w-3.5 mr-1.5" />Print CSI</DropdownMenuItem>
                               <DropdownMenuItem onClick={() => printCSIBlank(group)}><FileOutput className="h-3.5 w-3.5 mr-1.5" />Print (Blank Form)</DropdownMenuItem>
                               <DropdownMenuItem onClick={() => openEdit(group.si_number)}>Edit</DropdownMenuItem>
-                              {group.collection_status === 'cancelled' ? (
-                                <DropdownMenuItem onClick={() => setCsiCollectionStatus(group.si_number, null)}>Reactivate SI</DropdownMenuItem>
-                              ) : (
-                                <DropdownMenuItem className="text-destructive" onClick={() => setCsiCollectionStatus(group.si_number, 'cancelled')}>Cancel SI</DropdownMenuItem>
-                              )}
                               <DropdownMenuItem className="text-destructive" onClick={() => setDeleteId(group.items[0].id)}>Delete</DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
