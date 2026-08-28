@@ -1912,28 +1912,7 @@ export default function CSIMonitoringPage() {
                           {format(parseISO(group.date), 'MMM d, yyyy')}
                         </TableCell>
                         <TableCell className="font-mono text-sm font-semibold text-red-600">{group.si_number}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground" onClick={e => e.stopPropagation()}>
-                          <div>{group.po ?? '—'}</div>
-                          {group.collection_status === 'cancelled' ? (
-                            <button
-                              type="button"
-                              onClick={() => setCsiCollectionStatus(group.si_number, null)}
-                              className="mt-1 inline-flex items-center text-[11px] font-medium px-2 py-0.5 rounded-full border bg-gray-100 border-gray-200 text-gray-500 hover:bg-gray-200 transition-colors"
-                              title="Reactivate this SI"
-                            >
-                              Reactivate SI
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setCsiCollectionStatus(group.si_number, 'cancelled')}
-                              className="mt-1 inline-flex items-center text-[11px] font-medium px-2 py-0.5 rounded-full border bg-red-50 border-red-200 text-red-600 hover:bg-red-100 transition-colors"
-                              title="Cancel this SI"
-                            >
-                              Cancel SI
-                            </button>
-                          )}
-                        </TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{group.po ?? '—'}</TableCell>
                         <TableCell className="text-sm">{group.client}</TableCell>
                         <TableCell className="text-sm font-mono">{group.dr ?? '—'}</TableCell>
                         <TableCell className="text-right text-sm">{group.items.length}</TableCell>
