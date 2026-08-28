@@ -1053,13 +1053,15 @@ export default function CSIMonitoringPage() {
                   <div className="grid grid-cols-[2fr_1fr] gap-4">
                     <div className="space-y-1.5">
                       <Label>SO Number</Label>
-                      <Select value={header.po_number} onValueChange={v => { setHeader(h => ({ ...h, po_number: v ?? '' })); setDrNumberLockedFromSo(false) }}>
-                        <SelectTrigger className="w-full"><SelectValue placeholder="Select SO…" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="">— None —</SelectItem>
-                          {soNumbers.map(s => <SelectItem key={s.id} value={s.so_number}>{s.so_number}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
+                      <Input
+                        list="so-number-options"
+                        value={header.po_number}
+                        onChange={e => { setHeader(h => ({ ...h, po_number: e.target.value })); setDrNumberLockedFromSo(false) }}
+                        placeholder="Type or pick an SO number…"
+                      />
+                      <datalist id="so-number-options">
+                        {soNumbers.map(s => <option key={s.id} value={s.so_number} />)}
+                      </datalist>
                       {header.po_number && soItemsMap[header.po_number]?.length > 0 && (
                         <button
                           type="button"
