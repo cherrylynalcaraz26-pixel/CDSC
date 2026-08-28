@@ -329,6 +329,13 @@ export default function CSIMonitoringPage() {
     toast.success(next ? `SI ${siNumber} visible in portal` : `SI ${siNumber} hidden from portal`)
   }
 
+  async function setCsiCollectionStatus(siNumber: string, status: 'cancelled' | null) {
+    const { error } = await supabase.from('csi_records').update({ collection_status: status }).eq('si_number', siNumber)
+    if (error) { toast.error('Failed to update status'); return }
+    setRecords(prev => prev.map(r => r.si_number === siNumber ? { ...r, collection_status: status } : r))
+    toast.success(status === 'cancelled' ? `SI ${siNumber} marked as Cancelled` : `SI ${siNumber} reactivated`)
+  }
+
   async function uploadSiAttachment(siNumber: string, file: File) {
     setUploadingAttachmentSi(siNumber)
     try {
@@ -1874,6 +1881,11 @@ export default function CSIMonitoringPage() {
                               <DropdownMenuItem onClick={() => printCSI(group)}><Printer className="h-3.5 w-3.5 mr-1.5" />Print CSI</DropdownMenuItem>
                               <DropdownMenuItem onClick={() => printCSIBlank(group)}><FileOutput className="h-3.5 w-3.5 mr-1.5" />Print (Blank Form)</DropdownMenuItem>
                               <DropdownMenuItem onClick={() => openEdit(group.si_number)}>Edit</DropdownMenuItem>
+                              {group.collection_status === 'cancelled' ? (
+                                <DropdownMenuItem onClick={() => setCsiCollectionStatus(group.si_number, null)}>Reactivate SI</DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem className="text-destructive" onClick={() => setCsiCollectionStatus(group.si_number, 'cancelled')}>Cancel SI</DropdownMenuItem>
+                              )}
                               <DropdownMenuItem className="text-destructive" onClick={() => setDeleteId(group.items[0].id)}>Delete</DropdownMenuItem>
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -1978,6 +1990,11 @@ export default function CSIMonitoringPage() {
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
                             <DropdownMenuItem onClick={() => openEdit(rec.si_number)}>Edit SI</DropdownMenuItem>
+                            {rec.collection_status === 'cancelled' ? (
+                              <DropdownMenuItem onClick={() => setCsiCollectionStatus(rec.si_number, null)}>Reactivate SI</DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem className="text-destructive" onClick={() => setCsiCollectionStatus(rec.si_number, 'cancelled')}>Cancel SI</DropdownMenuItem>
+                            )}
                             <DropdownMenuItem className="text-destructive" onClick={() => setDeleteId(rec.id)}>Delete Item</DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
