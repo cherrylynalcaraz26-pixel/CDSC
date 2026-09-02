@@ -14,10 +14,10 @@ const ICONS = [Wrench, Zap, ShieldCheck, Cog, Building2]
 export default function ProductsPage() {
   return (
     <>
-      <section className="border-b border-cdsc-line bg-cdsc-navy-dark">
+      <section className="border-b border-cdsc-line bg-cdsc-tint">
         <div className="mx-auto max-w-4xl px-6 py-20 text-center">
-          <h1 className="text-3xl font-semibold text-white sm:text-4xl">Products</h1>
-          <p className="mt-5 text-base leading-relaxed text-cdsc-paper/70">
+          <h1 className="text-3xl font-semibold text-cdsc-ink sm:text-4xl">Products</h1>
+          <p className="mt-5 text-base leading-relaxed text-cdsc-ink/65">
             Tell us what you need and we will help source it. Below are the categories we regularly supply.
           </p>
         </div>

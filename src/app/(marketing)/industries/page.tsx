@@ -16,10 +16,10 @@ const ICONS = [Factory, HardHat, Wrench, Car, Building, Settings, Warehouse, Bri
 export default function IndustriesPage() {
   return (
     <>
-      <section className="border-b border-cdsc-line bg-cdsc-navy-dark">
+      <section className="border-b border-cdsc-line bg-cdsc-tint">
         <div className="mx-auto max-w-4xl px-6 py-20 text-center">
-          <h1 className="text-3xl font-semibold text-white sm:text-4xl">Industries We Serve</h1>
-          <p className="mt-5 text-base leading-relaxed text-cdsc-paper/70">
+          <h1 className="text-3xl font-semibold text-cdsc-ink sm:text-4xl">Industries We Serve</h1>
+          <p className="mt-5 text-base leading-relaxed text-cdsc-ink/65">
             Purchasing requirements look different across sectors. Here is how CDSC supports each one.
           </p>
         </div>

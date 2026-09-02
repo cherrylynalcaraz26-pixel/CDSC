@@ -14,10 +14,10 @@ const ICONS = [Package, Search, ClipboardList, Boxes, Truck, Puzzle]
 export default function ServicesPage() {
   return (
     <>
-      <section className="border-b border-cdsc-line bg-cdsc-navy-dark">
+      <section className="border-b border-cdsc-line bg-cdsc-tint">
         <div className="mx-auto max-w-4xl px-6 py-20 text-center">
-          <h1 className="text-3xl font-semibold text-white sm:text-4xl">Services</h1>
-          <p className="mt-5 text-base leading-relaxed text-cdsc-paper/70">
+          <h1 className="text-3xl font-semibold text-cdsc-ink sm:text-4xl">Services</h1>
+          <p className="mt-5 text-base leading-relaxed text-cdsc-ink/65">
             Procurement, sourcing, quotation support, and delivery coordination — built around recurring business requirements.
           </p>
         </div>

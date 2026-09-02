@@ -22,13 +22,13 @@ export default function CompanyProfilePage() {
   return (
     <div className="print:text-[11px]">
       {/* COVER */}
-      <section className="border-b border-cdsc-line bg-cdsc-navy-dark print:break-after-page">
+      <section className="border-b border-cdsc-line bg-cdsc-tint print:break-after-page">
         <div className="mx-auto flex max-w-4xl flex-col items-center px-6 py-24 text-center">
-          <div className="relative h-20 w-44 rounded bg-white p-2">
+          <div className="relative h-20 w-44 rounded border border-cdsc-line bg-white p-2">
             <Image src="/cdsc-logo.jpg" alt="CDSC Industrial Supply logo" fill className="object-contain p-2" />
           </div>
-          <h1 className="mt-8 text-3xl font-semibold text-white sm:text-4xl">{company.name}</h1>
-          <p className="mt-3 text-lg italic text-cdsc-paper/70">&ldquo;{company.tagline}&rdquo;</p>
+          <h1 className="mt-8 text-3xl font-semibold text-cdsc-ink sm:text-4xl">{company.name}</h1>
+          <p className="mt-3 text-lg italic text-cdsc-ink/65">&ldquo;{company.tagline}&rdquo;</p>
           <p className="mt-6 text-sm uppercase tracking-widest text-cdsc-accent">Industrial Supply &middot; Procurement &middot; Sourcing</p>
           <div className="mt-8">
             <PrintButton />

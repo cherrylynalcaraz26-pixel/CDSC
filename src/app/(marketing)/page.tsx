@@ -19,24 +19,24 @@ export default function HomePage() {
   return (
     <>
       {/* HERO */}
-      <section className="relative overflow-hidden bg-cdsc-navy-dark">
+      <section className="relative overflow-hidden border-b border-cdsc-line bg-cdsc-tint">
         <div
-          className="pointer-events-none absolute inset-0 opacity-[0.07]"
-          style={{ backgroundImage: 'repeating-linear-gradient(45deg,#fff 0,#fff 1px,transparent 1px,transparent 26px)' }}
+          className="pointer-events-none absolute inset-0 opacity-[0.05]"
+          style={{ backgroundImage: 'repeating-linear-gradient(45deg,var(--cdsc-navy) 0,var(--cdsc-navy) 1px,transparent 1px,transparent 26px)' }}
         />
         <div
-          className="pointer-events-none absolute -right-24 -top-24 h-96 w-96 rounded-full opacity-20 blur-3xl"
+          className="pointer-events-none absolute -right-24 -top-24 h-96 w-96 rounded-full opacity-25 blur-3xl"
           style={{ background: 'radial-gradient(circle, var(--cdsc-accent), transparent 70%)' }}
         />
         <div className="relative mx-auto max-w-7xl px-6 py-24 sm:py-28 lg:py-32">
           <div className="max-w-3xl">
-            <span className="inline-flex items-center rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs font-medium uppercase tracking-wide text-cdsc-paper/70">
+            <span className="inline-flex items-center rounded-full border border-cdsc-line bg-white px-3 py-1 text-xs font-medium uppercase tracking-wide text-cdsc-navy">
               Industrial Supply &middot; Procurement &middot; Sourcing
             </span>
-            <h1 className="mt-6 text-4xl font-semibold leading-tight text-white sm:text-5xl lg:text-6xl">
+            <h1 className="mt-6 text-4xl font-semibold leading-tight text-cdsc-ink sm:text-5xl lg:text-6xl">
               Industrial Supply Solutions<br className="hidden sm:block" /> Built Around Your Business
             </h1>
-            <p className="mt-6 max-w-2xl text-base leading-relaxed text-cdsc-paper/70 sm:text-lg">
+            <p className="mt-6 max-w-2xl text-base leading-relaxed text-cdsc-ink/65 sm:text-lg">
               CDSC Industrial Supply provides reliable products, sourcing support, and procurement solutions for
               businesses, industrial facilities, contractors, and organizations across the Philippines.
             </p>
@@ -49,7 +49,7 @@ export default function HomePage() {
               </Link>
               <Link
                 href="/products"
-                className="inline-flex items-center justify-center gap-2 rounded-md border border-white/20 px-6 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-white/10"
+                className="inline-flex items-center justify-center gap-2 rounded-md border border-cdsc-ink/15 px-6 py-3.5 text-sm font-semibold text-cdsc-ink transition-colors hover:bg-white"
               >
                 Explore Our Products
               </Link>
@@ -145,11 +145,11 @@ export default function HomePage() {
       </section>
 
       {/* PROCUREMENT / SOURCING */}
-      <section className="bg-cdsc-navy-dark">
+      <section className="border-y border-cdsc-line bg-cdsc-tint">
         <div className="mx-auto max-w-7xl px-6 py-20">
           <div className="mx-auto max-w-2xl text-center">
-            <h2 className="text-2xl font-semibold text-white sm:text-3xl">More Than a Supplier. Your Procurement Partner.</h2>
-            <p className="mt-4 text-cdsc-paper/70">
+            <h2 className="text-2xl font-semibold text-cdsc-ink sm:text-3xl">More Than a Supplier. Your Procurement Partner.</h2>
+            <p className="mt-4 text-cdsc-ink/65">
               Every business has purchasing requirements that do not always fit neatly into a catalog. CDSC helps
               simplify those requirements by assisting with product sourcing, supplier coordination, quotation
               preparation, and fulfillment.
@@ -157,17 +157,17 @@ export default function HomePage() {
           </div>
           <div className="mt-14 grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
             {procurementProcess.map(step => (
-              <div key={step.step} className="border-l-2 border-cdsc-accent pl-5">
+              <div key={step.step} className="border-l-2 border-cdsc-accent bg-white pl-5 py-1">
                 <span className="text-sm font-semibold text-cdsc-accent">{step.step}</span>
-                <h3 className="mt-2 text-base font-semibold text-white">{step.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-cdsc-paper/60">{step.description}</p>
+                <h3 className="mt-2 text-base font-semibold text-cdsc-ink">{step.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-cdsc-ink/60">{step.description}</p>
               </div>
             ))}
           </div>
           <div className="mt-12 text-center">
             <Link
               href="/quote"
-              className="inline-flex items-center gap-2 rounded-md bg-cdsc-accent px-6 py-3.5 text-sm font-semibold text-cdsc-navy-dark transition-colors hover:bg-white"
+              className="inline-flex items-center gap-2 rounded-md bg-cdsc-accent px-6 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-cdsc-accent-dark"
             >
               Send Your Requirement <ArrowRight className="h-4 w-4" />
             </Link>

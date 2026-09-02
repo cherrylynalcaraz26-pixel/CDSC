@@ -15,13 +15,13 @@ export function SiteHeader() {
   return (
     <header id="site-header" className="sticky top-0 z-40 w-full print:hidden">
       {/* Top utility bar */}
-      <div className="hidden bg-cdsc-navy-dark text-cdsc-paper/80 sm:block">
+      <div className="hidden border-b border-cdsc-line bg-cdsc-paper text-cdsc-ink/70 sm:block">
         <div className="mx-auto flex max-w-7xl items-center justify-end gap-6 px-6 py-2 text-xs">
-          <a href={company.phoneHref} className="flex items-center gap-1.5 hover:text-white">
-            <Phone className="h-3.5 w-3.5" /> {company.phone}
+          <a href={company.phoneHref} className="flex items-center gap-1.5 hover:text-cdsc-navy">
+            <Phone className="h-3.5 w-3.5 text-cdsc-accent" /> {company.phone}
           </a>
-          <a href={company.emailHref} className="flex items-center gap-1.5 hover:text-white">
-            <Mail className="h-3.5 w-3.5" /> {company.email}
+          <a href={company.emailHref} className="flex items-center gap-1.5 hover:text-cdsc-navy">
+            <Mail className="h-3.5 w-3.5 text-cdsc-accent" /> {company.email}
           </a>
         </div>
       </div>
