@@ -1441,6 +1441,11 @@ export default function SettingsPage() {
           <h1 className="text-2xl font-semibold">Company Profile &amp; Settings</h1>
           <p className="text-muted-foreground text-sm">Business information, BIR details and preferences</p>
         </div>
+        <a href="/company-profile" target="_blank" rel="noopener noreferrer">
+          <Button variant="outline" size="sm" className="gap-1.5">
+            <ExternalLink className="h-3.5 w-3.5" />View Public Company Profile
+          </Button>
+        </a>
       </div>
 
       <div className="border-b mb-6">
