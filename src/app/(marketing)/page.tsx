@@ -175,6 +175,29 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* PARTNER WITH US */}
+      <section className="mx-auto max-w-7xl px-6 py-20">
+        <div className="flex flex-col items-center justify-between gap-8 rounded-lg border border-cdsc-line px-8 py-14 text-center lg:flex-row lg:text-left">
+          <div className="flex items-start gap-4">
+            <Handshake className="mt-1 h-8 w-8 shrink-0 text-cdsc-accent-dark" />
+            <div>
+              <h2 className="text-2xl font-semibold text-cdsc-ink sm:text-3xl">Interested in Partnering with CDSC?</h2>
+              <p className="mt-3 max-w-xl text-cdsc-ink/65">
+                We work with reliable suppliers, vendors, and business partners to keep our product range dependable
+                and our sourcing responsive. If you supply industrial, electrical, safety, or related products and
+                want to work with CDSC, we&apos;d like to hear from you.
+              </p>
+            </div>
+          </div>
+          <Link
+            href="/inquiry"
+            className="inline-flex shrink-0 items-center gap-2 rounded-md bg-cdsc-navy px-6 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-cdsc-navy-dark"
+          >
+            Partner with Us <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+      </section>
+
       {/* FINAL CTA */}
       <section className="mx-auto max-w-7xl px-6 py-20">
         <div className="flex flex-col items-center justify-between gap-8 rounded-lg border border-cdsc-line bg-cdsc-paper px-8 py-14 text-center lg:flex-row lg:text-left">

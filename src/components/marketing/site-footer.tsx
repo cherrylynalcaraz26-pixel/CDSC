@@ -24,6 +24,9 @@ export function SiteFooter() {
                   <Link href={item.href} className="text-sm hover:text-cdsc-navy">{item.label}</Link>
                 </li>
               ))}
+              <li>
+                <Link href="/inquiry" className="text-sm hover:text-cdsc-navy">Partner with Us</Link>
+              </li>
             </ul>
           </div>
 
