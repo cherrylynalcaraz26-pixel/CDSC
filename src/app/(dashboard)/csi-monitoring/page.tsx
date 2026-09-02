@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, Fragment } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { fetchAllRows } from '@/lib/supabase/fetch-all'
+import { parseDrNumbers } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -32,12 +33,6 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   Cell, Legend, AreaChart, Area,
 } from 'recharts'
-
-// dr_number is stored as a single comma-separated text field (e.g. "DR-0001, DR-0002")
-// so a Sales Invoice can be linked to deliveries spread across multiple DRs.
-function parseDrNumbers(value: string | null | undefined): string[] {
-  return (value ?? '').split(',').map(s => s.trim()).filter(Boolean)
-}
 
 interface ItemOption { item_name: string; unit_of_measure: string; selling_price: number | null }
 interface ClientOption {
@@ -138,17 +133,6 @@ interface CSIItem {
 }
 
 type SortOption = 'date_desc' | 'date_asc' | 'si_asc' | 'si_desc' | 'amount_desc' | 'amount_asc' | 'client_asc' | 'client_desc'
-
-const SORT_OPTIONS: { value: SortOption; label: string }[] = [
-  { value: 'date_desc', label: 'Date (Newest)' },
-  { value: 'date_asc', label: 'Date (Oldest)' },
-  { value: 'si_asc', label: 'SI Number (A–Z)' },
-  { value: 'si_desc', label: 'SI Number (Z–A)' },
-  { value: 'amount_desc', label: 'Amount (High–Low)' },
-  { value: 'amount_asc', label: 'Amount (Low–High)' },
-  { value: 'client_asc', label: 'Client (A–Z)' },
-  { value: 'client_desc', label: 'Client (Z–A)' },
-]
 
 function compareBySortOption(sort: SortOption, a: { date: string; si: string; amount: number; client: string }, b: { date: string; si: string; amount: number; client: string }) {
   switch (sort) {
@@ -1711,9 +1695,9 @@ export default function CSIMonitoringPage() {
         )
       })()}
 
-      {!open && <div className="flex flex-wrap gap-3 items-end">
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Client</Label>
+      {!open && <div className="flex flex-wrap gap-4 items-center">
+        <div className="flex items-center gap-2">
+          <Label className="text-xs text-muted-foreground whitespace-nowrap">Client</Label>
           <Select value={clientFilter || '__all__'} onValueChange={v => setClientFilter(!v || v === '__all__' ? '' : v)}>
             <SelectTrigger className="h-9 w-72 text-sm">
               <SelectValue className="truncate">{(v: string) => v === '__all__' ? 'Client' : v}</SelectValue>
@@ -1724,8 +1708,8 @@ export default function CSIMonitoringPage() {
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Year</Label>
+        <div className="flex items-center gap-2">
+          <Label className="text-xs text-muted-foreground whitespace-nowrap">Year</Label>
           <Select value={yearFilter} onValueChange={v => setYearFilter(v ?? 'all')}>
             <SelectTrigger className="h-9 w-32 text-sm">
               <SelectValue>{(v: string) => v === 'all' ? 'Filter by Year' : v}</SelectValue>
@@ -1733,17 +1717,6 @@ export default function CSIMonitoringPage() {
             <SelectContent>
               <SelectItem value="all">All Years</SelectItem>
               {availableYears.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Sort</Label>
-          <Select value={sortOption} onValueChange={v => setSortOption((v as SortOption) ?? 'date_desc')}>
-            <SelectTrigger className="h-9 w-44 text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {SORT_OPTIONS.map(o => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>

@@ -14,7 +14,7 @@ import {
 import {
   Package, ShoppingCart, Truck, FileText, ClipboardList,
   TrendingUp, TrendingDown, Users, ArrowRight, Loader2, ChevronDown, ChevronUp,
-  AlertTriangle, CheckCircle2, Clock, Lightbulb, Bell, HelpCircle, ImagePlus,
+  AlertTriangle, CheckCircle2, Clock, Lightbulb, Bell, HelpCircle, ImagePlus, ExternalLink,
 } from 'lucide-react'
 import Link from 'next/link'
 import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns'
@@ -503,6 +503,11 @@ export default function DashboardPage() {
         </div>
         <div className="flex items-center gap-3">
           {loading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+          <a href="/company-profile" target="_blank" rel="noopener noreferrer">
+            <Button variant="outline" size="sm" className="gap-1.5">
+              <ExternalLink className="h-3.5 w-3.5" />View Public Company Profile
+            </Button>
+          </a>
           <DemoVideoButton />
         </div>
       </div>

@@ -486,7 +486,6 @@ export default function InventoryPage() {
     // stayed blank on a fresh page load until then.
     loadItemOptions()
   }, [])
-  useEffect(() => { setPage(1) }, [clientFilter, statusFilter, search, viewMode])
 
   // Keep WH Stock (and DR/CSI totals) live — e.g. once a delivery is recorded
   // in DR Logs elsewhere, this page's Generate Report reflects it immediately
@@ -884,9 +883,6 @@ export default function InventoryPage() {
     byItemGroups.push(...Array.from(map.values()).sort((a, b) => a.item_name.localeCompare(b.item_name)))
   }
 
-  const PAGE_SIZE = 30
-  const [page, setPage] = useState(1)
-
   // KPI stats per view mode
   // By Client — client × item line rows
   const totalItems = filtered.length
@@ -935,10 +931,6 @@ export default function InventoryPage() {
     }
   })
 
-  const activeCount = viewMode === 'by_item' ? byItemGroups.length : viewMode === 'by_warehouse' ? filteredWarehouseRows.length : filtered.length
-  const totalPages = Math.max(1, Math.ceil(activeCount / PAGE_SIZE))
-  const pagedFiltered = sortedFiltered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
-  const pagedByItemGroups = sortedByItemGroups.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   // Unit Price (catalog cost) and Selling Price per warehouse row, plus each × Qty amount.
   const itemUnitPriceMap: Record<string, number> = {}
@@ -1514,9 +1506,9 @@ export default function InventoryPage() {
 
       {!reportOpen && viewMode !== 'by_warehouse' && <Card>
         <CardContent className="p-0">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto max-h-[65vh] overflow-y-auto">
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead className="w-12">No.</TableHead>
                   {viewMode === 'by_client'
@@ -1565,11 +1557,11 @@ export default function InventoryPage() {
                   // ── By Item view — click a row to open the Product Details modal ──
                   byItemGroups.length === 0 ? (
                     <TableRow><TableCell colSpan={9} className="text-center py-12 text-muted-foreground">No inventory data found.</TableCell></TableRow>
-                  ) : pagedByItemGroups.map((g, i) => {
+                  ) : sortedByItemGroups.map((g, i) => {
                     const isDeficit = g.total_balance < 0
                     return (
                       <TableRow key={'item||' + g.item_name} className="cursor-pointer hover:bg-muted/50" onClick={() => openItemDetail(g)}>
-                        <TableCell className="text-sm text-muted-foreground">{(page - 1) * PAGE_SIZE + i + 1}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{i + 1}</TableCell>
                         <TableCell className="font-medium text-sm">
                           <span className="flex items-center gap-1.5">
                             {isDeficit && <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />}
@@ -1594,7 +1586,7 @@ export default function InventoryPage() {
                   <TableRow>
                     <TableCell colSpan={11} className="text-center py-12 text-muted-foreground">No inventory data found.</TableCell>
                   </TableRow>
-                ) : pagedFiltered.map((row, i) => {
+                ) : sortedFiltered.map((row, i) => {
                   const key = rowKey(row)
                   const isDeficit = row.balance < 0
                   return (
@@ -1603,7 +1595,7 @@ export default function InventoryPage() {
                       className="cursor-pointer hover:bg-muted/50"
                       onClick={() => setClientDetailRow(row)}
                     >
-                      <TableCell className="text-sm text-muted-foreground">{(page - 1) * PAGE_SIZE + i + 1}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{i + 1}</TableCell>
                         <TableCell className="text-sm">{row.client}</TableCell>
                         <TableCell className="text-sm font-medium min-w-[200px]">
                           <span className="flex items-center gap-1.5">
@@ -1668,39 +1660,6 @@ export default function InventoryPage() {
           </div>
         </CardContent>
       </Card>}
-
-      {/* Pagination — hidden when report is open or viewing By Warehouse (unpaginated) */}
-      {!reportOpen && viewMode !== 'by_warehouse' && (() => {
-        const activeTotalPages = totalPages
-        const activeTotal = activeCount
-        if (activeTotalPages <= 1) return null
-        return (
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-muted-foreground">
-              Showing {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, activeTotal)} of {activeTotal}
-            </span>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => setPage(p => Math.max(1, p - 1))}
-                disabled={page === 1}
-                className="px-3 py-1.5 rounded-md border text-sm font-medium disabled:opacity-40 hover:bg-muted transition-colors"
-              >← Prev</button>
-              {Array.from({ length: activeTotalPages }, (_, i) => i + 1).map(p => (
-                <button
-                  key={p}
-                  onClick={() => setPage(p)}
-                  className={`w-8 h-8 rounded-md text-sm font-medium transition-colors ${p === page ? 'bg-red-600 text-white' : 'border hover:bg-muted'}`}
-                >{p}</button>
-              ))}
-              <button
-                onClick={() => setPage(p => Math.min(activeTotalPages, p + 1))}
-                disabled={page === activeTotalPages}
-                className="px-3 py-1.5 rounded-md border text-sm font-medium disabled:opacity-40 hover:bg-muted transition-colors"
-              >Next →</button>
-            </div>
-          </div>
-        )
-      })()}
 
       {/* Inline Inventory Report — shown instead of table when reportOpen */}
       {reportOpen && (() => {
@@ -2267,7 +2226,11 @@ export default function InventoryPage() {
           )}
           <div className="py-2">
             <Select value={assignChannelValue || 'unassigned'} onValueChange={v => setAssignChannelValue(v === 'unassigned' ? '' : (v ?? ''))}>
-              <SelectTrigger><SelectValue placeholder="Select channel…" /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue placeholder="Select channel…">
+                  {(v: string) => v === 'unassigned' ? 'Unassigned' : channelOptions.find(c => c.id === v)?.name ?? v}
+                </SelectValue>
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="unassigned">Unassigned</SelectItem>
                 {channelOptions.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
