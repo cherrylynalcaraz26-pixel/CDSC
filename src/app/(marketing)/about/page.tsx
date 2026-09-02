@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import { ArrowRight, Target, Eye, ShieldCheck, MessageCircle, Scale, Wrench, Handshake } from 'lucide-react'
-import { coreValues } from '@/lib/site-content'
+import { coreValues, companyOverview, mission, vision } from '@/lib/site-content'
 
 export const metadata: Metadata = {
   title: 'About Us',
@@ -25,15 +25,9 @@ export default function AboutPage() {
 
       <section className="mx-auto max-w-4xl px-6 py-20">
         <h2 className="text-xl font-semibold text-cdsc-ink">Company Overview</h2>
-        <p className="mt-4 text-base leading-relaxed text-cdsc-ink/70">
-          CDSC Industrial Supply is a Philippine based B2B industrial supply and procurement company providing
-          products and sourcing support to businesses, industrial facilities, contractors, and organizations.
-        </p>
-        <p className="mt-4 text-base leading-relaxed text-cdsc-ink/70">
-          We help customers simplify purchasing by providing practical sourcing solutions, responsive communication,
-          and dependable fulfillment support — for everyday industrial supplies as well as requirements that need a
-          more specific sourcing effort.
-        </p>
+        {companyOverview.map(p => (
+          <p key={p.slice(0, 24)} className="mt-4 text-base leading-relaxed text-cdsc-ink/70">{p}</p>
+        ))}
       </section>
 
       <section className="border-y border-cdsc-line bg-cdsc-paper">
@@ -41,17 +35,12 @@ export default function AboutPage() {
           <div className="rounded-lg bg-white p-8 ring-1 ring-cdsc-line">
             <Target className="h-6 w-6 text-cdsc-navy" />
             <h2 className="mt-4 text-lg font-semibold text-cdsc-ink">Our Mission</h2>
-            <p className="mt-3 text-sm leading-relaxed text-cdsc-ink/65">
-              To provide businesses with dependable supply and procurement support through responsive service,
-              practical sourcing, and long term partnerships.
-            </p>
+            <p className="mt-3 text-sm leading-relaxed text-cdsc-ink/65">{mission}</p>
           </div>
           <div className="rounded-lg bg-white p-8 ring-1 ring-cdsc-line">
             <Eye className="h-6 w-6 text-cdsc-navy" />
             <h2 className="mt-4 text-lg font-semibold text-cdsc-ink">Our Vision</h2>
-            <p className="mt-3 text-sm leading-relaxed text-cdsc-ink/65">
-              To become a trusted industrial supply and procurement partner for businesses across the Philippines.
-            </p>
+            <p className="mt-3 text-sm leading-relaxed text-cdsc-ink/65">{vision}</p>
           </div>
         </div>
       </section>

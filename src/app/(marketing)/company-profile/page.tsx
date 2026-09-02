@@ -1,12 +1,13 @@
 import type { Metadata } from 'next'
 import Image from 'next/image'
 import {
-  Target, Eye, ShieldCheck, MessageCircle, Scale, Wrench, Handshake,
+  Target, Eye, ShieldCheck, MessageCircle, Scale, Wrench, Handshake, BadgeCheck,
   Package, Search, ClipboardList, Boxes, Truck, Puzzle, Phone, Mail, MapPin,
 } from 'lucide-react'
 import { PrintButton } from '@/components/marketing/print-button'
 import {
   company, productCategories, services, industries, procurementProcess, coreValues, whyCds,
+  companyOverview, mission, vision, credentials,
 } from '@/lib/site-content'
 
 export const metadata: Metadata = {
@@ -28,6 +29,7 @@ export default function CompanyProfilePage() {
             <Image src="/cdsc-logo.jpg" alt="CDSC Industrial Supply logo" fill className="object-contain p-2" />
           </div>
           <h1 className="mt-8 text-3xl font-semibold text-cdsc-ink sm:text-4xl">{company.name}</h1>
+          <p className="mt-1 text-sm text-cdsc-ink/50">{company.legalName}</p>
           <p className="mt-3 text-lg italic text-cdsc-ink/65">&ldquo;{company.tagline}&rdquo;</p>
           <p className="mt-6 text-sm uppercase tracking-widest text-cdsc-accent">Industrial Supply &middot; Procurement &middot; Sourcing</p>
           <div className="mt-8">
@@ -39,30 +41,39 @@ export default function CompanyProfilePage() {
       {/* COMPANY OVERVIEW */}
       <section className="mx-auto max-w-4xl px-6 py-16 print:break-after-page">
         <h2 className="text-xl font-semibold text-cdsc-ink">Company Overview</h2>
-        <p className="mt-4 text-base leading-relaxed text-cdsc-ink/70">
-          CDSC Industrial Supply is a Philippine based B2B industrial supply and procurement company providing
-          products and sourcing support to businesses, industrial facilities, contractors, and organizations.
-        </p>
-        <p className="mt-4 text-base leading-relaxed text-cdsc-ink/70">
-          We help customers simplify purchasing by providing practical sourcing solutions, responsive communication,
-          and dependable fulfillment support.
-        </p>
+        {companyOverview.map(p => (
+          <p key={p.slice(0, 24)} className="mt-4 text-base leading-relaxed text-cdsc-ink/70">{p}</p>
+        ))}
 
-        <div className="mt-10 grid gap-6 sm:grid-cols-2">
+        <div className="mt-8 grid grid-cols-2 gap-4 rounded-lg border border-cdsc-line bg-cdsc-paper p-5 sm:grid-cols-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-cdsc-ink/50">Business Type</p>
+            <p className="mt-1 text-sm text-cdsc-ink">{company.businessType}</p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-cdsc-ink/50">Industry</p>
+            <p className="mt-1 text-sm text-cdsc-ink">{company.industry}</p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-cdsc-ink/50">VAT Status</p>
+            <p className="mt-1 text-sm text-cdsc-ink">{company.vatRegistered ? 'VAT Registered' : 'Non-VAT'}</p>
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-cdsc-ink/50">Location</p>
+            <p className="mt-1 text-sm text-cdsc-ink">Sto. Tomas, Batangas</p>
+          </div>
+        </div>
+
+        <div className="mt-8 grid gap-6 sm:grid-cols-2">
           <div className="rounded-lg border border-cdsc-line p-6">
             <Target className="h-6 w-6 text-cdsc-navy" />
             <h3 className="mt-3 text-base font-semibold text-cdsc-ink">Our Mission</h3>
-            <p className="mt-2 text-sm leading-relaxed text-cdsc-ink/65">
-              To provide businesses with dependable supply and procurement support through responsive service,
-              practical sourcing, and long term partnerships.
-            </p>
+            <p className="mt-2 text-sm leading-relaxed text-cdsc-ink/65">{mission}</p>
           </div>
           <div className="rounded-lg border border-cdsc-line p-6">
             <Eye className="h-6 w-6 text-cdsc-navy" />
             <h3 className="mt-3 text-base font-semibold text-cdsc-ink">Our Vision</h3>
-            <p className="mt-2 text-sm leading-relaxed text-cdsc-ink/65">
-              To become a trusted industrial supply and procurement partner for businesses across the Philippines.
-            </p>
+            <p className="mt-2 text-sm leading-relaxed text-cdsc-ink/65">{vision}</p>
           </div>
         </div>
 
@@ -152,6 +163,24 @@ export default function CompanyProfilePage() {
               <div key={card.title} className="rounded-lg border border-cdsc-line bg-white p-5">
                 <h3 className="text-sm font-semibold text-cdsc-ink">{card.title}</h3>
                 <p className="mt-1.5 text-xs leading-relaxed text-cdsc-ink/60">{card.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* CREDENTIALS & ACCREDITATION */}
+      <section className="border-t border-cdsc-line bg-cdsc-paper px-6 py-16 print:break-after-page">
+        <div className="mx-auto max-w-4xl">
+          <h2 className="text-xl font-semibold text-cdsc-ink">Credentials &amp; Accreditation</h2>
+          <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            {credentials.map(c => (
+              <div key={c.label} className="flex items-start gap-3 rounded-lg border border-cdsc-line bg-white p-5">
+                <BadgeCheck className="mt-0.5 h-5 w-5 shrink-0 text-cdsc-accent-dark" />
+                <div>
+                  <h3 className="text-sm font-semibold text-cdsc-ink">{c.label}</h3>
+                  <p className="mt-1.5 text-xs leading-relaxed text-cdsc-ink/60">{c.description}</p>
+                </div>
               </div>
             ))}
           </div>

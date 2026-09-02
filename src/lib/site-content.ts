@@ -5,7 +5,11 @@
 
 export const company = {
   name: 'CDSC Industrial Supply',
+  legalName: 'CDSC Industrial Supply Corporation',
   tagline: 'Supplying Solutions, Building Partnerships',
+  businessType: 'Trading Corporation',
+  industry: 'Industrial Supply & Distribution',
+  vatRegistered: true,
   addressLine1: '113 San Isidro Sur',
   addressLine2: 'Sto. Tomas, Batangas, Philippines 4234',
   addressFull: '113 San Isidro Sur, Sto. Tomas, Batangas, Philippines 4234',
@@ -14,6 +18,25 @@ export const company = {
   email: 'cdsc.gmot@gmail.com',
   emailHref: 'mailto:cdsc.gmot@gmail.com',
 }
+
+// Sourced from the internal Company & Business Profile record (system_settings)
+// so the public site and internal system stay in sync — not invented copy.
+export const mission =
+  'To provide industries and businesses with quality industrial supplies and exceptional service, delivered on time, every time, empowering our clients to achieve operational excellence and sustainable growth.'
+
+export const vision =
+  'To become a trusted industrial supply and procurement partner for businesses across Batangas and the Philippines.'
+
+export const companyOverview = [
+  'CDSC Industrial Supply Corporation is a Philippine based B2B industrial supply and procurement company, specializing in the supply and distribution of industrial materials, safety equipment, hardware, and general construction supplies. We provide products and sourcing support to businesses, industrial facilities, contractors, and organizations.',
+  'Strategically located in Sto. Tomas, Batangas, we serve manufacturers, contractors, and businesses across Region IV-A (CALABARZON) and beyond. We source quality products from trusted local and international suppliers, and help customers simplify purchasing through practical sourcing solutions, responsive communication, and dependable fulfillment support.',
+]
+
+// Registrations on file with the company — shown as-is, no unverified claims added.
+export const credentials = [
+  { label: 'PhilGEPS Registered', description: 'Registered with the Philippine Government Electronic Procurement System.' },
+  { label: 'DTI Registered Business', description: 'Registered business name with the Department of Trade and Industry.' },
+]
 
 export const nav = [
   { label: 'Home', href: '/' },
