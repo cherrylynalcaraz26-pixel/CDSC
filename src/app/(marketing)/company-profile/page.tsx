@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import Image from 'next/image'
 import {
   Target, Eye, ShieldCheck, MessageCircle, Scale, Wrench, Handshake, BadgeCheck,
@@ -216,6 +217,9 @@ export default function CompanyProfilePage() {
         <div className="mt-10 flex justify-center">
           <PrintButton label="Download / Print This Profile" />
         </div>
+        <p className="mt-6 text-center text-xs text-cdsc-ink/35 print:hidden">
+          <Link href="/login" className="hover:text-cdsc-navy hover:underline">Staff Login</Link>
+        </p>
       </section>
     </div>
   )
