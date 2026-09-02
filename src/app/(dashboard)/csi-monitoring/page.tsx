@@ -33,6 +33,12 @@ import {
   Cell, Legend, AreaChart, Area,
 } from 'recharts'
 
+// dr_number is stored as a single comma-separated text field (e.g. "DR-0001, DR-0002")
+// so a Sales Invoice can be linked to deliveries spread across multiple DRs.
+function parseDrNumbers(value: string | null | undefined): string[] {
+  return (value ?? '').split(',').map(s => s.trim()).filter(Boolean)
+}
+
 interface ItemOption { item_name: string; unit_of_measure: string; selling_price: number | null }
 interface ClientOption {
   id: string
@@ -1110,8 +1116,11 @@ export default function CSIMonitoringPage() {
                       value={header.client_name}
                       onValueChange={v => setHeader(h => {
                         const nextClient = v ?? ''
-                        const drStillValid = !h.dr_number || drNumberLockedFromSo || drNumbers.some(d => d.dr_number === h.dr_number && d.client_name === nextClient)
-                        return { ...h, client_name: nextClient, dr_number: drStillValid ? h.dr_number : '' }
+                        if (drNumberLockedFromSo) return { ...h, client_name: nextClient }
+                        // Drop only the DRs that no longer belong to the newly selected client,
+                        // keeping the rest — switching clients shouldn't wipe an entire multi-DR selection.
+                        const stillValid = parseDrNumbers(h.dr_number).filter(dr => drNumbers.some(d => d.dr_number === dr && d.client_name === nextClient))
+                        return { ...h, client_name: nextClient, dr_number: stillValid.join(', ') }
                       })}
                     >
                       <SelectTrigger className="w-full"><SelectValue placeholder="Select client…" /></SelectTrigger>
@@ -1155,19 +1164,46 @@ export default function CSIMonitoringPage() {
                       )}
                     </div>
                     <div className="space-y-1.5">
-                      <Label>DR Number</Label>
-                      <Select value={header.dr_number} onValueChange={v => setHeader(h => ({ ...h, dr_number: v ?? '' }))} disabled={drNumberLockedFromSo}>
-                        <SelectTrigger className="w-full"><SelectValue placeholder="Select DR…" /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="">— None —</SelectItem>
-                          {drNumbers
-                            .filter(d => !header.client_name || d.client_name === header.client_name)
-                            .map(d => <SelectItem key={d.id} value={d.dr_number}>{d.dr_number}</SelectItem>)}
-                          {header.dr_number && !drNumbers.some(d => d.dr_number === header.dr_number) && (
-                            <SelectItem value={header.dr_number}>{header.dr_number}</SelectItem>
-                          )}
-                        </SelectContent>
-                      </Select>
+                      <Label>DR Number(s)</Label>
+                      {!drNumberLockedFromSo && (
+                        <Select
+                          value=""
+                          onValueChange={v => {
+                            if (!v) return
+                            setHeader(h => {
+                              const current = parseDrNumbers(h.dr_number)
+                              if (current.includes(v)) return h
+                              return { ...h, dr_number: [...current, v].join(', ') }
+                            })
+                          }}
+                        >
+                          <SelectTrigger className="w-full"><SelectValue placeholder="Add a DR…" /></SelectTrigger>
+                          <SelectContent>
+                            {drNumbers
+                              .filter(d => !header.client_name || d.client_name === header.client_name)
+                              .filter(d => !parseDrNumbers(header.dr_number).includes(d.dr_number))
+                              .map(d => <SelectItem key={d.id} value={d.dr_number}>{d.dr_number}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      )}
+                      {parseDrNumbers(header.dr_number).length > 0 && (
+                        <div className="flex flex-wrap gap-1.5 pt-1">
+                          {parseDrNumbers(header.dr_number).map(dr => (
+                            <Badge key={dr} variant="secondary" className="gap-1">
+                              {dr}
+                              {!drNumberLockedFromSo && (
+                                <button
+                                  type="button"
+                                  onClick={() => setHeader(h => ({ ...h, dr_number: parseDrNumbers(h.dr_number).filter(x => x !== dr).join(', ') }))}
+                                  className="rounded-full hover:bg-black/10"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              )}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
                       {drNumberLockedFromSo && (
                         <p className="text-[11px] text-muted-foreground">Locked — matched from the loaded SO&apos;s DR.</p>
                       )}
