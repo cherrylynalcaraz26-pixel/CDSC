@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import type { Metadata } from 'next'
 import {
-  ArrowRight, ShieldCheck, MessageCircle, SlidersHorizontal, Scale, Building2, Handshake,
+  ArrowRight, ShieldCheck, MessageCircle, SlidersHorizontal, Scale, Building2, Handshake, Boxes,
   Wrench, Zap, Cog, PackageSearch, ClipboardCheck,
 } from 'lucide-react'
 import { productCategories, whyCds, industries, procurementProcess, company } from '@/lib/site-content'
@@ -12,7 +12,7 @@ export const metadata: Metadata = {
     'Reliable industrial, electrical, safety, and mechanical supplies with sourcing and procurement support for manufacturing, construction, and facility operations across the Philippines.',
 }
 
-const WHY_ICONS = [ShieldCheck, MessageCircle, SlidersHorizontal, Scale, Building2, Handshake]
+const WHY_ICONS = [ShieldCheck, MessageCircle, SlidersHorizontal, Scale, Building2, Handshake, Boxes]
 const CATEGORY_ICONS = [Wrench, Zap, ShieldCheck, Cog, Building2]
 
 export default function HomePage() {

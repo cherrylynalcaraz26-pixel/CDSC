@@ -86,6 +86,10 @@ export const whyCds: WhyCard[] = [
     title: 'Long Term Partnerships',
     description: 'We aim to become a dependable supplier that businesses can work with repeatedly.',
   },
+  {
+    title: 'Built-In Inventory System',
+    description: 'Our internal inventory and order tracking system supports accurate stock visibility and dependable fulfillment from quotation to delivery.',
+  },
 ]
 
 export type Industry = { name: string; description: string }
