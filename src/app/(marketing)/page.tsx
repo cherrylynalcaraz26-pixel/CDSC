@@ -43,7 +43,7 @@ export default function HomePage() {
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <Link
                 href="/quote"
-                className="inline-flex items-center justify-center gap-2 rounded-md bg-cdsc-accent px-6 py-3.5 text-sm font-semibold text-cdsc-navy-dark transition-colors hover:bg-white"
+                className="inline-flex items-center justify-center gap-2 rounded-md bg-cdsc-accent px-6 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-cdsc-accent-dark"
               >
                 Request a Quotation <ArrowRight className="h-4 w-4" />
               </Link>
