@@ -54,6 +54,7 @@ interface Settings {
   email: string
   website: string
   logo_url: string
+  registration_doc_url: string
   live_video_url: string
   vat_registered: boolean
   default_vat_rate: number
@@ -97,6 +98,7 @@ function defaultSettings(): Settings {
     email: 'cdsc.gmot@gmail.com',
     website: 'cdscindustrialsupply.netlify.app',
     logo_url: '',
+    registration_doc_url: '',
     live_video_url: '',
     vat_registered: true,
     default_vat_rate: 12,
@@ -1306,11 +1308,13 @@ export default function SettingsPage() {
   const supabase = createClient()
   const { reload: reloadCompany } = useCompany()
   const fileRef = useRef<HTMLInputElement>(null)
+  const registrationDocFileRef = useRef<HTMLInputElement>(null)
   const [tab, setTab] = useState<TabId>('profile')
   const [settings, setSettings] = useState<Settings>(defaultSettings())
   const [original, setOriginal] = useState<Settings>(defaultSettings())
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [uploadingRegistrationDoc, setUploadingRegistrationDoc] = useState(false)
 
   // Proposal Database records — shared by the Proposal Database tab and the
   // Business Proposal section's proposal picker.
@@ -1406,6 +1410,23 @@ export default function SettingsPage() {
     await reloadCompany()
     toast.success('Logo uploaded — sidebar and previews updated')
     setUploading(false)
+  }
+
+  async function uploadRegistrationDoc(file: File) {
+    if (file.size > 2 * 1024 * 1024) { toast.error('File must be under 2 MB'); return }
+    setUploadingRegistrationDoc(true)
+    let publicUrl: string
+    try {
+      publicUrl = await uploadImageToDrive(file, { displayName: 'Registration Document', folder: 'Company' })
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : 'Failed to upload image')
+      setUploadingRegistrationDoc(false)
+      return
+    }
+    set('registration_doc_url', publicUrl)
+    await supabase.from('system_settings').upsert({ id: 1, ...settings, registration_doc_url: publicUrl })
+    toast.success('Registration document uploaded')
+    setUploadingRegistrationDoc(false)
   }
 
   const S = (field: keyof Settings) => ({
@@ -1527,6 +1548,28 @@ export default function SettingsPage() {
 
             <div className="space-y-5">
               <p className="text-xs font-bold uppercase tracking-widest text-blue-600">Registration &amp; Compliance</p>
+
+              <div className="space-y-2">
+                <Label>Registration Document (SEC/DTI/BIR)</Label>
+                <div className="flex items-start gap-4">
+                  <div className="h-20 w-20 rounded-lg border bg-muted/20 flex items-center justify-center overflow-hidden shrink-0">
+                    {settings.registration_doc_url ? (
+                      <img src={settings.registration_doc_url} alt="registration document" className="w-full h-full object-cover" />
+                    ) : (
+                      <FileText className="h-8 w-8 text-muted-foreground/30" />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <Button variant="outline" size="sm" className="gap-2 mb-1" onClick={() => registrationDocFileRef.current?.click()} disabled={uploadingRegistrationDoc}>
+                      {uploadingRegistrationDoc ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+                      {uploadingRegistrationDoc ? 'Uploading…' : 'Upload Image'}
+                    </Button>
+                    <input ref={registrationDocFileRef} type="file" accept="image/png,image/jpeg,image/webp" className="hidden"
+                      onChange={e => { if (e.target.files?.[0]) uploadRegistrationDoc(e.target.files[0]) }} />
+                    <p className="text-xs text-muted-foreground">PNG, JPG, WEBP — max 2 MB. A photo/scan of your SEC/DTI/BIR certificate.</p>
+                  </div>
+                </div>
+              </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1.5">
