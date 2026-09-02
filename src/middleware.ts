@@ -25,8 +25,11 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
+  const PUBLIC_PATHS = ['/inquiry', '/about', '/products', '/industries', '/services', '/company-profile', '/contact', '/quote']
   const isAuthPage = request.nextUrl.pathname.startsWith('/login')
-  const isPublicPath = request.nextUrl.pathname === '/' || request.nextUrl.pathname.startsWith('/inquiry')
+  const isPublicPath =
+    request.nextUrl.pathname === '/' ||
+    PUBLIC_PATHS.some(p => request.nextUrl.pathname === p || request.nextUrl.pathname.startsWith(`${p}/`))
 
   if (!user && !isAuthPage && !isPublicPath) {
     const url = request.nextUrl.clone()
