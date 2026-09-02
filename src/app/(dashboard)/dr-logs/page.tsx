@@ -20,7 +20,7 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
-import { Plus, Search, MoreHorizontal, Loader2, Truck, Trash2, LayoutGrid, List, X, Printer, SlidersHorizontal, FileOutput, Camera, CheckCircle2, AlertCircle, XCircle } from 'lucide-react'
+import { Plus, Search, MoreHorizontal, Loader2, Truck, Trash2, LayoutGrid, List, X, Printer, SlidersHorizontal, FileOutput, Camera, CheckCircle2, AlertCircle, XCircle, Package } from 'lucide-react'
 import { toast } from 'sonner'
 import { format, parseISO } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
@@ -1543,10 +1543,10 @@ export default function DRLogsPage() {
                                   className="w-full h-8 pl-8 pr-3 rounded border border-input text-sm focus:outline-none focus:ring-2 focus:ring-red-500"
                                 />
                                 {itemDropdowns[i] && (
-                                  <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-44 overflow-y-auto">
+                                  <div className="absolute z-20 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg">
                                     {itemOptions
                                       .filter(it => !itemSearches[i] || it.item_name.toLowerCase().includes((itemSearches[i] ?? '').toLowerCase()))
-                                      .slice(0, 40)
+                                      .slice(0, 8)
                                       .map(it => (
                                         <button
                                           key={it.item_code}
@@ -1572,12 +1572,15 @@ export default function DRLogsPage() {
                               </div>
                             </TableCell>
                             <TableCell className="py-1.5">
-                              <Input
-                                type="number" min={0} placeholder="0"
-                                value={item.quantity}
-                                onChange={e => updateItem(i, 'quantity', e.target.value)}
-                                className="h-8 text-sm w-full"
-                              />
+                              <div className="relative">
+                                <Package className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                                <Input
+                                  type="number" min={0} placeholder="0"
+                                  value={item.quantity}
+                                  onChange={e => updateItem(i, 'quantity', e.target.value)}
+                                  className="h-8 text-sm w-full pl-8"
+                                />
+                              </div>
                             </TableCell>
                             <TableCell className="py-1.5">
                               <div className="h-8 flex items-center px-2 text-sm bg-muted/30 rounded border text-muted-foreground">

@@ -177,6 +177,7 @@ function DisbursementsTab() {
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [payees, setPayees] = useState<{ id: string; name: string }[]>([])
   const [form, setForm] = useState({
     disb_date: '', payee: '', description: '', amount: '',
     expense_account: '5950', payment_mode: 'cash', check_number: '', remarks: '',
@@ -184,12 +185,26 @@ function DisbursementsTab() {
 
   async function load() {
     setLoading(true)
-    const { data } = await supabase.from('disbursements').select('*').order('disb_date', { ascending: false })
+    const [{ data }, { data: payeeData }] = await Promise.all([
+      supabase.from('disbursements').select('*').order('disb_date', { ascending: false }),
+      supabase.from('payees').select('id, name').order('name'),
+    ])
     setDisbs((data ?? []) as Disbursement[])
+    setPayees(payeeData ?? [])
     setLoading(false)
   }
 
   useEffect(() => { load() }, [])
+
+  async function addPayeeInline(name: string) {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    const { data, error } = await supabase.from('payees').insert({ name: trimmed }).select('id, name').single()
+    if (error) { toast.error(error.message); return }
+    setPayees(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
+    setForm(p => ({ ...p, payee: data.name }))
+    toast.success('Payee added')
+  }
 
   function resetForm() {
     setForm({ disb_date: '', payee: '', description: '', amount: '', expense_account: '5950', payment_mode: 'cash', check_number: '', remarks: '' })
@@ -343,7 +358,25 @@ function DisbursementsTab() {
             </div>
             <div className="space-y-1.5">
               <Label>Payee <span className="text-destructive">*</span></Label>
-              <Input placeholder="Recipient / vendor name" value={form.payee} onChange={e => setForm(p => ({ ...p, payee: e.target.value }))} />
+              <div className="flex gap-2">
+                <Select value={form.payee || 'none'} onValueChange={v => setForm(p => ({ ...p, payee: v === 'none' ? '' : (v ?? '') }))}>
+                  <SelectTrigger className="flex-1"><SelectValue placeholder="Select a payee…" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">— None —</SelectItem>
+                    {payees.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button" variant="outline" size="sm"
+                  onClick={() => {
+                    const name = window.prompt('New payee name')
+                    if (name) addPayeeInline(name)
+                  }}
+                >
+                  <Plus className="h-3.5 w-3.5 mr-1" />Add
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">Saved payees are managed in Configuration → Payees.</p>
             </div>
             <div className="space-y-1.5">
               <Label>Description</Label>

@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { CheckCircle2, XCircle, AlertTriangle, Download, FileBarChart, Zap, FileText, Loader2, Printer, Sparkles, MoreHorizontal, ImagePlus, X, Plus } from 'lucide-react'
 import { toast } from 'sonner'
+import { format } from 'date-fns'
 import { htmlToPdfBase64 } from '@/lib/send-email'
 import { uploadImageToDrive } from '@/lib/upload-image'
 
@@ -161,6 +162,7 @@ export default function BIRPage() {
   const [formGenAmount, setFormGenAmount] = useState('')
 
   const [payees, setPayees] = useState<{ id: string; name: string }[]>([])
+  const [formTemplates, setFormTemplates] = useState<Record<string, string>>({})
   const [markFiledOpen, setMarkFiledOpen] = useState(false)
   const [markFiledTarget, setMarkFiledTarget] = useState<BirForm | null>(null)
   const [markFiledPayee, setMarkFiledPayee] = useState('')
@@ -168,9 +170,31 @@ export default function BIRPage() {
   const [markFiledUploading, setMarkFiledUploading] = useState(false)
   const [markFiledSaving, setMarkFiledSaving] = useState(false)
 
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [historyForm, setHistoryForm] = useState<BirForm | null>(null)
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyRows, setHistoryRows] = useState<{ tax_period: string; filing_date: string | null; due_date: string; status: string; amount_due: number | null; payee_name: string | null; attachment_url: string | null }[]>([])
+
+  async function openHistory(form: BirForm) {
+    setHistoryForm(form)
+    setHistoryOpen(true)
+    setHistoryLoading(true)
+    const { data } = await supabase.from('bir_filings')
+      .select('tax_period, filing_date, due_date, status, amount_due, payee_name, attachment_url')
+      .eq('form_type', form.form)
+      .order('due_date', { ascending: false })
+    setHistoryRows(data ?? [])
+    setHistoryLoading(false)
+  }
+
   const loadPayees = useCallback(async () => {
     const { data } = await supabase.from('payees').select('id, name').order('name')
     setPayees(data ?? [])
+  }, [supabase])
+
+  const loadFormTemplates = useCallback(async () => {
+    const { data } = await supabase.from('bir_form_templates').select('form_code, image_url')
+    setFormTemplates(Object.fromEntries((data ?? []).map(r => [r.form_code, r.image_url])))
   }, [supabase])
 
   // Final/Expanded Withholding Tax remittance forms are filed per payee, so only
@@ -233,7 +257,7 @@ export default function BIRPage() {
       if (sysData) setCompanyInfo(sysData)
       setVatRegistered(!!sysData?.vat_registered)
       setIsCorporate((sysData?.business_type ?? '').toLowerCase().includes('corp'))
-      await Promise.all([loadFilings(), loadPayees()])
+      await Promise.all([loadFilings(), loadPayees(), loadFormTemplates()])
       const supplierById = new Map((supData ?? []).map(s => [s.id, s]))
       const refByPoNumber = new Map((rrData ?? []).map(r => [r.po_number, r.si_number || r.dr_number || null]))
 
@@ -1069,7 +1093,7 @@ export default function BIRPage() {
                 </TableHeader>
                 <TableBody>
                   {forms.map(form => (
-                    <TableRow key={form.key}>
+                    <TableRow key={form.key} className="cursor-pointer" onClick={() => openHistory(form)}>
                       <TableCell className="font-mono font-bold text-primary">{form.form}</TableCell>
                       <TableCell className="text-sm">{form.description}</TableCell>
                       <TableCell className="text-sm">
@@ -1086,7 +1110,7 @@ export default function BIRPage() {
                           {form.status === 'filed' ? '✓ Filed' : form.status === 'overdue' ? '⚠ Overdue' : form.status === 'due_soon' ? '⚠ Due Soon' : 'Pending'}
                         </Badge>
                       </TableCell>
-                      <TableCell>
+                      <TableCell onClick={e => e.stopPropagation()}>
                         <DropdownMenu>
                           <DropdownMenuTrigger className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent">
                             <MoreHorizontal className="h-4 w-4" />
@@ -1103,6 +1127,11 @@ export default function BIRPage() {
                             {BIR_FORM_PDF_URLS[form.form] && (
                               <DropdownMenuItem onClick={() => window.open(BIR_FORM_PDF_URLS[form.form], '_blank', 'noopener,noreferrer')}>
                                 <Download className="h-3.5 w-3.5 mr-2" />Blank Form (PDF)
+                              </DropdownMenuItem>
+                            )}
+                            {formTemplates[form.form] && (
+                              <DropdownMenuItem onClick={() => window.open(formTemplates[form.form], '_blank', 'noopener,noreferrer')}>
+                                <ImagePlus className="h-3.5 w-3.5 mr-2" />Reference Image
                               </DropdownMenuItem>
                             )}
                           </DropdownMenuContent>
@@ -1461,18 +1490,20 @@ export default function BIRPage() {
               <div className="space-y-1.5">
                 <Label>Filing Proof / Receipt (optional)</Label>
                 {markFiledAttachment ? (
-                  <div className="flex items-center gap-2 text-sm border rounded-lg p-2">
-                    <a href={markFiledAttachment} target="_blank" rel="noopener noreferrer" className="text-primary underline flex-1 truncate">
-                      View uploaded file
-                    </a>
-                    <button type="button" onClick={() => setMarkFiledAttachment('')} className="text-muted-foreground hover:text-destructive">
-                      <X className="h-4 w-4" />
+                  <div className="relative border rounded-lg p-2 flex items-center justify-center bg-muted/20 h-32">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={markFiledAttachment} alt="Filing proof" className="max-h-full max-w-full object-contain rounded" />
+                    <button
+                      type="button" onClick={() => setMarkFiledAttachment('')}
+                      className="absolute top-1.5 right-1.5 h-6 w-6 flex items-center justify-center rounded-full bg-background border text-muted-foreground hover:text-destructive"
+                    >
+                      <X className="h-3.5 w-3.5" />
                     </button>
                   </div>
                 ) : (
-                  <label className="flex items-center justify-center gap-2 border border-dashed rounded-lg p-3 text-sm text-muted-foreground cursor-pointer hover:bg-accent">
-                    {markFiledUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
-                    {markFiledUploading ? 'Uploading…' : 'Upload image'}
+                  <label className="flex flex-col items-center justify-center gap-1.5 border-2 border-dashed rounded-lg h-32 text-sm text-muted-foreground cursor-pointer hover:bg-accent hover:border-muted-foreground/40 transition-colors">
+                    {markFiledUploading ? <Loader2 className="h-6 w-6 animate-spin" /> : <ImagePlus className="h-6 w-6" />}
+                    {markFiledUploading ? 'Uploading…' : 'Click to upload image'}
                     <input
                       type="file" accept="image/*" className="hidden" disabled={markFiledUploading}
                       onChange={e => { const f = e.target.files?.[0]; if (f) handleMarkFiledUpload(f) }}
@@ -1488,6 +1519,53 @@ export default function BIRPage() {
               {markFiledSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : 'Mark as Filed'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Filing History */}
+      <Dialog open={historyOpen} onOpenChange={o => { if (!o) setHistoryOpen(false) }}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Filing History — {historyForm?.form}</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto">
+            <Table>
+              <TableHeader className="sticky top-0 z-10 bg-background">
+                <TableRow>
+                  <TableHead>Period</TableHead>
+                  <TableHead>Filed</TableHead>
+                  <TableHead>Due Date</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead>Payee</TableHead>
+                  <TableHead className="w-12">Proof</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {historyLoading ? (
+                  <TableRow><TableCell colSpan={7} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
+                ) : historyRows.length === 0 ? (
+                  <TableRow><TableCell colSpan={7} className="text-center py-10 text-muted-foreground">No past filings recorded for {historyForm?.form} yet.</TableCell></TableRow>
+                ) : historyRows.map((h, i) => (
+                  <TableRow key={i}>
+                    <TableCell className="text-sm">{h.tax_period}</TableCell>
+                    <TableCell className="text-sm">{h.filing_date ? format(new Date(h.filing_date), 'MMM d, yyyy') : '—'}</TableCell>
+                    <TableCell className="text-sm">{h.due_date}</TableCell>
+                    <TableCell>
+                      <Badge variant={h.status === 'filed' ? 'outline' : 'secondary'} className="text-xs capitalize">{h.status}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right text-sm">{h.amount_due ? `₱${Number(h.amount_due).toLocaleString()}` : '—'}</TableCell>
+                    <TableCell className="text-sm">{h.payee_name ?? '—'}</TableCell>
+                    <TableCell>
+                      {h.attachment_url ? (
+                        <a href={h.attachment_url} target="_blank" rel="noopener noreferrer" className="text-primary underline text-xs">View</a>
+                      ) : '—'}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

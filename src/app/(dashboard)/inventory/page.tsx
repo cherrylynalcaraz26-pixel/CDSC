@@ -2042,7 +2042,7 @@ export default function InventoryPage() {
           </DialogHeader>
           <div className="max-h-[60vh] overflow-y-auto">
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead>Date</TableHead>
                   <TableHead>Type</TableHead>

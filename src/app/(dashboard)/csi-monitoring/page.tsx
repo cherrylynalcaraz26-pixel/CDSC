@@ -1738,8 +1738,8 @@ export default function CSIMonitoringPage() {
             </div>
           ) : null
         })()}
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">View</Label>
+        <div className="flex items-center gap-2">
+          <Label className="text-xs text-muted-foreground whitespace-nowrap">View</Label>
           <div className="flex border rounded-md overflow-hidden">
             <button
               onClick={() => setViewMode('by-si')}
