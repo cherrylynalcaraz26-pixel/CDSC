@@ -296,16 +296,20 @@ function LivePreview({ s }: { s: Settings }) {
   function openEmailDialog() {
     setEmailTo('')
     setEmailSubject(`Company & Business Profile – ${fullName}`)
+    // Keep the message itself short — the full profile is in the attached PDF
+    // (regenerated fresh from current Settings data on every send). Contact
+    // details move into a closing signature block instead of being dumped
+    // right after the greeting.
     setEmailBody(
-      `Dear Sir/Madam,\n\nPlease find attached our company & business profile:\n\n` +
-      `Company: ${fullName}\n` +
-      (s.tagline ? `Tagline: ${s.tagline}\n` : '') +
-      (addressLine ? `Address: ${addressLine}\n` : '') +
-      (s.phone ? `Tel: ${s.phone}\n` : '') +
-      (s.email ? `Email: ${s.email}\n` : '') +
-      (s.website ? `Website: ${s.website}\n` : '') +
-      (s.tin ? `TIN: ${s.tin}\n` : '') +
-      `\nThank you.`
+      `Dear Sir/Madam,\n\nPlease find attached our company & business profile for your reference.\n\nThank you.\n\n` +
+      `—\n` +
+      `${fullName}\n` +
+      (s.tagline ? `${s.tagline}\n` : '') +
+      (addressLine ? `${addressLine}\n` : '') +
+      [s.phone, s.mobile].filter(Boolean).join(' / ') + (s.phone || s.mobile ? '\n' : '') +
+      (s.email ? `${s.email}\n` : '') +
+      (s.website ? `${s.website}\n` : '') +
+      (s.tin ? `TIN: ${s.tin}\n` : '')
     )
     setEmailOpen(true)
   }
@@ -1441,11 +1445,6 @@ export default function SettingsPage() {
           <h1 className="text-2xl font-semibold">Company Profile &amp; Settings</h1>
           <p className="text-muted-foreground text-sm">Business information, BIR details and preferences</p>
         </div>
-        <a href="/company-profile" target="_blank" rel="noopener noreferrer">
-          <Button variant="outline" size="sm" className="gap-1.5">
-            <ExternalLink className="h-3.5 w-3.5" />View Public Company Profile
-          </Button>
-        </a>
       </div>
 
       <div className="border-b mb-6">

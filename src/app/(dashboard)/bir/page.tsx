@@ -12,10 +12,20 @@ import { Separator } from '@/components/ui/separator'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { CheckCircle2, XCircle, AlertTriangle, Download, FileBarChart, Zap, FileText, Loader2, Printer, Sparkles, MoreHorizontal } from 'lucide-react'
+import { CheckCircle2, XCircle, AlertTriangle, Download, FileBarChart, Zap, FileText, Loader2, Printer, Sparkles, MoreHorizontal, ImagePlus, X, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { htmlToPdfBase64 } from '@/lib/send-email'
+import { uploadImageToDrive } from '@/lib/upload-image'
+
+// Derives the filing cadence (Monthly, Quarterly, or whatever a future form's
+// description ends with in parentheses, e.g. Annually/Yearly) straight from the
+// form's own description instead of a separate hardcoded map.
+function periodTypeOf(description: string): string {
+  const m = description.match(/\(([^)]+)\)\s*(?:—.*)?$/)
+  return m ? m[1] : 'Custom'
+}
 
 interface BirFormDef { key: string; form: string; description: string; period: string; due: string; amount: number; periodStart: string; periodEnd: string }
 interface BirForm extends BirFormDef { status: 'filed' | 'overdue' | 'due_soon' | 'pending' }
@@ -150,6 +160,59 @@ export default function BIRPage() {
   const [formGenManual, setFormGenManual] = useState(false)
   const [formGenAmount, setFormGenAmount] = useState('')
 
+  const [payees, setPayees] = useState<{ id: string; name: string }[]>([])
+  const [markFiledOpen, setMarkFiledOpen] = useState(false)
+  const [markFiledTarget, setMarkFiledTarget] = useState<BirForm | null>(null)
+  const [markFiledPayee, setMarkFiledPayee] = useState('')
+  const [markFiledAttachment, setMarkFiledAttachment] = useState('')
+  const [markFiledUploading, setMarkFiledUploading] = useState(false)
+  const [markFiledSaving, setMarkFiledSaving] = useState(false)
+
+  const loadPayees = useCallback(async () => {
+    const { data } = await supabase.from('payees').select('id, name').order('name')
+    setPayees(data ?? [])
+  }, [supabase])
+
+  // Final/Expanded Withholding Tax remittance forms are filed per payee, so only
+  // these offer the Payee Name field — the sales/income tax forms are company-wide.
+  const formNeedsPayee = (form: string) => form.startsWith('0619') || form.startsWith('1601')
+
+  async function addPayeeInline(name: string) {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    const { data, error } = await supabase.from('payees').insert({ name: trimmed }).select('id, name').single()
+    if (error) { toast.error(error.message); return }
+    setPayees(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
+    setMarkFiledPayee(data.name)
+    toast.success('Payee added')
+  }
+
+  function openMarkFiled(form: BirForm) {
+    setMarkFiledTarget(form)
+    setMarkFiledPayee('')
+    setMarkFiledAttachment('')
+    setMarkFiledOpen(true)
+  }
+
+  async function handleMarkFiledUpload(file: File) {
+    setMarkFiledUploading(true)
+    try {
+      const url = await uploadImageToDrive(file, { folder: 'BIR Filings' })
+      setMarkFiledAttachment(url)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Upload failed')
+    }
+    setMarkFiledUploading(false)
+  }
+
+  async function confirmMarkFiled() {
+    if (!markFiledTarget) return
+    setMarkFiledSaving(true)
+    await markFiled(markFiledTarget, { payeeName: markFiledPayee || null, attachmentUrl: markFiledAttachment || null })
+    setMarkFiledSaving(false)
+    setMarkFiledOpen(false)
+  }
+
   const loadFilings = useCallback(async () => {
     const { data } = await supabase.from('bir_filings').select('form_type, tax_period, status')
     setFilings(data ?? [])
@@ -170,7 +233,7 @@ export default function BIRPage() {
       if (sysData) setCompanyInfo(sysData)
       setVatRegistered(!!sysData?.vat_registered)
       setIsCorporate((sysData?.business_type ?? '').toLowerCase().includes('corp'))
-      await loadFilings()
+      await Promise.all([loadFilings(), loadPayees()])
       const supplierById = new Map((supData ?? []).map(s => [s.id, s]))
       const refByPoNumber = new Map((rrData ?? []).map(r => [r.po_number, r.si_number || r.dr_number || null]))
 
@@ -250,7 +313,7 @@ export default function BIRPage() {
 
   const readinessScore = readinessChecks.length > 0 ? Math.round((readinessChecks.filter(c => c.status === 'pass').length / readinessChecks.length) * 100) : 0
 
-  async function markFiled(form: BirForm) {
+  async function markFiled(form: BirForm, extra?: { payeeName?: string | null; attachmentUrl?: string | null }) {
     const { error } = await supabase.from('bir_filings').upsert(
       {
         form_type: form.form,
@@ -259,6 +322,8 @@ export default function BIRPage() {
         filing_date: new Date().toISOString().split('T')[0],
         status: 'filed',
         amount_due: form.amount,
+        payee_name: extra?.payeeName ?? null,
+        attachment_url: extra?.attachmentUrl ?? null,
       },
       { onConflict: 'form_type,tax_period' }
     )
@@ -1007,7 +1072,10 @@ export default function BIRPage() {
                     <TableRow key={form.key}>
                       <TableCell className="font-mono font-bold text-primary">{form.form}</TableCell>
                       <TableCell className="text-sm">{form.description}</TableCell>
-                      <TableCell className="text-sm">{form.period}</TableCell>
+                      <TableCell className="text-sm">
+                        {form.period}
+                        <Badge variant="outline" className="ml-2 text-[10px] px-1.5 py-0 align-middle">{periodTypeOf(form.description)}</Badge>
+                      </TableCell>
                       <TableCell className="text-sm font-medium">{form.due}</TableCell>
                       <TableCell className="text-right font-medium">{form.amount ? `₱${form.amount.toLocaleString()}` : '—'}</TableCell>
                       <TableCell>
@@ -1028,7 +1096,7 @@ export default function BIRPage() {
                               <Sparkles className="h-3.5 w-3.5 mr-2" />Generate
                             </DropdownMenuItem>
                             {form.status !== 'filed' && (
-                              <DropdownMenuItem onClick={() => markFiled(form)}>
+                              <DropdownMenuItem onClick={() => openMarkFiled(form)}>
                                 Mark Filed
                               </DropdownMenuItem>
                             )}
@@ -1344,6 +1412,80 @@ export default function BIRPage() {
             </Button>
             <Button onClick={downloadFilledFormPdf} disabled={formGenLoading}>
               <Download className="h-4 w-4 mr-1.5" />Download PDF
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Mark as Filed */}
+      <Dialog open={markFiledOpen} onOpenChange={o => { if (!o) setMarkFiledOpen(false) }}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Mark {markFiledTarget?.form} as Filed</DialogTitle>
+          </DialogHeader>
+          {markFiledTarget && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 text-sm bg-muted/40 rounded-lg p-3">
+                <div>
+                  <span className="text-muted-foreground">Period:</span> {markFiledTarget.period}{' '}
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 align-middle">{periodTypeOf(markFiledTarget.description)}</Badge>
+                </div>
+                <div><span className="text-muted-foreground">Due Date:</span> {markFiledTarget.due}</div>
+              </div>
+
+              {formNeedsPayee(markFiledTarget.form) && (
+                <div className="space-y-1.5">
+                  <Label>Payee Name</Label>
+                  <div className="flex gap-2">
+                    <Select value={markFiledPayee || 'none'} onValueChange={v => setMarkFiledPayee(v === 'none' ? '' : (v ?? ''))}>
+                      <SelectTrigger className="flex-1"><SelectValue placeholder="Select a payee…" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">— None —</SelectItem>
+                        {payees.map(p => <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button" variant="outline" size="sm"
+                      onClick={() => {
+                        const name = window.prompt('New payee name')
+                        if (name) addPayeeInline(name)
+                      }}
+                    >
+                      <Plus className="h-3.5 w-3.5 mr-1" />Add
+                    </Button>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">Saved payees are managed in Configuration → Payees.</p>
+                </div>
+              )}
+
+              <div className="space-y-1.5">
+                <Label>Filing Proof / Receipt (optional)</Label>
+                {markFiledAttachment ? (
+                  <div className="flex items-center gap-2 text-sm border rounded-lg p-2">
+                    <a href={markFiledAttachment} target="_blank" rel="noopener noreferrer" className="text-primary underline flex-1 truncate">
+                      View uploaded file
+                    </a>
+                    <button type="button" onClick={() => setMarkFiledAttachment('')} className="text-muted-foreground hover:text-destructive">
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex items-center justify-center gap-2 border border-dashed rounded-lg p-3 text-sm text-muted-foreground cursor-pointer hover:bg-accent">
+                    {markFiledUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
+                    {markFiledUploading ? 'Uploading…' : 'Upload image'}
+                    <input
+                      type="file" accept="image/*" className="hidden" disabled={markFiledUploading}
+                      onChange={e => { const f = e.target.files?.[0]; if (f) handleMarkFiledUpload(f) }}
+                    />
+                  </label>
+                )}
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMarkFiledOpen(false)}>Cancel</Button>
+            <Button onClick={confirmMarkFiled} disabled={markFiledSaving || markFiledUploading}>
+              {markFiledSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Saving…</> : 'Mark as Filed'}
             </Button>
           </DialogFooter>
         </DialogContent>

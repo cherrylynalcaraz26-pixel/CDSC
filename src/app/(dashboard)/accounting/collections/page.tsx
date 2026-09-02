@@ -28,9 +28,11 @@ interface Collection {
   remarks: string | null
   status: string
   created_at: string
+  si_number: string | null
 }
 
 interface Client { id: string; company_name: string }
+interface OpenSI { si_number: string; client_name: string | null; total: number }
 
 const PAYMENT_MODES = ['Cash', 'Check', 'Bank Transfer', 'GCash', 'Maya', 'Credit Card', 'Online Banking']
 
@@ -44,6 +46,7 @@ export default function CollectionsPage() {
   const supabase = createClient()
   const [records, setRecords] = useState<Collection[]>([])
   const [clients, setClients] = useState<Client[]>([])
+  const [openSIs, setOpenSIs] = useState<OpenSI[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -51,24 +54,34 @@ export default function CollectionsPage() {
   const [form, setForm] = useState({
     client_id: '', client_name: '', amount: '',
     payment_mode: 'Cash', reference_number: '', collection_date: '',
-    remarks: '',
+    remarks: '', si_number: '',
   })
 
   async function load() {
     setLoading(true)
-    const [{ data: colData }, { data: cliData }] = await Promise.all([
+    const [{ data: colData }, { data: cliData }, { data: csiData }] = await Promise.all([
       supabase.from('collections').select('*').order('created_at', { ascending: false }),
       supabase.from('clients').select('id, company_name').eq('status', 'active').order('company_name'),
+      // Only SIs still open for collection — already-posted or cancelled invoices
+      // shouldn't be offered again here.
+      supabase.from('csi_records').select('si_number, client_name, amount, collection_status').not('collection_status', 'in', '(collected,cancelled)'),
     ])
     setRecords((colData ?? []) as Collection[])
     setClients(cliData ?? [])
+    const siMap = new Map<string, OpenSI>()
+    for (const r of (csiData ?? []) as { si_number: string; client_name: string | null; amount: number; collection_status: string | null }[]) {
+      const existing = siMap.get(r.si_number)
+      if (existing) existing.total += Number(r.amount) || 0
+      else siMap.set(r.si_number, { si_number: r.si_number, client_name: r.client_name, total: Number(r.amount) || 0 })
+    }
+    setOpenSIs([...siMap.values()].sort((a, b) => a.si_number.localeCompare(b.si_number)))
     setLoading(false)
   }
 
   useEffect(() => { load() }, [])
 
   function resetForm() {
-    setForm({ client_id: '', client_name: '', amount: '', payment_mode: 'Cash', reference_number: '', collection_date: '', remarks: '' })
+    setForm({ client_id: '', client_name: '', amount: '', payment_mode: 'Cash', reference_number: '', collection_date: '', remarks: '', si_number: '' })
   }
 
   async function save() {
@@ -86,6 +99,7 @@ export default function CollectionsPage() {
       reference_number: form.reference_number || null,
       collection_date: form.collection_date || new Date().toISOString().split('T')[0],
       remarks: form.remarks || null,
+      si_number: form.si_number || null,
       status: 'posted',
     })
     if (error) toast.error(error.message)
@@ -222,9 +236,9 @@ export default function CollectionsPage() {
 
       {/* New Collection Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-[95vw] max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] max-w-5xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>New Collection (OR)</DialogTitle></DialogHeader>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 py-2">
             <div className="space-y-1.5">
               <Label>OR Number</Label>
               <Input value="" disabled className="bg-muted text-muted-foreground" placeholder="Auto-generated" />
@@ -232,6 +246,32 @@ export default function CollectionsPage() {
             <div className="space-y-1.5">
               <Label>Collection Date</Label>
               <Input type="date" value={form.collection_date} onChange={e => setForm(p => ({ ...p, collection_date: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>SI Number</Label>
+              <Select
+                value={form.si_number || 'none'}
+                onValueChange={v => setForm(p => {
+                  const si = openSIs.find(s => s.si_number === v)
+                  return {
+                    ...p,
+                    si_number: v === 'none' ? '' : (v ?? ''),
+                    amount: si ? String(si.total) : p.amount,
+                    client_name: si && !p.client_id ? (si.client_name ?? p.client_name) : p.client_name,
+                  }
+                })}
+              >
+                <SelectTrigger><SelectValue placeholder="Link to an SI (optional)" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">— None —</SelectItem>
+                  {openSIs.map(s => (
+                    <SelectItem key={s.si_number} value={s.si_number}>
+                      {s.si_number}{s.client_name ? ` — ${s.client_name}` : ''}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-[11px] text-muted-foreground">Already collected or cancelled invoices aren&apos;t listed.</p>
             </div>
 
             <div className="sm:col-span-2 space-y-1.5">
@@ -251,12 +291,12 @@ export default function CollectionsPage() {
                 />
               )}
             </div>
-
             <div className="space-y-1.5">
               <Label>Amount (₱) <span className="text-destructive">*</span></Label>
               <Input type="number" min={0} step="0.01" placeholder="0.00" value={form.amount}
                 onChange={e => setForm(p => ({ ...p, amount: e.target.value }))} />
             </div>
+
             <div className="space-y-1.5">
               <Label>Payment Mode</Label>
               <Select value={form.payment_mode} onValueChange={v => setForm(p => ({ ...p, payment_mode: v ?? 'Cash' }))}>
@@ -266,13 +306,11 @@ export default function CollectionsPage() {
                 </SelectContent>
               </Select>
             </div>
-
             <div className="space-y-1.5">
               <Label>Reference Number</Label>
               <Input placeholder="Check #, bank ref, transaction ID…" value={form.reference_number}
                 onChange={e => setForm(p => ({ ...p, reference_number: e.target.value }))} />
             </div>
-
             <div className="space-y-1.5">
               <Label>Remarks</Label>
               <Textarea rows={2} placeholder="Optional notes…" value={form.remarks}

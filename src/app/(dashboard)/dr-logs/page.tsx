@@ -26,6 +26,7 @@ import { format, parseISO } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
 import { usePersistedState } from '@/lib/use-persisted-state'
 import { uploadImageToDrive } from '@/lib/upload-image'
+import { parseDrNumbers } from '@/lib/utils'
 
 interface Supplier { id: string; company_name: string }
 interface Client {
@@ -149,6 +150,9 @@ export default function DRLogsPage() {
   const [soNumbers, setSoNumbers] = useState<{ id: string; so_number: string }[]>([])
   const [soItemsMap, setSoItemsMap] = useState<Record<string, { item_name: string; unit: string; quantity: number }[]>>({})
   const [allItems, setAllItems] = useState<DRItem[]>([])
+  // DR number -> SI number(s) in CSI Monitoring that reference it, so staff can see at a
+  // glance whether a delivery has already been invoiced without leaving DR Logs.
+  const [csiByDr, setCsiByDr] = useState<Record<string, string[]>>({})
   const { query: search } = useSearchContext()
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = usePersistedState('dr-logs:statusFilter', 'all')
@@ -391,6 +395,18 @@ export default function DRLogsPage() {
     }
     const { data: sysData } = await supabase.from('system_settings').select('company_name, address, phone, email, tin').single()
     if (sysData) setCompanyInfo(sysData)
+
+    const { data: csiData } = await supabase.from('csi_records').select('si_number, dr_number').not('dr_number', 'is', null)
+    const drMap: Record<string, Set<string>> = {}
+    for (const rec of (csiData ?? []) as { si_number: string; dr_number: string | null }[]) {
+      for (const dr of parseDrNumbers(rec.dr_number)) {
+        const key = dr.trim().toUpperCase()
+        if (!drMap[key]) drMap[key] = new Set()
+        drMap[key].add(rec.si_number)
+      }
+    }
+    setCsiByDr(Object.fromEntries(Object.entries(drMap).map(([k, v]) => [k, [...v]])))
+
     setLoading(false)
   }
 
@@ -405,6 +421,10 @@ export default function DRLogsPage() {
     return getItems(drNumber).reduce((sum, i) => sum + (Number(i.quantity) || 0), 0)
   }
 
+  function getCsiRefs(drNumber: string) {
+    return csiByDr[drNumber.trim().toUpperCase()] ?? []
+  }
+
   // An SO that already has a DR log recorded against it shouldn't be offered again in the
   // SO Reference dropdown — keep the currently-edited DR's own SO reference selectable though.
   const usedSoNumbers = new Set(
@@ -415,10 +435,12 @@ export default function DRLogsPage() {
   const availableYears = Array.from(new Set(logs.map(l => l.dr_date?.slice(0, 4)).filter(Boolean))).sort((a, b) => b.localeCompare(a))
 
   const filtered = logs.filter(l => {
+    const q = search.toLowerCase()
     const matchSearch =
-      l.dr_number.toLowerCase().includes(search.toLowerCase()) ||
-      (l.supplier_name ?? '').toLowerCase().includes(search.toLowerCase()) ||
-      (l.po_number ?? '').toLowerCase().includes(search.toLowerCase())
+      l.dr_number.toLowerCase().includes(q) ||
+      (l.supplier_name ?? '').toLowerCase().includes(q) ||
+      (l.po_number ?? '').toLowerCase().includes(q) ||
+      getItems(l.dr_number).some(it => it.item_name.toLowerCase().includes(q))
     const matchStatus = statusFilter === 'all' || l.status === statusFilter
     const matchClient = !clientFilter || (l.supplier_name ?? '') === clientFilter
     const matchYear = yearFilter === 'all' || l.dr_date?.slice(0, 4) === yearFilter
@@ -1016,6 +1038,7 @@ export default function DRLogsPage() {
                     <SortableTableHead label="Delivered To" sortKey="supplier_name" activeKey={drLogSortKey} direction={drLogSortDir} onSort={onSortDrLog} />
                     <SortableTableHead label="Total Qty" sortKey="total_qty" align="right" activeKey={drLogSortKey} direction={drLogSortDir} onSort={onSortDrLog} />
                     <SortableTableHead label="Status" sortKey="status" activeKey={drLogSortKey} direction={drLogSortDir} onSort={onSortDrLog} />
+                    <TableHead className="w-32">CSI Reference</TableHead>
                     <TableHead className="w-16 text-center">Photo</TableHead>
                     <TableHead className="w-10" />
                   </TableRow>
@@ -1023,13 +1046,13 @@ export default function DRLogsPage() {
                 <TableBody>
                   {loading ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-10">
+                      <TableCell colSpan={9} className="text-center py-10">
                         <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                       </TableCell>
                     </TableRow>
                   ) : sortedFiltered.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
+                      <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
                         No DR logs found. Click <strong>New DR Log</strong> to add one.
                       </TableCell>
                     </TableRow>
@@ -1038,6 +1061,7 @@ export default function DRLogsPage() {
                     const isExpanded = expandedId === log.id
                     const logItems = getItems(log.dr_number)
                     const totalQty = getTotalQty(log.dr_number)
+                    const csiRefs = getCsiRefs(log.dr_number)
 
                     return (
                       <>
@@ -1055,6 +1079,15 @@ export default function DRLogsPage() {
                           <TableCell className="text-right font-medium text-sm">{totalQty}</TableCell>
                           <TableCell>
                             <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${sc.cls}`}>{sc.label}</span>
+                          </TableCell>
+                          <TableCell className="text-sm">
+                            {csiRefs.length > 0 ? (
+                              <span className="font-mono text-xs text-blue-600" title={csiRefs.join(', ')}>
+                                {csiRefs.join(', ')}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground">—</span>
+                            )}
                           </TableCell>
                           <TableCell className="text-center" onClick={e => e.stopPropagation()}>
                             {log.attachment_url ? (
@@ -1104,7 +1137,7 @@ export default function DRLogsPage() {
 
                         {isExpanded && (
                           <TableRow key={`${log.id}-expanded`} className="bg-muted/30 hover:bg-muted/30">
-                            <TableCell colSpan={8} className="py-3 px-6">
+                            <TableCell colSpan={9} className="py-3 px-6">
                               <div className="space-y-3">
                                 <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-muted-foreground">
                                   {log.po_number && <span>SO: <span className="font-mono text-foreground">{log.po_number}</span></span>}
