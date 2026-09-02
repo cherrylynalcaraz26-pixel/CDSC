@@ -161,9 +161,11 @@ export default function CollectionsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
+          <div className="overflow-x-auto max-h-[65vh] overflow-y-auto">
           <Table>
-            <TableHeader>
+            <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
+                <TableHead className="w-12">No.</TableHead>
                 <TableHead>OR Number</TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead>Client</TableHead>
@@ -177,15 +179,16 @@ export default function CollectionsPage() {
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-10">
+                <TableRow><TableCell colSpan={9} className="text-center py-10">
                   <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
                 </TableCell></TableRow>
               ) : records.length === 0 ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
+                <TableRow><TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
                   No collections yet. Click <strong>New Collection</strong> to record one.
                 </TableCell></TableRow>
-              ) : records.map(r => (
+              ) : records.map((r, i) => (
                 <TableRow key={r.id}>
+                  <TableCell className="text-sm text-muted-foreground">{i + 1}</TableCell>
                   <TableCell className="font-mono text-xs font-semibold text-red-600">{r.or_number ?? '—'}</TableCell>
                   <TableCell className="text-sm whitespace-nowrap">
                     {r.collection_date ? format(new Date(r.collection_date), 'MMM d, yyyy') : '—'}
@@ -231,6 +234,7 @@ export default function CollectionsPage() {
               ))}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
 

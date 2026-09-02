@@ -2023,6 +2023,90 @@ function PayeesTab({ configSelector }: { configSelector: React.ReactNode }) {
   )
 }
 
+/* ─── BIR Forms ───────────────────────────────────────── */
+// The BIR forms tracked by the Filing Calendar (src/app/(dashboard)/bir/page.tsx) —
+// keep this list in sync with buildBirForms()'s form codes there.
+const BIR_FORM_CODES = ['0619-E', '0619-F', '1601-EQ', '1601-FQ', '2550Q', '2551Q', '1701Q', '1702Q']
+
+function BirFormsTab({ configSelector }: { configSelector: React.ReactNode }) {
+  const supabase = createClient()
+  const [templates, setTemplates] = useState<Record<string, string>>({})
+  const [loading, setLoading] = useState(true)
+  const [uploadingCode, setUploadingCode] = useState<string | null>(null)
+
+  async function load() {
+    setLoading(true)
+    const { data } = await supabase.from('bir_form_templates').select('form_code, image_url')
+    setTemplates(Object.fromEntries((data ?? []).map(r => [r.form_code, r.image_url])))
+    setLoading(false)
+  }
+  useEffect(() => { load() }, [])
+
+  async function handleUpload(code: string, file: File) {
+    setUploadingCode(code)
+    try {
+      const url = await uploadImageToDrive(file, { displayName: `BIR Form ${code}`, folder: 'BIR Forms' })
+      const { error } = await supabase.from('bir_form_templates').upsert({ form_code: code, image_url: url, updated_at: new Date().toISOString() })
+      if (error) throw error
+      setTemplates(prev => ({ ...prev, [code]: url }))
+      toast.success(`${code} form image uploaded`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Upload failed')
+    }
+    setUploadingCode(null)
+  }
+
+  async function removeTemplate(code: string) {
+    const { error } = await supabase.from('bir_form_templates').delete().eq('form_code', code)
+    if (error) { toast.error(error.message); return }
+    setTemplates(prev => { const next = { ...prev }; delete next[code]; return next })
+    toast.success('Removed')
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        {configSelector}
+      </div>
+      <p className="text-sm text-muted-foreground">
+        Upload a reference image (blank form or scanned copy) for each BIR form — shown alongside the official BIR PDF in the Filing Calendar.
+      </p>
+      {loading ? (
+        <div className="text-center py-8 text-muted-foreground">Loading…</div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          {BIR_FORM_CODES.map(code => (
+            <div key={code} className="rounded-lg border bg-card p-3 space-y-2">
+              <div className="font-mono text-sm font-semibold text-red-600">{code}</div>
+              {templates[code] ? (
+                <div className="relative h-28 rounded border bg-muted/20 flex items-center justify-center overflow-hidden">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={templates[code]} alt={`${code} form`} className="max-h-full max-w-full object-contain" />
+                  <button
+                    type="button" onClick={() => removeTemplate(code)}
+                    className="absolute top-1 right-1 h-5 w-5 flex items-center justify-center rounded-full bg-background border text-muted-foreground hover:text-destructive"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ) : (
+                <label className="flex flex-col items-center justify-center gap-1 h-28 border-2 border-dashed rounded text-xs text-muted-foreground cursor-pointer hover:bg-accent">
+                  {uploadingCode === code ? <Loader2 className="h-5 w-5 animate-spin" /> : <ImagePlus className="h-5 w-5" />}
+                  {uploadingCode === code ? 'Uploading…' : 'Upload image'}
+                  <input
+                    type="file" accept="image/*" className="hidden" disabled={uploadingCode !== null}
+                    onChange={e => { const f = e.target.files?.[0]; if (f) handleUpload(code, f) }}
+                  />
+                </label>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 /* ─── Page ────────────────────────────────────────────── */
 const CONFIG_TABS = [
   { key: 'suppliers',  label: 'Suppliers' },
@@ -2032,6 +2116,7 @@ const CONFIG_TABS = [
   { key: 'brands',     label: 'Brands' },
   { key: 'attributes', label: 'Attributes' },
   { key: 'payees',     label: 'Payees' },
+  { key: 'bir_forms',  label: 'BIR Forms' },
 ]
 
 function SetupPageContent() {
@@ -2098,6 +2183,7 @@ function SetupPageContent() {
         {active === 'brands'     && <BrandsTab configSelector={configSelector} />}
         {active === 'attributes' && <AttributesTab configSelector={configSelector} />}
         {active === 'payees'     && <PayeesTab configSelector={configSelector} />}
+        {active === 'bir_forms'  && <BirFormsTab configSelector={configSelector} />}
       </div>
     </div>
   )
