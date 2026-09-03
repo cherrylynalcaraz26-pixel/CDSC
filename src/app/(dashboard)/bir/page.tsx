@@ -75,6 +75,44 @@ function buildBirForms(today: Date, vatRegistered: boolean, isCorporate: boolean
   ]
 }
 
+// Builds the four quarterly forms (EWT, FWT, sales tax, income tax) for a given
+// calendar year, each with its own Q1–Q4 due dates — unlike buildBirForms above,
+// which only computes the single most-recently-closed cycle, this covers the
+// whole year at once for the Filing Monitor grid.
+interface QuarterCell { quarter: number; period: string; due: string; periodStart: string; periodEnd: string }
+interface QuarterlyFormRow { form: string; description: string; amount: number; quarters: QuarterCell[] }
+
+function buildQuarterlyGridForms(year: number, vatRegistered: boolean, isCorporate: boolean): QuarterlyFormRow[] {
+  const iso = (d: Date) => d.toISOString().split('T')[0]
+  const salesTaxForm = vatRegistered
+    ? { form: '2550Q', description: 'Value Added Tax (Quarterly)' }
+    : { form: '2551Q', description: 'Percentage Tax (Quarterly)' }
+  const incomeTaxForm = isCorporate
+    ? { form: '1702Q', description: 'Income Tax (Quarterly) — Corporation' }
+    : { form: '1701Q', description: 'Income Tax (Quarterly) — Individual/Sole Prop' }
+
+  const formDefs: { form: string; description: string; amount: number; dueOffsetMonths?: number; dueOffsetDays?: number }[] = [
+    { form: '1601-EQ', description: 'Expanded Withholding Tax (Quarterly)', amount: 38750, dueOffsetMonths: 2 },
+    { form: '1601-FQ', description: 'Final Withholding Tax (Quarterly)', amount: 9600, dueOffsetMonths: 2 },
+    { form: salesTaxForm.form, description: salesTaxForm.description, amount: 0, dueOffsetDays: 25 },
+    { form: incomeTaxForm.form, description: incomeTaxForm.description, amount: 145000, dueOffsetDays: 60 },
+  ]
+
+  return formDefs.map(fd => ({
+    form: fd.form,
+    description: fd.description,
+    amount: fd.amount,
+    quarters: [1, 2, 3, 4].map(q => {
+      const start = new Date(year, (q - 1) * 3, 1)
+      const end = new Date(year, (q - 1) * 3 + 3, 0)
+      const due = fd.dueOffsetMonths != null
+        ? new Date(end.getFullYear(), end.getMonth() + fd.dueOffsetMonths, 0)
+        : new Date(end.getFullYear(), end.getMonth(), end.getDate() + (fd.dueOffsetDays ?? 0))
+      return { quarter: q, period: `Q${q} ${year}`, due: iso(due), periodStart: iso(start), periodEnd: iso(end) }
+    }),
+  }))
+}
+
 const vatSummary = [
   { month: 'Jan 2025', gross_purchases: 820000, input_vat: 88071.43, output_vat: 0, net_vat: 88071.43 },
   { month: 'Feb 2025', gross_purchases: 640000, input_vat: 68571.43, output_vat: 0, net_vat: 68571.43 },
@@ -143,12 +181,14 @@ interface SlspRow { month: string; supplier: string; tin: string | null; refNo: 
 
 export default function BIRPage() {
   const supabase = createClient()
-  const [activeTab, setActiveTab] = useState('overview')
+  const [activeTab, setActiveTab] = useState('monitor')
   const [loadingTax, setLoadingTax] = useState(true)
   const [ewtRows, setEwtRows] = useState<EwtRow[]>([])
   const [slspRows, setSlspRows] = useState<SlspRow[]>([])
   const [suppliers, setSuppliers] = useState<{ id: string; tin: string | null; atc_code: string | null }[]>([])
-  const [filings, setFilings] = useState<{ form_type: string; tax_period: string; status: string }[]>([])
+  const [filings, setFilings] = useState<{ form_type: string; tax_period: string; status: string; is_amendment: boolean }[]>([])
+  const [monitorYear, setMonitorYear] = useState(new Date().getFullYear())
+  const [markFiledIsAmendment, setMarkFiledIsAmendment] = useState(false)
   const [vatRegistered, setVatRegistered] = useState(false)
   const [isCorporate, setIsCorporate] = useState(false)
   const [companyInfo, setCompanyInfo] = useState<{ company_name: string | null; address: string | null; phone: string | null; tin: string | null } | null>(null)
@@ -212,8 +252,9 @@ export default function BIRPage() {
     toast.success('Payee added')
   }
 
-  function openMarkFiled(form: BirForm) {
+  function openMarkFiled(form: BirForm, isAmendment = false) {
     setMarkFiledTarget(form)
+    setMarkFiledIsAmendment(isAmendment)
     setMarkFiledPayee('')
     setMarkFiledAttachment('')
     setMarkFiledOpen(true)
@@ -233,13 +274,13 @@ export default function BIRPage() {
   async function confirmMarkFiled() {
     if (!markFiledTarget) return
     setMarkFiledSaving(true)
-    await markFiled(markFiledTarget, { payeeName: markFiledPayee || null, attachmentUrl: markFiledAttachment || null })
+    await markFiled(markFiledTarget, { payeeName: markFiledPayee || null, attachmentUrl: markFiledAttachment || null, isAmendment: markFiledIsAmendment })
     setMarkFiledSaving(false)
     setMarkFiledOpen(false)
   }
 
   const loadFilings = useCallback(async () => {
-    const { data } = await supabase.from('bir_filings').select('form_type, tax_period, status')
+    const { data } = await supabase.from('bir_filings').select('form_type, tax_period, status, is_amendment')
     setFilings(data ?? [])
   }, [supabase])
 
@@ -311,7 +352,7 @@ export default function BIRPage() {
   }, [])
 
   const baseForms = useMemo(() => buildBirForms(new Date(), vatRegistered, isCorporate), [vatRegistered, isCorporate])
-  const filedSet = useMemo(() => new Set(filings.filter(f => f.status === 'filed').map(f => `${f.form_type}|${f.tax_period}`)), [filings])
+  const filedSet = useMemo(() => new Set(filings.filter(f => f.status === 'filed' && !f.is_amendment).map(f => `${f.form_type}|${f.tax_period}`)), [filings])
   const forms: BirForm[] = useMemo(() => {
     const now = new Date().getTime()
     return baseForms.map(f => {
@@ -321,6 +362,26 @@ export default function BIRPage() {
       return { ...f, status }
     })
   }, [baseForms, filedSet])
+
+  // Filing Monitor grid — same forms as above, but every quarter of the selected
+  // year at once (status per quarter) instead of just the current cycle.
+  const quarterlyGrid = useMemo(() => {
+    const gridForms = buildQuarterlyGridForms(monitorYear, vatRegistered, isCorporate)
+    const now = new Date().getTime()
+    const filedPeriods = new Set(filings.filter(f => f.status === 'filed' && !f.is_amendment).map(f => `${f.form_type}|${f.tax_period}`))
+    const amendedPeriods = new Set(filings.filter(f => f.status === 'filed' && f.is_amendment).map(f => `${f.form_type}|${f.tax_period}`))
+    return gridForms.map(row => {
+      const cells = row.quarters.map(q => {
+        const key = `${row.form}|${q.period}`
+        const filed = filedPeriods.has(key)
+        const status: 'filed' | 'overdue' | 'pending' = filed ? 'filed' : (new Date(q.due).getTime() < now ? 'overdue' : 'pending')
+        return { ...q, status, amended: amendedPeriods.has(key) }
+      })
+      const filedCount = cells.filter(c => c.status === 'filed').length
+      const overdueCount = cells.filter(c => c.status === 'overdue').length
+      return { ...row, cells, filedCount, overdueCount, totalTaxDue: filedCount > 0 ? filedCount * row.amount : null }
+    })
+  }, [monitorYear, vatRegistered, isCorporate, filings])
 
   const readinessChecks = useMemo(() => {
     const totalSup = suppliers.length
@@ -338,7 +399,8 @@ export default function BIRPage() {
 
   const readinessScore = readinessChecks.length > 0 ? Math.round((readinessChecks.filter(c => c.status === 'pass').length / readinessChecks.length) * 100) : 0
 
-  async function markFiled(form: BirForm, extra?: { payeeName?: string | null; attachmentUrl?: string | null }) {
+  async function markFiled(form: BirForm, extra?: { payeeName?: string | null; attachmentUrl?: string | null; isAmendment?: boolean }) {
+    const isAmendment = extra?.isAmendment ?? false
     const { error } = await supabase.from('bir_filings').upsert(
       {
         form_type: form.form,
@@ -349,15 +411,16 @@ export default function BIRPage() {
         amount_due: form.amount,
         payee_name: extra?.payeeName ?? null,
         attachment_url: extra?.attachmentUrl ?? null,
+        is_amendment: isAmendment,
       },
-      { onConflict: 'form_type,tax_period' }
+      { onConflict: 'form_type,tax_period,is_amendment' }
     )
     if (error) { toast.error(getErrorMessage(error)); return }
     setFilings(prev => {
-      const others = prev.filter(f => !(f.form_type === form.form && f.tax_period === form.period))
-      return [...others, { form_type: form.form, tax_period: form.period, status: 'filed' }]
+      const others = prev.filter(f => !(f.form_type === form.form && f.tax_period === form.period && f.is_amendment === isAmendment))
+      return [...others, { form_type: form.form, tax_period: form.period, status: 'filed', is_amendment: isAmendment }]
     })
-    toast.success(`Form ${form.form} marked as filed`)
+    toast.success(`Form ${form.form}${isAmendment ? ' amendment' : ''} marked as filed`)
   }
 
   // Pulls the real figures backing a given BIR form for its computed period, so the
@@ -1043,12 +1106,128 @@ export default function BIRPage() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
+          <TabsTrigger value="monitor">Filing Monitor</TabsTrigger>
           <TabsTrigger value="overview">Filing Calendar</TabsTrigger>
           <TabsTrigger value="ewt">EWT Summary</TabsTrigger>
           <TabsTrigger value="vat">VAT Summary</TabsTrigger>
           <TabsTrigger value="alphalist">Alphalist</TabsTrigger>
           <TabsTrigger value="slsp">SLSP</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="monitor">
+          <Card className="overflow-visible">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base">Filing Monitor</CardTitle>
+                  <CardDescription>Every quarterly BIR form for the year, at a glance — click a quarter to mark it filed</CardDescription>
+                </div>
+                <Select value={String(monitorYear)} onValueChange={v => setMonitorYear(Number(v))}>
+                  <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {[0, 1, 2, 3].map(i => {
+                      const y = new Date().getFullYear() - i
+                      return <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table containerClassName="overflow-x-clip">
+                <TableHeader className="sticky top-0 z-10 bg-background">
+                  <TableRow>
+                    <TableHead className="w-10">No.</TableHead>
+                    <TableHead>Form</TableHead>
+                    <TableHead>Year</TableHead>
+                    <TableHead>Freq</TableHead>
+                    <TableHead>Period</TableHead>
+                    <TableHead>Amendments</TableHead>
+                    <TableHead>Progress</TableHead>
+                    <TableHead className="text-right">Tax Due</TableHead>
+                    <TableHead className="w-12" />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {quarterlyGrid.map((row, i) => (
+                    <TableRow key={row.form}>
+                      <TableCell className="text-sm text-muted-foreground">{i + 1}</TableCell>
+                      <TableCell>
+                        <span className="font-mono font-bold text-primary">{row.form}</span>
+                        <div className="text-xs text-muted-foreground">{row.description}</div>
+                      </TableCell>
+                      <TableCell className="text-sm">{monitorYear}</TableCell>
+                      <TableCell><Badge variant="secondary" className="text-xs">Quarterly</Badge></TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          {row.cells.map(cell => (
+                            <button
+                              key={cell.quarter}
+                              title={`${cell.period} — due ${cell.due} — ${cell.status === 'filed' ? 'Filed' : cell.status === 'overdue' ? 'Overdue' : 'Not yet due'}`}
+                              onClick={() => cell.status === 'filed'
+                                ? openHistory({ key: row.form, form: row.form, description: row.description, period: cell.period, due: cell.due, amount: row.amount, periodStart: cell.periodStart, periodEnd: cell.periodEnd, status: cell.status })
+                                : openMarkFiled({ key: `${row.form}_${cell.period}`, form: row.form, description: row.description, period: cell.period, due: cell.due, amount: row.amount, periodStart: cell.periodStart, periodEnd: cell.periodEnd, status: cell.status })
+                              }
+                              className={`h-7 w-9 rounded text-[11px] font-semibold border transition-colors ${
+                                cell.status === 'filed' ? 'bg-green-500 text-white border-green-600 hover:bg-green-600' :
+                                cell.status === 'overdue' ? 'bg-red-500 text-white border-red-600 hover:bg-red-600' :
+                                'bg-muted text-muted-foreground border-transparent hover:bg-muted-foreground/20'
+                              }`}
+                            >
+                              Q{cell.quarter}
+                            </button>
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          {row.cells.map(cell => (
+                            <button
+                              key={cell.quarter}
+                              disabled={cell.status !== 'filed'}
+                              title={cell.status !== 'filed' ? `${cell.period} — file the original return first` : cell.amended ? `${cell.period} — amendment filed` : `${cell.period} — mark amendment filed`}
+                              onClick={() => openMarkFiled({ key: `${row.form}_${cell.period}_amd`, form: row.form, description: row.description, period: cell.period, due: cell.due, amount: row.amount, periodStart: cell.periodStart, periodEnd: cell.periodEnd, status: cell.status }, true)}
+                              className={`h-7 w-9 rounded text-[11px] font-semibold border transition-colors ${
+                                cell.amended ? 'bg-blue-500 text-white border-blue-600 hover:bg-blue-600' :
+                                cell.status !== 'filed' ? 'bg-muted/50 text-muted-foreground/40 border-transparent cursor-not-allowed' :
+                                'bg-muted text-muted-foreground border-transparent hover:bg-muted-foreground/20'
+                              }`}
+                            >
+                              Q{cell.quarter}
+                            </button>
+                          ))}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm font-medium">{row.filedCount}/4 filed</span>
+                          {row.overdueCount > 0 && (
+                            <Badge variant="destructive" className="text-[10px]">{row.overdueCount} overdue</Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        {row.totalTaxDue ? `₱${row.totalTaxDue.toLocaleString()}` : '—'}
+                      </TableCell>
+                      <TableCell>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => openHistory({ key: row.form, form: row.form, description: row.description, period: `Q1 ${monitorYear}`, due: row.cells[0].due, amount: row.amount, periodStart: row.cells[0].periodStart, periodEnd: row.cells[0].periodEnd, status: 'pending' })}>
+                              View Filing History
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="overview">
           <Card className="mb-4">
@@ -1451,7 +1630,7 @@ export default function BIRPage() {
       <Dialog open={markFiledOpen} onOpenChange={o => { if (!o) setMarkFiledOpen(false) }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Mark {markFiledTarget?.form} as Filed</DialogTitle>
+            <DialogTitle>Mark {markFiledTarget?.form}{markFiledIsAmendment ? ' Amendment' : ''} as Filed</DialogTitle>
           </DialogHeader>
           {markFiledTarget && (
             <div className="space-y-4">
