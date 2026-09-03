@@ -408,8 +408,9 @@ export default function ClientsPage() {
       {/* Table View */}
       {view === 'table' && (
         <div className="rounded-lg border bg-card overflow-x-auto">
+          <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
           <Table>
-            <TableHeader>
+            <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead>Client</TableHead>
                 <TableHead>Contact</TableHead>
@@ -521,6 +522,7 @@ export default function ClientsPage() {
               ))}
             </TableBody>
           </Table>
+          </div>
         </div>
       )}
 

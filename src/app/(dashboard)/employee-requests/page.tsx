@@ -55,8 +55,9 @@ export default function EmployeeRequestsPage() {
           <CardTitle className="text-base flex items-center gap-2"><UserCheck className="h-4 w-4" />Request History</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
+          <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
           <Table>
-            <TableHeader>
+            <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead>ER Number</TableHead>
                 <TableHead>Type</TableHead>
@@ -83,6 +84,7 @@ export default function EmployeeRequestsPage() {
               ))}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
 

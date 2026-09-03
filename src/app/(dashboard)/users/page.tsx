@@ -273,8 +273,9 @@ export default function UsersPage() {
 
       {/* Table */}
       <div className="rounded-lg border bg-card overflow-x-auto">
+        <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
               <TableHead>User</TableHead>
               <TableHead>Employee ID</TableHead>
@@ -347,6 +348,7 @@ export default function UsersPage() {
             })}
           </TableBody>
         </Table>
+        </div>
       </div>
 
       {/* Create Portal Account Dialog */}

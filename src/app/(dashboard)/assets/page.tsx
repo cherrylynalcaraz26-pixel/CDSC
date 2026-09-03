@@ -218,8 +218,9 @@ export default function AssetsPage() {
           </div>
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
+          <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
           <Table>
-            <TableHeader>
+            <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead>Asset No.</TableHead>
                 <TableHead>Category</TableHead>
@@ -305,6 +306,7 @@ export default function AssetsPage() {
               })}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
 

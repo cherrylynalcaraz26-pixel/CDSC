@@ -127,8 +127,9 @@ function SalesJournalTab({ collections }: { collections: Collection[] }) {
 
       <Card>
         <CardContent className="p-0">
+          <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
           <Table>
-            <TableHeader>
+            <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead>Date</TableHead>
                 <TableHead>OR Number</TableHead>
@@ -157,6 +158,7 @@ function SalesJournalTab({ collections }: { collections: Collection[] }) {
               ))}
             </TableBody>
           </Table>
+          </div>
           {posted.length > 0 && (
             <div className="flex justify-end gap-8 px-4 py-2 bg-muted/40 border-t text-sm font-semibold">
               <span>Gross: {fmt(totalGross)}</span>
@@ -301,8 +303,9 @@ function DisbursementsTab() {
 
       <Card>
         <CardContent className="p-0">
+          <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
           <Table>
-            <TableHeader>
+            <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead>Date</TableHead>
                 <TableHead>CDJ #</TableHead>
@@ -337,6 +340,7 @@ function DisbursementsTab() {
               ))}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
 
@@ -467,8 +471,9 @@ function GeneralLedgerTab({ lines }: { lines: JournalLine[] }) {
       </div>
       <Card>
         <CardContent className="p-0">
+          <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
           <Table>
-            <TableHeader>
+            <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead>Date</TableHead>
                 <TableHead>Entry #</TableHead>
@@ -502,6 +507,7 @@ function GeneralLedgerTab({ lines }: { lines: JournalLine[] }) {
               ))}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
     </div>
@@ -555,8 +561,9 @@ function TrialBalanceTab({ lines, coa }: { lines: JournalLine[]; coa: COA[] }) {
       </div>
       <Card>
         <CardContent className="p-0">
+          <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
           <Table>
-            <TableHeader>
+            <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead>Account Code</TableHead>
                 <TableHead>Account Name</TableHead>
@@ -584,6 +591,7 @@ function TrialBalanceTab({ lines, coa }: { lines: JournalLine[]; coa: COA[] }) {
               </TableRow>
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
     </div>

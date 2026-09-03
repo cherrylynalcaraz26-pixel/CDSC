@@ -1080,8 +1080,9 @@ export default function BIRPage() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
+              <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
               <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     <TableHead>Form</TableHead>
                     <TableHead>Description</TableHead>
@@ -1142,6 +1143,7 @@ export default function BIRPage() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -1160,8 +1162,9 @@ export default function BIRPage() {
               </div>
             </CardHeader>
             <CardContent>
+              <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
               <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     <TableHead>Supplier</TableHead>
                     <TableHead>TIN</TableHead>
@@ -1199,6 +1202,7 @@ export default function BIRPage() {
                   </>)}
                 </TableBody>
               </Table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -1217,8 +1221,9 @@ export default function BIRPage() {
               </div>
             </CardHeader>
             <CardContent>
+              <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
               <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     <TableHead>Month</TableHead>
                     <TableHead className="text-right">Gross Purchases</TableHead>
@@ -1246,6 +1251,7 @@ export default function BIRPage() {
                   </TableRow>
                 </TableBody>
               </Table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -1268,8 +1274,9 @@ export default function BIRPage() {
               </div>
             </CardHeader>
             <CardContent>
+              <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
               <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     <TableHead>#</TableHead>
                     <TableHead>Supplier Name</TableHead>
@@ -1298,6 +1305,7 @@ export default function BIRPage() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -1322,8 +1330,9 @@ export default function BIRPage() {
                 <strong className="text-foreground">Total VAT Purchases:</strong> ₱{slspRows.reduce((s, r) => s + r.gross, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} &nbsp;|&nbsp;
                 <strong className="text-foreground">Total Input VAT:</strong> ₱{slspRows.reduce((s, r) => s + r.vat, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </div>
+              <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
               <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     <TableHead>Month</TableHead>
                     <TableHead>Supplier</TableHead>
@@ -1352,6 +1361,7 @@ export default function BIRPage() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -1385,8 +1395,9 @@ export default function BIRPage() {
                 </p>
               ) : (
                 <div className="border rounded-lg overflow-hidden">
+                  <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
                   <Table>
-                    <TableHeader>
+                    <TableHeader className="sticky top-0 z-10 bg-background">
                       <TableRow>
                         <TableHead>{formGenTarget.form === '1701Q' || formGenTarget.form === '1702Q' ? 'Account' : (formGenTarget.form === '2551Q' || formGenTarget.form === '2550Q') ? 'Client' : 'Supplier'}</TableHead>
                         <TableHead className="text-right">Amount</TableHead>
@@ -1408,6 +1419,7 @@ export default function BIRPage() {
                       ))}
                     </TableBody>
                   </Table>
+                  </div>
                 </div>
               )}
 

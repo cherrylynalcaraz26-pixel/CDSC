@@ -1161,8 +1161,9 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
             <CardContent className="pt-5 space-y-2">
               <Label>Line Items</Label>
               <div className="border rounded-lg overflow-hidden">
+                <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
                 <Table>
-                  <TableHeader>
+                  <TableHeader className="sticky top-0 z-10 bg-background">
                     <TableRow className="bg-muted/40">
                       <TableHead className="w-12">No.</TableHead>
                       <TableHead className="w-16">Qty</TableHead>
@@ -1286,6 +1287,7 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
                     })}
                   </TableBody>
                 </Table>
+                </div>
               </div>
               <Button variant="outline" size="sm" onClick={() => setLines(p => [...p, emptyLine()])}>
                 <Box className="h-3.5 w-3.5 mr-1.5" />Add Item
@@ -1417,8 +1419,9 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
           </Button>
         </CardHeader>
         <CardContent className="p-0">
+          <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
           <Table>
-            <TableHeader>
+            <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead className="w-10">No.</TableHead>
                 <SortableTableHead label="SO Number" sortKey="so_number" activeKey={soSortKey} direction={soSortDir} onSort={onSortSo} />
@@ -1553,6 +1556,7 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
               })}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
       )}
@@ -1903,8 +1907,9 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
             <div className="space-y-1.5">
               <Label>Short Items — select the ones to include in this PO</Label>
               <div className="border rounded-lg overflow-hidden">
+                <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
                 <Table>
-                  <TableHeader>
+                  <TableHeader className="sticky top-0 z-10 bg-background">
                     <TableRow className="bg-muted/40">
                       <TableHead className="w-8"></TableHead>
                       <TableHead>Item</TableHead>
@@ -1933,6 +1938,7 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               </div>
             </div>
             <div className="space-y-1.5">

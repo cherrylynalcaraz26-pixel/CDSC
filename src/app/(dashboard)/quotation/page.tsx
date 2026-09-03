@@ -994,8 +994,9 @@ export default function QuotationPage() {
           <CardContent className="pt-5 space-y-2">
             <Label>Line Items</Label>
             <div className="border rounded-lg overflow-hidden">
+              <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
               <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow className="bg-muted/40">
                     <TableHead className="w-12">No.</TableHead>
                     <TableHead className="w-16">Qty</TableHead>
@@ -1082,6 +1083,7 @@ export default function QuotationPage() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             </div>
             <Button variant="outline" size="sm" onClick={() => setLines(prev => [...prev, emptyLine()])}>
               <Plus className="h-3.5 w-3.5 mr-1.5" />Add Item
@@ -1188,8 +1190,9 @@ export default function QuotationPage() {
             <CardTitle className="text-base">Quotation List</CardTitle>
           </CardHeader>
           <CardContent className="p-0 overflow-x-auto">
+            <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead className="w-10">No.</TableHead>
                   <SortableTableHead label="Quote #" sortKey="quote_number" activeKey={quoteSortKey} direction={quoteSortDir} onSort={onSortQuote} />
@@ -1280,6 +1283,7 @@ export default function QuotationPage() {
                 })}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       )}

@@ -170,8 +170,9 @@ export default function ClientRequestsPage() {
 
       {/* Table */}
       <div className="rounded-lg border bg-card overflow-x-auto">
+        <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
               <TableHead>Request</TableHead>
               <TableHead>Client</TableHead>
@@ -234,6 +235,7 @@ export default function ClientRequestsPage() {
             ))}
           </TableBody>
         </Table>
+        </div>
       </div>
 
       {/* View Request Dialog */}

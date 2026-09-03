@@ -522,8 +522,9 @@ export default function QuotationRequestsPanel({ onQuotationCreated }: { onQuota
             <div className="space-y-2">
               <Label>Requested Items {isOpenForEditing && <span className="text-muted-foreground font-normal">(fill in pricing before sending the quotation)</span>}</Label>
               <div className="border rounded-lg overflow-hidden">
+                <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
                 <Table>
-                  <TableHeader>
+                  <TableHeader className="sticky top-0 z-10 bg-background">
                     <TableRow className="bg-muted/40">
                       <TableHead className="min-w-[160px]">Item Description</TableHead>
                       <TableHead className="w-16">Qty</TableHead>
@@ -596,6 +597,7 @@ export default function QuotationRequestsPanel({ onQuotationCreated }: { onQuota
                     ))}
                   </TableBody>
                 </Table>
+                </div>
               </div>
               {isOpenForEditing && (
                 <Button variant="outline" size="sm" onClick={() => setEditLines(prev => [...prev, emptyLine()])}>
@@ -684,8 +686,9 @@ export default function QuotationRequestsPanel({ onQuotationCreated }: { onQuota
           <CardTitle className="text-base">Requests for Quotation</CardTitle>
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
+          <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
           <Table>
-            <TableHeader>
+            <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead className="w-10">No.</TableHead>
                 <SortableTableHead label="Request #" sortKey="request_number" activeKey={rfqSortKey} direction={rfqSortDir} onSort={onSortRfq} />
@@ -724,6 +727,7 @@ export default function QuotationRequestsPanel({ onQuotationCreated }: { onQuota
               ))}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
     </div>

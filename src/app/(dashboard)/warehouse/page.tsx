@@ -80,8 +80,9 @@ export default function WarehousePage() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
+              <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
               <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     <TableHead>Transfer No.</TableHead>
                     <TableHead>From</TableHead>
@@ -104,6 +105,7 @@ export default function WarehousePage() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -116,8 +118,9 @@ export default function WarehousePage() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
+              <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
               <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     <TableHead>Number</TableHead>
                     <TableHead>Warehouse</TableHead>
@@ -140,6 +143,7 @@ export default function WarehousePage() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

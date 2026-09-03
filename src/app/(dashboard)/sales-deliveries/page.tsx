@@ -197,8 +197,9 @@ export default function SalesDeliveriesPage() {
                 : 'No records match the current filter.'}
             </div>
           ) : (
+            <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead className="w-10">No.</TableHead>
                   <TableHead className="w-8" />
@@ -262,6 +263,7 @@ export default function SalesDeliveriesPage() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           )}
         </CardContent>
       </Card>

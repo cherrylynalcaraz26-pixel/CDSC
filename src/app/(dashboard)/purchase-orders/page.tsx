@@ -1095,8 +1095,9 @@ export default function PurchaseOrdersPage() {
             <CardTitle className="text-base">Purchase Order List</CardTitle>
           </CardHeader>
           <CardContent className="p-0 overflow-x-auto">
+            <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead className="w-10">No.</TableHead>
                   <SortableTableHead label="PO Number" sortKey="po_number" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
@@ -1157,6 +1158,7 @@ export default function PurchaseOrdersPage() {
                 })}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -1525,8 +1527,9 @@ export default function PurchaseOrdersPage() {
                 </Button>
               </div>
               <div className="border rounded-lg overflow-hidden">
+                <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
                 <Table>
-                  <TableHeader>
+                  <TableHeader className="sticky top-0 z-10 bg-background">
                     <TableRow className="bg-muted/40">
                       <TableHead className="w-6"></TableHead>
                       <TableHead className="min-w-[160px]">Item Description</TableHead>
@@ -1625,6 +1628,7 @@ export default function PurchaseOrdersPage() {
                     })}
                   </TableBody>
                 </Table>
+                </div>
               </div>
               <Button variant="outline" size="sm" onClick={() => setLines(p => [...p, emptyLine()])}>
                 <Plus className="h-3.5 w-3.5 mr-1.5" />Add Item

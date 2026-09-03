@@ -9,7 +9,6 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, SortableTableHead } from '@/components/ui/table'
 import { useTableSort } from '@/lib/use-table-sort'
-import { PaginationBar } from '@/components/ui/pagination-bar'
 import { Tabs, TabsContent } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
@@ -362,8 +361,9 @@ function OverviewTab() {
           <CardTitle className="text-base">Recent Purchase Orders</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
+          <div className="max-h-[500px] overflow-x-auto overflow-y-auto">
           <Table>
-            <TableHeader>
+            <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead className="w-10">No.</TableHead>
                 <SortableTableHead label="PO Number" sortKey="po_number" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
@@ -402,6 +402,7 @@ function OverviewTab() {
               })}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
     </div>
@@ -547,7 +548,6 @@ function CollectionsTab() {
   const [saving, setSaving] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [clientFilter, setClientFilter] = useState(() => searchParams.get('client') ?? '')
-  const [page, setPage] = useState(1)
   const df = useDateRangeFilter()
   const [orBlankCalib, setOrBlankCalib] = useState<OrBlankCalib>(() => loadOrBlankCalib())
   const [orCalibOpen, setOrCalibOpen] = useState(false)
@@ -1158,12 +1158,6 @@ function CollectionsTab() {
     }
   })
 
-  const PAGE_SIZE = 30
-  const totalPages = Math.max(1, Math.ceil(filteredRecords.length / PAGE_SIZE))
-  const pagedRecords = sortedRecords.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
-
-  useEffect(() => { setPage(1) }, [clientFilter, df.filterFrom, df.filterTo])
-
   return (
     <div className="space-y-6">
       <div>
@@ -1217,8 +1211,9 @@ function CollectionsTab() {
           <CardDescription>Sales Orders that have been delivered (DR) and invoiced (CSI) but still have an outstanding balance</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
+          <div className="max-h-[500px] overflow-x-auto overflow-y-auto">
           <Table>
-            <TableHeader>
+            <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <SortableTableHead label="SO Number" sortKey="so_number" activeKey={rtcSortKey} direction={rtcSortDir} onSort={onSortRtc} />
                 <SortableTableHead label="Client" sortKey="client_name" activeKey={rtcSortKey} direction={rtcSortDir} onSort={onSortRtc} />
@@ -1307,6 +1302,7 @@ function CollectionsTab() {
               })}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
 
@@ -1377,11 +1373,11 @@ function CollectionsTab() {
                 <TableRow><TableCell colSpan={11} className="text-center py-12 text-muted-foreground">
                   {clientFilter ? `No collections found for "${clientFilter}".` : 'No collections yet. Click New Collection to record one.'}
                 </TableCell></TableRow>
-              ) : pagedRecords.map((r, i) => {
+              ) : sortedRecords.map((r, i) => {
                 const linkedSis = csiLinksByCollection[r.id] ?? (r.si_number ? [r.si_number] : [])
                 return (
                 <TableRow key={r.id} className="cursor-pointer hover:bg-red-50/40 transition-colors" onClick={() => setViewRecord(r)}>
-                  <TableCell className="text-sm text-muted-foreground">{(page - 1) * PAGE_SIZE + i + 1}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{i + 1}</TableCell>
                   <TableCell className="font-mono text-xs font-semibold text-red-600">{r.or_number ?? '—'}</TableCell>
                   <TableCell className="text-sm whitespace-nowrap">
                     {r.collection_date ? format(new Date(r.collection_date), 'MMM d, yyyy') : '—'}
@@ -1446,14 +1442,6 @@ function CollectionsTab() {
               })}
             </TableBody>
           </Table>
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between text-sm px-4 py-3 border-t">
-              <span className="text-muted-foreground">
-                Showing {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, filteredRecords.length)} of {filteredRecords.length}
-              </span>
-              <PaginationBar page={page} totalPages={totalPages} onPageChange={setPage} />
-            </div>
-          )}
         </CardContent>
       </Card>
 
@@ -1916,8 +1904,9 @@ function SalesJournalTab({ collections, csiRecords }: { collections: Collection[
         <Card><CardContent className="pt-4 pb-3"><div className="text-xl font-bold">{siRows.length}</div><div className="text-xs text-muted-foreground">Sales Invoices</div></CardContent></Card>
       </div>
       <Card><CardContent className="p-0">
+        <div className="max-h-[500px] overflow-x-auto overflow-y-auto">
         <Table>
-          <TableHeader><TableRow>
+          <TableHeader className="sticky top-0 z-10 bg-background"><TableRow>
             <TableHead>Date</TableHead>
             <TableHead>SI Number</TableHead>
             <TableHead>Client</TableHead>
@@ -1940,6 +1929,7 @@ function SalesJournalTab({ collections, csiRecords }: { collections: Collection[
             ))}
           </TableBody>
         </Table>
+        </div>
         {siRows.length > 0 && (
           <div className="flex justify-end gap-8 px-4 py-2 bg-muted/40 border-t text-sm font-semibold">
             <span>Total Sales: {fmt(totalSales)}</span>
@@ -2133,8 +2123,9 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
             <CardDescription>Purchase Orders not yet paid — accept one to prefill a Disbursement</CardDescription>
           </CardHeader>
           <CardContent className="p-0">
+            <div className="max-h-[500px] overflow-x-auto overflow-y-auto">
             <Table>
-              <TableHeader><TableRow>
+              <TableHeader className="sticky top-0 z-10 bg-background"><TableRow>
                 <TableHead>PO Number</TableHead><TableHead>Date</TableHead><TableHead>Supplier</TableHead>
                 <TableHead className="text-right">Net Payable</TableHead><TableHead className="w-24" />
               </TableRow></TableHeader>
@@ -2152,12 +2143,14 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
                 ))}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       )}
       <Card><CardContent className="p-0">
+        <div className="max-h-[500px] overflow-x-auto overflow-y-auto">
         <Table>
-          <TableHeader><TableRow>
+          <TableHeader className="sticky top-0 z-10 bg-background"><TableRow>
             <TableHead>Date</TableHead><TableHead>CDJ #</TableHead><TableHead>Payee</TableHead>
             <TableHead>Description</TableHead><TableHead>Expense Account</TableHead>
             <TableHead>Mode</TableHead><TableHead className="text-right">Amount</TableHead><TableHead className="w-10" />
@@ -2185,6 +2178,7 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
             ))}
           </TableBody>
         </Table>
+        </div>
       </CardContent></Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -2300,8 +2294,9 @@ function ChartOfAccountsTab({ coa }: { coa: COA[] }) {
         <Input placeholder="Search accounts…" value={search} onChange={e => setSearch(e.target.value)} className="max-w-xs" />
       </div>
       <Card><CardContent className="p-0">
+        <div className="max-h-[500px] overflow-x-auto overflow-y-auto">
         <Table>
-          <TableHeader><TableRow>
+          <TableHeader className="sticky top-0 z-10 bg-background"><TableRow>
             <TableHead>Code</TableHead>
             <TableHead>Account Name</TableHead>
             <TableHead>Type</TableHead>
@@ -2326,6 +2321,7 @@ function ChartOfAccountsTab({ coa }: { coa: COA[] }) {
             ))}
           </TableBody>
         </Table>
+        </div>
       </CardContent></Card>
     </div>
   )
@@ -2367,8 +2363,9 @@ function GeneralLedgerTab({ lines }: { lines: JournalLine[] }) {
         </div>
       </div>
       <Card><CardContent className="p-0">
+        <div className="max-h-[500px] overflow-x-auto overflow-y-auto">
         <Table>
-          <TableHeader><TableRow>
+          <TableHeader className="sticky top-0 z-10 bg-background"><TableRow>
             <TableHead>Date</TableHead><TableHead>Entry #</TableHead><TableHead>Account</TableHead>
             <TableHead>Memo</TableHead><TableHead className="text-right">Debit</TableHead>
             <TableHead className="text-right">Credit</TableHead><TableHead className="text-right">Balance</TableHead>
@@ -2391,6 +2388,7 @@ function GeneralLedgerTab({ lines }: { lines: JournalLine[] }) {
             ))}
           </TableBody>
         </Table>
+        </div>
       </CardContent></Card>
     </div>
   )
@@ -2430,8 +2428,9 @@ function TrialBalanceTab({ lines, coa }: { lines: JournalLine[]; coa: COA[] }) {
         </div>
       </div>
       <Card><CardContent className="p-0">
+        <div className="max-h-[500px] overflow-x-auto overflow-y-auto">
         <Table>
-          <TableHeader><TableRow>
+          <TableHeader className="sticky top-0 z-10 bg-background"><TableRow>
             <TableHead>Account Code</TableHead><TableHead>Account Name</TableHead><TableHead>Type</TableHead>
             <TableHead className="text-right">Debit</TableHead><TableHead className="text-right">Credit</TableHead>
           </TableRow></TableHeader>
@@ -2454,6 +2453,7 @@ function TrialBalanceTab({ lines, coa }: { lines: JournalLine[]; coa: COA[] }) {
             </TableRow>
           </TableBody>
         </Table>
+        </div>
       </CardContent></Card>
     </div>
   )
