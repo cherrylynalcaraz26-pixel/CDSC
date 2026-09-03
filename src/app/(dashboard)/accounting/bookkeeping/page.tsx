@@ -14,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { getErrorMessage } from '@/lib/error-message'
 import {
   Plus, Download, Loader2, BookOpen, Banknote, TrendingUp, BarChart3,
-  Scale, FileSpreadsheet, Trash2,
+  Scale, FileSpreadsheet, Trash2, ChevronRight, FileStack,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
@@ -913,6 +913,52 @@ function BIRExportTab({ collections, disbursements }: { collections: Collection[
   )
 }
 
+// ── Accounting Cycle Flow ──────────────────────────────────────────────────────
+
+// Every book on this page is a downstream step of the one before it — this strip
+// shows that order and lets a click jump straight to a stage's tab, so someone
+// who doesn't already know the accounting cycle can see why the tabs are in this
+// order and what feeds what (source paperwork → journals → ledger → trial
+// balance → statements → BIR/CAS export) instead of seven equal-looking tabs.
+const BOOKKEEPING_STAGES: { label: string; hint: string; tabs: string[] | null; icon: React.ComponentType<{ className?: string }> }[] = [
+  { label: 'Source Documents', hint: 'ORs, DRs, invoices, receipts', tabs: null, icon: FileStack },
+  { label: 'Journals', hint: 'Sales Journal (CRJ) & Disbursements (CDJ)', tabs: ['crj', 'cdj'], icon: BookOpen },
+  { label: 'General Ledger', hint: 'Every entry, posted per account', tabs: ['gl'], icon: BarChart3 },
+  { label: 'Trial Balance', hint: 'Proves the books are in balance', tabs: ['tb'], icon: Scale },
+  { label: 'Financial Statements', hint: 'Income Statement & Balance Sheet', tabs: ['is', 'bs'], icon: FileSpreadsheet },
+  { label: 'BIR / CAS Export', hint: 'Books formatted for filing', tabs: ['bir'], icon: Download },
+]
+
+function AccountingFlow({ activeTab, onSelect }: { activeTab: string; onSelect: (tab: string) => void }) {
+  return (
+    <div className="flex items-center gap-1 overflow-x-auto rounded-xl border bg-muted/20 p-2.5">
+      {BOOKKEEPING_STAGES.map((stage, i) => {
+        const active = stage.tabs?.includes(activeTab) ?? false
+        return (
+          <div key={stage.label} className="flex items-center shrink-0">
+            {i > 0 && <ChevronRight className="h-4 w-4 text-muted-foreground/40 mx-1 shrink-0" />}
+            <button
+              type="button"
+              disabled={!stage.tabs}
+              onClick={() => stage.tabs && onSelect(stage.tabs[0])}
+              className={`flex min-w-[140px] items-start gap-2 rounded-lg px-3 py-1.5 text-left transition-colors ${
+                active ? 'bg-primary text-primary-foreground shadow-sm' :
+                stage.tabs ? 'border bg-background hover:bg-accent' : 'border border-dashed text-muted-foreground cursor-default'
+              }`}
+            >
+              <stage.icon className={`h-3.5 w-3.5 shrink-0 mt-0.5 ${active ? 'text-primary-foreground' : 'text-muted-foreground'}`} />
+              <span className="flex flex-col items-start">
+                <span className="text-xs font-semibold leading-tight">{stage.label}</span>
+                <span className={`text-[10px] leading-tight ${active ? 'text-primary-foreground/80' : 'text-muted-foreground'}`}>{stage.hint}</span>
+              </span>
+            </button>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function BookkeepingPage() {
@@ -922,6 +968,7 @@ export default function BookkeepingPage() {
   const [coa, setCoa] = useState<COA[]>([])
   const [jLines, setJLines] = useState<JournalLine[]>([])
   const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState('crj')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -957,10 +1004,12 @@ export default function BookkeepingPage() {
     <div className="space-y-6">
       <div>
         <h2 className="text-2xl font-bold">Bookkeeping</h2>
-        <p className="text-muted-foreground text-sm">Double-entry accounting books — BIR CAS ready</p>
+        <p className="text-muted-foreground text-sm">Double-entry accounting books, formatted for BIR CAS</p>
       </div>
 
-      <Tabs defaultValue="crj">
+      <AccountingFlow activeTab={activeTab} onSelect={setActiveTab} />
+
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="flex-wrap h-auto gap-1">
           <TabsTrigger value="crj" className="flex items-center gap-1.5">
             <BookOpen className="h-3.5 w-3.5" />Sales Journal
