@@ -1788,7 +1788,6 @@ export default function CSIMonitoringPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto max-h-[620px] overflow-y-auto">
             {viewMode === 'cross-ref' ? (() => {
               return (
                 <div className="p-4 space-y-6">
@@ -1857,7 +1856,7 @@ export default function CSIMonitoringPage() {
                 </div>
               )
             })() : viewMode === 'by-si' ? (
-              <Table>
+              <Table containerClassName="max-h-[620px] overflow-y-auto">
                 <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     <TableHead className="w-8">
@@ -2023,7 +2022,7 @@ export default function CSIMonitoringPage() {
                 </TableBody>
               </Table>
             ) : (
-              <Table>
+              <Table containerClassName="max-h-[620px] overflow-y-auto">
                 <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     <TableHead className="w-12">No.</TableHead>
@@ -2089,7 +2088,6 @@ export default function CSIMonitoringPage() {
                 </TableBody>
               </Table>
             )}
-          </div>
         </CardContent>
       </Card>
       }

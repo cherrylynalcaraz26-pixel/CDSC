@@ -700,8 +700,7 @@ export default function ReceivingPage() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="max-h-[560px] overflow-y-auto">
-                <Table>
+                <Table containerClassName="max-h-[560px] overflow-y-auto">
                   <TableHeader className="sticky top-0 z-10">
                     <TableRow>
                       <TableHead className="w-10">No.</TableHead>
@@ -733,7 +732,6 @@ export default function ReceivingPage() {
                     ))}
                   </TableBody>
                 </Table>
-              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -886,8 +884,7 @@ export default function ReceivingPage() {
           <Card>
             <CardHeader className="pb-3"><CardTitle className="text-base flex items-center gap-2"><ShoppingBag className="h-4 w-4" />DR Log → Sales Deliveries</CardTitle></CardHeader>
             <CardContent className="p-0">
-              <div className="max-h-[560px] overflow-y-auto">
-              <Table>
+              <Table containerClassName="max-h-[560px] overflow-y-auto">
                 <TableHeader className="sticky top-0 z-10">
                   <TableRow>
                     <SortableTableHead label="DR Number" sortKey="dr_number" activeKey={sdSortKey} direction={sdSortDir} onSort={onSortSd} />
@@ -928,7 +925,6 @@ export default function ReceivingPage() {
                   })}
                 </TableBody>
               </Table>
-              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -1073,8 +1069,7 @@ export default function ReceivingPage() {
             <Card>
               <CardHeader className="pb-3"><CardTitle className="text-base">Return History</CardTitle></CardHeader>
               <CardContent className="p-0">
-                <div className="max-h-[560px] overflow-y-auto">
-                <Table>
+                <Table containerClassName="max-h-[560px] overflow-y-auto">
                   <TableHeader className="sticky top-0 z-10">
                     <TableRow>
                       <SortableTableHead label="Return #" sortKey="return_number" activeKey={returnSortKey} direction={returnSortDir} onSort={onSortReturn} />
@@ -1111,7 +1106,6 @@ export default function ReceivingPage() {
                     ))}
                   </TableBody>
                 </Table>
-                </div>
               </CardContent>
             </Card>
           )}

@@ -496,9 +496,8 @@ function VendorCatalogPageContent() {
               ))}
             </div>
           ) : (
-            <div className="bg-white rounded-xl border border-gray-200 overflow-x-auto">
-              <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
-              <Table>
+            <div className="bg-white rounded-xl border border-gray-200">
+              <Table containerClassName="overflow-x-clip">
                 <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     <TableHead className="w-10">No.</TableHead>
@@ -555,7 +554,6 @@ function VendorCatalogPageContent() {
                   ))}
                 </TableBody>
               </Table>
-              </div>
             </div>
           )}
         </>

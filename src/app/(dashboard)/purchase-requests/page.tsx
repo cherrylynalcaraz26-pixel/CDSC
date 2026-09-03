@@ -225,13 +225,12 @@ export default function PurchaseRequestsPage() {
       </div>
 
       {/* PR List */}
-      <Card>
+      <Card className="overflow-visible">
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Purchase Request List</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
-          <Table>
+          <Table containerClassName="overflow-x-clip">
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead>PR Number</TableHead>
@@ -342,7 +341,6 @@ export default function PurchaseRequestsPage() {
               })}
             </TableBody>
           </Table>
-          </div>
         </CardContent>
       </Card>
 

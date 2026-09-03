@@ -1070,7 +1070,7 @@ export default function BIRPage() {
               </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="overflow-visible">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div>
@@ -1080,8 +1080,7 @@ export default function BIRPage() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
-              <Table>
+              <Table containerClassName="overflow-x-clip">
                 <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     <TableHead>Form</TableHead>
@@ -1143,13 +1142,12 @@ export default function BIRPage() {
                   ))}
                 </TableBody>
               </Table>
-              </div>
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="ewt">
-          <Card>
+          <Card className="overflow-visible">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div>
@@ -1162,8 +1160,7 @@ export default function BIRPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
-              <Table>
+              <Table containerClassName="overflow-x-clip">
                 <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     <TableHead>Supplier</TableHead>
@@ -1202,13 +1199,12 @@ export default function BIRPage() {
                   </>)}
                 </TableBody>
               </Table>
-              </div>
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="vat">
-          <Card>
+          <Card className="overflow-visible">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div>
@@ -1221,8 +1217,7 @@ export default function BIRPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
-              <Table>
+              <Table containerClassName="overflow-x-clip">
                 <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     <TableHead>Month</TableHead>
@@ -1251,13 +1246,12 @@ export default function BIRPage() {
                   </TableRow>
                 </TableBody>
               </Table>
-              </div>
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="alphalist">
-          <Card>
+          <Card className="overflow-visible">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div>
@@ -1274,8 +1268,7 @@ export default function BIRPage() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
-              <Table>
+              <Table containerClassName="overflow-x-clip">
                 <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     <TableHead>#</TableHead>
@@ -1305,13 +1298,12 @@ export default function BIRPage() {
                   ))}
                 </TableBody>
               </Table>
-              </div>
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="slsp">
-          <Card>
+          <Card className="overflow-visible">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div>
@@ -1330,8 +1322,7 @@ export default function BIRPage() {
                 <strong className="text-foreground">Total VAT Purchases:</strong> ₱{slspRows.reduce((s, r) => s + r.gross, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })} &nbsp;|&nbsp;
                 <strong className="text-foreground">Total Input VAT:</strong> ₱{slspRows.reduce((s, r) => s + r.vat, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
               </div>
-              <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
-              <Table>
+              <Table containerClassName="overflow-x-clip">
                 <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     <TableHead>Month</TableHead>
@@ -1361,7 +1352,6 @@ export default function BIRPage() {
                   ))}
                 </TableBody>
               </Table>
-              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -1394,9 +1384,8 @@ export default function BIRPage() {
                   No source data is tracked in the system yet for Final Withholding Tax. Enter the amount manually below — the header and period info is still auto-filled.
                 </p>
               ) : (
-                <div className="border rounded-lg overflow-hidden">
-                  <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
-                  <Table>
+                <div className="border rounded-lg overflow-x-clip">
+                  <Table containerClassName="overflow-x-clip">
                     <TableHeader className="sticky top-0 z-10 bg-background">
                       <TableRow>
                         <TableHead>{formGenTarget.form === '1701Q' || formGenTarget.form === '1702Q' ? 'Account' : (formGenTarget.form === '2551Q' || formGenTarget.form === '2550Q') ? 'Client' : 'Supplier'}</TableHead>
@@ -1419,7 +1408,6 @@ export default function BIRPage() {
                       ))}
                     </TableBody>
                   </Table>
-                  </div>
                 </div>
               )}
 
@@ -1541,8 +1529,7 @@ export default function BIRPage() {
           <DialogHeader>
             <DialogTitle>Filing History — {historyForm?.form}</DialogTitle>
           </DialogHeader>
-          <div className="max-h-[60vh] overflow-y-auto">
-            <Table>
+            <Table containerClassName="max-h-[60vh] overflow-y-auto">
               <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead>Period</TableHead>
@@ -1578,7 +1565,6 @@ export default function BIRPage() {
                 ))}
               </TableBody>
             </Table>
-          </div>
         </DialogContent>
       </Dialog>
     </div>

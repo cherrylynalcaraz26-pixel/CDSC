@@ -72,7 +72,7 @@ export default function WarehousePage() {
           <TabsTrigger value="cycle"><ClipboardCheck className="h-4 w-4 mr-1" />Cycle Count</TabsTrigger>
         </TabsList>
         <TabsContent value="transfers">
-          <Card>
+          <Card className="overflow-visible">
             <CardHeader className="pb-3">
               <div className="flex justify-between items-center">
                 <CardTitle className="text-base">Stock Transfer History</CardTitle>
@@ -80,8 +80,7 @@ export default function WarehousePage() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
-              <Table>
+              <Table containerClassName="overflow-x-clip">
                 <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     <TableHead>Transfer No.</TableHead>
@@ -105,12 +104,11 @@ export default function WarehousePage() {
                   ))}
                 </TableBody>
               </Table>
-              </div>
             </CardContent>
           </Card>
         </TabsContent>
         <TabsContent value="adjustments">
-          <Card>
+          <Card className="overflow-visible">
             <CardHeader className="pb-3">
               <div className="flex justify-between items-center">
                 <CardTitle className="text-base">Stock Adjustments</CardTitle>
@@ -118,8 +116,7 @@ export default function WarehousePage() {
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
-              <Table>
+              <Table containerClassName="overflow-x-clip">
                 <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     <TableHead>Number</TableHead>
@@ -143,7 +140,6 @@ export default function WarehousePage() {
                   ))}
                 </TableBody>
               </Table>
-              </div>
             </CardContent>
           </Card>
         </TabsContent>

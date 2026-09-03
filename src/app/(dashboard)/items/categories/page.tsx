@@ -99,8 +99,7 @@ export default function CategoriesPage() {
       </div>
 
       <div className="rounded-lg border bg-card">
-        <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
-        <Table>
+        <Table containerClassName="overflow-x-clip">
           <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
               <TableHead>Code</TableHead>
@@ -137,7 +136,6 @@ export default function CategoriesPage() {
             ))}
           </TableBody>
         </Table>
-        </div>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>

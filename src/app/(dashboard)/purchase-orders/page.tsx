@@ -1090,13 +1090,12 @@ export default function PurchaseOrdersPage() {
 
       {/* PO List */}
       {!open && (
-        <Card>
+        <Card className="overflow-visible">
           <CardHeader className="pb-3">
             <CardTitle className="text-base">Purchase Order List</CardTitle>
           </CardHeader>
           <CardContent className="p-0 overflow-x-auto">
-            <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
-            <Table>
+            <Table containerClassName="overflow-x-clip">
               <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead className="w-10">No.</TableHead>
@@ -1158,7 +1157,6 @@ export default function PurchaseOrdersPage() {
                 })}
               </TableBody>
             </Table>
-            </div>
           </CardContent>
         </Card>
       )}
@@ -1526,9 +1524,8 @@ export default function PurchaseOrdersPage() {
                   <Store className="h-3.5 w-3.5" />Browse Vendor Catalog
                 </Button>
               </div>
-              <div className="border rounded-lg overflow-hidden">
-                <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
-                <Table>
+              <div className="border rounded-lg overflow-x-clip">
+                <Table containerClassName="overflow-x-clip">
                   <TableHeader className="sticky top-0 z-10 bg-background">
                     <TableRow className="bg-muted/40">
                       <TableHead className="w-6"></TableHead>
@@ -1628,7 +1625,6 @@ export default function PurchaseOrdersPage() {
                     })}
                   </TableBody>
                 </Table>
-                </div>
               </div>
               <Button variant="outline" size="sm" onClick={() => setLines(p => [...p, emptyLine()])}>
                 <Plus className="h-3.5 w-3.5 mr-1.5" />Add Item

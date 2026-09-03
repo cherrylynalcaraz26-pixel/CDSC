@@ -162,8 +162,7 @@ export default function CollectionsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto max-h-[65vh] overflow-y-auto">
-          <Table>
+          <Table containerClassName="max-h-[65vh] overflow-y-auto">
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead className="w-12">No.</TableHead>
@@ -235,7 +234,6 @@ export default function CollectionsPage() {
               ))}
             </TableBody>
           </Table>
-          </div>
         </CardContent>
       </Card>
 
