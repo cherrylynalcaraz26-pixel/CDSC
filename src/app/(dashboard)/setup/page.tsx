@@ -86,8 +86,7 @@ function UOMTab({ configSelector }: { configSelector: React.ReactNode }) {
         </Button>
       </div>
       <div className="rounded-lg border bg-card">
-        <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
-        <Table>
+        <Table containerClassName="overflow-x-clip">
           <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
               <TableHead>Code</TableHead>
@@ -127,7 +126,6 @@ function UOMTab({ configSelector }: { configSelector: React.ReactNode }) {
             ))}
           </TableBody>
         </Table>
-        </div>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -235,8 +233,7 @@ function BrandsTab({ configSelector }: { configSelector: React.ReactNode }) {
         </Button>
       </div>
       <div className="rounded-lg border bg-card">
-        <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
-        <Table>
+        <Table containerClassName="overflow-x-clip">
           <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
               <SortableTableHead label="Brand Name" sortKey="name" activeKey={brandSortKey} direction={brandSortDir} onSort={onSortBrands} />
@@ -276,7 +273,6 @@ function BrandsTab({ configSelector }: { configSelector: React.ReactNode }) {
             ))}
           </TableBody>
         </Table>
-        </div>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -409,8 +405,7 @@ function AttributesTab({ configSelector }: { configSelector: React.ReactNode }) 
         </Button>
       </div>
       <div className="rounded-lg border bg-card">
-        <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
-        <Table>
+        <Table containerClassName="overflow-x-clip">
           <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
               <SortableTableHead label="Attribute Name" sortKey="name" activeKey={attrSortKey} direction={attrSortDir} onSort={onSortAttrs} />
@@ -460,7 +455,6 @@ function AttributesTab({ configSelector }: { configSelector: React.ReactNode }) 
             ))}
           </TableBody>
         </Table>
-        </div>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -589,8 +583,7 @@ function CategoriesTab({ configSelector }: { configSelector: React.ReactNode }) 
         </Button>
       </div>
       <div className="rounded-lg border bg-card">
-        <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
-        <Table>
+        <Table containerClassName="overflow-x-clip">
           <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
               <TableHead>Code</TableHead>
@@ -630,7 +623,6 @@ function CategoriesTab({ configSelector }: { configSelector: React.ReactNode }) 
             ))}
           </TableBody>
         </Table>
-        </div>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -866,9 +858,8 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
           <Plus className="h-4 w-4 mr-1" />Add Supplier
         </Button>
       </div>
-      <div className="rounded-lg border bg-card overflow-x-auto">
-        <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
-        <Table>
+      <div className="rounded-lg border bg-card">
+        <Table containerClassName="overflow-x-clip">
           <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
               <TableHead className="w-12">Logo</TableHead>
@@ -959,7 +950,6 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
             ))}
           </TableBody>
         </Table>
-        </div>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -1631,9 +1621,8 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
           )})}
         </div>
       ) : (
-      <div className="rounded-lg border bg-card overflow-x-auto">
-        <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
-        <Table>
+      <div className="rounded-lg border bg-card">
+        <Table containerClassName="overflow-x-clip">
           <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
               <TableHead className="w-14">Image</TableHead>
@@ -1705,7 +1694,6 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
             )})}
           </TableBody>
         </Table>
-        </div>
       </div>
       )}
       <Dialog open={open} onOpenChange={setOpen}>
@@ -1974,8 +1962,7 @@ function PayeesTab({ configSelector }: { configSelector: React.ReactNode }) {
         </Button>
       </div>
       <div className="rounded-lg border bg-card">
-        <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
-        <Table>
+        <Table containerClassName="overflow-x-clip">
           <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
               <SortableTableHead label="Payee Name" sortKey="name" activeKey={payeeSortKey} direction={payeeSortDir} onSort={onSortPayees} />
@@ -2007,7 +1994,6 @@ function PayeesTab({ configSelector }: { configSelector: React.ReactNode }) {
             ))}
           </TableBody>
         </Table>
-        </div>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>

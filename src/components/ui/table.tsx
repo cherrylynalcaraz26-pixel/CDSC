@@ -5,11 +5,21 @@ import { ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
-function Table({ className, ...props }: React.ComponentProps<"table">) {
+// `containerClassName` merges onto the table's own scroll wrapper rather than
+// adding a separate outer div. A sticky <TableHeader> resolves its position
+// against the *nearest* ancestor with non-visible overflow — an extra outer
+// wrapper would lose to this div's own `overflow-x-auto` (which forces
+// `overflow-y` to compute as `auto` too), and since that inner div always
+// sizes itself exactly to its content it never actually scrolls, so the
+// sticky header would have nothing to stick against. Putting both concerns
+// on one div fixes that: pass e.g. `max-h-[600px] overflow-y-auto` here for a
+// bounded local scrollbox, or `overflow-x-clip` to give up horizontal scroll
+// and let the header stick to the page's own scroll instead.
+function Table({ className, containerClassName, ...props }: React.ComponentProps<"table"> & { containerClassName?: string }) {
   return (
     <div
       data-slot="table-container"
-      className="relative w-full overflow-x-auto"
+      className={cn("relative w-full overflow-x-auto", containerClassName)}
     >
       <table
         data-slot="table"

@@ -211,15 +211,14 @@ export default function AssetsPage() {
         </CardContent></Card>
       </div>
 
-      <Card>
+      <Card className="overflow-visible">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-base flex items-center gap-2"><Cpu className="h-4 w-4" />Asset List</CardTitle>
           </div>
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
-          <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
-          <Table>
+          <Table containerClassName="overflow-x-clip">
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead>Asset No.</TableHead>
@@ -306,7 +305,6 @@ export default function AssetsPage() {
               })}
             </TableBody>
           </Table>
-          </div>
         </CardContent>
       </Card>
 

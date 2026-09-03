@@ -401,9 +401,8 @@ export default function CRMPage() {
       ) : view === 'table' ? (
 
         /* ── TABLE VIEW ── */
-        <div className="rounded-xl border overflow-hidden">
-          <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
-          <Table>
+        <div className="rounded-xl border overflow-x-clip">
+          <Table containerClassName="overflow-x-clip">
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow className="bg-muted/40 hover:bg-muted/40">
                 <SortableTableHead label="Company" sortKey="company_name" className="text-xs" activeKey={leadSortKey} direction={leadSortDir} onSort={onSortLead} />
@@ -503,7 +502,6 @@ export default function CRMPage() {
               })}
             </TableBody>
           </Table>
-          </div>
         </div>
 
       ) : (

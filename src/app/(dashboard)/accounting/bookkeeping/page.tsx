@@ -125,10 +125,9 @@ function SalesJournalTab({ collections }: { collections: Collection[] }) {
         </CardContent></Card>
       </div>
 
-      <Card>
+      <Card className="overflow-visible">
         <CardContent className="p-0">
-          <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
-          <Table>
+          <Table containerClassName="overflow-x-clip">
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead>Date</TableHead>
@@ -158,7 +157,6 @@ function SalesJournalTab({ collections }: { collections: Collection[] }) {
               ))}
             </TableBody>
           </Table>
-          </div>
           {posted.length > 0 && (
             <div className="flex justify-end gap-8 px-4 py-2 bg-muted/40 border-t text-sm font-semibold">
               <span>Gross: {fmt(totalGross)}</span>
@@ -301,10 +299,9 @@ function DisbursementsTab() {
         <div className="text-xs text-muted-foreground">Total Disbursements</div>
       </CardContent></Card>
 
-      <Card>
+      <Card className="overflow-visible">
         <CardContent className="p-0">
-          <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
-          <Table>
+          <Table containerClassName="overflow-x-clip">
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead>Date</TableHead>
@@ -340,7 +337,6 @@ function DisbursementsTab() {
               ))}
             </TableBody>
           </Table>
-          </div>
         </CardContent>
       </Card>
 
@@ -469,10 +465,9 @@ function GeneralLedgerTab({ lines }: { lines: JournalLine[] }) {
           <Button variant="outline" size="sm" onClick={exportGL}><Download className="h-3.5 w-3.5 mr-1.5" />Export</Button>
         </div>
       </div>
-      <Card>
+      <Card className="overflow-visible">
         <CardContent className="p-0">
-          <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
-          <Table>
+          <Table containerClassName="overflow-x-clip">
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead>Date</TableHead>
@@ -507,7 +502,6 @@ function GeneralLedgerTab({ lines }: { lines: JournalLine[] }) {
               ))}
             </TableBody>
           </Table>
-          </div>
         </CardContent>
       </Card>
     </div>
@@ -559,10 +553,9 @@ function TrialBalanceTab({ lines, coa }: { lines: JournalLine[]; coa: COA[] }) {
           <Button variant="outline" size="sm" onClick={exportTB}><Download className="h-3.5 w-3.5 mr-1.5" />Export</Button>
         </div>
       </div>
-      <Card>
+      <Card className="overflow-visible">
         <CardContent className="p-0">
-          <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
-          <Table>
+          <Table containerClassName="overflow-x-clip">
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead>Account Code</TableHead>
@@ -591,7 +584,6 @@ function TrialBalanceTab({ lines, coa }: { lines: JournalLine[]; coa: COA[] }) {
               </TableRow>
             </TableBody>
           </Table>
-          </div>
         </CardContent>
       </Card>
     </div>

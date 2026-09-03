@@ -1028,9 +1028,8 @@ export default function DRLogsPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="overflow-x-auto max-h-[600px] overflow-y-auto">
             {viewMode === 'by-dr' ? (
-              <Table>
+              <Table containerClassName="max-h-[600px] overflow-y-auto">
                 <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     <TableHead className="w-12">No.</TableHead>
@@ -1235,7 +1234,7 @@ export default function DRLogsPage() {
             ) : (
               (() => {
                 return (
-                  <Table>
+                  <Table containerClassName="max-h-[600px] overflow-y-auto">
                     <TableHeader className="sticky top-0 z-10 bg-background">
                       <TableRow>
                         <TableHead className="w-12">No.</TableHead>
@@ -1285,7 +1284,6 @@ export default function DRLogsPage() {
                 )
               })()
             )}
-          </div>
         </CardContent>
       </Card>
       </>)}

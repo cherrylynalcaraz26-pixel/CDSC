@@ -1381,8 +1381,7 @@ export default function InventoryPage() {
       {!reportOpen && viewMode === 'by_warehouse' && (
         <Card>
           <CardContent className="p-0">
-            <div className="overflow-x-auto max-h-[65vh] overflow-y-auto">
-              <Table>
+              <Table containerClassName="max-h-[65vh] overflow-y-auto">
                 <TableHeader className="sticky top-0 z-10 bg-muted/40">
                   <TableRow>
                     <TableHead className="w-12">No.</TableHead>
@@ -1500,15 +1499,13 @@ export default function InventoryPage() {
                   })}
                 </TableBody>
               </Table>
-            </div>
           </CardContent>
         </Card>
       )}
 
       {!reportOpen && viewMode !== 'by_warehouse' && <Card>
         <CardContent className="p-0">
-          <div className="overflow-x-auto max-h-[65vh] overflow-y-auto">
-            <Table>
+            <Table containerClassName="max-h-[65vh] overflow-y-auto">
               <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead className="w-12">No.</TableHead>
@@ -1658,7 +1655,6 @@ export default function InventoryPage() {
                 })}
               </TableBody>
             </Table>
-          </div>
         </CardContent>
       </Card>}
 
@@ -2041,8 +2037,7 @@ export default function InventoryPage() {
               <History className="h-4 w-4 text-slate-600" /> Stock History — {historyItemName}
             </DialogTitle>
           </DialogHeader>
-          <div className="max-h-[60vh] overflow-y-auto">
-            <Table>
+            <Table containerClassName="max-h-[60vh] overflow-y-auto">
               <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead>Date</TableHead>
@@ -2077,7 +2072,6 @@ export default function InventoryPage() {
                 ))}
               </TableBody>
             </Table>
-          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setHistoryOpen(false)}>Close</Button>
           </DialogFooter>

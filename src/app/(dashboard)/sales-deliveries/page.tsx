@@ -183,7 +183,7 @@ export default function SalesDeliveriesPage() {
         )}
       </div>
 
-      <Card>
+      <Card className="overflow-visible">
         <CardHeader>
           <CardTitle>Delivery Records ({filtered.length})</CardTitle>
         </CardHeader>
@@ -197,8 +197,7 @@ export default function SalesDeliveriesPage() {
                 : 'No records match the current filter.'}
             </div>
           ) : (
-            <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
-            <Table>
+            <Table containerClassName="overflow-x-clip">
               <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead className="w-10">No.</TableHead>
@@ -263,7 +262,6 @@ export default function SalesDeliveriesPage() {
                 ))}
               </TableBody>
             </Table>
-            </div>
           )}
         </CardContent>
       </Card>

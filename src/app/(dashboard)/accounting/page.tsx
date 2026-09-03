@@ -356,13 +356,12 @@ function OverviewTab() {
         ))}
       </div>
 
-      <Card>
+      <Card className="overflow-visible">
         <CardHeader>
           <CardTitle className="text-base">Recent Purchase Orders</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="max-h-[500px] overflow-x-auto overflow-y-auto">
-          <Table>
+          <Table containerClassName="overflow-x-clip">
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead className="w-10">No.</TableHead>
@@ -402,7 +401,6 @@ function OverviewTab() {
               })}
             </TableBody>
           </Table>
-          </div>
         </CardContent>
       </Card>
     </div>
@@ -1203,7 +1201,7 @@ function CollectionsTab() {
         </Card>
       </div>
 
-      <Card>
+      <Card className="overflow-visible">
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
             <CheckCircle2 className="h-4 w-4 text-green-600" />Ready to Collect
@@ -1211,8 +1209,7 @@ function CollectionsTab() {
           <CardDescription>Sales Orders that have been delivered (DR) and invoiced (CSI) but still have an outstanding balance</CardDescription>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="max-h-[500px] overflow-x-auto overflow-y-auto">
-          <Table>
+          <Table containerClassName="overflow-x-clip">
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <SortableTableHead label="SO Number" sortKey="so_number" activeKey={rtcSortKey} direction={rtcSortDir} onSort={onSortRtc} />
@@ -1302,7 +1299,6 @@ function CollectionsTab() {
               })}
             </TableBody>
           </Table>
-          </div>
         </CardContent>
       </Card>
 
@@ -1347,8 +1343,8 @@ function CollectionsTab() {
             <Receipt className="h-4 w-4 text-red-600" />Collection Records
           </CardTitle>
         </CardHeader>
-        <CardContent className="p-0 overflow-x-auto max-h-[620px] overflow-y-auto">
-          <Table>
+        <CardContent className="p-0">
+          <Table containerClassName="max-h-[620px] overflow-y-auto">
             <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead className="w-12">No.</TableHead>
@@ -1903,9 +1899,8 @@ function SalesJournalTab({ collections, csiRecords }: { collections: Collection[
         <Card><CardContent className="pt-4 pb-3"><div className="text-xl font-bold text-blue-600">{fmt(totalSales)}</div><div className="text-xs text-muted-foreground">Total Sales Billed</div></CardContent></Card>
         <Card><CardContent className="pt-4 pb-3"><div className="text-xl font-bold">{siRows.length}</div><div className="text-xs text-muted-foreground">Sales Invoices</div></CardContent></Card>
       </div>
-      <Card><CardContent className="p-0">
-        <div className="max-h-[500px] overflow-x-auto overflow-y-auto">
-        <Table>
+      <Card className="overflow-visible"><CardContent className="p-0">
+        <Table containerClassName="overflow-x-clip">
           <TableHeader className="sticky top-0 z-10 bg-background"><TableRow>
             <TableHead>Date</TableHead>
             <TableHead>SI Number</TableHead>
@@ -1929,7 +1924,6 @@ function SalesJournalTab({ collections, csiRecords }: { collections: Collection[
             ))}
           </TableBody>
         </Table>
-        </div>
         {siRows.length > 0 && (
           <div className="flex justify-end gap-8 px-4 py-2 bg-muted/40 border-t text-sm font-semibold">
             <span>Total Sales: {fmt(totalSales)}</span>
@@ -2117,14 +2111,13 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
         <div className="text-xs text-muted-foreground">Total Disbursements</div>
       </CardContent></Card>
       {pendingPOs.length > 0 && (
-        <Card>
+        <Card className="overflow-visible">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-amber-600" />Pending Disbursements ({pendingPOs.length})</CardTitle>
             <CardDescription>Purchase Orders not yet paid — accept one to prefill a Disbursement</CardDescription>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="max-h-[500px] overflow-x-auto overflow-y-auto">
-            <Table>
+            <Table containerClassName="overflow-x-clip">
               <TableHeader className="sticky top-0 z-10 bg-background"><TableRow>
                 <TableHead>PO Number</TableHead><TableHead>Date</TableHead><TableHead>Supplier</TableHead>
                 <TableHead className="text-right">Net Payable</TableHead><TableHead className="w-24" />
@@ -2143,13 +2136,11 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
                 ))}
               </TableBody>
             </Table>
-            </div>
           </CardContent>
         </Card>
       )}
-      <Card><CardContent className="p-0">
-        <div className="max-h-[500px] overflow-x-auto overflow-y-auto">
-        <Table>
+      <Card className="overflow-visible"><CardContent className="p-0">
+        <Table containerClassName="overflow-x-clip">
           <TableHeader className="sticky top-0 z-10 bg-background"><TableRow>
             <TableHead>Date</TableHead><TableHead>CDJ #</TableHead><TableHead>Payee</TableHead>
             <TableHead>Description</TableHead><TableHead>Expense Account</TableHead>
@@ -2178,7 +2169,6 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
             ))}
           </TableBody>
         </Table>
-        </div>
       </CardContent></Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -2293,9 +2283,8 @@ function ChartOfAccountsTab({ coa }: { coa: COA[] }) {
         </div>
         <Input placeholder="Search accounts…" value={search} onChange={e => setSearch(e.target.value)} className="max-w-xs" />
       </div>
-      <Card><CardContent className="p-0">
-        <div className="max-h-[500px] overflow-x-auto overflow-y-auto">
-        <Table>
+      <Card className="overflow-visible"><CardContent className="p-0">
+        <Table containerClassName="overflow-x-clip">
           <TableHeader className="sticky top-0 z-10 bg-background"><TableRow>
             <TableHead>Code</TableHead>
             <TableHead>Account Name</TableHead>
@@ -2321,7 +2310,6 @@ function ChartOfAccountsTab({ coa }: { coa: COA[] }) {
             ))}
           </TableBody>
         </Table>
-        </div>
       </CardContent></Card>
     </div>
   )
@@ -2363,8 +2351,7 @@ function GeneralLedgerTab({ lines }: { lines: JournalLine[] }) {
         </div>
       </div>
       <Card><CardContent className="p-0">
-        <div className="max-h-[500px] overflow-x-auto overflow-y-auto">
-        <Table>
+        <Table containerClassName="max-h-[500px] overflow-y-auto">
           <TableHeader className="sticky top-0 z-10 bg-background"><TableRow>
             <TableHead>Date</TableHead><TableHead>Entry #</TableHead><TableHead>Account</TableHead>
             <TableHead>Memo</TableHead><TableHead className="text-right">Debit</TableHead>
@@ -2388,7 +2375,6 @@ function GeneralLedgerTab({ lines }: { lines: JournalLine[] }) {
             ))}
           </TableBody>
         </Table>
-        </div>
       </CardContent></Card>
     </div>
   )
@@ -2428,8 +2414,7 @@ function TrialBalanceTab({ lines, coa }: { lines: JournalLine[]; coa: COA[] }) {
         </div>
       </div>
       <Card><CardContent className="p-0">
-        <div className="max-h-[500px] overflow-x-auto overflow-y-auto">
-        <Table>
+        <Table containerClassName="max-h-[500px] overflow-y-auto">
           <TableHeader className="sticky top-0 z-10 bg-background"><TableRow>
             <TableHead>Account Code</TableHead><TableHead>Account Name</TableHead><TableHead>Type</TableHead>
             <TableHead className="text-right">Debit</TableHead><TableHead className="text-right">Credit</TableHead>
@@ -2453,7 +2438,6 @@ function TrialBalanceTab({ lines, coa }: { lines: JournalLine[]; coa: COA[] }) {
             </TableRow>
           </TableBody>
         </Table>
-        </div>
       </CardContent></Card>
     </div>
   )
