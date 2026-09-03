@@ -13,8 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
-import { CheckCircle2, XCircle, AlertTriangle, Download, FileBarChart, Zap, FileText, Loader2, Printer, Sparkles, MoreHorizontal, ImagePlus, X, Plus } from 'lucide-react'
+import { CheckCircle2, XCircle, AlertTriangle, Download, FileBarChart, Zap, FileText, Loader2, Printer, Sparkles, ImagePlus, X, Plus } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { htmlToPdfBase64 } from '@/lib/send-email'
@@ -382,6 +381,28 @@ export default function BIRPage() {
       return { ...row, cells, filedCount, overdueCount, totalTaxDue: filedCount > 0 ? filedCount * row.amount : null }
     })
   }, [monitorYear, vatRegistered, isCorporate, filings])
+
+  // Flattens the grid's 16 quarter-cells into the shape the Filing Calendar
+  // mini month-grids already know how to render.
+  const calendarForms: BirForm[] = useMemo(() => quarterlyGrid.flatMap(row =>
+    row.cells.map(cell => ({
+      key: `${row.form}_${cell.period}`, form: row.form, description: row.description,
+      period: cell.period, due: cell.due, amount: row.amount,
+      periodStart: cell.periodStart, periodEnd: cell.periodEnd, status: cell.status,
+    }))
+  ), [quarterlyGrid])
+
+  // A row click (anywhere but the Period/Amendments badges) opens history —
+  // defaults to the first still-unfiled quarter so Generate has a real period
+  // to pull figures for, or the last quarter once everything's filed.
+  function defaultFormFor(row: QuarterlyFormRow & { cells: (QuarterCell & { status: string; amended: boolean })[] }): BirForm {
+    const cell = row.cells.find(c => c.status !== 'filed') ?? row.cells[row.cells.length - 1]
+    return {
+      key: `${row.form}_${cell.period}`, form: row.form, description: row.description,
+      period: cell.period, due: cell.due, amount: row.amount,
+      periodStart: cell.periodStart, periodEnd: cell.periodEnd, status: cell.status as BirForm['status'],
+    }
+  }
 
   const readinessChecks = useMemo(() => {
     const totalSup = suppliers.length
@@ -1107,7 +1128,6 @@ export default function BIRPage() {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="monitor">Filing Monitor</TabsTrigger>
-          <TabsTrigger value="overview">Filing Calendar</TabsTrigger>
           <TabsTrigger value="ewt">EWT Summary</TabsTrigger>
           <TabsTrigger value="vat">VAT Summary</TabsTrigger>
           <TabsTrigger value="alphalist">Alphalist</TabsTrigger>
@@ -1115,12 +1135,30 @@ export default function BIRPage() {
         </TabsList>
 
         <TabsContent value="monitor">
+          <Card className="mb-4">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Filing Calendar — Due Dates</CardTitle>
+              <CardDescription>Each highlighted day has a BIR form due for {monitorYear} — hover a date for details</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-4 mb-4">
+                {groupFormsByMonth(calendarForms).map(g => (
+                  <FilingMonthCalendar key={`${g.year}-${g.month}`} year={g.year} month={g.month} forms={g.forms} />
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-4 text-xs">
+                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded border bg-green-100 border-green-300" />Filed</span>
+                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded border bg-red-200 border-red-400" />Overdue</span>
+                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded border bg-yellow-100 border-yellow-300" />Pending</span>
+              </div>
+            </CardContent>
+          </Card>
           <Card className="overflow-visible">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="text-base">Filing Monitor</CardTitle>
-                  <CardDescription>Every quarterly BIR form for the year, at a glance — click a quarter to mark it filed</CardDescription>
+                  <CardDescription>Every quarterly BIR form for the year, at a glance — click a quarter to mark it filed, click a row for its filing history</CardDescription>
                 </div>
                 <Select value={String(monitorYear)} onValueChange={v => setMonitorYear(Number(v))}>
                   <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
@@ -1145,12 +1183,11 @@ export default function BIRPage() {
                     <TableHead>Amendments</TableHead>
                     <TableHead>Progress</TableHead>
                     <TableHead className="text-right">Tax Due</TableHead>
-                    <TableHead className="w-12" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {quarterlyGrid.map((row, i) => (
-                    <TableRow key={row.form}>
+                    <TableRow key={row.form} className="cursor-pointer" onClick={() => openHistory(defaultFormFor(row))}>
                       <TableCell className="text-sm text-muted-foreground">{i + 1}</TableCell>
                       <TableCell>
                         <span className="font-mono font-bold text-primary">{row.form}</span>
@@ -1158,7 +1195,7 @@ export default function BIRPage() {
                       </TableCell>
                       <TableCell className="text-sm">{monitorYear}</TableCell>
                       <TableCell><Badge variant="secondary" className="text-xs">Quarterly</Badge></TableCell>
-                      <TableCell>
+                      <TableCell onClick={e => e.stopPropagation()}>
                         <div className="flex gap-1">
                           {row.cells.map(cell => (
                             <button
@@ -1179,7 +1216,7 @@ export default function BIRPage() {
                           ))}
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell onClick={e => e.stopPropagation()}>
                         <div className="flex gap-1">
                           {row.cells.map(cell => (
                             <button
@@ -1208,114 +1245,6 @@ export default function BIRPage() {
                       </TableCell>
                       <TableCell className="text-right font-medium">
                         {row.totalTaxDue ? `₱${row.totalTaxDue.toLocaleString()}` : '—'}
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => openHistory({ key: row.form, form: row.form, description: row.description, period: `Q1 ${monitorYear}`, due: row.cells[0].due, amount: row.amount, periodStart: row.cells[0].periodStart, periodEnd: row.cells[0].periodEnd, status: 'pending' })}>
-                              View Filing History
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="overview">
-          <Card className="mb-4">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Filing Calendar — Due Dates</CardTitle>
-              <CardDescription>Each highlighted day has a BIR form due — hover a date for details</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-4 mb-4">
-                {groupFormsByMonth(forms).map(g => (
-                  <FilingMonthCalendar key={`${g.year}-${g.month}`} year={g.year} month={g.month} forms={g.forms} />
-                ))}
-              </div>
-              <div className="flex flex-wrap gap-4 text-xs">
-                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded border bg-green-100 border-green-300" />Filed</span>
-                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded border bg-red-200 border-red-400" />Overdue</span>
-                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded border bg-red-100 border-red-300" />Due Soon</span>
-                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded border bg-yellow-100 border-yellow-300" />Pending</span>
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="overflow-visible">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-base">BIR Filing Calendar {new Date().getFullYear()}</CardTitle>
-                  <CardDescription>Track all BIR form due dates and filing status</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="p-0">
-              <Table containerClassName="overflow-x-clip">
-                <TableHeader className="sticky top-0 z-10 bg-background">
-                  <TableRow>
-                    <TableHead>Form</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead>Period</TableHead>
-                    <TableHead>Due Date</TableHead>
-                    <TableHead className="text-right">Amount</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="w-12" />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {forms.map(form => (
-                    <TableRow key={form.key} className="cursor-pointer" onClick={() => openHistory(form)}>
-                      <TableCell className="font-mono font-bold text-primary">{form.form}</TableCell>
-                      <TableCell className="text-sm">{form.description}</TableCell>
-                      <TableCell className="text-sm">
-                        {form.period}
-                        <Badge variant="outline" className="ml-2 text-[10px] px-1.5 py-0 align-middle">{periodTypeOf(form.description)}</Badge>
-                      </TableCell>
-                      <TableCell className="text-sm font-medium">{form.due}</TableCell>
-                      <TableCell className="text-right font-medium">{form.amount ? `₱${form.amount.toLocaleString()}` : '—'}</TableCell>
-                      <TableCell>
-                        <Badge variant={
-                          form.status === 'filed' ? 'outline' :
-                          form.status === 'overdue' || form.status === 'due_soon' ? 'destructive' : 'secondary'
-                        } className="text-xs">
-                          {form.status === 'filed' ? '✓ Filed' : form.status === 'overdue' ? '⚠ Overdue' : form.status === 'due_soon' ? '⚠ Due Soon' : 'Pending'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell onClick={e => e.stopPropagation()}>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent">
-                            <MoreHorizontal className="h-4 w-4" />
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => openFormGenerator(form)}>
-                              <Sparkles className="h-3.5 w-3.5 mr-2" />Generate
-                            </DropdownMenuItem>
-                            {form.status !== 'filed' && (
-                              <DropdownMenuItem onClick={() => openMarkFiled(form)}>
-                                Mark Filed
-                              </DropdownMenuItem>
-                            )}
-                            {BIR_FORM_PDF_URLS[form.form] && (
-                              <DropdownMenuItem onClick={() => window.open(BIR_FORM_PDF_URLS[form.form], '_blank', 'noopener,noreferrer')}>
-                                <Download className="h-3.5 w-3.5 mr-2" />Blank Form (PDF)
-                              </DropdownMenuItem>
-                            )}
-                            {formTemplates[form.form] && (
-                              <DropdownMenuItem onClick={() => window.open(formTemplates[form.form], '_blank', 'noopener,noreferrer')}>
-                                <ImagePlus className="h-3.5 w-3.5 mr-2" />Reference Image
-                              </DropdownMenuItem>
-                            )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -1744,6 +1673,23 @@ export default function BIRPage() {
                 ))}
               </TableBody>
             </Table>
+          {historyForm && (
+            <DialogFooter className="sm:justify-start gap-2">
+              <Button variant="outline" size="sm" onClick={() => openFormGenerator(historyForm)}>
+                <Sparkles className="h-3.5 w-3.5 mr-1.5" />Generate — {historyForm.period}
+              </Button>
+              {BIR_FORM_PDF_URLS[historyForm.form] && (
+                <Button variant="outline" size="sm" onClick={() => window.open(BIR_FORM_PDF_URLS[historyForm.form], '_blank', 'noopener,noreferrer')}>
+                  <Download className="h-3.5 w-3.5 mr-1.5" />Blank Form (PDF)
+                </Button>
+              )}
+              {formTemplates[historyForm.form] && (
+                <Button variant="outline" size="sm" onClick={() => window.open(formTemplates[historyForm.form], '_blank', 'noopener,noreferrer')}>
+                  <ImagePlus className="h-3.5 w-3.5 mr-1.5" />Reference Image
+                </Button>
+              )}
+            </DialogFooter>
+          )}
         </DialogContent>
       </Dialog>
     </div>
