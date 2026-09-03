@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { getErrorMessage } from '@/lib/error-message'
 import {
   Plus, MoreHorizontal, Cpu, ArrowRightLeft, Eye, History,
   RotateCcw, Trash2, Loader2, CheckCircle2,
@@ -125,7 +126,7 @@ export default function AssetsPage() {
       remarks: form.remarks || null,
       status: 'active',
     })
-    if (error) { toast.error(error.message); setSaving(false); return }
+    if (error) { toast.error(getErrorMessage(error)); setSaving(false); return }
     toast.success('Asset issued successfully')
     setIssueOpen(false)
     setForm(emptyForm())
@@ -140,7 +141,7 @@ export default function AssetsPage() {
       department: transferDept || transferAsset.department,
       status: 'transferred',
     }).eq('id', transferAsset.id)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(getErrorMessage(error)); return }
     toast.success('Asset transferred')
     setTransferAsset(null)
     load()
@@ -153,7 +154,7 @@ export default function AssetsPage() {
       status: 'returned',
       assigned_to: null,
     }).eq('id', returnAsset.id)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(getErrorMessage(error)); return }
     toast.success('Asset returned')
     setReturnAsset(null)
     load()
@@ -161,7 +162,7 @@ export default function AssetsPage() {
 
   async function disposeAsset(id: string) {
     const { error } = await supabase.from('assets').update({ status: 'disposed' }).eq('id', id)
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else { toast.success('Asset disposed'); load() }
   }
 
@@ -217,8 +218,9 @@ export default function AssetsPage() {
           </div>
         </CardHeader>
         <CardContent className="p-0 overflow-x-auto">
+          <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
           <Table>
-            <TableHeader>
+            <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead>Asset No.</TableHead>
                 <TableHead>Category</TableHead>
@@ -304,6 +306,7 @@ export default function AssetsPage() {
               })}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
 

@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { getErrorMessage } from '@/lib/error-message'
 import {
   Plus, MoreHorizontal, CheckCircle2, Package, Loader2, Trash2, X,
   ShoppingBag, ArrowLeftRight, Pencil, Printer, Search, FileText,
@@ -301,7 +302,7 @@ export default function ReceivingPage() {
         dr_number: drNumber || null,
       }
       const { error } = await supabase.from('receiving_reports').update(payload).eq('id', editingRRId)
-      if (error) { toast.error(error.message); setRrSaving(false); return }
+      if (error) { toast.error(getErrorMessage(error)); setRrSaving(false); return }
       toast.success('Receiving report updated.')
       setRrOpen(false); resetRRForm(); loadRR()
       setRrSaving(false)
@@ -337,7 +338,7 @@ export default function ReceivingPage() {
       status: 'completed',
     }
     const { error } = await supabase.from('receiving_reports').insert(payload)
-    if (error) { toast.error(error.message); setRrSaving(false); return }
+    if (error) { toast.error(getErrorMessage(error)); setRrSaving(false); return }
 
     // Credit warehouse stock (unassigned to any client — general stock coming in from the
     // supplier) for exactly what's being received now, and accumulate it onto the PO
@@ -391,7 +392,7 @@ export default function ReceivingPage() {
   async function confirmDeleteRR() {
     if (!deleteRRId) return
     const { error } = await supabase.from('receiving_reports').delete().eq('id', deleteRRId)
-    if (error) { toast.error(error.message); setDeleteRRId(null); return }
+    if (error) { toast.error(getErrorMessage(error)); setDeleteRRId(null); return }
     setDeleteRRId(null)
     toast.success('Receiving report deleted.')
     loadRR()
@@ -479,10 +480,10 @@ export default function ReceivingPage() {
       notes: returnNotes || null,
       status: 'completed',
     }).select('return_number').single()
-    if (error) { toast.error(error.message); setReturnSaving(false); return }
+    if (error) { toast.error(getErrorMessage(error)); setReturnSaving(false); return }
     const itemRows = validItems.map(i => ({ return_number: data.return_number, item_name: i.item_name, unit: i.unit || null, quantity: parseFloat(i.quantity), reason: i.reason || null }))
     const { error: ie } = await supabase.from('item_return_items').insert(itemRows)
-    if (ie) { toast.error(ie.message); setReturnSaving(false); return }
+    if (ie) { toast.error(getErrorMessage(ie)); setReturnSaving(false); return }
 
     // Returning stock to CDSC's own warehouse puts it back into the general pool — and if
     // a client is named, that quantity leaves their own On Hand ledger the same way an
@@ -537,7 +538,7 @@ export default function ReceivingPage() {
       notes: salesdNotes || null,
       status: salesdStatus,
     }).select('delivery_number').single()
-    if (error) { toast.error(error.message); setSalesdSaving(false); return }
+    if (error) { toast.error(getErrorMessage(error)); setSalesdSaving(false); return }
     const rows = validItems.map(i => ({
       delivery_number: data.delivery_number,
       item_name: i.item_name,
@@ -545,7 +546,7 @@ export default function ReceivingPage() {
       quantity: parseFloat(i.quantity),
     }))
     const { error: ie } = await supabase.from('sales_delivery_items').insert(rows)
-    if (ie) { toast.error(ie.message); setSalesdSaving(false); return }
+    if (ie) { toast.error(getErrorMessage(ie)); setSalesdSaving(false); return }
     toast.success(`Sales Delivery ${data.delivery_number} saved.`)
     setSalesdOpen(false); resetSalesdForm(); loadSalesDeliveries()
     setSalesdSaving(false)

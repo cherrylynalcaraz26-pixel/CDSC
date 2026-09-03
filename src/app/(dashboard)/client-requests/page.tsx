@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
+import { getErrorMessage } from '@/lib/error-message'
 import {
   Loader2, MoreHorizontal, FileText, Clock, CheckCircle2,
   XCircle, Eye, ChevronDown, ChevronRight, Package,
@@ -80,7 +81,7 @@ export default function ClientRequestsPage() {
       .from('client_requests')
       .select('*')
       .order('created_at', { ascending: false })
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else setRequests(data ?? [])
     setLoading(false)
   }
@@ -95,7 +96,7 @@ export default function ClientRequestsPage() {
       reviewed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     }).eq('id', id)
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else {
       toast.success(`Request marked as ${status}`)
       setViewing(null)
@@ -169,8 +170,9 @@ export default function ClientRequestsPage() {
 
       {/* Table */}
       <div className="rounded-lg border bg-card overflow-x-auto">
+        <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
               <TableHead>Request</TableHead>
               <TableHead>Client</TableHead>
@@ -233,6 +235,7 @@ export default function ClientRequestsPage() {
             ))}
           </TableBody>
         </Table>
+        </div>
       </div>
 
       {/* View Request Dialog */}

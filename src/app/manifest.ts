@@ -5,7 +5,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: 'CDSC Industrial Supply — ERP',
     short_name: 'CDSC ERP',
     description: 'Enterprise Resource Planning — Inventory, Purchasing, Warehouse & BIR Compliance',
-    start_url: '/',
+    start_url: '/login',
     display: 'standalone',
     background_color: '#ffffff',
     theme_color: '#dc2626',

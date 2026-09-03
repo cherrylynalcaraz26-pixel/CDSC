@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { getErrorMessage } from '@/lib/error-message'
 import {
   Plus, MoreHorizontal, CheckCircle2, XCircle, ArrowRight,
   Trash2, Mail, Eye, Printer, ArrowRightLeft, Loader2, Search,
@@ -86,7 +87,7 @@ export default function PurchaseRequestsPage() {
       .from('purchase_requests')
       .select('id, pr_number, date, created_at, department, priority, purpose, status')
       .order('created_at', { ascending: false })
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else setPRs((data ?? []) as PR[])
     setLoading(false)
   }
@@ -116,7 +117,7 @@ export default function PurchaseRequestsPage() {
       purpose: purpose.trim(),
       status: asDraft ? 'draft' : 'submitted',
     })
-    if (error) { toast.error(error.message); setSaving(false); return }
+    if (error) { toast.error(getErrorMessage(error)); setSaving(false); return }
     toast.success(asDraft ? 'Saved as draft' : 'Purchase request submitted for approval')
     setOpen(false)
     resetForm()
@@ -126,14 +127,14 @@ export default function PurchaseRequestsPage() {
 
   async function updateStatus(id: string, status: PRStatus) {
     const { error } = await supabase.from('purchase_requests').update({ status }).eq('id', id)
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else { toast.success(`Status → ${STATUS_CFG[status].label}`); load() }
   }
 
   async function deletePR(id: string) {
     const { data: saved } = await supabase.from('purchase_requests').select('*').eq('id', id).single()
     const { error } = await supabase.from('purchase_requests').delete().eq('id', id)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(getErrorMessage(error)); return }
     load()
     toast.success('Purchase request deleted', {
       action: {
@@ -229,8 +230,9 @@ export default function PurchaseRequestsPage() {
           <CardTitle className="text-base">Purchase Request List</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
+          <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
           <Table>
-            <TableHeader>
+            <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead>PR Number</TableHead>
                 <TableHead>Date</TableHead>
@@ -340,6 +342,7 @@ export default function PurchaseRequestsPage() {
               })}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
 

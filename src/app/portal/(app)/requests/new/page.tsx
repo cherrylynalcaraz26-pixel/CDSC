@@ -7,6 +7,7 @@ import { Trash2, Loader2, ChevronLeft, Send, AlertTriangle, X, Search, Package, 
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { uploadImageToDrive } from '@/lib/upload-image'
+import { getErrorMessage } from '@/lib/error-message'
 
 const MAX_LINE_ITEMS = 50
 
@@ -177,7 +178,7 @@ export default function NewRequestPage() {
       toast.success('Item suggestion sent to CDSC for review')
       setCustomModalIdx(null)
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to submit item suggestion')
+      toast.error(getErrorMessage(err, 'Failed to submit item suggestion'))
     }
     setSubmittingCustom(false)
   }
@@ -227,12 +228,12 @@ export default function NewRequestPage() {
           is_custom: it.is_custom,
         }))
         const { error: itemErr } = await supabase.from('so_items').insert(itemRows)
-        if (itemErr) toast.error(`Items: ${itemErr.message}`)
+        if (itemErr) toast.error(`Items: ${getErrorMessage(itemErr)}`)
       }
       toast.success('Order submitted successfully!')
       router.push('/portal/requests')
     } catch (err: any) {
-      toast.error(err.message ?? 'Failed to submit order')
+      toast.error(getErrorMessage(err, 'Failed to submit order'))
     }
     setSubmitting(false)
   }

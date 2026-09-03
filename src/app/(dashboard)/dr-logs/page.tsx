@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { getErrorMessage } from '@/lib/error-message'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow, SortableTableHead,
 } from '@/components/ui/table'
@@ -482,11 +483,11 @@ export default function DRLogsPage() {
     try {
       const url = await uploadImageToDrive(file, { displayName: `DR-${drNumber}`, folder: 'DR Attachments' })
       const { error } = await supabase.from('dr_logs').update({ attachment_url: url }).eq('dr_number', drNumber)
-      if (error) { toast.error(error.message); return }
+      if (error) { toast.error(getErrorMessage(error)); return }
       setLogs(prev => prev.map(l => l.dr_number === drNumber ? { ...l, attachment_url: url } : l))
       toast.success(`Photo attached to DR ${drNumber}`)
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to upload image')
+      toast.error(getErrorMessage(err, 'Failed to upload image'))
     } finally {
       setUploadingAttachmentDr(null)
     }
@@ -620,10 +621,10 @@ export default function DRLogsPage() {
 
     if (editing) {
       const { error } = await supabase.from('dr_logs').update(payload).eq('id', editing.id)
-      if (error) { toast.error(error.message); setSaving(false); return }
+      if (error) { toast.error(getErrorMessage(error)); setSaving(false); return }
     } else {
       const { error } = await supabase.from('dr_logs').insert(payload)
-      if (error) { toast.error(error.message); setSaving(false); return }
+      if (error) { toast.error(getErrorMessage(error)); setSaving(false); return }
     }
 
     const validItems = items.filter(it => it.item_name.trim())
@@ -859,7 +860,7 @@ export default function DRLogsPage() {
       : { data: [] }
     if (log) await supabase.from('dr_log_items').delete().eq('dr_number', log.dr_number)
     const { error } = await supabase.from('dr_logs').delete().eq('id', deleteId)
-    if (error) { toast.error(error.message); setDeleteId(null); return }
+    if (error) { toast.error(getErrorMessage(error)); setDeleteId(null); return }
     setDeleteId(null)
     load()
     toast.success('DR Log deleted', {

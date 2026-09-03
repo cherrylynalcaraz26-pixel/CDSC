@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { Plus, Trash2, Loader2, ChevronLeft, Send, X } from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
+import { getErrorMessage } from '@/lib/error-message'
 
 interface RequestItem {
   item_name: string
@@ -94,12 +95,12 @@ export default function NewQuotationRequestPage() {
           remarks: it.remarks.trim() || null,
         }))
         const { error: itemErr } = await supabase.from('quotation_request_items').insert(itemRows)
-        if (itemErr) toast.error(`Items: ${itemErr.message}`)
+        if (itemErr) toast.error(`Items: ${getErrorMessage(itemErr)}`)
       }
       toast.success('Request for quotation submitted!')
       router.push('/portal/quotations')
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to submit request')
+      toast.error(getErrorMessage(err, 'Failed to submit request'))
     }
     setSubmitting(false)
   }

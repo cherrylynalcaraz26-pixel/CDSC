@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
+import { getErrorMessage } from '@/lib/error-message'
 import {
   Loader2, Save, Eye, EyeOff, User, Lock, Building2, Tag, Plus, Trash2,
   FileCheck2, CheckCircle2, AlertCircle, Camera, ImagePlus, X,
@@ -103,7 +104,7 @@ export default function PortalSettingsPage() {
     if (!error && clientId && portalRole === 'client') {
       await supabase.from('clients').update({ website: website.trim() || null }).eq('id', clientId)
     }
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else toast.success('Profile updated successfully')
     setSaving(false)
   }
@@ -116,7 +117,7 @@ export default function PortalSettingsPage() {
       vat_registered: vatRegistered === 'true',
       vat_classification: vatClassification || null,
     }).eq('id', clientId)
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else toast.success('BIR information updated')
     setSavingBir(false)
   }
@@ -131,7 +132,7 @@ export default function PortalSettingsPage() {
       setAvatarUrl(url)
       toast.success('Avatar updated')
     } catch (err: any) {
-      toast.error(err.message ?? 'Failed to upload avatar')
+      toast.error(getErrorMessage(err, 'Failed to upload avatar'))
     }
     setUploadingAvatar(false)
   }
@@ -157,7 +158,7 @@ export default function PortalSettingsPage() {
       window.dispatchEvent(new CustomEvent('portal-logo-updated', { detail: { url } }))
       toast.success('Company logo updated')
     } catch (err: any) {
-      toast.error(err.message ?? 'Failed to upload logo')
+      toast.error(getErrorMessage(err, 'Failed to upload logo'))
     }
     setUploadingLogo(false)
   }
@@ -181,7 +182,7 @@ export default function PortalSettingsPage() {
     const { error: signInError } = await supabase.auth.signInWithPassword({ email, password: currentPw })
     if (signInError) { toast.error('Current password is incorrect'); setChangingPw(false); return }
     const { error } = await supabase.auth.updateUser({ password: newPw })
-    if (error) { toast.error(error.message); setChangingPw(false); return }
+    if (error) { toast.error(getErrorMessage(error)); setChangingPw(false); return }
     setCurrentPw(''); setNewPw(''); setConfirmPw('')
     // Sign out and require a fresh login with the new password
     toast.success('Password changed — please sign in again with your new password')
@@ -198,7 +199,7 @@ export default function PortalSettingsPage() {
     }
     setAddingDept(true)
     const { data, error } = await supabase.from('client_departments').insert({ client_id: clientId, name }).select('id, name').single()
-    if (error) { toast.error(error.message); setAddingDept(false); return }
+    if (error) { toast.error(getErrorMessage(error)); setAddingDept(false); return }
     setDepartments(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
     setNewDept('')
     setAddingDept(false)
@@ -207,7 +208,7 @@ export default function PortalSettingsPage() {
 
   async function deleteDepartment(id: string) {
     const { error } = await supabase.from('client_departments').delete().eq('id', id)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(getErrorMessage(error)); return }
     setDepartments(prev => prev.filter(d => d.id !== id))
     toast.success('Department removed')
   }

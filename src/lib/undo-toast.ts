@@ -1,4 +1,5 @@
 import { toast } from 'sonner'
+import { getErrorMessage } from '@/lib/error-message'
 
 // Shows a success toast with an "Undo" action button. Pass the async
 // function that reverts the mutation just performed — errors from it are
@@ -9,7 +10,7 @@ export function undoToast(message: string, undo: () => void | Promise<void>) {
       label: 'Undo',
       onClick: () => {
         Promise.resolve(undo()).catch((err: unknown) => {
-          toast.error(err instanceof Error ? err.message : 'Failed to undo')
+          toast.error(getErrorMessage(err, 'Failed to undo'))
         })
       },
     },

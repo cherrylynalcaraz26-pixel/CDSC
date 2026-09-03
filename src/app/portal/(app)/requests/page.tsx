@@ -9,6 +9,7 @@ import { Plus, Loader2, FileText, ChevronDown, ChevronUp, Package, Truck, CheckC
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { useSearchContext } from '@/context/search-context'
+import { getErrorMessage } from '@/lib/error-message'
 
 interface SOItem {
   id: string
@@ -153,7 +154,7 @@ export default function PortalRequests() {
       .update({ client_accepted_at: new Date().toISOString(), client_accepted_by: clientName })
       .eq('dr_number', acceptingDR.dr_number)
     if (error) {
-      toast.error(error.message)
+      toast.error(getErrorMessage(error))
       setAccepting(false)
       return
     }

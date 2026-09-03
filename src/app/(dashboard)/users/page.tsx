@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent } from '@/components/ui/card'
+import { getErrorMessage } from '@/lib/error-message'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
@@ -87,7 +88,7 @@ export default function UsersPage() {
       supabase.from('clients').select('company_name').eq('status', 'active').order('company_name'),
       supabase.from('suppliers').select('company_name').eq('is_active', true).order('company_name'),
     ])
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else setProfiles(data ?? [])
     setClientNames((cliData ?? []).map((c: any) => c.company_name))
     setSupplierNames((supData ?? []).map((s: any) => s.company_name))
@@ -138,7 +139,7 @@ export default function UsersPage() {
       setInviteForm({ email: '', full_name: '', role: 'employee', department: '', company: '', employee_id: '' })
       load()
     } catch (err: any) {
-      toast.error(err.message ?? 'Failed to invite user')
+      toast.error(getErrorMessage(err, 'Failed to invite user'))
     }
     setInviting(false)
   }
@@ -175,7 +176,7 @@ export default function UsersPage() {
       setPortalForm({ email: '', full_name: '', company: '', password: '', confirmPassword: '', role: 'client' })
       load()
     } catch (err: any) {
-      toast.error(err.message ?? 'Failed to create portal account')
+      toast.error(getErrorMessage(err, 'Failed to create portal account'))
     }
     setPortalCreating(false)
   }
@@ -195,14 +196,14 @@ export default function UsersPage() {
       company: editForm.company || null,
       employee_id: editForm.employee_id.trim() || null,
     }).eq('id', editing.id)
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else { toast.success('User updated'); setEditOpen(false); load() }
   }
 
   async function toggleStatus(p: Profile) {
     const next = p.status === 'active' ? 'inactive' : 'active'
     const { error } = await supabase.from('profiles').update({ status: next }).eq('id', p.id)
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else { toast.success(`User ${next}`); load() }
   }
 
@@ -272,8 +273,9 @@ export default function UsersPage() {
 
       {/* Table */}
       <div className="rounded-lg border bg-card overflow-x-auto">
+        <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
               <TableHead>User</TableHead>
               <TableHead>Employee ID</TableHead>
@@ -346,6 +348,7 @@ export default function UsersPage() {
             })}
           </TableBody>
         </Table>
+        </div>
       </div>
 
       {/* Create Portal Account Dialog */}

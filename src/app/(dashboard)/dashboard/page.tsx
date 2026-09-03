@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { getErrorMessage } from '@/lib/error-message'
 import {
   BarChart, Bar, LineChart, Line, ComposedChart, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts'
@@ -435,7 +436,7 @@ export default function DashboardPage() {
       toast.success(`${channel.name} logo updated`)
       setRealtimeTick(t => t + 1)
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to upload logo')
+      toast.error(getErrorMessage(err, 'Failed to upload logo'))
     }
     setUploadingChannelId(null)
   }

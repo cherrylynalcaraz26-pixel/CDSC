@@ -21,6 +21,7 @@ import { sendEmail } from '@/lib/send-email'
 import { uploadImageToDrive } from '@/lib/upload-image'
 import Image from 'next/image'
 import QuotationRequestsPanel from '@/components/quotation/quotation-requests-panel'
+import { getErrorMessage } from '@/lib/error-message'
 
 interface Client { id: string; company_name: string; email: string | null }
 interface ItemOption { item_name: string; description: string | null; unit_of_measure: string; cost: number | null; selling_price: number | null; image_url: string | null; image_urls: string[] | null }
@@ -283,13 +284,13 @@ export default function QuotationPage() {
       .eq('quotation_id', id)
       .order('created_at')
     const { error } = await supabase.from('quotations').delete().eq('id', id)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(getErrorMessage(error)); return }
     undoToast('Quotation deleted', async () => {
       if (!snapshot) return
       const { status: _status, id: _id, ...rest } = snapshot
       void _status; void _id
       const { data: restored, error: restoreErr } = await supabase.from('quotations').insert({ ...rest, status: snapshot.status }).select('id').single()
-      if (restoreErr || !restored) { toast.error(restoreErr?.message ?? 'Failed to restore quotation'); return }
+      if (restoreErr || !restored) { toast.error(getErrorMessage(restoreErr, 'Failed to restore quotation')); return }
       if (itemSnapshot && itemSnapshot.length > 0) {
         await supabase.from('quotation_items').insert(itemSnapshot.map(i => ({ ...i, quotation_id: restored.id })))
       }
@@ -376,7 +377,7 @@ export default function QuotationPage() {
       try {
         imageUrl = await uploadImageToDrive(newItemImageFile, { displayName: name, folder: 'Items' })
       } catch (err: unknown) {
-        toast.error(err instanceof Error ? err.message : 'Failed to upload image')
+        toast.error(getErrorMessage(err, 'Failed to upload image'))
         setSavingNewItem(false)
         return
       }
@@ -395,7 +396,7 @@ export default function QuotationPage() {
       image_urls: imageUrl ? [imageUrl] : [],
       status: 'active',
     })
-    if (error) { toast.error(error.message); setSavingNewItem(false); return }
+    if (error) { toast.error(getErrorMessage(error)); setSavingNewItem(false); return }
 
     const newOption: ItemOption = { item_name: name, description: null, unit_of_measure, cost, selling_price: sellingPrice, image_url: imageUrl, image_urls: imageUrl ? [imageUrl] : [] }
     setItems(prev => [...prev, newOption].sort((a, b) => a.item_name.localeCompare(b.item_name)))
@@ -447,7 +448,7 @@ export default function QuotationPage() {
       error = insErr
       savedId = inserted?.id ?? null
     }
-    if (error) { toast.error(error.message); setSaving(false); return }
+    if (error) { toast.error(getErrorMessage(error)); setSaving(false); return }
 
     // Save line items
     if (savedId) {
@@ -581,7 +582,7 @@ export default function QuotationPage() {
   async function updateStatus(id: string, status: string) {
     const prevStatus = quotations.find(q => q.id === id)?.status
     const { error } = await supabase.from('quotations').update({ status }).eq('id', id)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(getErrorMessage(error)); return }
     undoToast(`Status updated to ${STATUS_CFG[status]?.label ?? status}`, async () => {
       if (!prevStatus) return
       await supabase.from('quotations').update({ status: prevStatus }).eq('id', id)
@@ -993,8 +994,9 @@ export default function QuotationPage() {
           <CardContent className="pt-5 space-y-2">
             <Label>Line Items</Label>
             <div className="border rounded-lg overflow-hidden">
+              <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
               <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow className="bg-muted/40">
                     <TableHead className="w-12">No.</TableHead>
                     <TableHead className="w-16">Qty</TableHead>
@@ -1081,6 +1083,7 @@ export default function QuotationPage() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             </div>
             <Button variant="outline" size="sm" onClick={() => setLines(prev => [...prev, emptyLine()])}>
               <Plus className="h-3.5 w-3.5 mr-1.5" />Add Item
@@ -1187,8 +1190,9 @@ export default function QuotationPage() {
             <CardTitle className="text-base">Quotation List</CardTitle>
           </CardHeader>
           <CardContent className="p-0 overflow-x-auto">
+            <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead className="w-10">No.</TableHead>
                   <SortableTableHead label="Quote #" sortKey="quote_number" activeKey={quoteSortKey} direction={quoteSortDir} onSort={onSortQuote} />
@@ -1279,6 +1283,7 @@ export default function QuotationPage() {
                 })}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -1388,7 +1393,7 @@ ${emailBodyQ.replace(/\n/g, '<br/>')}
                     setShowEmailQ(false)
                     clearEmailAttachment()
                   } catch (err: unknown) {
-                    toast.error(err instanceof Error ? err.message : 'Failed to send email')
+                    toast.error(getErrorMessage(err, 'Failed to send email'))
                   } finally {
                     setSendingEmailQ(false)
                   }
@@ -1485,7 +1490,7 @@ ${listEmailBody.replace(/\n/g, '<br/>')}
                     clearEmailAttachment()
                     updateStatus(q.id, 'sent')
                   } catch (err: unknown) {
-                    toast.error(err instanceof Error ? err.message : 'Failed to send email')
+                    toast.error(getErrorMessage(err, 'Failed to send email'))
                   } finally {
                     setSendingListEmail(false)
                   }

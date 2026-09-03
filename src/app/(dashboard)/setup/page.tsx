@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
+import { getErrorMessage } from '@/lib/error-message'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
@@ -58,7 +59,7 @@ function UOMTab({ configSelector }: { configSelector: React.ReactNode }) {
     const { error } = editing
       ? await supabase.from('uom_list').update(payload).eq('id', editing.id)
       : await supabase.from('uom_list').insert(payload)
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else { toast.success(editing ? 'UOM updated' : 'UOM added'); setOpen(false); load() }
     setSaving(false)
   }
@@ -71,7 +72,7 @@ function UOMTab({ configSelector }: { configSelector: React.ReactNode }) {
   async function del() {
     if (!deleteId) return
     const { error } = await supabase.from('uom_list').delete().eq('id', deleteId)
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else { toast.success('Deleted'); load() }
     setDeleteId(null)
   }
@@ -85,8 +86,9 @@ function UOMTab({ configSelector }: { configSelector: React.ReactNode }) {
         </Button>
       </div>
       <div className="rounded-lg border bg-card">
+        <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
               <TableHead>Code</TableHead>
               <TableHead>Name</TableHead>
@@ -125,6 +127,7 @@ function UOMTab({ configSelector }: { configSelector: React.ReactNode }) {
             ))}
           </TableBody>
         </Table>
+        </div>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -197,7 +200,7 @@ function BrandsTab({ configSelector }: { configSelector: React.ReactNode }) {
     const { error } = editing
       ? await supabase.from('brands').update(payload).eq('id', editing.id)
       : await supabase.from('brands').insert(payload)
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else { toast.success(editing ? 'Brand updated' : 'Brand added'); setOpen(false); load() }
     setSaving(false)
   }
@@ -210,7 +213,7 @@ function BrandsTab({ configSelector }: { configSelector: React.ReactNode }) {
   async function del() {
     if (!deleteId) return
     const { error } = await supabase.from('brands').delete().eq('id', deleteId)
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else { toast.success('Deleted'); load() }
     setDeleteId(null)
   }
@@ -232,8 +235,9 @@ function BrandsTab({ configSelector }: { configSelector: React.ReactNode }) {
         </Button>
       </div>
       <div className="rounded-lg border bg-card">
+        <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
               <SortableTableHead label="Brand Name" sortKey="name" activeKey={brandSortKey} direction={brandSortDir} onSort={onSortBrands} />
               <SortableTableHead label="Description" sortKey="description" activeKey={brandSortKey} direction={brandSortDir} onSort={onSortBrands} />
@@ -272,6 +276,7 @@ function BrandsTab({ configSelector }: { configSelector: React.ReactNode }) {
             ))}
           </TableBody>
         </Table>
+        </div>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -369,7 +374,7 @@ function AttributesTab({ configSelector }: { configSelector: React.ReactNode }) 
     const { error } = editing
       ? await supabase.from('attributes').update(payload).eq('id', editing.id)
       : await supabase.from('attributes').insert(payload)
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else { toast.success(editing ? 'Attribute updated' : 'Attribute added'); setOpen(false); load() }
     setSaving(false)
   }
@@ -382,7 +387,7 @@ function AttributesTab({ configSelector }: { configSelector: React.ReactNode }) 
   async function del() {
     if (!deleteId) return
     const { error } = await supabase.from('attributes').delete().eq('id', deleteId)
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else { toast.success('Deleted'); load() }
     setDeleteId(null)
   }
@@ -404,8 +409,9 @@ function AttributesTab({ configSelector }: { configSelector: React.ReactNode }) 
         </Button>
       </div>
       <div className="rounded-lg border bg-card">
+        <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
               <SortableTableHead label="Attribute Name" sortKey="name" activeKey={attrSortKey} direction={attrSortDir} onSort={onSortAttrs} />
               <SortableTableHead label="Type" sortKey="data_type" activeKey={attrSortKey} direction={attrSortDir} onSort={onSortAttrs} />
@@ -454,6 +460,7 @@ function AttributesTab({ configSelector }: { configSelector: React.ReactNode }) 
             ))}
           </TableBody>
         </Table>
+        </div>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -554,7 +561,7 @@ function CategoriesTab({ configSelector }: { configSelector: React.ReactNode }) 
     const { error } = editing
       ? await supabase.from('categories').update(payload).eq('id', editing.id)
       : await supabase.from('categories').insert({ ...payload, status: 'active' })
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else { toast.success(editing ? 'Category updated' : 'Category added'); setOpen(false); load() }
     setSaving(false)
   }
@@ -568,7 +575,7 @@ function CategoriesTab({ configSelector }: { configSelector: React.ReactNode }) 
   async function del() {
     if (!deleteId) return
     const { error } = await supabase.from('categories').delete().eq('id', deleteId)
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else { toast.success('Deleted'); load() }
     setDeleteId(null)
   }
@@ -582,8 +589,9 @@ function CategoriesTab({ configSelector }: { configSelector: React.ReactNode }) 
         </Button>
       </div>
       <div className="rounded-lg border bg-card">
+        <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
               <TableHead>Code</TableHead>
               <TableHead>Name</TableHead>
@@ -622,6 +630,7 @@ function CategoriesTab({ configSelector }: { configSelector: React.ReactNode }) 
             ))}
           </TableBody>
         </Table>
+        </div>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -755,7 +764,7 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
       setInviteResult({ email: inviteEmail.trim().toLowerCase() })
       load()
     } catch (err: any) {
-      toast.error(err.message ?? 'Failed to create portal account')
+      toast.error(getErrorMessage(err, 'Failed to create portal account'))
     }
     setInviting(false)
   }
@@ -804,7 +813,7 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
       try {
         logoUrl = await uploadImageToDrive(logoFile, { displayName: form.company_name.trim(), folder: 'Suppliers' })
       } catch (err: unknown) {
-        toast.error(err instanceof Error ? err.message : 'Failed to upload logo')
+        toast.error(getErrorMessage(err, 'Failed to upload logo'))
         setUploadingLogo(false)
         setSaving(false)
         return
@@ -831,7 +840,7 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
     const { error } = editing
       ? await supabase.from('suppliers').update(payload).eq('id', editing.id)
       : await supabase.from('suppliers').insert(payload)
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else { toast.success(editing ? 'Supplier updated' : 'Supplier added'); setOpen(false); load() }
     setSaving(false)
   }
@@ -844,7 +853,7 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
   async function del() {
     if (!deleteId) return
     const { error } = await supabase.from('suppliers').delete().eq('id', deleteId)
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else { toast.success('Deleted'); load() }
     setDeleteId(null)
   }
@@ -858,8 +867,9 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
         </Button>
       </div>
       <div className="rounded-lg border bg-card overflow-x-auto">
+        <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
               <TableHead className="w-12">Logo</TableHead>
               <TableHead>Code</TableHead>
@@ -949,6 +959,7 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
             ))}
           </TableBody>
         </Table>
+        </div>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -1250,7 +1261,7 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
     const name = newBrandName.trim()
     if (!name) return
     const { data, error } = await supabase.from('brands').insert({ name, is_active: true }).select('id, name').single()
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(getErrorMessage(error)); return }
     setBrandList(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
     setForm(p => ({ ...p, brand: data.name }))
     setNewBrandName('')
@@ -1262,7 +1273,7 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
     const name = newAttributeName.trim()
     if (!name) return
     const { data, error } = await supabase.from('attributes').insert({ name, data_type: 'select', options: [], is_active: true }).select('id, name, data_type, options').single()
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(getErrorMessage(error)); return }
     const created = data as AttributeOption
     setAttributeList(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)))
     setAttributeTypeId(created.id)
@@ -1278,7 +1289,7 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
     if (!value || selectedAttrType.options?.includes(value)) return
     const updatedOptions = [...(selectedAttrType.options ?? []), value]
     const { error } = await supabase.from('attributes').update({ options: updatedOptions, data_type: 'select' }).eq('id', selectedAttrType.id)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(getErrorMessage(error)); return }
     setAttributeList(prev => prev.map(a => a.id === selectedAttrType.id ? { ...a, options: updatedOptions, data_type: 'select' } : a))
     setForm(p => ({ ...p, attribute: value }))
     setNewAttrValue('')
@@ -1391,7 +1402,7 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
     const { error } = await supabase.from('item_suggestions').update({
       status: 'rejected', reviewed_by: user?.email ?? null, reviewed_at: new Date().toISOString(),
     }).eq('id', id)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(getErrorMessage(error)); return }
     toast.success('Suggestion declined')
     load()
   }
@@ -1425,7 +1436,7 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
         }
       }
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to upload image')
+      toast.error(getErrorMessage(err, 'Failed to upload image'))
       setUploadingImage(false)
       setSaving(false)
       return
@@ -1453,7 +1464,7 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
       error = insErr
       newItemId = inserted?.id ?? null
     }
-    if (error) { toast.error(error.message); setSaving(false); return }
+    if (error) { toast.error(getErrorMessage(error)); setSaving(false); return }
 
     // Warehouse stock and its stock-history ledger key items by name, not by item_id, so
     // renaming an item here would otherwise orphan its existing stock row and hide all of
@@ -1490,7 +1501,7 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
   async function del() {
     if (!deleteId) return
     const { error } = await supabase.from('items').delete().eq('id', deleteId)
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else { toast.success('Deleted'); load() }
     setDeleteId(null)
   }
@@ -1621,8 +1632,9 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
         </div>
       ) : (
       <div className="rounded-lg border bg-card overflow-x-auto">
+        <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
               <TableHead className="w-14">Image</TableHead>
               <SortableTableHead label="Code" sortKey="item_code" activeKey={itemSortKey} direction={itemSortDir} onSort={onSortItems} />
@@ -1693,6 +1705,7 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
             )})}
           </TableBody>
         </Table>
+        </div>
       </div>
       )}
       <Dialog open={open} onOpenChange={setOpen}>
@@ -1932,7 +1945,7 @@ function PayeesTab({ configSelector }: { configSelector: React.ReactNode }) {
     const { error } = editing
       ? await supabase.from('payees').update({ name: name.trim() }).eq('id', editing.id)
       : await supabase.from('payees').insert({ name: name.trim() })
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else { toast.success(editing ? 'Payee updated' : 'Payee added'); setOpen(false); load() }
     setSaving(false)
   }
@@ -1940,7 +1953,7 @@ function PayeesTab({ configSelector }: { configSelector: React.ReactNode }) {
   async function del() {
     if (!deleteId) return
     const { error } = await supabase.from('payees').delete().eq('id', deleteId)
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else { toast.success('Deleted'); load() }
     setDeleteId(null)
   }
@@ -1961,8 +1974,9 @@ function PayeesTab({ configSelector }: { configSelector: React.ReactNode }) {
         </Button>
       </div>
       <div className="rounded-lg border bg-card">
+        <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
               <SortableTableHead label="Payee Name" sortKey="name" activeKey={payeeSortKey} direction={payeeSortDir} onSort={onSortPayees} />
               <SortableTableHead label="Added" sortKey="created_at" activeKey={payeeSortKey} direction={payeeSortDir} onSort={onSortPayees} />
@@ -1993,6 +2007,7 @@ function PayeesTab({ configSelector }: { configSelector: React.ReactNode }) {
             ))}
           </TableBody>
         </Table>
+        </div>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -2051,14 +2066,14 @@ function BirFormsTab({ configSelector }: { configSelector: React.ReactNode }) {
       setTemplates(prev => ({ ...prev, [code]: url }))
       toast.success(`${code} form image uploaded`)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Upload failed')
+      toast.error(getErrorMessage(err, 'Upload failed'))
     }
     setUploadingCode(null)
   }
 
   async function removeTemplate(code: string) {
     const { error } = await supabase.from('bir_form_templates').delete().eq('form_code', code)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(getErrorMessage(error)); return }
     setTemplates(prev => { const next = { ...prev }; delete next[code]; return next })
     toast.success('Removed')
   }

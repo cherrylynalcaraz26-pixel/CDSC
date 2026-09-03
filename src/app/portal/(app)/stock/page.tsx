@@ -4,6 +4,7 @@ import { Suspense, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { fetchAllRows } from '@/lib/supabase/fetch-all'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { getErrorMessage } from '@/lib/error-message'
 import {
   Package, Loader2, Search, AlertTriangle, ArrowDownCircle, ArrowUpCircle,
   SlidersHorizontal, History, ChevronDown, ChevronUp, X, Check, Plus, Truck, CheckCircle2,
@@ -191,7 +192,7 @@ function PortalStockPageContent() {
     if (!clientId || !newDeptName.trim()) return
     setSavingDept(true)
     const { error } = await supabase.from('client_departments').insert({ client_id: clientId, name: newDeptName.trim() })
-    if (error) { toast.error(error.message); setSavingDept(false); return }
+    if (error) { toast.error(getErrorMessage(error)); setSavingDept(false); return }
     toast.success('Department added')
     setNewDeptName('')
     setAddDeptOpen(false)
@@ -278,7 +279,7 @@ function PortalStockPageContent() {
       }
       await fetchData(clientId)
     } catch (err: any) {
-      toast.error(err.message ?? 'Failed to save transaction')
+      toast.error(getErrorMessage(err, 'Failed to save transaction'))
     }
     setSubmitting(false)
   }
@@ -315,7 +316,7 @@ function PortalStockPageContent() {
       setSelectedPO('')
       setBulkSelectedItems([])
     } catch (err: any) {
-      toast.error(err.message ?? 'Failed to save transactions')
+      toast.error(getErrorMessage(err, 'Failed to save transactions'))
     }
     setBulkSubmitting(false)
   }
@@ -351,7 +352,7 @@ function PortalStockPageContent() {
       toast.success('Transaction undone')
       await fetchData(clientId)
     } catch (err: any) {
-      toast.error(err.message ?? 'Failed to undo transaction')
+      toast.error(getErrorMessage(err, 'Failed to undo transaction'))
     }
     setUndoingId(null)
   }
@@ -363,7 +364,7 @@ function PortalStockPageContent() {
     const { error } = await supabase.from('client_inventory')
       .update({ low_stock_threshold: val })
       .eq('id', thresholdItem.id)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(getErrorMessage(error)); return }
     toast.success('Threshold updated')
     setThresholdItem(null)
     await fetchData(clientId!)
@@ -705,7 +706,7 @@ function PortalStockPageContent() {
                             toast.success('Stock report emailed')
                             setEmailDialogOpen(false)
                           } catch (err) {
-                            toast.error(err instanceof Error ? err.message : 'Failed to send email')
+                            toast.error(getErrorMessage(err, 'Failed to send email'))
                           }
                           setSendingEmail(false)
                         }}

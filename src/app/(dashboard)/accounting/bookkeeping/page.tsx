@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { getErrorMessage } from '@/lib/error-message'
 import {
   Plus, Download, Loader2, BookOpen, Banknote, TrendingUp, BarChart3,
   Scale, FileSpreadsheet, Trash2,
@@ -126,8 +127,9 @@ function SalesJournalTab({ collections }: { collections: Collection[] }) {
 
       <Card>
         <CardContent className="p-0">
+          <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
           <Table>
-            <TableHeader>
+            <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead>Date</TableHead>
                 <TableHead>OR Number</TableHead>
@@ -156,6 +158,7 @@ function SalesJournalTab({ collections }: { collections: Collection[] }) {
               ))}
             </TableBody>
           </Table>
+          </div>
           {posted.length > 0 && (
             <div className="flex justify-end gap-8 px-4 py-2 bg-muted/40 border-t text-sm font-semibold">
               <span>Gross: {fmt(totalGross)}</span>
@@ -200,7 +203,7 @@ function DisbursementsTab() {
     const trimmed = name.trim()
     if (!trimmed) return
     const { data, error } = await supabase.from('payees').insert({ name: trimmed }).select('id, name').single()
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(getErrorMessage(error)); return }
     setPayees(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
     setForm(p => ({ ...p, payee: data.name }))
     toast.success('Payee added')
@@ -231,7 +234,7 @@ function DisbursementsTab() {
       status: 'posted',
     }).select().single()
 
-    if (disbErr) { toast.error(disbErr.message); setSaving(false); return }
+    if (disbErr) { toast.error(getErrorMessage(disbErr)); setSaving(false); return }
 
     // Create journal entry
     const memo = `${form.payee} – ${form.description || expAcc?.name || 'Disbursement'}`
@@ -261,7 +264,7 @@ function DisbursementsTab() {
 
   async function deleteDisbursement(id: string) {
     const { error } = await supabase.from('disbursements').delete().eq('id', id)
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else { toast.success('Deleted'); load() }
   }
 
@@ -300,8 +303,9 @@ function DisbursementsTab() {
 
       <Card>
         <CardContent className="p-0">
+          <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
           <Table>
-            <TableHeader>
+            <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead>Date</TableHead>
                 <TableHead>CDJ #</TableHead>
@@ -336,6 +340,7 @@ function DisbursementsTab() {
               ))}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
 
@@ -466,8 +471,9 @@ function GeneralLedgerTab({ lines }: { lines: JournalLine[] }) {
       </div>
       <Card>
         <CardContent className="p-0">
+          <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
           <Table>
-            <TableHeader>
+            <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead>Date</TableHead>
                 <TableHead>Entry #</TableHead>
@@ -501,6 +507,7 @@ function GeneralLedgerTab({ lines }: { lines: JournalLine[] }) {
               ))}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
     </div>
@@ -554,8 +561,9 @@ function TrialBalanceTab({ lines, coa }: { lines: JournalLine[]; coa: COA[] }) {
       </div>
       <Card>
         <CardContent className="p-0">
+          <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
           <Table>
-            <TableHeader>
+            <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead>Account Code</TableHead>
                 <TableHead>Account Name</TableHead>
@@ -583,6 +591,7 @@ function TrialBalanceTab({ lines, coa }: { lines: JournalLine[]; coa: COA[] }) {
               </TableRow>
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
     </div>

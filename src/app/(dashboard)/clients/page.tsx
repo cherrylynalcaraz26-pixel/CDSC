@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
+import { getErrorMessage } from '@/lib/error-message'
 import {
   Plus, Loader2, MoreHorizontal, Building2, Phone, Mail,
   MapPin, User, Pencil, Trash2, Users, CheckCircle2, XCircle,
@@ -153,7 +154,7 @@ export default function ClientsPage() {
       supabase.from('clients').select('*').order('created_at', { ascending: false }),
       supabase.from('client_messages').select('client_id, status').eq('status', 'unread'),
     ])
-    if (clientRes.error) toast.error(clientRes.error.message)
+    if (clientRes.error) toast.error(getErrorMessage(clientRes.error))
     else setClients(clientRes.data ?? [])
     const counts: Record<string, number> = {}
     for (const m of (msgRes.data ?? [])) {
@@ -260,21 +261,21 @@ export default function ClientsPage() {
       setOpen(false)
       load()
     } catch (err: any) {
-      toast.error(err.message ?? 'Failed to save client')
+      toast.error(getErrorMessage(err, 'Failed to save client'))
     }
     setSaving(false)
   }
 
   async function handleDelete(c: Client) {
     const { error } = await supabase.from('clients').delete().eq('id', c.id)
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else { toast.success('Client deleted'); setDeleteConfirm(null); load() }
   }
 
   async function toggleStatus(c: Client) {
     const next = c.status === 'active' ? 'inactive' : 'active'
     const { error } = await supabase.from('clients').update({ status: next }).eq('id', c.id)
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else { toast.success(`Client marked ${next}`); load() }
   }
 
@@ -318,7 +319,7 @@ export default function ClientsPage() {
       setInviteResult({ email: inviteEmail.trim().toLowerCase() })
       load()
     } catch (err: any) {
-      toast.error(err.message ?? 'Failed to create portal account')
+      toast.error(getErrorMessage(err, 'Failed to create portal account'))
     }
     setInviting(false)
   }
@@ -407,8 +408,9 @@ export default function ClientsPage() {
       {/* Table View */}
       {view === 'table' && (
         <div className="rounded-lg border bg-card overflow-x-auto">
+          <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
           <Table>
-            <TableHeader>
+            <TableHeader className="sticky top-0 z-10 bg-background">
               <TableRow>
                 <TableHead>Client</TableHead>
                 <TableHead>Contact</TableHead>
@@ -520,6 +522,7 @@ export default function ClientsPage() {
               ))}
             </TableBody>
           </Table>
+          </div>
         </div>
       )}
 

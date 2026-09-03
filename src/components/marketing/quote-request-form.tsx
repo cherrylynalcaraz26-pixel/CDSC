@@ -6,6 +6,7 @@ import { sendEmail } from '@/lib/send-email'
 import { company } from '@/lib/site-content'
 import { toast } from 'sonner'
 import { Loader2, Paperclip, Send, CheckCircle2 } from 'lucide-react'
+import { getErrorMessage } from '@/lib/error-message'
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024 // 5MB — keeps the notification email well under the send-email API's size limit
 
@@ -83,7 +84,7 @@ export function QuoteRequestForm({ source = 'Website - Quotation Request' }: { s
     })
 
     if (error) {
-      toast.error(error.message || 'Failed to send your request. Please try again.')
+      toast.error(getErrorMessage(error, 'Failed to send your request. Please try again.'))
       setSending(false)
       return
     }

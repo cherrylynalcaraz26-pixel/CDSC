@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
+import { getErrorMessage } from '@/lib/error-message'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
@@ -70,7 +71,7 @@ export default function CategoriesPage() {
     const { error } = editing
       ? await supabase.from('categories').update(payload).eq('id', editing.id)
       : await supabase.from('categories').insert({ ...payload, status: 'active' })
-    if (error) { toast.error(error.message) } else {
+    if (error) { toast.error(getErrorMessage(error)) } else {
       toast.success(editing ? 'Category updated' : 'Category created')
       setOpen(false)
       load()
@@ -81,7 +82,7 @@ export default function CategoriesPage() {
   async function confirmDelete() {
     if (!deleteId) return
     const { error } = await supabase.from('categories').delete().eq('id', deleteId)
-    if (error) { toast.error(error.message) } else { toast.success('Category deleted'); load() }
+    if (error) { toast.error(getErrorMessage(error)) } else { toast.success('Category deleted'); load() }
     setDeleteId(null)
   }
 
@@ -98,8 +99,9 @@ export default function CategoriesPage() {
       </div>
 
       <div className="rounded-lg border bg-card">
+        <div className="max-h-[600px] overflow-x-auto overflow-y-auto">
         <Table>
-          <TableHeader>
+          <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
               <TableHead>Code</TableHead>
               <TableHead>Name</TableHead>
@@ -135,6 +137,7 @@ export default function CategoriesPage() {
             ))}
           </TableBody>
         </Table>
+        </div>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
