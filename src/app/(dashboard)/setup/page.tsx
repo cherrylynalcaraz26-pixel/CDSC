@@ -26,6 +26,7 @@ import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { uploadImageToDrive } from '@/lib/upload-image'
 import { useSearchContext } from '@/context/search-context'
+import { friendlyErrorMessage } from '@/lib/friendly-error'
 
 /* ─── UOM ─────────────────────────────────────────────── */
 interface UOM { id: string; code: string; name: string; description: string | null; is_active: boolean }
@@ -1250,7 +1251,7 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
     const name = newBrandName.trim()
     if (!name) return
     const { data, error } = await supabase.from('brands').insert({ name, is_active: true }).select('id, name').single()
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(friendlyErrorMessage(error)); return }
     setBrandList(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
     setForm(p => ({ ...p, brand: data.name }))
     setNewBrandName('')
@@ -1262,7 +1263,7 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
     const name = newAttributeName.trim()
     if (!name) return
     const { data, error } = await supabase.from('attributes').insert({ name, data_type: 'select', options: [], is_active: true }).select('id, name, data_type, options').single()
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(friendlyErrorMessage(error)); return }
     const created = data as AttributeOption
     setAttributeList(prev => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)))
     setAttributeTypeId(created.id)
@@ -1278,7 +1279,7 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
     if (!value || selectedAttrType.options?.includes(value)) return
     const updatedOptions = [...(selectedAttrType.options ?? []), value]
     const { error } = await supabase.from('attributes').update({ options: updatedOptions, data_type: 'select' }).eq('id', selectedAttrType.id)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(friendlyErrorMessage(error)); return }
     setAttributeList(prev => prev.map(a => a.id === selectedAttrType.id ? { ...a, options: updatedOptions, data_type: 'select' } : a))
     setForm(p => ({ ...p, attribute: value }))
     setNewAttrValue('')
@@ -1391,7 +1392,7 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
     const { error } = await supabase.from('item_suggestions').update({
       status: 'rejected', reviewed_by: user?.email ?? null, reviewed_at: new Date().toISOString(),
     }).eq('id', id)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(friendlyErrorMessage(error)); return }
     toast.success('Suggestion declined')
     load()
   }
@@ -1425,7 +1426,7 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
         }
       }
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to upload image')
+      toast.error(friendlyErrorMessage(err, 'Failed to upload image. Please try again.'))
       setUploadingImage(false)
       setSaving(false)
       return
@@ -1453,7 +1454,7 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
       error = insErr
       newItemId = inserted?.id ?? null
     }
-    if (error) { toast.error(error.message); setSaving(false); return }
+    if (error) { toast.error(friendlyErrorMessage(error, 'Failed to save the item. Please check your entries and try again.')); setSaving(false); return }
 
     // Warehouse stock and its stock-history ledger key items by name, not by item_id, so
     // renaming an item here would otherwise orphan its existing stock row and hide all of
@@ -1490,7 +1491,7 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
   async function del() {
     if (!deleteId) return
     const { error } = await supabase.from('items').delete().eq('id', deleteId)
-    if (error) toast.error(error.message)
+    if (error) toast.error(friendlyErrorMessage(error, "Couldn't delete this item. It may still be in use elsewhere."))
     else { toast.success('Deleted'); load() }
     setDeleteId(null)
   }
