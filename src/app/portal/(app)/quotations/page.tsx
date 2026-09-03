@@ -11,6 +11,7 @@ import { undoToast } from '@/lib/undo-toast'
 import { useSearchContext } from '@/context/search-context'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { RfqFlowStepper } from '@/components/quotation/rfq-flow'
+import { getErrorMessage } from '@/lib/error-message'
 
 interface QuoteItem {
   id: string
@@ -144,7 +145,7 @@ export default function PortalQuotations() {
     setUpdatingId(id)
     const prevStatus = quotations.find(q => q.id === id)?.status
     const { error } = await supabase.from('quotations').update({ status }).eq('id', id)
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else {
       setQuotations(prev => prev.map(q => q.id === id ? { ...q, status } : q))
       undoToast(status === 'accepted' ? 'Quotation accepted' : 'Quotation declined', async () => {

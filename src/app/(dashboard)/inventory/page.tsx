@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { getErrorMessage } from '@/lib/error-message'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow, SortableTableHead,
 } from '@/components/ui/table'
@@ -571,7 +572,7 @@ export default function InventoryPage() {
         notes: warehouseUpdateNotes.trim() || null,
         updated_at: new Date().toISOString(),
       }).eq('id', warehouseUpdateRow.id)
-      if (error) { toast.error(error.message); setWarehouseUpdateSaving(false); return }
+      if (error) { toast.error(getErrorMessage(error)); setWarehouseUpdateSaving(false); return }
 
       // The quantity is already deducted above regardless — surface a failure here
       // rather than swallowing it, since a silently-failed insert (e.g. a constraint
@@ -606,7 +607,7 @@ export default function InventoryPage() {
         notes: warehouseUpdateNotes.trim() || null,
         updated_at: new Date().toISOString(),
       }).eq('id', warehouseUpdateRow.id)
-      if (error) { toast.error(error.message); setWarehouseUpdateSaving(false); return }
+      if (error) { toast.error(getErrorMessage(error)); setWarehouseUpdateSaving(false); return }
 
       const deliverClient = clientOptions.find(c => c.id === wsDeliverClientId)
       const { error: ledgerError } = await supabase.from('warehouse_stock_ledger').insert({
@@ -657,7 +658,7 @@ export default function InventoryPage() {
       notes: warehouseUpdateNotes.trim() || null,
     }).eq('id', warehouseUpdateRow.id)
     if (error) {
-      toast.error(error.message)
+      toast.error(getErrorMessage(error))
     } else {
       if (delta !== 0) {
         const { error: ledgerError } = await supabase.from('warehouse_stock_ledger').insert({
@@ -813,7 +814,7 @@ export default function InventoryPage() {
     const poNumber = addPoOptions.find(p => p.id === addPoId)?.po_number ?? null
     const error = await addToWarehouseStock(rows, 'po_receiving', poNumber)
     if (error) {
-      toast.error(error)
+      toast.error(getErrorMessage(error))
     } else {
       toast.success(`${rows.length} item${rows.length !== 1 ? 's' : ''} received`)
       setAddOpen(false)
@@ -835,7 +836,7 @@ export default function InventoryPage() {
     const poNumber = addPoId ? (addPoOptions.find(p => p.id === addPoId)?.po_number ?? null) : null
     const error = await addToWarehouseStock(rows, addPoId ? 'po_receiving' : 'manual_add', poNumber)
     if (error) {
-      toast.error(error)
+      toast.error(getErrorMessage(error))
     } else {
       toast.success(addPoId
         ? `${rows.length} item${rows.length !== 1 ? 's' : ''} received`
@@ -1037,7 +1038,7 @@ export default function InventoryPage() {
       .update({ channel_id: assignChannelValue || null })
       .eq('client_id', clientId)
       .eq('item_name', assignChannelRow.item_name)
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else { toast.success('Channel updated'); setAssignChannelRow(null); load() }
     setAssigningChannel(false)
   }
@@ -1060,7 +1061,7 @@ export default function InventoryPage() {
       .eq('item_name', oldName)
 
     if (drErr || csiErr) {
-      toast.error((drErr || csiErr)!.message)
+      toast.error(getErrorMessage(drErr || csiErr))
     } else {
       toast.success(`Updated "${oldName}" → "${newName}" in DR and CSI records`)
       setEditRow(null)
@@ -1081,7 +1082,7 @@ export default function InventoryPage() {
       .eq('item_name', row.item_name)
       .eq('client_name', row.client)
     if (drErr || csiErr) {
-      toast.error((drErr || csiErr)!.message)
+      toast.error(getErrorMessage(drErr || csiErr))
     } else {
       toast.success(`Deleted "${row.item_name}" records`)
       load()
@@ -1093,7 +1094,7 @@ export default function InventoryPage() {
     askConfirm(`Delete this warehouse stock entry for "${item_name}"? This cannot be undone.`, async () => {
       const { error } = await supabase.from('warehouse_stock').delete().eq('id', id)
       if (error) {
-        toast.error(error.message)
+        toast.error(getErrorMessage(error))
       } else {
         toast.success('Warehouse stock entry deleted')
         load()
@@ -1828,7 +1829,7 @@ export default function InventoryPage() {
             toast.success('Email sent')
             setEmailReportOpen(false)
           } catch (err: unknown) {
-            toast.error(err instanceof Error ? err.message : 'Failed to send email')
+            toast.error(getErrorMessage(err, 'Failed to send email'))
           }
           setEmailReportSending(false)
         }

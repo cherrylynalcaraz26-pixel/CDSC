@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 import { undoToast } from '@/lib/undo-toast'
+import { getErrorMessage } from '@/lib/error-message'
 import {
   Loader2, ClipboardList, ChevronLeft, Trash2, Plus, Package,
   XCircle, ShoppingCart, Star, Truck, Globe2,
@@ -207,7 +208,7 @@ export default function QuotationRequestsPanel({ onQuotationCreated }: { onQuota
     const { error } = await supabase.from('quotation_requests').update({
       status: 'declined', reviewed_by: staffName || null, reviewed_at: new Date().toISOString(),
     }).eq('id', reviewing.id)
-    if (error) { toast.error(error.message); setSaving(false); return }
+    if (error) { toast.error(getErrorMessage(error)); setSaving(false); return }
     undoToast('Request declined', async () => {
       await supabase.from('quotation_requests').update({ status: prevStatus }).eq('id', reviewing.id)
       await load()
@@ -223,7 +224,7 @@ export default function QuotationRequestsPanel({ onQuotationCreated }: { onQuota
     const valid = supplierCols.filter(c => c.supplier_name.trim())
     setSavingComparison(true)
     const { error: delErr } = await supabase.from('quotation_request_suppliers').delete().eq('request_id', reviewing.id)
-    if (delErr) { toast.error(delErr.message); setSavingComparison(false); return }
+    if (delErr) { toast.error(getErrorMessage(delErr)); setSavingComparison(false); return }
     if (valid.length > 0) {
       const { error: insErr } = await supabase.from('quotation_request_suppliers').insert(valid.map(c => ({
         request_id: reviewing.id,
@@ -237,7 +238,7 @@ export default function QuotationRequestsPanel({ onQuotationCreated }: { onQuota
         notes: c.notes || null,
         is_selected: c.is_selected,
       })))
-      if (insErr) { toast.error(insErr.message); setSavingComparison(false); return }
+      if (insErr) { toast.error(getErrorMessage(insErr)); setSavingComparison(false); return }
     }
     undoToast('Supplier comparison saved', async () => {
       await supabase.from('quotation_request_suppliers').delete().eq('request_id', reviewing.id)
@@ -340,7 +341,7 @@ export default function QuotationRequestsPanel({ onQuotationCreated }: { onQuota
       await load()
       onQuotationCreated?.(quoData.id)
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to create quotation')
+      toast.error(getErrorMessage(err, 'Failed to create quotation'))
     }
     setSaving(false)
   }

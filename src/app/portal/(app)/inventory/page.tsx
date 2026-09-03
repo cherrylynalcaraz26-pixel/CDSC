@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import { useRouter } from 'next/navigation'
 import { useSearchContext } from '@/context/search-context'
+import { getErrorMessage } from '@/lib/error-message'
 
 interface InventoryItem {
   id: string
@@ -73,7 +74,7 @@ export default function PortalInventoryPage() {
               .order('item_name'),
             supabase.from('client_inventory').select('item_name').eq('client_id', clientRow.id),
           ])
-          if (error) toast.error(error.message)
+          if (error) toast.error(getErrorMessage(error))
 
           const myNames = new Set(
             (inventoryRows ?? []).map(r => r.item_name).filter(Boolean).map(n => cleanText(n).toLowerCase())
@@ -186,7 +187,7 @@ export default function PortalInventoryPage() {
           total_amount: (e.item.selling_price ?? 0) * e.qty,
         }))
         const { error: itemErr } = await supabase.from('so_items').insert(itemRows)
-        if (itemErr) toast.error(`Items: ${itemErr.message}`)
+        if (itemErr) toast.error(`Items: ${getErrorMessage(itemErr)}`)
       }
       toast.success('Order submitted successfully!')
       setCart([])
@@ -195,7 +196,7 @@ export default function PortalInventoryPage() {
       setNotes('')
       router.push('/portal/requests')
     } catch (err: any) {
-      toast.error(err.message ?? 'Failed to submit order')
+      toast.error(getErrorMessage(err, 'Failed to submit order'))
     }
     setSubmitting(false)
   }

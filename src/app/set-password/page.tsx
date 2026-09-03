@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Eye, EyeOff, Loader2, Lock, CheckCircle2, XCircle } from 'lucide-react'
+import { getErrorMessage } from '@/lib/error-message'
 
 function SetPasswordContent() {
   const supabase = createClient()
@@ -42,7 +43,7 @@ function SetPasswordContent() {
     setSaving(true)
     const { error } = await supabase.auth.updateUser({ password })
     if (error) {
-      toast.error(error.message)
+      toast.error(getErrorMessage(error))
       setSaving(false)
       return
     }

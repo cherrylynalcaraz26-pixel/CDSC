@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { Eye, EyeOff, Loader2, Lock, Mail } from 'lucide-react'
+import { getErrorMessage } from '@/lib/error-message'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
@@ -44,7 +45,7 @@ export default function LoginPage() {
         router.push('/dashboard')
       }
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Login failed')
+      toast.error(getErrorMessage(err, 'Login failed'))
     } finally {
       setLoading(false)
     }

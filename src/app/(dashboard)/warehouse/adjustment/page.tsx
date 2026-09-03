@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { getErrorMessage } from '@/lib/error-message'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
@@ -76,7 +77,7 @@ export default function StockAdjustmentPage() {
       .from('stock_adjustments')
       .insert({ warehouse_id, reason: reason || null, status: 'pending', adjustment_date: today })
       .select('id').single()
-    if (error) { toast.error(error.message); setSaving(false); return }
+    if (error) { toast.error(getErrorMessage(error)); setSaving(false); return }
     const linePayload = lines.map(l => ({
       adjustment_id: adj.id,
       item_id: l.item_id,
@@ -85,7 +86,7 @@ export default function StockAdjustmentPage() {
       variance: l.qty_after - l.qty_before,
     }))
     const { error: le } = await supabase.from('stock_adjustment_items').insert(linePayload)
-    if (le) { toast.error(le.message) } else {
+    if (le) { toast.error(getErrorMessage(le)) } else {
       toast.success('Stock adjustment created')
       setOpen(false)
       setWarehouseId('')

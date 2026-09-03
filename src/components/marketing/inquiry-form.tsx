@@ -4,6 +4,7 @@ import { useId, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { Loader2, Send, CheckCircle2, Building2, Truck } from 'lucide-react'
+import { getErrorMessage } from '@/lib/error-message'
 
 type ContactType = 'client' | 'supplier'
 
@@ -52,7 +53,7 @@ export function InquiryForm() {
       source: 'Online Inquiry Form',
     })
     if (leadError) {
-      toast.error(leadError.message || 'Failed to submit inquiry. Please try again.')
+      toast.error(getErrorMessage(leadError, 'Failed to submit inquiry. Please try again.'))
       setSending(false)
       return
     }
@@ -67,7 +68,7 @@ export function InquiryForm() {
         notes: form.notes.trim() || null,
         status: 'active',
       })
-      if (error) toast.error(error.message)
+      if (error) toast.error(getErrorMessage(error))
     } else if (form.contact_type === 'supplier') {
       const now = new Date()
       const mm = String(now.getMonth() + 1).padStart(2, '0')
@@ -86,7 +87,7 @@ export function InquiryForm() {
         status: 'active',
         is_active: true,
       })
-      if (error) toast.error(error.message)
+      if (error) toast.error(getErrorMessage(error))
     }
 
     setSending(false)

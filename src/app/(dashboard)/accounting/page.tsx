@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
+import { getErrorMessage } from '@/lib/error-message'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
@@ -850,7 +851,7 @@ function CollectionsTab() {
       const { error } = editingId
         ? await supabase.from('collections').update(payload).eq('id', editingId)
         : await supabase.from('collections').insert(payload)
-      if (error) toast.error(error.message)
+      if (error) toast.error(getErrorMessage(error))
       else { toast.success(`OR ${orNumber} marked ${orStatus}`); setOpen(false); resetForm(); load() }
       setSaving(false)
       return
@@ -877,7 +878,7 @@ function CollectionsTab() {
     }
     if (editingId) {
       const { error } = await supabase.from('collections').update(payload).eq('id', editingId)
-      if (error) { toast.error(error.message); setSaving(false); return }
+      if (error) { toast.error(getErrorMessage(error)); setSaving(false); return }
       await supabase.from('collection_csi_links').delete().eq('collection_id', editingId)
       if (selectedCsis.size > 0) {
         await supabase.from('collection_csi_links').insert([...selectedCsis].map(si_number => ({ collection_id: editingId, si_number })))
@@ -887,7 +888,7 @@ function CollectionsTab() {
       return
     }
     const { data: colData, error } = await supabase.from('collections').insert({ ...payload, status: 'posted' }).select().single()
-    if (error) { toast.error(error.message); setSaving(false); return }
+    if (error) { toast.error(getErrorMessage(error)); setSaving(false); return }
     if (selectedCsis.size > 0) {
       await supabase.from('collection_csi_links').insert([...selectedCsis].map(si_number => ({ collection_id: (colData as any).id, si_number })))
     }
@@ -949,20 +950,20 @@ function CollectionsTab() {
     const { error } = await supabase.from('collection_csi_links').insert(
       [...linkCsiSelected].map(si_number => ({ collection_id: linkCsiFor.id, si_number }))
     )
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else { toast.success(`${linkCsiSelected.size} CSI invoice${linkCsiSelected.size !== 1 ? 's' : ''} linked`); setLinkCsiFor(null); load() }
     setLinkingCsi(false)
   }
 
   async function voidRecord(id: string) {
     const { error } = await supabase.from('collections').update({ status: 'voided' }).eq('id', id)
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else { toast.success('Collection voided'); load() }
   }
 
   async function deleteRecord(id: string) {
     const { error } = await supabase.from('collections').delete().eq('id', id)
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else { toast.success('Deleted'); load() }
   }
 
@@ -2039,7 +2040,7 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
 
   async function addPayeeName(name: string) {
     const { data, error } = await supabase.from('payees').insert({ name }).select('id, name').single()
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(getErrorMessage(error)); return }
     setPayees(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
     setForm(f => ({ ...f, payee: name }))
     setPayeeDropdownOpen(false)
@@ -2059,7 +2060,7 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
       check_number: form.check_number.trim() || null, remarks: form.remarks.trim() || null, status: 'posted',
       po_number: form.po_number || null,
     }).select().single()
-    if (disbErr) { toast.error(disbErr.message); setSaving(false); return }
+    if (disbErr) { toast.error(getErrorMessage(disbErr)); setSaving(false); return }
     const memo = `${form.payee} – ${form.description || expAcc?.name || 'Disbursement'}`
     const { data: jeData, error: jeErr } = await supabase.from('journal_entries').insert({
       entry_date: form.disb_date, memo, entry_type: 'disbursement',
@@ -2084,7 +2085,7 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
 
   async function deleteDisbursement(id: string) {
     const { error } = await supabase.from('disbursements').delete().eq('id', id)
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else { toast.success('Deleted'); load() }
   }
 

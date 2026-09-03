@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { getErrorMessage } from '@/lib/error-message'
 import {
   Plus, Download, Loader2, BookOpen, Banknote, TrendingUp, BarChart3,
   Scale, FileSpreadsheet, Trash2,
@@ -200,7 +201,7 @@ function DisbursementsTab() {
     const trimmed = name.trim()
     if (!trimmed) return
     const { data, error } = await supabase.from('payees').insert({ name: trimmed }).select('id, name').single()
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(getErrorMessage(error)); return }
     setPayees(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
     setForm(p => ({ ...p, payee: data.name }))
     toast.success('Payee added')
@@ -231,7 +232,7 @@ function DisbursementsTab() {
       status: 'posted',
     }).select().single()
 
-    if (disbErr) { toast.error(disbErr.message); setSaving(false); return }
+    if (disbErr) { toast.error(getErrorMessage(disbErr)); setSaving(false); return }
 
     // Create journal entry
     const memo = `${form.payee} – ${form.description || expAcc?.name || 'Disbursement'}`
@@ -261,7 +262,7 @@ function DisbursementsTab() {
 
   async function deleteDisbursement(id: string) {
     const { error } = await supabase.from('disbursements').delete().eq('id', id)
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else { toast.success('Deleted'); load() }
   }
 

@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { fetchAllRows } from '@/lib/supabase/fetch-all'
 import { subMonths, format } from 'date-fns'
 import { toast } from 'sonner'
+import { getErrorMessage } from '@/lib/error-message'
 import {
   Store, Plus, Loader2, Pencil, Trash2, MoreHorizontal, ImagePlus, X, Package,
   LayoutGrid, List, ArrowLeft, Lightbulb, TrendingUp, MessageSquareQuote, History, Layers, ArrowUpDown,
@@ -325,21 +326,21 @@ function VendorCatalogPageContent() {
       load()
       setRecsLoaded(false)
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to save item')
+      toast.error(getErrorMessage(err, 'Failed to save item'))
     }
     setSaving(false)
   }
 
   async function toggleActive(it: CatalogItem) {
     const { error } = await supabase.from('vendor_catalog_items').update({ is_active: !it.is_active }).eq('id', it.id)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(getErrorMessage(error)); return }
     load()
   }
 
   async function confirmDelete() {
     if (!deleteId) return
     const { error } = await supabase.from('vendor_catalog_items').delete().eq('id', deleteId)
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else { toast.success('Item removed'); load() }
     setDeleteId(null)
   }
@@ -354,7 +355,7 @@ function VendorCatalogPageContent() {
       price: r.price ?? null,
     }))
     const { error } = await supabase.from('vendor_catalog_items').insert(payload)
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else {
       toast.success(`${rows.length} item${rows.length !== 1 ? 's' : ''} added to your catalog`)
       load()

@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Card, CardContent } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
+import { getErrorMessage } from '@/lib/error-message'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
@@ -288,7 +289,7 @@ function LivePreview({ s }: { s: Settings }) {
       a.href = url; a.download = `${fullName} - Company Profile.pdf`; a.click()
       URL.revokeObjectURL(url)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to generate PDF')
+      toast.error(getErrorMessage(err, 'Failed to generate PDF'))
     }
     setDownloadingPdf(false)
   }
@@ -328,7 +329,7 @@ function LivePreview({ s }: { s: Settings }) {
       toast.success('Email sent')
       setEmailOpen(false)
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to send email')
+      toast.error(getErrorMessage(err, 'Failed to send email'))
     }
     setSendingEmail(false)
   }
@@ -606,7 +607,7 @@ function SecurityTab() {
     if (newPw.length < 8) { toast.error('Password must be at least 8 characters'); return }
     setSaving(true)
     const { error } = await supabase.auth.updateUser({ password: newPw })
-    if (error) { toast.error(error.message); setSaving(false); return }
+    if (error) { toast.error(getErrorMessage(error)); setSaving(false); return }
     setNewPw(''); setConfirmPw('')
     // Sign out and require a fresh login with the new password
     toast.success('Password updated — please sign in again with your new password')
@@ -908,7 +909,7 @@ function ProposalDatabaseTab({ settings, proposals, loading, onReload }: {
     }).select().single()
 
     if (error) {
-      toast.error(error.message)
+      toast.error(getErrorMessage(error))
     } else {
       toast.success('Proposal saved')
       setForm({ client: '', title: '', amount: '', status: 'draft' })
@@ -920,7 +921,7 @@ function ProposalDatabaseTab({ settings, proposals, loading, onReload }: {
 
   async function deleteProposal(id: number) {
     const { error } = await supabase.from('proposals').delete().eq('id', id)
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else {
       toast.success('Proposal deleted')
       await onReload()
@@ -955,7 +956,7 @@ function ProposalDatabaseTab({ settings, proposals, loading, onReload }: {
       toast.success('Proposal email sent successfully')
       setEmailDialogOpen(false)
     } catch (err: any) {
-      toast.error(err.message ?? 'Failed to send email')
+      toast.error(getErrorMessage(err, 'Failed to send email'))
     } finally {
       setSendingEmail(false)
     }
@@ -1196,7 +1197,7 @@ function BackupTab() {
       .select('*')
       .order('synced_at', { ascending: false })
       .limit(20)
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else setHistory(data ?? [])
     setHistoryLoading(false)
   }
@@ -1211,7 +1212,7 @@ function BackupTab() {
       toast.success('Database synced to Google Sheets')
       await loadHistory()
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to sync backup')
+      toast.error(getErrorMessage(err, 'Failed to sync backup'))
     }
     setSyncing(false)
   }
@@ -1333,7 +1334,7 @@ export default function SettingsPage() {
       .from('proposals')
       .select('*')
       .order('created_at', { ascending: false })
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else setProposals(data ?? [])
     setProposalsLoading(false)
   }
@@ -1392,7 +1393,7 @@ export default function SettingsPage() {
   async function save() {
     setSaving(true)
     const { error } = await supabase.from('system_settings').upsert({ id: 1, ...settings })
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else { toast.success('Settings saved'); setOriginal(settings); await reloadCompany() }
     setSaving(false)
   }
@@ -1404,7 +1405,7 @@ export default function SettingsPage() {
     try {
       publicUrl = await uploadImageToDrive(file, { displayName: 'Company Logo', folder: 'Company' })
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to upload logo')
+      toast.error(getErrorMessage(err, 'Failed to upload logo'))
       setUploading(false)
       return
     }
@@ -1423,7 +1424,7 @@ export default function SettingsPage() {
     try {
       publicUrl = await uploadImageToDrive(file, { displayName: 'Registration Document', folder: 'Company' })
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to upload image')
+      toast.error(getErrorMessage(err, 'Failed to upload image'))
       setUploadingRegistrationDoc(false)
       return
     }

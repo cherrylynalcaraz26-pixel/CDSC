@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { getErrorMessage } from '@/lib/error-message'
 import {
   Plus, MoreHorizontal, Eye, Printer, Trash2, CheckCircle2, XCircle,
   Loader2, X, FileText, Package, Search, Mail, ChevronDown, ChevronUp,
@@ -335,7 +336,7 @@ export default function SalesOrdersPage() {
       net_payable: totalCost,
       created_by: user?.id,
     }).select('id, po_number').single()
-    if (error) { toast.error(error.message); setQuickPOSaving(false); return }
+    if (error) { toast.error(getErrorMessage(error)); setQuickPOSaving(false); return }
     const { error: itemErr } = await supabase.from('po_items').insert(
       rows.map(r => ({
         po_id: po.id,
@@ -347,7 +348,7 @@ export default function SalesOrdersPage() {
         total_cost: r.total_cost,
       }))
     )
-    if (itemErr) { toast.error(itemErr.message); setQuickPOSaving(false); return }
+    if (itemErr) { toast.error(getErrorMessage(itemErr)); setQuickPOSaving(false); return }
     toast.success(`Purchase Order ${po.po_number ?? ''} created with ${rows.length} item${rows.length !== 1 ? 's' : ''}`)
     setQuickPOSaving(false)
     setQuickPOOpen(false)
@@ -360,7 +361,7 @@ export default function SalesOrdersPage() {
     if (!line.item_name) { toast.error('Select an item first'); return }
     if (!price || price <= 0) { toast.error('Enter a Selling Price first'); return }
     const { error } = await supabase.from('items').update({ selling_price: price }).eq('item_name', line.item_name)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(getErrorMessage(error)); return }
     setItems(prev => prev.map(it => it.item_name === line.item_name ? { ...it, selling_price: price } : it))
     toast.success(`Selling price for "${line.item_name}" updated to ${fmt(price)} in Configuration`)
   }
@@ -392,21 +393,21 @@ export default function SalesOrdersPage() {
     if (editingSOId) {
       // Update existing SO
       const { error } = await supabase.from('sales_orders').update(payload).eq('id', editingSOId)
-      if (error) { toast.error(error.message); setSaving(false); return }
+      if (error) { toast.error(getErrorMessage(error)); setSaving(false); return }
       // Replace items
       await supabase.from('so_items').delete().eq('so_id', editingSOId)
       if (itemRows.length > 0) {
         const { error: itemErr } = await supabase.from('so_items').insert(itemRows.map(r => ({ ...r, so_id: editingSOId })))
-        if (itemErr) toast.error(`Items: ${itemErr.message}`)
+        if (itemErr) toast.error(`Items: ${getErrorMessage(itemErr)}`)
       }
       toast.success('Sales Order updated')
     } else {
       // Create new SO
       const { data: soData, error } = await supabase.from('sales_orders').insert(payload).select('id').single()
-      if (error) { toast.error(error.message); setSaving(false); return }
+      if (error) { toast.error(getErrorMessage(error)); setSaving(false); return }
       if (soData?.id && itemRows.length > 0) {
         const { error: itemErr } = await supabase.from('so_items').insert(itemRows.map(r => ({ ...r, so_id: soData.id })))
-        if (itemErr) toast.error(`Items: ${itemErr.message}`)
+        if (itemErr) toast.error(`Items: ${getErrorMessage(itemErr)}`)
       }
       toast.success('Sales Order created')
     }
@@ -442,7 +443,7 @@ export default function SalesOrdersPage() {
 
   async function updateStatus(id: string, status: SOStatus) {
     const { error } = await supabase.from('sales_orders').update({ status }).eq('id', id)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(getErrorMessage(error)); return }
     if (status === 'cancelled') toast.warning('Sales Order cancelled')
     else toast.success(`Status → ${STATUS_CFG[status].label}`)
     load()
@@ -451,7 +452,7 @@ export default function SalesOrdersPage() {
   async function deleteSO(id: string) {
     const { data: saved } = await supabase.from('sales_orders').select('*').eq('id', id).single()
     const { error } = await supabase.from('sales_orders').delete().eq('id', id)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(getErrorMessage(error)); return }
     load()
     toast.success('Sales Order deleted', {
       action: { label: 'Undo', onClick: async () => {
@@ -463,7 +464,7 @@ export default function SalesOrdersPage() {
   async function togglePortalVisibility(so: SO) {
     const next = !so.show_in_portal
     const { error } = await supabase.from('sales_orders').update({ show_in_portal: next }).eq('id', so.id)
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else { toast.success(next ? 'Visible in Client Portal' : 'Hidden from Client Portal'); load() }
   }
 
@@ -684,7 +685,7 @@ export default function SalesOrdersPage() {
     if (!viewSO?.so_number || !linkDRSelected) return
     setLinkDRSaving(true)
     const { error } = await supabase.from('dr_logs').update({ po_number: viewSO.so_number }).eq('dr_number', linkDRSelected)
-    if (error) { toast.error(error.message); setLinkDRSaving(false); return }
+    if (error) { toast.error(getErrorMessage(error)); setLinkDRSaving(false); return }
     toast.success(`DR ${linkDRSelected} linked to SO ${viewSO.so_number}`)
     setLinkDRSaving(false)
     await openViewSO(viewSO)
@@ -694,7 +695,7 @@ export default function SalesOrdersPage() {
   async function unlinkDRFromSO(drNumber: string) {
     if (!viewSO) return
     const { error } = await supabase.from('dr_logs').update({ po_number: null }).eq('dr_number', drNumber)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(getErrorMessage(error)); return }
     toast.success(`DR ${drNumber} unlinked`)
     await openViewSO(viewSO)
     load()
@@ -704,7 +705,7 @@ export default function SalesOrdersPage() {
     if (!viewSO?.so_number || !linkCSISelected) return
     setLinkCSISaving(true)
     const { error } = await supabase.from('csi_records').update({ po_number: viewSO.so_number }).eq('si_number', linkCSISelected)
-    if (error) { toast.error(error.message); setLinkCSISaving(false); return }
+    if (error) { toast.error(getErrorMessage(error)); setLinkCSISaving(false); return }
     toast.success(`SI ${linkCSISelected} linked to SO ${viewSO.so_number}`)
     setLinkCSISaving(false)
     await openViewSO(viewSO)
@@ -713,7 +714,7 @@ export default function SalesOrdersPage() {
   async function unlinkCSIFromSO(siNumber: string) {
     if (!viewSO) return
     const { error } = await supabase.from('csi_records').update({ po_number: null }).eq('si_number', siNumber)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(getErrorMessage(error)); return }
     toast.success(`SI ${siNumber} unlinked`)
     await openViewSO(viewSO)
   }
@@ -759,7 +760,7 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
       toast.success('Email sent successfully')
       setEmailSO(null)
     } catch (e: any) {
-      toast.error(e.message ?? 'Failed to send email')
+      toast.error(getErrorMessage(e, 'Failed to send email'))
     } finally {
       setSendingEmailSO(false)
     }

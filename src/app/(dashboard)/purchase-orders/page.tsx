@@ -10,6 +10,7 @@ import { useTableSort } from '@/lib/use-table-sort'
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { getErrorMessage } from '@/lib/error-message'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
@@ -171,7 +172,7 @@ export default function PurchaseOrdersPage() {
     const { error } = await supabase.from('items').insert({
       item_code, item_name: name, unit_of_measure, cost, selling_price, status: 'active',
     })
-    if (error) { toast.error(error.message); setSavingNewItem(false); return }
+    if (error) { toast.error(getErrorMessage(error)); setSavingNewItem(false); return }
 
     const newOption: ItemOption = { item_code, item_name: name, unit_of_measure, status: 'active', cost, selling_price }
     setItems(prev => [...prev, newOption].sort((a, b) => a.item_name.localeCompare(b.item_name)))
@@ -230,7 +231,7 @@ export default function PurchaseOrdersPage() {
       setPoAttachmentCounts(prev => ({ ...prev, [poNumber]: (prev[poNumber] ?? 0) + files.length }))
       toast.success('Attachment(s) uploaded')
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to upload attachment')
+      toast.error(getErrorMessage(err, 'Failed to upload attachment'))
     } finally {
       setUploadingPOAttachment(false)
     }
@@ -238,7 +239,7 @@ export default function PurchaseOrdersPage() {
 
   async function deletePOAttachment(id: string, poNumber: string | null) {
     const { error } = await supabase.from('po_attachments').delete().eq('id', id)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(getErrorMessage(error)); return }
     await loadPOAttachments(poNumber)
     if (poNumber) setPoAttachmentCounts(prev => ({ ...prev, [poNumber]: Math.max(0, (prev[poNumber] ?? 1) - 1) }))
   }
@@ -492,7 +493,7 @@ export default function PurchaseOrdersPage() {
       error = insErr
       savedPoId = inserted?.id ?? null
     }
-    if (error) { toast.error(error.message); setSaving(false); return }
+    if (error) { toast.error(getErrorMessage(error)); setSaving(false); return }
 
     // Save line items to po_items
     if (savedPoId) {
@@ -561,7 +562,7 @@ export default function PurchaseOrdersPage() {
 
   async function updateStatus(id: string, status: POStatus) {
     const { error } = await supabase.from('purchase_orders').update({ status }).eq('id', id)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(getErrorMessage(error)); return }
 
     if (status === 'completed') {
       const received = await autoReceivePO(id)
@@ -683,7 +684,7 @@ export default function PurchaseOrdersPage() {
   async function deletePO(id: string) {
     const { data: saved } = await supabase.from('purchase_orders').select('*').eq('id', id).single()
     const { error } = await supabase.from('purchase_orders').delete().eq('id', id)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(getErrorMessage(error)); return }
     load()
     toast.success('PO deleted', {
       action: {
@@ -895,7 +896,7 @@ export default function PurchaseOrdersPage() {
       toast.success('Email sent successfully!')
       setShowEmail(false)
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to send email')
+      toast.error(getErrorMessage(err, 'Failed to send email'))
     } finally {
       setSendingEmail(false)
     }

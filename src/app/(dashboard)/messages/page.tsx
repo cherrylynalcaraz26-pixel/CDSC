@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
+import { getErrorMessage } from '@/lib/error-message'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
@@ -223,7 +224,7 @@ export default function MessagesPage() {
       setReplyFile(null)
       toast.success('Reply saved.')
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to send reply')
+      toast.error(getErrorMessage(err, 'Failed to send reply'))
     }
     setReplying(false)
   }
@@ -289,7 +290,7 @@ export default function MessagesPage() {
       await load()
       setSelectedKey(`${newConvType}:${party.id}`)
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to start conversation')
+      toast.error(getErrorMessage(err, 'Failed to start conversation'))
     }
     setCreatingConv(false)
   }

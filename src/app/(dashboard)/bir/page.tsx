@@ -19,6 +19,7 @@ import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { htmlToPdfBase64 } from '@/lib/send-email'
 import { uploadImageToDrive } from '@/lib/upload-image'
+import { getErrorMessage } from '@/lib/error-message'
 
 // Derives the filing cadence (Monthly, Quarterly, or whatever a future form's
 // description ends with in parentheses, e.g. Annually/Yearly) straight from the
@@ -205,7 +206,7 @@ export default function BIRPage() {
     const trimmed = name.trim()
     if (!trimmed) return
     const { data, error } = await supabase.from('payees').insert({ name: trimmed }).select('id, name').single()
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(getErrorMessage(error)); return }
     setPayees(prev => [...prev, data].sort((a, b) => a.name.localeCompare(b.name)))
     setMarkFiledPayee(data.name)
     toast.success('Payee added')
@@ -224,7 +225,7 @@ export default function BIRPage() {
       const url = await uploadImageToDrive(file, { folder: 'BIR Filings' })
       setMarkFiledAttachment(url)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Upload failed')
+      toast.error(getErrorMessage(err, 'Upload failed'))
     }
     setMarkFiledUploading(false)
   }
@@ -351,7 +352,7 @@ export default function BIRPage() {
       },
       { onConflict: 'form_type,tax_period' }
     )
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(getErrorMessage(error)); return }
     setFilings(prev => {
       const others = prev.filter(f => !(f.form_type === form.form && f.tax_period === form.period))
       return [...others, { form_type: form.form, tax_period: form.period, status: 'filed' }]
@@ -866,7 +867,7 @@ export default function BIRPage() {
       URL.revokeObjectURL(url)
       toast.success(`Form ${formGenTarget.form} PDF downloaded`)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to generate PDF')
+      toast.error(getErrorMessage(err, 'Failed to generate PDF'))
     }
   }
 
@@ -926,7 +927,7 @@ export default function BIRPage() {
       URL.revokeObjectURL(url)
       toast.success('Alphalist PDF downloaded')
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to generate PDF')
+      toast.error(getErrorMessage(err, 'Failed to generate PDF'))
     }
   }
 

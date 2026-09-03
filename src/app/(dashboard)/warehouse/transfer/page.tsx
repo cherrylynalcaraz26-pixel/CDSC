@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { getErrorMessage } from '@/lib/error-message'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
@@ -86,10 +87,10 @@ export default function StockTransferPage() {
         transfer_date: today,
       })
       .select('id').single()
-    if (error) { toast.error(error.message); setSaving(false); return }
+    if (error) { toast.error(getErrorMessage(error)); setSaving(false); return }
     const linePayload = lines.map(l => ({ transfer_id: transfer.id, item_id: l.item_id, quantity: l.qty }))
     const { error: le } = await supabase.from('stock_transfer_items').insert(linePayload)
-    if (le) { toast.error(le.message) } else {
+    if (le) { toast.error(getErrorMessage(le)) } else {
       toast.success('Stock transfer created')
       setOpen(false)
       setForm({ from_warehouse_id: '', to_warehouse_id: '', remarks: '' })

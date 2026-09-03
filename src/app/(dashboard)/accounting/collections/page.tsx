@@ -15,6 +15,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Plus, MoreHorizontal, Printer, Eye, Loader2, Receipt, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
+import { getErrorMessage } from '@/lib/error-message'
 
 interface Collection {
   id: string
@@ -102,20 +103,20 @@ export default function CollectionsPage() {
       si_number: form.si_number || null,
       status: 'posted',
     })
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else { toast.success('Collection recorded'); setOpen(false); resetForm(); load() }
     setSaving(false)
   }
 
   async function voidRecord(id: string) {
     const { error } = await supabase.from('collections').update({ status: 'voided' }).eq('id', id)
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else { toast.success('Collection voided'); load() }
   }
 
   async function deleteRecord(id: string) {
     const { error } = await supabase.from('collections').delete().eq('id', id)
-    if (error) toast.error(error.message)
+    if (error) toast.error(getErrorMessage(error))
     else { toast.success('Deleted'); load() }
   }
 

@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { getErrorMessage } from '@/lib/error-message'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow, SortableTableHead,
 } from '@/components/ui/table'
@@ -333,11 +334,11 @@ export default function CSIMonitoringPage() {
     try {
       const url = await uploadImageToDrive(file, { displayName: `SI-${siNumber}`, folder: 'CSI Attachments' })
       const { error } = await supabase.from('csi_records').update({ attachment_url: url }).eq('si_number', siNumber)
-      if (error) { toast.error(error.message); return }
+      if (error) { toast.error(getErrorMessage(error)); return }
       setRecords(prev => prev.map(r => r.si_number === siNumber ? { ...r, attachment_url: url } : r))
       toast.success(`Photo attached to SI ${siNumber}`)
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to upload image')
+      toast.error(getErrorMessage(err, 'Failed to upload image'))
     } finally {
       setUploadingAttachmentSi(null)
     }
@@ -647,7 +648,7 @@ export default function CSIMonitoringPage() {
       setEmailBulkOpen(false)
       setSelectedSIs(new Set())
     } catch (e: any) {
-      toast.error(e.message ?? 'Failed to send email')
+      toast.error(getErrorMessage(e, 'Failed to send email'))
     } finally {
       setSendingBulkEmail(false)
     }
@@ -945,7 +946,7 @@ export default function CSIMonitoringPage() {
       try {
         imageUrl = await uploadImageToDrive(newItemImageFile, { displayName: name, folder: 'Items' })
       } catch (err: unknown) {
-        toast.error(err instanceof Error ? err.message : 'Failed to upload image')
+        toast.error(getErrorMessage(err, 'Failed to upload image'))
         setSavingNewItem(false)
         return
       }
@@ -961,7 +962,7 @@ export default function CSIMonitoringPage() {
       image_urls: imageUrl ? [imageUrl] : [],
       status: 'active',
     })
-    if (error) { toast.error(error.message); setSavingNewItem(false); return }
+    if (error) { toast.error(getErrorMessage(error)); setSavingNewItem(false); return }
     const sellingPrice = newItemForm.selling_price.trim() ? parseFloat(newItemForm.selling_price) : null
     const newOption: ItemOption = { item_name: name, unit_of_measure, selling_price: sellingPrice }
     setItemOptions(prev => [...prev, newOption].sort((a, b) => a.item_name.localeCompare(b.item_name)))
@@ -985,7 +986,7 @@ export default function CSIMonitoringPage() {
     if (!it.item_name) { toast.error('Select an item first'); return }
     if (!price || price <= 0) { toast.error('Enter a Selling Price first'); return }
     const { error } = await supabase.from('items').update({ selling_price: price }).eq('item_name', it.item_name)
-    if (error) { toast.error(error.message); return }
+    if (error) { toast.error(getErrorMessage(error)); return }
     setItemOptions(prev => prev.map(o => o.item_name === it.item_name ? { ...o, selling_price: price } : o))
     toast.success(`Selling price for "${it.item_name}" updated to ${formatPeso(price)} in Configuration`)
   }
@@ -1019,7 +1020,7 @@ export default function CSIMonitoringPage() {
     }))
 
     const { error } = await supabase.from('csi_records').insert(rows)
-    if (error) { toast.error(error.message); setSaving(false); return }
+    if (error) { toast.error(getErrorMessage(error)); setSaving(false); return }
     toast.success(editingSiNumber ? 'Record updated' : 'Record added')
     setOpen(false)
     load()
@@ -1029,7 +1030,7 @@ export default function CSIMonitoringPage() {
   async function confirmDelete() {
     if (deleteId === null) return
     const { error } = await supabase.from('csi_records').delete().eq('id', deleteId)
-    if (error) { toast.error(error.message); setDeleteId(null); return }
+    if (error) { toast.error(getErrorMessage(error)); setDeleteId(null); return }
     setDeleteId(null)
     load()
     toast.success('Record deleted')
