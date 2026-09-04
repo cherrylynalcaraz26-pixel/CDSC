@@ -12,7 +12,7 @@ export interface QuotationPdfData {
   validUntil?: string
   clientName?: string
   subject?: string
-  items: { item_name: string; quantity: number; unit?: string | null; unit_price: number; selling_price?: number | null; total_amount: number }[]
+  items: { item_name: string; quantity: number; unit?: string | null; unit_price: number; selling_price?: number | null; total_amount: number; imageDataUrl?: string }[]
   subtotal: number
   vatAmount: number
   ewtAmount: number
@@ -335,6 +335,65 @@ async function buildQuotePdf(data: QuotationPdfData): Promise<string> {
   pdf.setFontSize(8)
   pdf.setTextColor(156, 163, 175)
   pdf.text('Signature over Printed Name / Date', sig2X + sigW / 2, y + 19, { align: 'center' })
+
+  // ── Item Images ─────────────────────────────────────────────────────────
+  // Mirror the on-screen quotation preview: a gallery of every line item that
+  // has an image, on its own page.
+  const imageItems = data.items.filter(it => it.imageDataUrl)
+  if (imageItems.length > 0) {
+    pdf.addPage()
+    const pageH = pdf.internal.pageSize.getHeight()
+    let gy = margin
+
+    setFont('bold')
+    pdf.setFontSize(13)
+    pdf.setTextColor(185, 28, 28)
+    pdf.text('Item Images', margin, gy + 10)
+    gy += 24
+
+    const gap = 12
+    const cols = 2
+    const cellW = (contentW - gap * (cols - 1)) / cols
+    const imgH = 120
+    const captionH = 14
+    const cellH = imgH + captionH + gap
+
+    imageItems.forEach((it, i) => {
+      const col = i % cols
+      if (col === 0 && i > 0) gy += cellH
+      if (gy + imgH + captionH > pageH - margin) {
+        pdf.addPage()
+        gy = margin
+      }
+      const cx = margin + col * (cellW + gap)
+
+      // Frame
+      pdf.setDrawColor(229, 231, 235)
+      pdf.setFillColor(249, 250, 251)
+      pdf.rect(cx, gy, cellW, imgH, 'FD')
+
+      try {
+        const props = pdf.getImageProperties(it.imageDataUrl!)
+        const ratio = props.width / props.height
+        let drawW = cellW - 8
+        let drawH = drawW / ratio
+        if (drawH > imgH - 8) {
+          drawH = imgH - 8
+          drawW = drawH * ratio
+        }
+        const ix = cx + (cellW - drawW) / 2
+        const iy = gy + (imgH - drawH) / 2
+        const fmt = /^data:image\/png/i.test(it.imageDataUrl!) ? 'PNG' : 'JPEG'
+        pdf.addImage(it.imageDataUrl!, fmt, ix, iy, drawW, drawH)
+      } catch { /* skip unreadable image */ }
+
+      setFont()
+      pdf.setFontSize(8)
+      pdf.setTextColor(55, 65, 81)
+      const caption = pdf.splitTextToSize(it.item_name ?? '-', cellW)[0]
+      pdf.text(caption, cx + cellW / 2, gy + imgH + 10, { align: 'center' })
+    })
+  }
 
   return pdf.output('datauristring').split(',')[1]
 }

@@ -153,7 +153,21 @@ export default function QuotationPage() {
       </style>
     </head><body class="p-6 text-[11px]">${el.innerHTML}</body></html>`)
     win.document.close()
-    setTimeout(() => { win.focus(); win.print(); win.close() }, 800)
+    const doPrint = () => { win.focus(); win.print(); win.close() }
+    // Wait for images (Drive thumbnails can be slow) before printing so they
+    // aren't dropped from the printed / saved PDF. Fall back after a timeout.
+    const imgs = Array.from(win.document.images)
+    const pending = imgs.filter(img => !img.complete)
+    if (pending.length === 0) { setTimeout(doPrint, 300); return }
+    let done = 0
+    let fired = false
+    const fire = () => { if (!fired) { fired = true; doPrint() } }
+    pending.forEach(img => {
+      const onSettled = () => { done += 1; if (done === pending.length) fire() }
+      img.addEventListener('load', onSettled)
+      img.addEventListener('error', onSettled)
+    })
+    setTimeout(fire, 3000)
   }
 
   async function load() {
@@ -357,18 +371,32 @@ export default function QuotationPage() {
     setSaving(false)
   }
 
-  async function buildQuotePdfData(q: Quotation, items: { item_name: string; quantity: number; unit: string | null; unit_price: number; selling_price: number | null; total_amount: number }[]): Promise<QuotationPdfData> {
-    let logoDataUrl: string | undefined
+  async function urlToDataUrl(src: string): Promise<string | undefined> {
     try {
-      const logoSrc = companyInfo?.logo_url || '/cdsc-logo.jpg'
-      const resp = await fetch(logoSrc)
+      // Same-origin assets can be fetched directly; remote (Google Drive) images
+      // go through the image proxy so they can be read without CORS errors.
+      const isRemote = /^https?:\/\//i.test(src) && !src.startsWith(window.location.origin)
+      const fetchUrl = isRemote ? `/api/image-proxy?url=${encodeURIComponent(src)}` : src
+      const resp = await fetch(fetchUrl)
+      if (!resp.ok) return undefined
       const blob = await resp.blob()
-      logoDataUrl = await new Promise<string>(resolve => {
+      return await new Promise<string>((resolve, reject) => {
         const reader = new FileReader()
         reader.onload = () => resolve(reader.result as string)
+        reader.onerror = reject
         reader.readAsDataURL(blob)
       })
-    } catch { /* skip logo */ }
+    } catch { return undefined }
+  }
+
+  async function buildQuotePdfData(q: Quotation, items: { item_name: string; quantity: number; unit: string | null; unit_price: number; selling_price: number | null; total_amount: number }[]): Promise<QuotationPdfData> {
+    const logoSrc = companyInfo?.logo_url || '/cdsc-logo.jpg'
+    const logoDataUrl = await urlToDataUrl(logoSrc)
+    const itemsWithImages = await Promise.all(items.map(async it => {
+      const imgSrc = it.item_name ? itemImage(it.item_name) : null
+      const imageDataUrl = imgSrc ? await urlToDataUrl(imgSrc) : undefined
+      return { ...it, imageDataUrl }
+    }))
     return {
       companyName: companyInfo?.company_name ?? 'CDSC INDUSTRIAL SUPPLY',
       companyAddress: companyInfo?.address ?? undefined,
@@ -381,7 +409,7 @@ export default function QuotationPage() {
       validUntil: q.valid_until ?? undefined,
       clientName: q.client_name ?? undefined,
       subject: q.subject ?? undefined,
-      items,
+      items: itemsWithImages,
       subtotal: q.subtotal ?? 0,
       vatAmount: q.vat_amount ?? 0,
       ewtAmount: q.ewt_amount ?? 0,
