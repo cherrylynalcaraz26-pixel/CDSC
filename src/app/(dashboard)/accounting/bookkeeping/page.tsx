@@ -12,9 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { getErrorMessage } from '@/lib/error-message'
+import { logAudit } from '@/lib/audit-log'
 import {
   Plus, Download, Loader2, BookOpen, Banknote, TrendingUp, BarChart3,
-  Scale, FileSpreadsheet, Trash2, ChevronRight, FileStack,
+  Scale, FileSpreadsheet, Receipt, ChevronRight, FileStack,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
@@ -233,6 +234,7 @@ function DisbursementsTab() {
     }).select().single()
 
     if (disbErr) { toast.error(getErrorMessage(disbErr)); setSaving(false); return }
+    await logAudit(supabase, { action: 'create', table: 'disbursements', recordId: (disbData as { id: string }).id, newValues: { ...form, status: 'posted' } })
 
     // Create journal entry
     const memo = `${form.payee} – ${form.description || expAcc?.name || 'Disbursement'}`
@@ -260,10 +262,13 @@ function DisbursementsTab() {
     setSaving(false)
   }
 
-  async function deleteDisbursement(id: string) {
-    const { error } = await supabase.from('disbursements').delete().eq('id', id)
+  async function voidDisbursement(id: string) {
+    const { error } = await supabase.from('disbursements').update({ status: 'voided' }).eq('id', id)
     if (error) toast.error(getErrorMessage(error))
-    else { toast.success('Deleted'); load() }
+    else {
+      await logAudit(supabase, { action: 'void', table: 'disbursements', recordId: id, newValues: { status: 'voided' } })
+      toast.success('Disbursement voided'); load()
+    }
   }
 
   const total = disbs.filter(d => d.status === 'posted').reduce((s, d) => s + d.amount, 0)
@@ -311,14 +316,15 @@ function DisbursementsTab() {
                 <TableHead>Expense Account</TableHead>
                 <TableHead>Mode</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
-                <TableHead className="w-10" />
+                <TableHead>Status</TableHead>
+                <TableHead className="w-16" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-8"><Loader2 className="h-4 w-4 animate-spin mx-auto" /></TableCell></TableRow>
+                <TableRow><TableCell colSpan={9} className="text-center py-8"><Loader2 className="h-4 w-4 animate-spin mx-auto" /></TableCell></TableRow>
               ) : disbs.length === 0 ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No disbursements yet.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">No disbursements yet.</TableCell></TableRow>
               ) : disbs.map(d => (
                 <TableRow key={d.id}>
                   <TableCell className="text-sm whitespace-nowrap">{format(new Date(d.disb_date), 'MMM d, yyyy')}</TableCell>
@@ -329,9 +335,16 @@ function DisbursementsTab() {
                   <TableCell><span className="text-xs bg-muted px-2 py-0.5 rounded-full capitalize">{d.payment_mode.replace('_',' ')}</span></TableCell>
                   <TableCell className="text-right font-semibold">{fmt(d.amount)}</TableCell>
                   <TableCell>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteDisbursement(d.id)}>
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${d.status === 'voided' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                      {d.status}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    {d.status === 'posted' && (
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => voidDisbursement(d.id)} title="Void">
+                        <Receipt className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
