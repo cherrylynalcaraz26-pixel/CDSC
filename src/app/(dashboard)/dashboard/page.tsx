@@ -16,6 +16,7 @@ import {
   Package, ShoppingCart, Truck, FileText, ClipboardList,
   TrendingUp, TrendingDown, Users, ArrowRight, Loader2, ChevronDown, ChevronUp,
   AlertTriangle, CheckCircle2, Clock, Lightbulb, Bell, HelpCircle, ImagePlus, ExternalLink,
+  Copy, Check,
 } from 'lucide-react'
 import Link from 'next/link'
 import { format, subMonths, startOfMonth, endOfMonth } from 'date-fns'
@@ -176,6 +177,19 @@ export default function DashboardPage() {
   const [stockByClientOpen, setStockByClientOpen] = useState(true)
   const [realtimeTick, setRealtimeTick] = useState(0)
   const [uploadingChannelId, setUploadingChannelId] = useState<string | null>(null)
+  const [profileLinkCopied, setProfileLinkCopied] = useState(false)
+
+  async function copyProfileLink() {
+    const url = `${window.location.origin}/company-profile`
+    try {
+      await navigator.clipboard.writeText(url)
+      setProfileLinkCopied(true)
+      toast.success('Link copied to clipboard')
+      setTimeout(() => setProfileLinkCopied(false), 2000)
+    } catch (err) {
+      toast.error(getErrorMessage(err, 'Failed to copy link'))
+    }
+  }
 
   useEffect(() => {
     const channel = supabase
@@ -509,6 +523,10 @@ export default function DashboardPage() {
               <ExternalLink className="h-3.5 w-3.5" />View Public Company Profile
             </Button>
           </a>
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={copyProfileLink} title="Copy public company profile link">
+            {profileLinkCopied ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
+            {profileLinkCopied ? 'Copied' : 'Copy Link'}
+          </Button>
           <DemoVideoButton />
         </div>
       </div>
