@@ -1693,7 +1693,9 @@ export default function InventoryPage() {
           return [...priced].sort((a, b) => (b.si_date ?? '').localeCompare(a.si_date ?? ''))[0].unit_price
         }
         function estUnitPrice(r: { item_name: string; csi_details: CsiDetail[] }): number | null {
-          return latestCsiPrice(r.csi_details) ?? (itemSellingPriceMap[r.item_name] || null)
+          const csiPrice = latestCsiPrice(r.csi_details)
+          if (csiPrice != null) return csiPrice
+          return r.item_name in itemSellingPriceMap ? itemSellingPriceMap[r.item_name] : null
         }
         const totalEstValue = reportRows.reduce((s, r) => {
           const price = estUnitPrice(r)
