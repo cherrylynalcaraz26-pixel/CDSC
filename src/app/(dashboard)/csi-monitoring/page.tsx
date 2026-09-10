@@ -205,7 +205,8 @@ export default function CSIMonitoringPage() {
   const [chartsExpanded, setChartsExpanded] = useState(false)
   const [editingSiNumber, setEditingSiNumber] = useState<string | null>(null)
   const [clientFilter, setClientFilter] = usePersistedState('csi-monitoring:clientFilter', '')
-  const [yearFilter, setYearFilter] = usePersistedState('csi-monitoring:yearFilter', 'all')
+  const [dateFrom, setDateFrom] = usePersistedState('csi-monitoring:dateFrom', '')
+  const [dateTo, setDateTo] = usePersistedState('csi-monitoring:dateTo', '')
   const [sortOption, setSortOption] = usePersistedState<SortOption>('csi-monitoring:sortOption', 'date_desc')
   const [header, setHeader] = useState(emptyHeader())
   const [items, setItems] = useState<CSIItem[]>([emptyItem()])
@@ -743,8 +744,6 @@ export default function CSIMonitoringPage() {
     setTimeout(() => { win.focus(); win.print(); win.close() }, 800)
   }
 
-  const availableYears = Array.from(new Set(records.map(r => r.si_date?.slice(0, 4)).filter(Boolean))).sort((a, b) => b.localeCompare(a))
-
   const filtered = records.filter(r => {
     const q = search.toLowerCase()
     const matchSearch = !q || (
@@ -754,8 +753,8 @@ export default function CSIMonitoringPage() {
       (r.dr_number ?? '').toLowerCase().includes(q)
     )
     const matchClient = !clientFilter || (r.client_name ?? '') === clientFilter
-    const matchYear = yearFilter === 'all' || r.si_date?.slice(0, 4) === yearFilter
-    return matchSearch && matchClient && matchYear
+    const matchDate = (!dateFrom || (r.si_date ?? '') >= dateFrom) && (!dateTo || (r.si_date ?? '') <= dateTo)
+    return matchSearch && matchClient && matchDate
   })
 
   const totalAmount = filtered.reduce((s, r) => s + (Number(r.amount) || 0), 0)
@@ -1709,18 +1708,17 @@ export default function CSIMonitoringPage() {
             </SelectContent>
           </Select>
         </div>
-        <div className="flex items-center gap-2">
-          <Label className="text-xs text-muted-foreground whitespace-nowrap">Year</Label>
-          <Select value={yearFilter} onValueChange={v => setYearFilter(v ?? 'all')}>
-            <SelectTrigger className="h-9 w-32 text-sm">
-              <SelectValue>{(v: string) => v === 'all' ? 'Filter by Year' : v}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Years</SelectItem>
-              {availableYears.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
-            </SelectContent>
-          </Select>
+        <div className="flex items-center gap-1.5">
+          <Label className="text-xs text-muted-foreground whitespace-nowrap">From</Label>
+          <Input type="date" className="h-9 w-40 text-sm" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
         </div>
+        <div className="flex items-center gap-1.5">
+          <Label className="text-xs text-muted-foreground whitespace-nowrap">To</Label>
+          <Input type="date" className="h-9 w-40 text-sm" value={dateTo} onChange={e => setDateTo(e.target.value)} />
+        </div>
+        {(dateFrom || dateTo) && (
+          <Button variant="ghost" size="sm" onClick={() => { setDateFrom(''); setDateTo('') }}>Clear</Button>
+        )}
         {clientFilter && (() => {
           const sel = clientOptions.find(c => c.company_name === clientFilter)
           return sel ? (
