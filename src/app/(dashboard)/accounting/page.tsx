@@ -16,12 +16,13 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { getErrorMessage } from '@/lib/error-message'
+import { logAudit } from '@/lib/audit-log'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import {
   Plus, Download, Loader2, BookOpen, Banknote, TrendingUp,
-  Scale, FileSpreadsheet, Trash2, Calculator, Receipt, FileText, DollarSign,
+  Scale, FileSpreadsheet, Calculator, Receipt, FileText, DollarSign,
   MoreHorizontal, Printer, Eye, CheckCircle2, AlertTriangle,
   ChevronDown, ChevronRight, SlidersHorizontal, Pencil, Link2, X,
 } from 'lucide-react'
@@ -850,7 +851,10 @@ function CollectionsTab() {
         ? await supabase.from('collections').update(payload).eq('id', editingId)
         : await supabase.from('collections').insert(payload)
       if (error) toast.error(getErrorMessage(error))
-      else { toast.success(`OR ${orNumber} marked ${orStatus}`); setOpen(false); resetForm(); load() }
+      else {
+        await logAudit(supabase, { action: editingId ? 'update' : 'create', table: 'collections', recordId: editingId ?? orNumber, newValues: payload })
+        toast.success(`OR ${orNumber} marked ${orStatus}`); setOpen(false); resetForm(); load()
+      }
       setSaving(false)
       return
     }
@@ -881,12 +885,14 @@ function CollectionsTab() {
       if (selectedCsis.size > 0) {
         await supabase.from('collection_csi_links').insert([...selectedCsis].map(si_number => ({ collection_id: editingId, si_number })))
       }
+      await logAudit(supabase, { action: 'update', table: 'collections', recordId: editingId, newValues: payload })
       toast.success('Collection updated'); setOpen(false); resetForm(); load()
       setSaving(false)
       return
     }
     const { data: colData, error } = await supabase.from('collections').insert({ ...payload, status: 'posted' }).select().single()
     if (error) { toast.error(getErrorMessage(error)); setSaving(false); return }
+    await logAudit(supabase, { action: 'create', table: 'collections', recordId: (colData as { id: string }).id, newValues: { ...payload, status: 'posted' } })
     if (selectedCsis.size > 0) {
       await supabase.from('collection_csi_links').insert([...selectedCsis].map(si_number => ({ collection_id: (colData as any).id, si_number })))
     }
@@ -956,13 +962,10 @@ function CollectionsTab() {
   async function voidRecord(id: string) {
     const { error } = await supabase.from('collections').update({ status: 'voided' }).eq('id', id)
     if (error) toast.error(getErrorMessage(error))
-    else { toast.success('Collection voided'); load() }
-  }
-
-  async function deleteRecord(id: string) {
-    const { error } = await supabase.from('collections').delete().eq('id', id)
-    if (error) toast.error(getErrorMessage(error))
-    else { toast.success('Deleted'); load() }
+    else {
+      await logAudit(supabase, { action: 'void', table: 'collections', recordId: id, newValues: { status: 'voided' } })
+      toast.success('Collection voided'); load()
+    }
   }
 
   // `r === null` prints a blank OR template (blank lines instead of data) for manual/
@@ -1427,9 +1430,6 @@ function CollectionsTab() {
                             <Receipt className="mr-2 h-4 w-4" />Void
                           </DropdownMenuItem>
                         )}
-                        <DropdownMenuItem onClick={() => deleteRecord(r.id)} className="text-destructive">
-                          <Trash2 className="mr-2 h-4 w-4" />Delete
-                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
@@ -2045,6 +2045,7 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
       po_number: form.po_number || null,
     }).select().single()
     if (disbErr) { toast.error(getErrorMessage(disbErr)); setSaving(false); return }
+    await logAudit(supabase, { action: 'create', table: 'disbursements', recordId: (disbData as { id: string }).id, newValues: { ...form, status: 'posted' } })
     const memo = `${form.payee} – ${form.description || expAcc?.name || 'Disbursement'}`
     const { data: jeData, error: jeErr } = await supabase.from('journal_entries').insert({
       entry_date: form.disb_date, memo, entry_type: 'disbursement',
@@ -2067,10 +2068,13 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
     setSaving(false)
   }
 
-  async function deleteDisbursement(id: string) {
-    const { error } = await supabase.from('disbursements').delete().eq('id', id)
+  async function voidDisbursement(id: string) {
+    const { error } = await supabase.from('disbursements').update({ status: 'voided' }).eq('id', id)
     if (error) toast.error(getErrorMessage(error))
-    else { toast.success('Deleted'); load() }
+    else {
+      await logAudit(supabase, { action: 'void', table: 'disbursements', recordId: id, newValues: { status: 'voided' } })
+      toast.success('Disbursement voided'); load()
+    }
   }
 
   const filteredDisbs = disbs.filter(d => {
@@ -2144,13 +2148,14 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
           <TableHeader className="sticky top-0 z-10 bg-background"><TableRow>
             <TableHead>Date</TableHead><TableHead>CDJ #</TableHead><TableHead>Payee</TableHead>
             <TableHead>Description</TableHead><TableHead>Expense Account</TableHead>
-            <TableHead>Mode</TableHead><TableHead className="text-right">Amount</TableHead><TableHead className="w-10" />
+            <TableHead>Mode</TableHead><TableHead className="text-right">Amount</TableHead>
+            <TableHead>Status</TableHead><TableHead className="w-10" />
           </TableRow></TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={8} className="text-center py-8"><Loader2 className="h-4 w-4 animate-spin mx-auto" /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={9} className="text-center py-8"><Loader2 className="h-4 w-4 animate-spin mx-auto" /></TableCell></TableRow>
             ) : filteredDisbs.length === 0 ? (
-              <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No disbursements for the selected period.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">No disbursements for the selected period.</TableCell></TableRow>
             ) : filteredDisbs.map(d => (
               <TableRow key={d.id}>
                 <TableCell className="text-sm whitespace-nowrap">{format(new Date(d.disb_date), 'MMM d, yyyy')}</TableCell>
@@ -2161,9 +2166,23 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
                 <TableCell><span className="text-xs bg-muted px-2 py-0.5 rounded-full">{cap(d.payment_mode.replace('_',' '))}</span></TableCell>
                 <TableCell className="text-right font-semibold">{fmt(d.amount)}</TableCell>
                 <TableCell>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => deleteDisbursement(d.id)}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${STATUS_CLS[d.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                    {d.status}
+                  </span>
+                </TableCell>
+                <TableCell>
+                  {d.status === 'posted' && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-40">
+                        <DropdownMenuItem onClick={() => voidDisbursement(d.id)} className="text-destructive">
+                          <Receipt className="mr-2 h-4 w-4" />Void
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                 </TableCell>
               </TableRow>
             ))}

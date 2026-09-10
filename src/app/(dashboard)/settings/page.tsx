@@ -25,6 +25,8 @@ import { sendEmail, htmlToPdfBase64 } from '@/lib/send-email'
 import { uploadImageToDrive } from '@/lib/upload-image'
 import { syncDatabaseBackup, type BackupSyncResult } from '@/lib/backup-sheets'
 
+const AUDIT_VISIBLE_ROLES = ['super_admin', 'admin', 'auditor']
+
 const BUSINESS_TYPES = [
   'Sole Proprietorship', 'Partnership', 'Corporation', 'Trading Corporation',
   'Manufacturing', 'Service Provider', 'Distributor', 'Retailer',
@@ -588,6 +590,102 @@ function LivePreview({ s }: { s: Settings }) {
 
 // ── Security Tab ──────────────────────────────────────────────────────────────
 
+interface AuditLogEntry {
+  id: string
+  user_id: string | null
+  action: string
+  table_name: string
+  record_id: string | null
+  old_values: Record<string, unknown> | null
+  new_values: Record<string, unknown> | null
+  created_at: string
+}
+
+const AUDIT_ACTION_CLS: Record<string, string> = {
+  create: 'bg-green-100 text-green-700',
+  update: 'bg-blue-100 text-blue-700',
+  void:   'bg-red-100 text-red-700',
+}
+
+// Read-only trail of who created, edited, or voided a books-of-accounts row —
+// required documentation for a BIR Computerized Accounting System. Gated to
+// the same roles as the audit_logs table's own RLS read policy.
+function AuditLogSection() {
+  const supabase = createClient()
+  const [visible, setVisible] = useState(false)
+  const [checking, setChecking] = useState(true)
+  const [entries, setEntries] = useState<AuditLogEntry[]>([])
+  const [loading, setLoading] = useState(true)
+  const [emailsById, setEmailsById] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { setChecking(false); return }
+      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+      const allowed = !!profile && AUDIT_VISIBLE_ROLES.includes((profile as { role: string }).role)
+      setVisible(allowed)
+      setChecking(false)
+      if (!allowed) return
+      const { data, error } = await supabase
+        .from('audit_logs')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(50)
+      if (error) toast.error(getErrorMessage(error))
+      else {
+        const rows = (data ?? []) as AuditLogEntry[]
+        setEntries(rows)
+        const ids = [...new Set(rows.map(r => r.user_id).filter((id): id is string => !!id))]
+        if (ids.length > 0) {
+          const { data: profiles } = await supabase.from('profiles').select('id, email').in('id', ids)
+          setEmailsById(Object.fromEntries((profiles ?? []).map((p: { id: string; email: string | null }) => [p.id, p.email ?? p.id])))
+        }
+      }
+      setLoading(false)
+    })()
+  }, [])
+
+  if (checking || !visible) return null
+
+  return (
+    <div>
+      <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider mb-4">Audit Log</h3>
+      <Card>
+        <CardContent className="pt-5">
+          <p className="text-xs text-muted-foreground mb-4">
+            Who created, edited, or voided a Collections / Disbursements record, and when. Visible to Super-Admin, Admin, and Auditor roles only.
+          </p>
+          {loading ? (
+            <div className="flex items-center justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
+          ) : entries.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-6">No activity logged yet.</p>
+          ) : (
+            <div className="space-y-0 max-h-[420px] overflow-y-auto">
+              {entries.map(e => (
+                <div key={e.id} className="flex items-center justify-between gap-3 py-2.5 border-b last:border-0 text-sm">
+                  <div className="min-w-0 flex items-center gap-2.5">
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium uppercase shrink-0 ${AUDIT_ACTION_CLS[e.action] ?? 'bg-gray-100 text-gray-600'}`}>
+                      {e.action}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="font-medium truncate">{e.table_name}{e.record_id ? ` · ${e.record_id.slice(0, 8)}` : ''}</div>
+                      <div className="text-xs text-muted-foreground truncate">
+                        {e.user_id ? (emailsById[e.user_id] ?? e.user_id) : 'System'}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="text-xs text-muted-foreground shrink-0">{new Date(e.created_at).toLocaleString('en-PH')}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
 function SecurityTab() {
   const supabase = createClient()
   const [email, setEmail] = useState('')
@@ -688,6 +786,8 @@ function SecurityTab() {
           </CardContent>
         </Card>
       </div>
+
+      <AuditLogSection />
     </div>
   )
 }

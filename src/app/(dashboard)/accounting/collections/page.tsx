@@ -12,10 +12,11 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
-import { Plus, MoreHorizontal, Printer, Eye, Loader2, Receipt, Trash2 } from 'lucide-react'
+import { Plus, MoreHorizontal, Printer, Eye, Loader2, Receipt } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { getErrorMessage } from '@/lib/error-message'
+import { logAudit } from '@/lib/audit-log'
 
 interface Collection {
   id: string
@@ -92,7 +93,7 @@ export default function CollectionsPage() {
       : form.client_name
     if (!clientName.trim()) { toast.error('Client name required'); return }
     setSaving(true)
-    const { error } = await supabase.from('collections').insert({
+    const payload = {
       client_id: form.client_id || null,
       client_name: clientName.trim(),
       amount: Number(form.amount),
@@ -102,22 +103,23 @@ export default function CollectionsPage() {
       remarks: form.remarks || null,
       si_number: form.si_number || null,
       status: 'posted',
-    })
+    }
+    const { data, error } = await supabase.from('collections').insert(payload).select().single()
     if (error) toast.error(getErrorMessage(error))
-    else { toast.success('Collection recorded'); setOpen(false); resetForm(); load() }
+    else {
+      await logAudit(supabase, { action: 'create', table: 'collections', recordId: (data as { id: string }).id, newValues: payload })
+      toast.success('Collection recorded'); setOpen(false); resetForm(); load()
+    }
     setSaving(false)
   }
 
   async function voidRecord(id: string) {
     const { error } = await supabase.from('collections').update({ status: 'voided' }).eq('id', id)
     if (error) toast.error(getErrorMessage(error))
-    else { toast.success('Collection voided'); load() }
-  }
-
-  async function deleteRecord(id: string) {
-    const { error } = await supabase.from('collections').delete().eq('id', id)
-    if (error) toast.error(getErrorMessage(error))
-    else { toast.success('Deleted'); load() }
+    else {
+      await logAudit(supabase, { action: 'void', table: 'collections', recordId: id, newValues: { status: 'voided' } })
+      toast.success('Collection voided'); load()
+    }
   }
 
   const totalPosted = records.filter(r => r.status === 'posted').reduce((s, r) => s + (r.amount ?? 0) - (r.form_2307 ?? 0), 0)
@@ -224,9 +226,6 @@ export default function CollectionsPage() {
                             <Receipt className="mr-2 h-4 w-4" />Void
                           </DropdownMenuItem>
                         )}
-                        <DropdownMenuItem onClick={() => deleteRecord(r.id)} className="text-destructive">
-                          <Trash2 className="mr-2 h-4 w-4" />Delete
-                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
