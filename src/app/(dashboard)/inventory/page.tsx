@@ -1717,7 +1717,7 @@ export default function InventoryPage() {
             ? `<tr><td colspan="9" style="text-align:center;padding:24px;color:#9ca3af;font-style:italic">No inventory data for this client.</td></tr>`
             : reportRows.map((r, i) => {
               const price = estUnitPrice(r)
-              const estValue = price != null ? r.balance * price : null
+              const estValue = r.balance === 0 ? 0 : (price != null ? r.balance * price : null)
               const balColor = r.balance > 0 ? '#15803d' : r.balance < 0 ? '#dc2626' : '#9ca3af'
               return `<tr>
                 <td>${i + 1}</td>
@@ -1939,7 +1939,7 @@ export default function InventoryPage() {
                     <tbody>
                       {reportRows.map((r, i) => {
                         const latestPrice = estUnitPrice(r)
-                        const estValue = latestPrice != null ? r.balance * latestPrice : null
+                        const estValue = r.balance === 0 ? 0 : (latestPrice != null ? r.balance * latestPrice : null)
                         return (
                           <tr key={r.item_name} className={i % 2 === 1 ? 'bg-gray-50' : 'bg-white'}>
                             <td className="px-3 py-2 text-gray-400 border-b border-gray-100">{i + 1}</td>
