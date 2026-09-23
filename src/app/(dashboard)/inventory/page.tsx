@@ -2,6 +2,7 @@
 
 import { useState, useEffect, Fragment } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { fetchAllRows } from '@/lib/supabase/fetch-all'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent } from '@/components/ui/card'
@@ -75,6 +76,7 @@ interface LedgerRow {
   id: string; change_qty: number; source_type: LedgerSourceType
   reference_no: string | null; client_name: string | null; notes: string | null; created_at: string
 }
+interface WhTxRow extends LedgerRow { item_name: string }
 
 const LEDGER_SOURCE_LABEL: Record<LedgerSourceType, string> = {
   po_receiving: 'Purchase Order',
@@ -204,6 +206,11 @@ export default function InventoryPage() {
   const [historyItemName, setHistoryItemName] = useState('')
   const [historyRows, setHistoryRows] = useState<LedgerRow[]>([])
   const [historyLoading, setHistoryLoading] = useState(false)
+  const [allTxOpen, setAllTxOpen] = useState(false)
+  const [allTxLoading, setAllTxLoading] = useState(false)
+  const [allTxRows, setAllTxRows] = useState<WhTxRow[]>([])
+  const [allTxSearch, setAllTxSearch] = useState('')
+  const [allTxSortLow, setAllTxSortLow] = useState(false)
   const [wsMarkDelivered, setWsMarkDelivered] = useState(false)
   const [wsDeliverClientId, setWsDeliverClientId] = useState('')
   const [wsDeliverQty, setWsDeliverQty] = useState('')
@@ -591,6 +598,26 @@ export default function InventoryPage() {
     setHistoryLoading(false)
   }
 
+  // Every warehouse_stock_ledger row is already scoped to CDSC's own general pool (every
+  // write site filters .is('client_name', null) on warehouse_stock before logging) — so
+  // this is the full CDSC stock transaction log across every item, not just one row's
+  // history. Lets you scan recent activity across the whole warehouse and, combined with
+  // each item's current quantity, spot what's running low without opening each row.
+  async function openAllTransactions() {
+    setAllTxOpen(true)
+    setAllTxLoading(true)
+    const data = await fetchAllRows<WhTxRow>((from, to) =>
+      supabase
+        .from('warehouse_stock_ledger')
+        .select('id, item_name, change_qty, source_type, reference_no, client_name, notes, created_at')
+        .order('created_at', { ascending: false })
+        .order('id')
+        .range(from, to)
+    )
+    setAllTxRows(data)
+    setAllTxLoading(false)
+  }
+
   function openWarehouseUpdate(row: typeof warehouseRows[0]) {
     setWarehouseUpdateRow({ id: row.id, item_name: row.item_name, unit: row.unit, notes: row.notes, quantity: row.quantity })
     setWarehouseUpdateQty(String(row.quantity))
@@ -956,6 +983,18 @@ export default function InventoryPage() {
   })
   const whTotalQty     = filteredWarehouseRows.reduce((s, r) => s + (Number(r.quantity) || 0), 0)
   const whUnassigned   = filteredWarehouseRows.filter(r => !r.client_name).length
+
+  // Current on-hand qty per item, so the Transactions log can show it alongside each entry —
+  // lets you spot items running low in CDSC's own stock while scanning activity, without
+  // opening each item individually.
+  const whQtyByItem = new Map(warehouseRows.map(r => [r.item_name, r.quantity]))
+  const filteredAllTx = allTxRows.filter(t => {
+    const q = allTxSearch.toLowerCase()
+    return !q || t.item_name.toLowerCase().includes(q)
+  })
+  const sortedAllTx = allTxSortLow
+    ? [...filteredAllTx].sort((a, b) => (whQtyByItem.get(a.item_name) ?? 0) - (whQtyByItem.get(b.item_name) ?? 0))
+    : filteredAllTx
 
   type ClientRowSortKey = 'client' | 'item_name' | 'unit' | 'dr_qty' | 'ws_qty' | 'csi_qty' | 'balance'
   const { sorted: sortedFiltered, sortKey: clientSortKey, sortDir: clientSortDir, onSort: onSortClientRow } = useTableSort<InventoryRow, ClientRowSortKey>(filtered, (r, key) => {
@@ -1361,6 +1400,11 @@ export default function InventoryPage() {
           </Select>
         </div>
         <div className="flex gap-2 ml-auto">
+          {viewMode === 'by_warehouse' && (
+            <Button variant="outline" onClick={openAllTransactions} className="border-gray-300 text-gray-700 gap-1.5">
+              <History className="h-4 w-4" /> Transactions
+            </Button>
+          )}
           <Button variant="outline" onClick={printInventoryList} className="border-gray-300 text-gray-700 gap-1.5">
             <Printer className="h-4 w-4" /> Print
           </Button>
@@ -2159,6 +2203,84 @@ export default function InventoryPage() {
             </Table>
           <DialogFooter>
             <Button variant="outline" onClick={() => setHistoryOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── All Transactions (By Warehouse) — every CDSC stock movement across every item, ── */}
+      {/* so you can scan recent activity and, via the Current Qty column, spot what's low. */}
+      <Dialog open={allTxOpen} onOpenChange={o => { if (!o) { setAllTxOpen(false); setAllTxSearch(''); setAllTxSortLow(false) } }}>
+        <DialogContent className="w-[95vw] max-w-4xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="h-4 w-4 text-slate-600" /> CDSC Stock Transactions
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 min-w-[200px]">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+              <Input
+                placeholder="Search by item name…"
+                value={allTxSearch}
+                onChange={e => setAllTxSearch(e.target.value)}
+                className="pl-8 h-9"
+              />
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setAllTxSortLow(v => !v)}
+              className={allTxSortLow ? 'border-red-300 text-red-600 bg-red-50' : ''}
+            >
+              <ArrowDownCircle className="h-3.5 w-3.5 mr-1.5" /> {allTxSortLow ? 'Sorted: Lowest Stock First' : 'Sort by Lowest Stock'}
+            </Button>
+          </div>
+          <Table containerClassName="max-h-[60vh] overflow-y-auto">
+            <TableHeader className="sticky top-0 z-10 bg-background">
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Item</TableHead>
+                <TableHead className="text-right">Current Qty</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Reference / Destination</TableHead>
+                <TableHead className="text-right">Qty Change</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {allTxLoading ? (
+                <TableRow><TableCell colSpan={6} className="text-center py-10"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
+              ) : sortedAllTx.length === 0 ? (
+                <TableRow><TableCell colSpan={6} className="text-center py-10 text-muted-foreground">{allTxSearch ? 'No transactions match your search.' : 'No recorded transactions yet.'}</TableCell></TableRow>
+              ) : sortedAllTx.map(t => {
+                const currentQty = whQtyByItem.get(t.item_name)
+                return (
+                  <TableRow key={t.id}>
+                    <TableCell className="text-sm whitespace-nowrap">{new Date(t.created_at).toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })}</TableCell>
+                    <TableCell className="text-sm font-medium">{t.item_name}</TableCell>
+                    <TableCell className={`text-right text-sm font-semibold ${currentQty !== undefined && currentQty <= 5 ? 'text-red-600' : 'text-foreground'}`}>
+                      {currentQty ?? '—'}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      <span className="inline-flex items-center gap-1">
+                        {t.change_qty >= 0
+                          ? <ArrowUpCircle className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                          : <ArrowDownCircle className="h-3.5 w-3.5 text-red-600 shrink-0" />}
+                        {LEDGER_SOURCE_LABEL[t.source_type]}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {t.notes || [t.reference_no, t.client_name].filter(Boolean).join(' → ') || '—'}
+                    </TableCell>
+                    <TableCell className={`text-right text-sm font-semibold ${t.change_qty >= 0 ? 'text-green-700' : 'text-red-600'}`}>
+                      {t.change_qty >= 0 ? '+' : ''}{t.change_qty}
+                    </TableCell>
+                  </TableRow>
+                )
+              })}
+            </TableBody>
+          </Table>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAllTxOpen(false)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
