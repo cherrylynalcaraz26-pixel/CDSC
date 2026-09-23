@@ -22,7 +22,7 @@ import { Badge } from '@/components/ui/badge'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { Search, Loader2, Pencil, AlertTriangle, Plus, MoreHorizontal, Trash2, FileText, Printer, Mail, Send, Truck, Package, History, ArrowDownCircle, ArrowUpCircle, Users, List, CheckCircle2, Scale, Wallet, Boxes, ArrowUp, ArrowDown, ArrowUpDown, X, User } from 'lucide-react'
+import { Search, Loader2, Pencil, AlertTriangle, Plus, MoreHorizontal, Trash2, FileText, Printer, Mail, Send, Truck, Package, History, ArrowDownCircle, ArrowUpCircle, Users, List, CheckCircle2, Scale, Wallet, Boxes, ArrowUp, ArrowDown, ArrowUpDown, ChevronUp, ChevronDown, X, User } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSearchContext } from '@/context/search-context'
 import { sendEmail } from '@/lib/send-email'
@@ -85,6 +85,55 @@ const LEDGER_SOURCE_LABEL: Record<LedgerSourceType, string> = {
   personal_use: 'Used',
 }
 
+interface WhHistoryGroup {
+  key: string; change_qty: number; source_type: LedgerSourceType
+  reference_no: string | null; client_name: string | null; notes: string | null; created_at: string
+  edited: boolean; raw: LedgerRow[]
+}
+
+// Editing an already-saved DR reverses its previous stock deduction (a '+qty' row noting
+// "Reversal of previous delivery (DR edited)") then re-applies the new one (a '-qty' row) —
+// so a single edit shows up as 3+ ledger rows that net to one real change. Collapse a
+// same-reference run of dr_delivery rows into one line (showing the net) whenever a
+// reversal row is present, so History reads as "what happened" rather than raw edit
+// mechanics — the untouched rows stay available by expanding the "edited" line.
+function groupWhHistory(rows: LedgerRow[]): WhHistoryGroup[] {
+  const groups: WhHistoryGroup[] = []
+  let i = 0
+  while (i < rows.length) {
+    const row = rows[i]
+    if (row.source_type === 'dr_delivery' && row.reference_no) {
+      let j = i
+      while (j < rows.length && rows[j].source_type === 'dr_delivery' && rows[j].reference_no === row.reference_no) j++
+      const run = rows.slice(i, j)
+      const hasReversal = run.some(r => r.notes === 'Reversal of previous delivery (DR edited)')
+      if (hasReversal && run.length > 1) {
+        const latest = run[0]
+        groups.push({
+          key: latest.id,
+          change_qty: run.reduce((s, r) => s + r.change_qty, 0),
+          source_type: 'dr_delivery',
+          reference_no: latest.reference_no,
+          client_name: latest.client_name,
+          notes: null,
+          created_at: latest.created_at,
+          edited: true,
+          raw: run,
+        })
+        i = j
+        continue
+      }
+    }
+    groups.push({
+      key: row.id, change_qty: row.change_qty, source_type: row.source_type,
+      reference_no: row.reference_no, client_name: row.client_name, notes: row.notes,
+      created_at: row.created_at, edited: false, raw: [row],
+    })
+    i++
+  }
+  return groups
+}
+
 function KpiCard({ value, label, valueClass, icon: Icon, tint, grad, shadow }: {
   value: React.ReactNode; label: string; valueClass?: string
   icon: React.ComponentType<{ className?: string }>; tint: string; grad: string; shadow: string
@@ -145,6 +194,7 @@ export default function InventoryPage() {
   const [expandedWhId, setExpandedWhId] = useState<string | null>(null)
   const [expandedWhHistory, setExpandedWhHistory] = useState<LedgerRow[]>([])
   const [expandedWhHistoryLoading, setExpandedWhHistoryLoading] = useState(false)
+  const [expandedWhHistoryGroupKeys, setExpandedWhHistoryGroupKeys] = useState<Set<string>>(new Set())
   const [warehouseUpdateOpen, setWarehouseUpdateOpen] = useState(false)
   const [warehouseUpdateRow, setWarehouseUpdateRow] = useState<{id: string; item_name: string; unit: string; notes: string | null; quantity: number} | null>(null)
   const [warehouseUpdateQty, setWarehouseUpdateQty] = useState('')
@@ -516,6 +566,7 @@ export default function InventoryPage() {
   async function toggleWhExpand(row: typeof warehouseRows[0]) {
     if (expandedWhId === row.id) { setExpandedWhId(null); return }
     setExpandedWhId(row.id)
+    setExpandedWhHistoryGroupKeys(new Set())
     setExpandedWhHistoryLoading(true)
     const { data } = await supabase
       .from('warehouse_stock_ledger')
@@ -1462,19 +1513,51 @@ export default function InventoryPage() {
                                   <p className="text-xs text-muted-foreground italic">No recorded history for this item yet — its current quantity predates this tracking.</p>
                                 ) : (
                                   <div className="space-y-1">
-                                    {expandedWhHistory.map(h => (
-                                      <div key={h.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
-                                        {h.change_qty >= 0
-                                          ? <ArrowUpCircle className="h-3.5 w-3.5 text-green-600 shrink-0" />
-                                          : <ArrowDownCircle className="h-3.5 w-3.5 text-red-600 shrink-0" />}
-                                        <span className={`font-semibold ${h.change_qty >= 0 ? 'text-green-700' : 'text-red-600'}`}>{h.change_qty >= 0 ? '+' : ''}{h.change_qty}</span>
-                                        <span className={h.source_type === 'manual_add' || h.source_type === 'manual_edit' || h.source_type === 'personal_use' ? 'inline-flex items-center rounded-full bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 font-medium' : 'text-foreground'}>
-                                          {LEDGER_SOURCE_LABEL[h.source_type]}
-                                        </span>
-                                        <span className="text-muted-foreground min-w-0 break-words">{h.notes || [h.reference_no, h.client_name].filter(Boolean).join(' → ') || ''}</span>
-                                        <span className="text-muted-foreground ml-auto shrink-0">{new Date(h.created_at).toLocaleDateString('en-PH')}</span>
-                                      </div>
-                                    ))}
+                                    {groupWhHistory(expandedWhHistory).map(g => {
+                                      const isOpen = expandedWhHistoryGroupKeys.has(g.key)
+                                      return (
+                                        <div key={g.key}>
+                                          <div
+                                            className={`flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs ${g.edited ? 'cursor-pointer' : ''}`}
+                                            onClick={g.edited ? (e) => {
+                                              e.stopPropagation()
+                                              setExpandedWhHistoryGroupKeys(s => {
+                                                const next = new Set(s)
+                                                if (next.has(g.key)) next.delete(g.key); else next.add(g.key)
+                                                return next
+                                              })
+                                            } : undefined}
+                                          >
+                                            {g.change_qty >= 0
+                                              ? <ArrowUpCircle className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                                              : <ArrowDownCircle className="h-3.5 w-3.5 text-red-600 shrink-0" />}
+                                            <span className={`font-semibold ${g.change_qty >= 0 ? 'text-green-700' : 'text-red-600'}`}>{g.change_qty >= 0 ? '+' : ''}{g.change_qty}</span>
+                                            <span className={g.source_type === 'manual_add' || g.source_type === 'manual_edit' || g.source_type === 'personal_use' ? 'inline-flex items-center rounded-full bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 font-medium' : 'text-foreground'}>
+                                              {LEDGER_SOURCE_LABEL[g.source_type]}
+                                            </span>
+                                            <span className="text-muted-foreground min-w-0 break-words">{g.notes || [g.reference_no, g.client_name].filter(Boolean).join(' → ') || ''}</span>
+                                            {g.edited && (
+                                              <span className="inline-flex items-center gap-0.5 text-[10px] text-blue-600 font-medium">
+                                                <Pencil className="h-3 w-3" /> edited
+                                                {isOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                                              </span>
+                                            )}
+                                            <span className="text-muted-foreground ml-auto shrink-0">{new Date(g.created_at).toLocaleDateString('en-PH')}</span>
+                                          </div>
+                                          {g.edited && isOpen && (
+                                            <div className="ml-5 mt-1 space-y-1 border-l-2 border-blue-100 pl-2">
+                                              {g.raw.map(r => (
+                                                <div key={r.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-muted-foreground">
+                                                  <span className={r.change_qty >= 0 ? 'text-green-700 font-medium' : 'text-red-600 font-medium'}>{r.change_qty >= 0 ? '+' : ''}{r.change_qty}</span>
+                                                  <span className="min-w-0 break-words">{r.notes || [r.reference_no, r.client_name].filter(Boolean).join(' → ') || ''}</span>
+                                                  <span className="ml-auto shrink-0">{new Date(r.created_at).toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' })}</span>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          )}
+                                        </div>
+                                      )
+                                    })}
                                   </div>
                                 )}
                               </div>
