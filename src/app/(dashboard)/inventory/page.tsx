@@ -1463,7 +1463,7 @@ export default function InventoryPage() {
                                 ) : (
                                   <div className="space-y-1">
                                     {expandedWhHistory.map(h => (
-                                      <div key={h.id} className="flex items-center gap-2 text-xs">
+                                      <div key={h.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs">
                                         {h.change_qty >= 0
                                           ? <ArrowUpCircle className="h-3.5 w-3.5 text-green-600 shrink-0" />
                                           : <ArrowDownCircle className="h-3.5 w-3.5 text-red-600 shrink-0" />}
@@ -1471,7 +1471,7 @@ export default function InventoryPage() {
                                         <span className={h.source_type === 'manual_add' || h.source_type === 'manual_edit' || h.source_type === 'personal_use' ? 'inline-flex items-center rounded-full bg-amber-100 text-amber-800 border border-amber-300 px-2 py-0.5 font-medium' : 'text-foreground'}>
                                           {LEDGER_SOURCE_LABEL[h.source_type]}
                                         </span>
-                                        <span className="text-muted-foreground">{[h.reference_no, h.client_name].filter(Boolean).join(' → ') || h.notes || ''}</span>
+                                        <span className="text-muted-foreground min-w-0 break-words">{h.notes || [h.reference_no, h.client_name].filter(Boolean).join(' → ') || ''}</span>
                                         <span className="text-muted-foreground ml-auto shrink-0">{new Date(h.created_at).toLocaleDateString('en-PH')}</span>
                                       </div>
                                     ))}
