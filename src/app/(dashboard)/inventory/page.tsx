@@ -2210,7 +2210,7 @@ export default function InventoryPage() {
       {/* ── All Transactions (By Warehouse) — every CDSC stock movement across every item, ── */}
       {/* so you can scan recent activity and, via the Current Qty column, spot what's low. */}
       <Dialog open={allTxOpen} onOpenChange={o => { if (!o) { setAllTxOpen(false); setAllTxSearch(''); setAllTxSortLow(false) } }}>
-        <DialogContent className="w-[95vw] max-w-6xl">
+        <DialogContent className="w-[95vw] max-w-6xl sm:max-w-6xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <History className="h-4 w-4 text-slate-600" /> CDSC Stock Transactions
