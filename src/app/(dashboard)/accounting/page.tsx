@@ -865,7 +865,7 @@ function CollectionsTab() {
       : form.client_name
     if (!clientName.trim()) { toast.error('Client name required'); return }
     setSaving(true)
-    const form2307 = Number(form.amount) * CWT_CFG[form.cwt_type].rate
+    const form2307 = Math.round(Number(form.amount) * CWT_CFG[form.cwt_type].rate * 100) / 100
     const payload = {
       or_number: orNumber,
       client_id: form.client_id || null,
