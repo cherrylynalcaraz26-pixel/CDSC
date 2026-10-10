@@ -112,12 +112,6 @@ function buildQuarterlyGridForms(year: number, vatRegistered: boolean, isCorpora
   }))
 }
 
-const vatSummary = [
-  { month: 'Jan 2025', gross_purchases: 820000, input_vat: 88071.43, output_vat: 0, net_vat: 88071.43 },
-  { month: 'Feb 2025', gross_purchases: 640000, input_vat: 68571.43, output_vat: 0, net_vat: 68571.43 },
-  { month: 'Mar 2025', gross_purchases: 950000, input_vat: 101785.71, output_vat: 0, net_vat: 101785.71 },
-]
-
 const FILING_STATUS_CLS: Record<string, string> = {
   filed: 'bg-green-100 text-green-700 border-green-300',
   overdue: 'bg-red-200 text-red-800 border-red-400',
@@ -177,6 +171,7 @@ function FilingMonthCalendar({ year, month, forms }: { year: number; month: numb
 
 interface EwtRow { supplier: string; tin: string | null; atc: string | null; address: string | null; gross: number; vat_excl: number; ewt_rate: number; ewt: number }
 interface SlspRow { month: string; supplier: string; tin: string | null; refNo: string; gross: number; vat: number; net: number }
+interface VatSummaryRow { month: string; gross_sales: number; output_vat: number; gross_purchases: number; input_vat: number; net_vat: number }
 
 export default function BIRPage() {
   const supabase = createClient()
@@ -184,6 +179,7 @@ export default function BIRPage() {
   const [loadingTax, setLoadingTax] = useState(true)
   const [ewtRows, setEwtRows] = useState<EwtRow[]>([])
   const [slspRows, setSlspRows] = useState<SlspRow[]>([])
+  const [vatSummaryRows, setVatSummaryRows] = useState<VatSummaryRow[]>([])
   const [suppliers, setSuppliers] = useState<{ id: string; tin: string | null; atc_code: string | null }[]>([])
   const [filings, setFilings] = useState<{ form_type: string; tax_period: string; status: string; is_amendment: boolean }[]>([])
   const [monitorYear, setMonitorYear] = useState(new Date().getFullYear())
@@ -286,13 +282,14 @@ export default function BIRPage() {
   useEffect(() => {
     async function loadTaxData() {
       setLoadingTax(true)
-      const [{ data: poData }, { data: supData }, { data: rrData }, { data: sysData }] = await Promise.all([
+      const [{ data: poData }, { data: supData }, { data: rrData }, { data: sysData }, { data: colData }] = await Promise.all([
         supabase.from('purchase_orders')
           .select('po_number, supplier_id, po_date, vat_amount, ewt_amount, total_amount')
           .neq('status', 'cancelled'),
         supabase.from('suppliers').select('id, company_name, tin, atc_code, ewt_rate, address, bir_registered_address'),
         supabase.from('receiving_reports').select('po_number, si_number, dr_number'),
         supabase.from('system_settings').select('vat_registered, business_type, company_name, address, phone, tin').single(),
+        supabase.from('collections').select('collection_date, amount, vat_type, vat_amount, status').eq('status', 'posted'),
       ])
       setSuppliers(supData ?? [])
       if (sysData) setCompanyInfo(sysData)
@@ -345,6 +342,35 @@ export default function BIRPage() {
         })
         .sort((a, b) => (a.month > b.month ? 1 : -1))
       setSlspRows(slspList)
+
+      // VAT Summary: Output VAT comes only from vatable collections (Output VAT
+      // is zero for a non-VAT-registered entity, since vat_type defaults to
+      // 'exempt' and splitVat never populates vat_amount for it); Input VAT comes
+      // from VAT-bearing purchases, same as the SLSP above. Net VAT = Output - Input.
+      const vatByMonth = new Map<string, { label: string; gross_sales: number; output_vat: number; gross_purchases: number; input_vat: number }>()
+      const monthKey = (iso: string) => iso.slice(0, 7)
+      const monthLabel = (iso: string) => new Date(iso + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', year: 'numeric' })
+      for (const c of (colData ?? [])) {
+        if (!c.collection_date || c.vat_type !== 'vatable') continue
+        const key = monthKey(c.collection_date)
+        const acc = vatByMonth.get(key) ?? { label: monthLabel(c.collection_date), gross_sales: 0, output_vat: 0, gross_purchases: 0, input_vat: 0 }
+        acc.gross_sales += Number(c.amount) || 0
+        acc.output_vat += Number(c.vat_amount) || 0
+        vatByMonth.set(key, acc)
+      }
+      for (const po of (poData ?? [])) {
+        const vat = Number(po.vat_amount) || 0
+        if (!po.po_date || vat <= 0) continue
+        const key = monthKey(po.po_date)
+        const acc = vatByMonth.get(key) ?? { label: monthLabel(po.po_date), gross_sales: 0, output_vat: 0, gross_purchases: 0, input_vat: 0 }
+        acc.gross_purchases += Number(po.total_amount) || 0
+        acc.input_vat += vat
+        vatByMonth.set(key, acc)
+      }
+      const vatSummaryList: VatSummaryRow[] = [...vatByMonth.entries()]
+        .sort(([a], [b]) => (a > b ? 1 : -1))
+        .map(([, v]) => ({ month: v.label, gross_sales: v.gross_sales, output_vat: v.output_vat, gross_purchases: v.gross_purchases, input_vat: v.input_vat, net_vat: v.output_vat - v.input_vat }))
+      setVatSummaryRows(vatSummaryList)
       setLoadingTax(false)
     }
     loadTaxData()
@@ -489,7 +515,8 @@ export default function BIRPage() {
       return
     }
 
-    if (form.form === '2551Q' || form.form === '2550Q') {
+    if (form.form === '2551Q') {
+      // Non-VAT Percentage Tax: 3% of gross receipts, no input-tax credit.
       const { data: colData } = await supabase.from('collections')
         .select('client_name, amount, collection_date, status')
         .eq('status', 'posted')
@@ -505,6 +532,36 @@ export default function BIRPage() {
       setFormGenBaseLabel('Gross Sales / Receipts Collected')
       setFormGenBaseAmount(gross)
       setFormGenAmount(((gross * 3) / 100).toFixed(2))
+      setFormGenLoading(false)
+      return
+    }
+
+    if (form.form === '2550Q') {
+      // VAT: Output VAT (12% of VATable Sales only) less creditable Input VAT on
+      // purchases in the same period — never gross receipts × a flat rate.
+      const [{ data: colData }, { data: poData }] = await Promise.all([
+        supabase.from('collections')
+          .select('client_name, vat_type, vat_amount, collection_date, status')
+          .eq('status', 'posted').eq('vat_type', 'vatable')
+          .gte('collection_date', form.periodStart).lte('collection_date', form.periodEnd),
+        supabase.from('purchase_orders')
+          .select('vat_amount, po_date')
+          .neq('status', 'cancelled')
+          .gte('po_date', form.periodStart).lte('po_date', form.periodEnd),
+      ])
+      const byClient = new Map<string, number>()
+      for (const c of colData ?? []) {
+        const outputVat = Number(c.vat_amount) || 0
+        byClient.set(c.client_name ?? 'Unknown Client', (byClient.get(c.client_name ?? 'Unknown Client') ?? 0) + outputVat)
+      }
+      const rows = [...byClient.entries()].map(([client, amount]) => ({ label: client, amount })).sort((a, b) => b.amount - a.amount)
+      const outputVatTotal = rows.reduce((s, r) => s + r.amount, 0)
+      const inputVatTotal = (poData ?? []).reduce((s, po) => s + (Number(po.vat_amount) || 0), 0)
+      rows.push({ label: 'Less: Creditable Input VAT', amount: -inputVatTotal })
+      setFormGenRows(rows)
+      setFormGenBaseLabel('Output VAT less Input VAT')
+      setFormGenBaseAmount(outputVatTotal - inputVatTotal)
+      setFormGenAmount(Math.max(outputVatTotal - inputVatTotal, 0).toFixed(2))
       setFormGenLoading(false)
       return
     }
@@ -587,10 +644,11 @@ export default function BIRPage() {
     const isRemittance = ['0619-E', '0619-F', '1601-EQ', '1601-FQ'].includes(form.form)
     const isFinalTax = form.form === '0619-F' || form.form === '1601-FQ'
     const isEwt = form.form === '0619-E' || form.form === '1601-EQ'
-    const isPercentageTax = form.form === '2551Q' || form.form === '2550Q'
+    const isPercentageTax = form.form === '2551Q'
+    const isVat = form.form === '2550Q'
     const isIncomeTax = form.form === '1701Q' || form.form === '1702Q'
     const isQuarterly = form.form.includes('Q')
-    const breakdownLabel = isIncomeTax ? 'Account' : isPercentageTax ? 'Client' : 'Supplier'
+    const breakdownLabel = isIncomeTax ? 'Account' : (isPercentageTax || isVat) ? 'Client' : 'Supplier'
     const officialTitle = BIR_FORM_TITLES[form.form] ?? form.description
     const netAmount = formGenBaseAmount
     const totalPayable = parseFloat(formGenAmount) || 0
@@ -871,6 +929,12 @@ export default function BIRPage() {
             <tr class="shade"><td class="lbl">Gross Sales / Receipts</td><td class="amtcell">${amountBoxRow(netAmount)}</td></tr>
             <tr><td class="lbl">Tax Rate</td><td class="amtcell" style="text-align:right;font-weight:700">${rate}%</td></tr>
             <tr class="shade"><td class="lbl">Tax Due</td><td class="amtcell">${amountBoxRow((netAmount * rate) / 100)}</td></tr>
+            <tr><td class="lbl">Less: Tax Credits / Payments</td><td class="amtcell">${amountBoxRow(0)}</td></tr>
+            <tr class="shade"><td class="lbl">Total Amount Payable</td><td class="amtcell">${amountBoxRow(totalPayable)}</td></tr>
+          ` : isVat ? `
+            <tr class="shade"><td class="lbl">Output VAT (12% of VATable Sales)</td><td class="amtcell">${amountBoxRow(formGenRows.filter(r => r.amount >= 0).reduce((s, r) => s + r.amount, 0))}</td></tr>
+            <tr><td class="lbl">Less: Creditable Input VAT</td><td class="amtcell">${amountBoxRow(-formGenRows.filter(r => r.amount < 0).reduce((s, r) => s + r.amount, 0))}</td></tr>
+            <tr class="shade"><td class="lbl">VAT Payable</td><td class="amtcell">${amountBoxRow(netAmount)}</td></tr>
             <tr><td class="lbl">Less: Tax Credits / Payments</td><td class="amtcell">${amountBoxRow(0)}</td></tr>
             <tr class="shade"><td class="lbl">Total Amount Payable</td><td class="amtcell">${amountBoxRow(totalPayable)}</td></tr>
           ` : `
@@ -1317,7 +1381,7 @@ export default function BIRPage() {
               <div className="flex items-center justify-between">
                 <div>
                   <CardTitle className="text-base">VAT Summary — BIR Form 2550Q</CardTitle>
-                  <CardDescription>Input VAT from purchases by month</CardDescription>
+                  <CardDescription>Output VAT from vatable sales and Input VAT from purchases, by month</CardDescription>
                 </div>
                 <Button size="sm" variant="outline" onClick={() => toast.success('VAT summary exported')}>
                   <Download className="h-4 w-4 mr-1" />Export
@@ -1336,7 +1400,9 @@ export default function BIRPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {vatSummary.map(row => (
+                  {vatSummaryRows.length === 0 ? (
+                    <TableRow><TableCell colSpan={5} className="text-center py-6 text-muted-foreground text-sm">No VAT-bearing transactions recorded yet.</TableCell></TableRow>
+                  ) : vatSummaryRows.map(row => (
                     <TableRow key={row.month}>
                       <TableCell className="font-medium">{row.month}</TableCell>
                       <TableCell className="text-right">₱{row.gross_purchases.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
@@ -1345,13 +1411,15 @@ export default function BIRPage() {
                       <TableCell className="text-right font-semibold">₱{row.net_vat.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
                     </TableRow>
                   ))}
-                  <TableRow className="bg-muted/50 font-bold">
-                    <TableCell>Q1 TOTAL</TableCell>
-                    <TableCell className="text-right">₱{vatSummary.reduce((s, r) => s + r.gross_purchases, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                    <TableCell className="text-right text-blue-600">₱{vatSummary.reduce((s, r) => s + r.input_vat, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                    <TableCell className="text-right">₱0.00</TableCell>
-                    <TableCell className="text-right">₱{vatSummary.reduce((s, r) => s + r.net_vat, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                  </TableRow>
+                  {vatSummaryRows.length > 0 && (
+                    <TableRow className="bg-muted/50 font-bold">
+                      <TableCell>TOTAL</TableCell>
+                      <TableCell className="text-right">₱{vatSummaryRows.reduce((s, r) => s + r.gross_purchases, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
+                      <TableCell className="text-right text-blue-600">₱{vatSummaryRows.reduce((s, r) => s + r.input_vat, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
+                      <TableCell className="text-right">₱{vatSummaryRows.reduce((s, r) => s + r.output_vat, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
+                      <TableCell className="text-right">₱{vatSummaryRows.reduce((s, r) => s + r.net_vat, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </CardContent>
@@ -1524,7 +1592,7 @@ export default function BIRPage() {
                 <span>₱{formGenBaseAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span>
               </div>
 
-              {(formGenTarget.form === '2551Q' || formGenTarget.form === '2550Q') && (
+              {formGenTarget.form === '2551Q' && (
                 <div className="space-y-1.5">
                   <Label>Tax Rate (%)</Label>
                   <Input

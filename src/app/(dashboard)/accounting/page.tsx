@@ -37,6 +37,8 @@ interface Collection {
   client_name: string | null; amount: number; form_2307: number | null; status: string
   payment_mode?: string | null; si_number?: string | null
   reference_number?: string | null; remarks?: string | null; client_id?: string | null
+  vat_type?: string | null; vatable_sales?: number | null; vat_amount?: number | null
+  cwt_type?: string | null
 }
 
 interface Disbursement {
@@ -128,6 +130,22 @@ const CWT_CFG: Record<CWTType, { label: string; rate: number; atc: string }> = {
   none:     { label: 'None',          rate: 0,    atc: '' },
   goods:    { label: 'Goods (1%)',    rate: 0.01, atc: 'WC158' },
   services: { label: 'Services (2%)', rate: 0.02, atc: 'WC157' },
+}
+
+type VATType = 'vatable' | 'zero_rated' | 'exempt'
+const VAT_TYPE_LABEL: Record<VATType, string> = {
+  vatable: 'Vatable (12%)', zero_rated: 'Zero-Rated', exempt: 'VAT-Exempt',
+}
+const VAT_RATE = 0.12
+
+// Splits a VAT-inclusive OR amount into its net (VATable Sales) and VAT components.
+// VATable Sales = Gross / 1.12, VAT = Gross - VATable Sales — never Gross * 0.12,
+// which would double-count the tax already folded into the gross amount.
+function splitVat(grossAmount: number, vatType: VATType): { vatableSales: number; vatAmount: number } {
+  if (vatType !== 'vatable' || grossAmount <= 0) return { vatableSales: 0, vatAmount: 0 }
+  const vatableSales = Math.round((grossAmount / (1 + VAT_RATE)) * 100) / 100
+  const vatAmount = Math.round((grossAmount - vatableSales) * 100) / 100
+  return { vatableSales, vatAmount }
 }
 
 // Strips a leading "OR-" (any case) so OR numbers stay in the plain numeric
@@ -554,7 +572,7 @@ function CollectionsTab() {
   const [form, setForm] = useState({
     or_number: '', client_id: '', client_name: '', amount: '', si_number: '',
     payment_mode: 'Cash', reference_number: '', collection_date: '', remarks: '',
-    cwt_type: 'none' as CWTType,
+    cwt_type: 'none' as CWTType, vat_type: 'exempt' as VATType,
   })
   const [clientSearch, setClientSearch] = useState('')
   const [clientDropdownOpen, setClientDropdownOpen] = useState(false)
@@ -571,6 +589,11 @@ function CollectionsTab() {
   const { sorted: sortedReadyToCollect, sortKey: rtcSortKey, sortDir: rtcSortDir, onSort: onSortRtc } = useTableSort<typeof readyToCollect[number], RtcSortKey>(readyToCollect, (r, key) => r[key])
   const [expandedRTC, setExpandedRTC] = useState<string | null>(null)
   const [companyInfo, setCompanyInfo] = useState<{ company_name: string | null; address: string | null; phone: string | null; tin: string | null } | null>(null)
+  // Default VAT type for a new OR — 'vatable' only when this entity is actually
+  // VAT-registered; otherwise every sale is VAT-exempt by definition (non-VAT
+  // taxpayers don't charge Output VAT). Still overridable per transaction, since
+  // a VAT-registered entity can have zero-rated clients (PEZA/BOI, etc.).
+  const [vatRegistered, setVatRegistered] = useState(false)
   const [viewRecord, setViewRecord] = useState<Collection | null>(null)
   const [blankFormOpen, setBlankFormOpen] = useState(false)
   const [blankFormClientId, setBlankFormClientId] = useState('')
@@ -588,8 +611,9 @@ function CollectionsTab() {
     ])
     setRecords((colData ?? []) as Collection[])
     setClients(cliData ?? [])
-    const { data: sysData } = await supabase.from('system_settings').select('company_name, address, phone, tin').single()
+    const { data: sysData } = await supabase.from('system_settings').select('company_name, address, phone, tin, vat_registered').single()
     if (sysData) setCompanyInfo(sysData)
+    setVatRegistered(!!sysData?.vat_registered)
 
     const { data: linkRows } = await supabase.from('collection_csi_links').select('collection_id, si_number')
     const linksMap: Record<string, string[]> = {}
@@ -646,7 +670,7 @@ function CollectionsTab() {
   useEffect(() => { load() }, [])
 
   function resetForm() {
-    setForm({ or_number: computeNextOrNumber(records), client_id: '', client_name: '', amount: '', si_number: '', payment_mode: 'Cash', reference_number: '', collection_date: '', remarks: '', cwt_type: 'none' })
+    setForm({ or_number: computeNextOrNumber(records), client_id: '', client_name: '', amount: '', si_number: '', payment_mode: 'Cash', reference_number: '', collection_date: '', remarks: '', cwt_type: 'none', vat_type: vatRegistered ? 'vatable' : 'exempt' })
     setEditingId(null)
     setClientSearch('')
     setClientDropdownOpen(false)
@@ -818,7 +842,8 @@ function CollectionsTab() {
       reference_number: r.reference_number ?? '',
       collection_date: r.collection_date ?? '',
       remarks: r.remarks ?? '',
-      cwt_type: cwtTypeFromAmount(amount, r.form_2307),
+      cwt_type: (r.cwt_type as CWTType | null) ?? cwtTypeFromAmount(amount, r.form_2307),
+      vat_type: (r.vat_type as VATType | null) ?? 'exempt',
     })
     setClientSearch(r.client_name ?? '')
     setSelectedCsis(new Set(csiLinksByCollection[r.id] ?? (r.si_number ? [r.si_number] : [])))
@@ -865,18 +890,28 @@ function CollectionsTab() {
       : form.client_name
     if (!clientName.trim()) { toast.error('Client name required'); return }
     setSaving(true)
-    const form2307 = Math.round(Number(form.amount) * CWT_CFG[form.cwt_type].rate * 100) / 100
+    const grossAmount = Number(form.amount)
+    const { vatableSales, vatAmount } = splitVat(grossAmount, form.vat_type)
+    // EWT is withheld on the VAT-exclusive amount — for a vatable sale that's
+    // vatableSales, not the gross OR total; for zero-rated/exempt sales the gross
+    // amount already carries no VAT, so it IS the base.
+    const ewtBase = form.vat_type === 'vatable' ? vatableSales : grossAmount
+    const form2307 = Math.round(ewtBase * CWT_CFG[form.cwt_type].rate * 100) / 100
     const payload = {
       or_number: orNumber,
       client_id: form.client_id || null,
       client_name: clientName.trim(),
-      amount: Number(form.amount),
+      amount: grossAmount,
       form_2307: form2307 > 0 ? form2307 : null,
       payment_mode: form.payment_mode.toLowerCase().replace(' ', '_'),
       reference_number: form.reference_number || null,
       collection_date: form.collection_date || new Date().toISOString().split('T')[0],
       remarks: form.remarks || null,
       si_number: [...selectedCsis][0] ?? null,
+      vat_type: form.vat_type,
+      vatable_sales: vatableSales,
+      vat_amount: vatAmount,
+      cwt_type: form.cwt_type,
     }
     if (editingId) {
       const { error } = await supabase.from('collections').update(payload).eq('id', editingId)
@@ -903,11 +938,13 @@ function CollectionsTab() {
     }).select().single()
     if (!jeErr && jeData) {
       const jeId = (jeData as any).id
-      const net = Number(form.amount) - (payload.form_2307 ?? 0)
+      const net = grossAmount - (payload.form_2307 ?? 0)
+      const salesRevenue = form.vat_type === 'vatable' ? vatableSales : grossAmount
       const lines = [
         { entry_id: jeId, account_code: '1100', account_name: 'Cash on Hand', memo, debit: net, credit: 0 },
-        { entry_id: jeId, account_code: '4100', account_name: 'Sales Revenue', memo, debit: 0, credit: Number(form.amount) },
+        { entry_id: jeId, account_code: '4100', account_name: 'Sales Revenue', memo, debit: 0, credit: salesRevenue },
       ]
+      if (vatAmount > 0) lines.push({ entry_id: jeId, account_code: '2200', account_name: 'Output VAT Payable', memo, debit: 0, credit: vatAmount })
       if (payload.form_2307) lines.push({ entry_id: jeId, account_code: '1120', account_name: 'Withholding Tax Receivable (2307)', memo, debit: payload.form_2307, credit: 0 })
       await supabase.from('journal_lines').insert(lines)
     }
@@ -1018,6 +1055,11 @@ function CollectionsTab() {
         <div class="row"><div class="lbl">SI Reference</div><div class="val">${r ? field((csiLinksByCollection[r.id] ?? (r.si_number ? [r.si_number] : [])).join(', ') || null) : field(null)}</div></div>
         <div class="row"><div class="lbl">For</div><div class="val">${r ? field(r.remarks) : field(null)}</div></div>
         <div class="amt-box">
+          ${r && r.vat_type === 'vatable' ? `
+          <div class="amt-line"><span>VATable Sales</span><span>${fmt(r.vatable_sales ?? 0)}</span></div>
+          <div class="amt-line"><span>VAT (12%)</span><span>${fmt(r.vat_amount ?? 0)}</span></div>` : ''}
+          ${r && r.vat_type === 'zero_rated' ? `<div class="amt-line"><span>Zero-Rated Sales</span><span>${fmt(r.amount ?? 0)}</span></div>` : ''}
+          ${r && (r.vat_type === 'exempt' || !r.vat_type) ? `<div class="amt-line"><span>VAT-Exempt Sales</span><span>${fmt(r.amount ?? 0)}</span></div>` : ''}
           <div class="amt-line"><span>Gross Amount</span><span>${r ? fmt(r.amount ?? 0) : '&nbsp;'}</span></div>
           <div class="amt-line"><span>Less: Form 2307 (EWT)</span><span>${r ? (r.form_2307 ? fmt(r.form_2307) : '—') : '&nbsp;'}</span></div>
           <div class="amt-line total"><span>Net Amount Received</span><span>${r ? fmt(net) : '&nbsp;'}</span></div>
@@ -1568,6 +1610,31 @@ function CollectionsTab() {
               </Select>
             </div>
             <div className="space-y-1.5">
+              <Label>VAT Type</Label>
+              <Select value={form.vat_type} onValueChange={v => setForm(p => ({ ...p, vat_type: (v ?? 'exempt') as VATType }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(VAT_TYPE_LABEL) as VATType[]).map(k => (
+                    <SelectItem key={k} value={k}>{VAT_TYPE_LABEL[k]}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {form.vat_type === 'vatable' && <>
+            <div className="space-y-1.5">
+              <Label>VATable Sales</Label>
+              <div className="h-9 flex items-center px-3 rounded-md border bg-muted text-sm text-muted-foreground">
+                {form.amount ? fmt(splitVat(Number(form.amount), form.vat_type).vatableSales) : '—'}
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>VAT Amount (12%)</Label>
+              <div className="h-9 flex items-center px-3 rounded-md border bg-muted text-sm text-muted-foreground">
+                {form.amount ? fmt(splitVat(Number(form.amount), form.vat_type).vatAmount) : '—'}
+              </div>
+            </div>
+            </>}
+            <div className="space-y-1.5">
               <Label>Form 2307 (CWT)</Label>
               <Select value={form.cwt_type} onValueChange={v => setForm(p => ({ ...p, cwt_type: (v ?? 'none') as CWTType }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
@@ -1583,7 +1650,7 @@ function CollectionsTab() {
               <div className="h-9 flex items-center px-3 rounded-md border bg-muted text-sm text-muted-foreground">
                 {form.cwt_type === 'none' || !form.amount
                   ? '—'
-                  : fmt(Number(form.amount) * CWT_CFG[form.cwt_type].rate)}
+                  : fmt((form.vat_type === 'vatable' ? splitVat(Number(form.amount), form.vat_type).vatableSales : Number(form.amount)) * CWT_CFG[form.cwt_type].rate)}
               </div>
             </div>
             <div className="space-y-1.5">
@@ -1660,6 +1727,13 @@ function CollectionsTab() {
                 <div><span className="text-xs text-muted-foreground block">For</span><span>{viewRecord.remarks ?? '—'}</span></div>
               </div>
               <div className="rounded-lg border bg-muted/30 p-3 space-y-1">
+                {viewRecord.vat_type === 'vatable' && <>
+                  <div className="flex justify-between"><span className="text-muted-foreground">VATable Sales</span><span>{fmt(viewRecord.vatable_sales ?? 0)}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">VAT (12%)</span><span>{fmt(viewRecord.vat_amount ?? 0)}</span></div>
+                </>}
+                {viewRecord.vat_type && viewRecord.vat_type !== 'vatable' && (
+                  <div className="flex justify-between"><span className="text-muted-foreground">{viewRecord.vat_type === 'zero_rated' ? 'Zero-Rated Sales' : 'VAT-Exempt Sales'}</span><span>{fmt(viewRecord.amount ?? 0)}</span></div>
+                )}
                 <div className="flex justify-between"><span className="text-muted-foreground">Gross Amount</span><span className="font-medium">{fmt(viewRecord.amount ?? 0)}</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Form 2307 (EWT)</span><span>{viewRecord.form_2307 ? fmt(viewRecord.form_2307) : '—'}</span></div>
                 <div className="flex justify-between border-t pt-1 font-bold text-green-700"><span>Net Total</span><span>{fmt((viewRecord.amount ?? 0) - (viewRecord.form_2307 ?? 0))}</span></div>
@@ -2599,8 +2673,15 @@ function BIRExportTab({ collections, disbursements }: { collections: Collection[
 
   function exportSalesJournal() {
     exportCSV('BIR_SJ_SalesJournal.csv',
-      ['Date','OR No.','Name of Payor','Amount of Collection','Form 2307 Amount','Net Amount Received'],
-      posted.map(c => [c.collection_date ?? '', c.or_number ?? '', c.client_name ?? '', c.amount, c.form_2307 ?? 0, c.amount - (c.form_2307 ?? 0)])
+      ['Date','OR No.','Name of Payor','VATable Sales','VAT Amount','Zero-Rated Sales','VAT-Exempt Sales','Amount of Collection','Form 2307 Amount','Net Amount Received'],
+      posted.map(c => [
+        c.collection_date ?? '', c.or_number ?? '', c.client_name ?? '',
+        c.vat_type === 'vatable' ? (c.vatable_sales ?? 0) : 0,
+        c.vat_type === 'vatable' ? (c.vat_amount ?? 0) : 0,
+        c.vat_type === 'zero_rated' ? c.amount : 0,
+        (!c.vat_type || c.vat_type === 'exempt') ? c.amount : 0,
+        c.amount, c.form_2307 ?? 0, c.amount - (c.form_2307 ?? 0),
+      ])
     )
     toast.success('Sales Journal exported for BIR')
   }
@@ -2616,7 +2697,11 @@ function BIRExportTab({ collections, disbursements }: { collections: Collection[
   function exportSummary2307() {
     exportCSV('BIR_Form2307_Summary.csv',
       ['OR No.','Date','Name of Income Payor','ATC','Amount of Income','Tax Withheld'],
-      posted.filter(c => (c.form_2307 ?? 0) > 0).map(c => [c.or_number ?? '', c.collection_date ?? '', c.client_name ?? '', 'WC158', c.amount, c.form_2307 ?? 0])
+      posted.filter(c => (c.form_2307 ?? 0) > 0).map(c => [
+        c.or_number ?? '', c.collection_date ?? '', c.client_name ?? '',
+        CWT_CFG[(c.cwt_type as CWTType | null) ?? 'goods'].atc || 'WC158',
+        c.amount, c.form_2307 ?? 0,
+      ])
     )
     toast.success('Form 2307 summary exported')
   }
