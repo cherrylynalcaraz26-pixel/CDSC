@@ -2,7 +2,8 @@ import Link from 'next/link'
 import Image from 'next/image'
 import type { Metadata } from 'next'
 import { ArrowRight, Phone, PlayCircle, ShoppingCart, PackageSearch, Handshake } from 'lucide-react'
-import { productCategories, whyCds, industries, additionalMarkets, procurementProcess, company, heroStats } from '@/lib/site-content'
+import { additionalMarkets, companyWithContact } from '@/lib/site-content'
+import { getSiteContent } from '@/lib/site-content-server'
 import { DemoVideoSection } from '@/components/marketing/demo-video-section'
 import { InventorySystemShowcase } from '@/components/marketing/inventory-showcase'
 import { Reveal, CountUp } from '@/components/marketing/profile-motion'
@@ -27,9 +28,6 @@ const INDUSTRY_PHOTOS: [string, string][] = [
   ['Engineering', '/images/site/engineering-plans.jpg'],
   ['Warehousing & Logistics', '/images/site/logistics-port.jpg'],
 ]
-const MARKETS = [...industries, ...additionalMarkets].map(m => m.name)
-// The built-in system gets its own showcase section below.
-const WHY = whyCds.filter(w => !/inventory system/i.test(w.title))
 
 function Badge({ children, light = false }: { children: React.ReactNode; light?: boolean }) {
   return (
@@ -57,7 +55,17 @@ function Heading({ badge, title, intro }: { badge: string; title: React.ReactNod
 
 const WRAP = 'mx-auto w-full max-w-screen-2xl px-6 lg:px-10'
 
-export default function HomePage() {
+// Content is editable in Settings → Website; refreshed at most every minute.
+export const revalidate = 60
+
+export default async function HomePage() {
+  const content = await getSiteContent()
+  const { productCategories, whyCds, industries, procurementProcess, heroStats, homeHero } = content
+  const company = companyWithContact(content.contact)
+  const MARKETS = [...industries, ...additionalMarkets].map(m => m.name)
+  // The built-in system gets its own showcase section below.
+  const WHY = whyCds.filter(w => !/inventory system/i.test(w.title))
+  const [h1 = '', h2 = '', ...h3] = homeHero.headline
   return (
     <>
       {/* ═══════════ HERO — real photo, fills the window ═══════════ */}
@@ -71,18 +79,13 @@ export default function HomePage() {
 
         <div className={`relative z-10 pb-32 pt-16 ${WRAP}`}>
           <div className="max-w-3xl motion-safe:animate-rise">
-            <Badge light>Industrial Supply · Procurement · Sourcing</Badge>
+            <Badge light>{homeHero.badge}</Badge>
             <h1 className="mt-7 text-5xl font-black leading-[1.04] tracking-tight text-white sm:text-6xl xl:text-7xl">
-              Industrial Supply
-              <br />
-              <span className="text-red-100">Solutions Built</span>
-              <br />
-              Around Your Business
+              {h1}
+              {h2 && <><br /><span className="text-red-100">{h2}</span></>}
+              {h3.length > 0 && <><br />{h3.join(' ')}</>}
             </h1>
-            <p className="mt-6 max-w-xl text-lg leading-relaxed text-white/85">
-              Reliable products, sourcing support, and procurement solutions for businesses, industrial facilities,
-              contractors, and organizations across the Philippines.
-            </p>
+            <p className="mt-6 max-w-xl text-lg leading-relaxed text-white/85">{homeHero.description}</p>
             <div className="mt-10 flex flex-wrap gap-4">
               <Link href="/quote" className="inline-flex items-center gap-2 rounded-2xl bg-white px-7 py-3.5 font-bold text-cdsc-accent shadow-lg transition hover:-translate-y-0.5 hover:shadow-2xl">
                 Request a Quotation <ArrowRight className="h-4 w-4" />

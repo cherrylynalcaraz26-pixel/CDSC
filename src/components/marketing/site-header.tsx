@@ -6,10 +6,12 @@ import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import { Menu, X, Phone, Mail, ArrowRight, ShoppingCart, Handshake } from 'lucide-react'
 import { useCart, cartCount, useCartHydrated } from '@/lib/cart-store'
-import { nav, company } from '@/lib/site-content'
+import { nav, company as defaultCompany } from '@/lib/site-content'
 import { cn } from '@/lib/utils'
 
-export function SiteHeader() {
+// Contact details come from Settings → Website (passed in by the marketing layout).
+export function SiteHeader({ contact }: { contact?: Pick<typeof defaultCompany, 'phone' | 'phoneHref' | 'email' | 'emailHref'> } = {}) {
+  const company = contact ?? defaultCompany
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
   const cartReady = useCartHydrated()

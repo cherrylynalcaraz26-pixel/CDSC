@@ -285,6 +285,14 @@ export const furniture = {
 
 export type StockBar = { label: string; percent: number }
 
+// Home page hero (top of the public site).
+export const homeHero = {
+  badge: 'Industrial Supply · Procurement · Sourcing',
+  headline: ['Industrial Supply', 'Solutions Built', 'Around Your Business'],
+  description:
+    'Reliable products, sourcing support, and procurement solutions for businesses, industrial facilities, contractors, and organizations across the Philippines.',
+}
+
 export const inventorySystem = {
   description:
     "We don't just deliver supplies — we give you tools to manage them. Our integrated system handles inventory monitoring, stock movement, and monthly reconciliation so you can focus on running your business, not counting boxes.",
@@ -306,4 +314,115 @@ export const inventorySystem = {
     { title: 'Monthly Reconciliation', description: 'End-of-month inventory reports generated automatically. No manual tallying — clean numbers, ready for review.' },
     { title: 'Order Scheduling', description: 'Plan recurring orders in advance. Keep your supply chain predictable and your team ahead of stock-outs.' },
   ],
+}
+
+// ── Editable content (Settings → Website) ────────────────────────────────
+// Everything above is the built-in copy. Staff can override these sections
+// from Settings → Website; the overrides are saved as JSON in
+// system_settings.website_content and merged over the defaults, so a section
+// that was never edited (or is saved empty) keeps the copy above.
+
+export type TitledItem = { title: string; description: string }
+export type NamedItem = { name: string; description: string }
+
+export interface SiteContent {
+  homeHero: { badge: string; headline: string[]; description: string }
+  profileHero: { headline: string[]; description: string; badge: string }
+  heroStats: HeroStat[]
+  mission: string
+  vision: string
+  companyOverview: string[]
+  coreValues: CoreValue[]
+  productCategories: ProductCategory[]
+  whyCds: WhyCard[]
+  industries: Industry[]
+  services: Service[]
+  procurementProcess: ProcessStep[]
+  contact: { tagline: string; phone: string; email: string; addressLine1: string; addressLine2: string }
+}
+
+export const DEFAULT_SITE_CONTENT: SiteContent = {
+  homeHero,
+  profileHero,
+  heroStats,
+  mission,
+  vision,
+  companyOverview,
+  coreValues,
+  productCategories,
+  whyCds,
+  industries,
+  services,
+  procurementProcess,
+  contact: {
+    tagline: company.tagline,
+    phone: company.phone,
+    email: company.email,
+    addressLine1: company.addressLine1,
+    addressLine2: company.addressLine2,
+  },
+}
+
+const str = (v: unknown, d: string) => (typeof v === 'string' && v.trim() ? v : d)
+const strArr = (v: unknown, d: string[]) => {
+  const a = Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && !!x.trim()) : []
+  return a.length ? a : d
+}
+// A list section: keeps only well-formed rows; falls back when nothing usable is left.
+function rows<T extends object>(v: unknown, d: T[], keys: (keyof T)[]): T[] {
+  if (!Array.isArray(v)) return d
+  const ok = v.filter(r => {
+    if (!r || typeof r !== 'object') return false
+    const rec = r as Record<string, unknown>
+    // every required key present, and the row isn't completely blank
+    return keys.every(k => typeof rec[k as string] !== 'undefined') && keys.some(k => String(rec[k as string] ?? '').trim() !== '')
+  }) as T[]
+  return ok.length ? ok : d
+}
+
+/** Saved overrides (any shape) → complete, safe content. */
+export function mergeSiteContent(raw: unknown): SiteContent {
+  const o = (raw && typeof raw === 'object' ? raw : {}) as Record<string, any> // eslint-disable-line @typescript-eslint/no-explicit-any
+  const D = DEFAULT_SITE_CONTENT
+  const hh = o.homeHero ?? {}
+  const ph = o.profileHero ?? {}
+  const ct = o.contact ?? {}
+  return {
+    homeHero: { badge: str(hh.badge, D.homeHero.badge), headline: strArr(hh.headline, D.homeHero.headline), description: str(hh.description, D.homeHero.description) },
+    profileHero: { badge: str(ph.badge, D.profileHero.badge), headline: strArr(ph.headline, D.profileHero.headline), description: str(ph.description, D.profileHero.description) },
+    heroStats: rows<HeroStat>(o.heroStats, D.heroStats, ['value', 'label']).map(s => ({ value: Number(s.value) || 0, suffix: String(s.suffix ?? ''), label: String(s.label), animate: s.animate !== false })),
+    mission: str(o.mission, D.mission),
+    vision: str(o.vision, D.vision),
+    companyOverview: strArr(o.companyOverview, D.companyOverview),
+    coreValues: rows<CoreValue>(o.coreValues, D.coreValues, ['title', 'description']),
+    productCategories: rows<ProductCategory>(o.productCategories, D.productCategories, ['name', 'description']).map(c => ({ ...c, items: Array.isArray(c.items) ? c.items.filter(Boolean) : [] })),
+    whyCds: rows<WhyCard>(o.whyCds, D.whyCds, ['title', 'description']),
+    industries: rows<Industry>(o.industries, D.industries, ['name', 'description']),
+    services: rows<Service>(o.services, D.services, ['title', 'description']),
+    procurementProcess: rows<ProcessStep>(o.procurementProcess, D.procurementProcess, ['title', 'description']).map((s, i) => ({ ...s, step: String(i + 1).padStart(2, '0') })),
+    contact: {
+      tagline: str(ct.tagline, D.contact.tagline),
+      phone: str(ct.phone, D.contact.phone),
+      email: str(ct.email, D.contact.email),
+      addressLine1: str(ct.addressLine1, D.contact.addressLine1),
+      addressLine2: str(ct.addressLine2, D.contact.addressLine2),
+    },
+  }
+}
+
+/** The `company` object with the edited contact details applied. */
+export function companyWithContact(c: SiteContent['contact']) {
+  const digits = c.phone.replace(/\D/g, '')
+  const intl = digits.startsWith('0') ? `+63${digits.slice(1)}` : digits ? `+${digits}` : ''
+  return {
+    ...company,
+    tagline: c.tagline,
+    phone: c.phone,
+    phoneHref: intl ? `tel:${intl}` : company.phoneHref,
+    email: c.email,
+    emailHref: `mailto:${c.email}`,
+    addressLine1: c.addressLine1,
+    addressLine2: c.addressLine2,
+    addressFull: `${c.addressLine1}, ${c.addressLine2}`,
+  }
 }

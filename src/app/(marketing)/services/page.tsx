@@ -2,7 +2,8 @@ import Link from 'next/link'
 import Image from 'next/image'
 import type { Metadata } from 'next'
 import { ArrowRight, Package, Search, ClipboardList, Boxes, Truck, Puzzle } from 'lucide-react'
-import { services, howWeWork } from '@/lib/site-content'
+import { howWeWork } from '@/lib/site-content'
+import { getSiteContent } from '@/lib/site-content-server'
 import { Reveal } from '@/components/marketing/profile-motion'
 
 export const metadata: Metadata = {
@@ -14,7 +15,11 @@ export const metadata: Metadata = {
 const ICONS = [Package, Search, ClipboardList, Boxes, Truck, Puzzle]
 const WRAP = 'mx-auto w-full max-w-screen-2xl px-6 lg:px-10'
 
-export default function ServicesPage() {
+// Content is editable in Settings → Website; refreshed at most every minute.
+export const revalidate = 60
+
+export default async function ServicesPage() {
+  const { services } = await getSiteContent()
   return (
     <>
       <section className="relative overflow-hidden">

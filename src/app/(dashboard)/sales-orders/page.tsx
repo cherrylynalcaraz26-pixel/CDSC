@@ -1,5 +1,9 @@
 'use client'
 
+import { useOpenOnNew } from '@/lib/use-open-on-new'
+
+import { useLetterhead, letterheadHtml, letterheadForPdf } from '@/lib/letterhead'
+
 import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -71,6 +75,7 @@ export default function SalesOrdersPage() {
   const [quickPOSupplierId, setQuickPOSupplierId] = useState('')
   const [quickPONotes, setQuickPONotes] = useState('')
   const [quickPOSaving, setQuickPOSaving] = useState(false)
+  const letterhead = useLetterhead()
   const [companyInfo, setCompanyInfo] = useState<SystemSettings | null>(null)
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
@@ -255,6 +260,7 @@ export default function SalesOrdersPage() {
     return `${prefix}${String(lastNum + 1).padStart(5, '0')}`
   }
 
+  useOpenOnNew(() => { handleOpenCreate() })
   async function handleOpenCreate() {
     resetForm()
     setSoNumber(await nextSoNumber())
@@ -494,7 +500,6 @@ export default function SalesOrdersPage() {
 
   function buildSOHtml(so: SO, soItems: SOItem[]): string {
     const info = companyInfo
-    const logoUrl = companyInfo?.logo_url || `${window.location.origin}/cdsc-logo.jpg`
     const soDate = so.so_date ? new Date(so.so_date + 'T00:00:00').toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }) : new Date(so.created_at).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })
     const fmtN = (n: number) => n.toLocaleString('en-PH', { minimumFractionDigits: 2 })
     const subtotalAmt = soItems.reduce((s, it) => s + (it.total_amount ?? 0), 0)
@@ -511,19 +516,7 @@ export default function SalesOrdersPage() {
       *{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,sans-serif;font-size:11px;padding:32px;color:#1f2937}
       table{border-collapse:collapse;width:100%}
     </style></head><body>
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:12px;border-bottom:1px solid #e5e7eb;margin-bottom:14px">
-      <div>
-        <img src="${logoUrl}" style="width:64px;height:64px;object-fit:cover;border-radius:4px"/>
-      </div>
-      <div style="text-align:right">
-        <div style="font-size:14px;font-weight:bold;color:#b91c1c;margin-bottom:2px">${info?.company_name ?? 'CDSC Industrial Supply'}</div>
-        <div style="font-size:9px;color:#6b7280">
-          ${info?.address ? `<div>${info.address}</div>` : ''}
-          ${info?.phone || info?.email ? `<div>${[info.phone, info.email].filter(Boolean).join(' | ')}</div>` : ''}
-          ${info?.tin ? `<div>TIN: ${info.tin}</div>` : ''}
-        </div>
-      </div>
-    </div>
+    ${letterheadHtml(letterhead, info)}
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;padding-bottom:12px;border-bottom:1px solid #e5e7eb;margin-bottom:14px">
       <div>
         <div style="font-size:9px;font-weight:600;color:#9ca3af;text-transform:uppercase;margin-bottom:2px">Bill To</div>
@@ -590,6 +583,7 @@ export default function SalesOrdersPage() {
       companyEmail: companyInfo?.email,
       companyTin: companyInfo?.tin,
       logoDataUrl,
+      letterhead: await letterheadForPdf(letterhead, companyInfo),
       soNumber: so.so_number ?? '—',
       soDate: fmtDate(so.so_date) || new Date(so.created_at).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }),
       clientName: so.client_name ?? '',

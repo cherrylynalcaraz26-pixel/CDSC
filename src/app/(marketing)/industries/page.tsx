@@ -5,7 +5,8 @@ import {
   type LucideIcon, ArrowRight, Factory, HardHat, Cog, Car, Building2, Wrench, Warehouse, Briefcase, Landmark,
   GraduationCap, HeartPulse, FlaskConical, Store, House,
 } from 'lucide-react'
-import { industries, additionalMarkets } from '@/lib/site-content'
+import { additionalMarkets } from '@/lib/site-content'
+import { getSiteContent } from '@/lib/site-content-server'
 import { Reveal } from '@/components/marketing/profile-motion'
 
 export const metadata: Metadata = {
@@ -28,7 +29,11 @@ const FEATURED: [string, string][] = [
 ]
 const WRAP = 'mx-auto w-full max-w-screen-2xl px-6 lg:px-10'
 
-export default function IndustriesPage() {
+// Content is editable in Settings → Website; refreshed at most every minute.
+export const revalidate = 60
+
+export default async function IndustriesPage() {
+  const { industries } = await getSiteContent()
   const all = [...industries, ...additionalMarkets]
   return (
     <>

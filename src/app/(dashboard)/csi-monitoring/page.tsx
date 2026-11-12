@@ -1,5 +1,7 @@
 'use client'
 
+import { FilterBar, DateRangeFilter, Segmented, FILTER_TRIGGER } from '@/components/ui/filter-bar'
+
 import { useState, useEffect, useRef, Fragment } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { fetchAllRows } from '@/lib/supabase/fetch-all'
@@ -1692,89 +1694,58 @@ export default function CSIMonitoringPage() {
         )
       })()}
 
-      {!open && <div className="flex flex-wrap gap-4 items-center">
-        <div className="flex items-center gap-2">
-          <Label className="text-xs text-muted-foreground whitespace-nowrap">Client</Label>
+      {!open && (
+        <FilterBar
+          actions={<>
+            {viewMode === 'by-si' && selectedSIs.size > 0 && (
+              <>
+                <span className="text-xs text-muted-foreground">{selectedSIs.size} selected</span>
+                <button onClick={() => setSelectedSIs(new Set())} className="inline-flex h-9 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground hover:bg-muted hover:text-foreground">
+                  <X className="h-3 w-3" /> Clear
+                </button>
+                <Button variant="outline" onClick={openBulkEmail} className="h-9 gap-1.5">
+                  <Mail className="h-4 w-4" /> Send Email
+                </Button>
+              </>
+            )}
+            <Button variant="outline" onClick={viewMode === 'cross-ref' ? printCrossRefList : printCsiList} className="h-9 gap-1.5">
+              <Printer className="h-4 w-4" /> Print
+            </Button>
+            <Button onClick={openAdd} className="h-9 bg-red-600 hover:bg-red-700">
+              <Plus className="h-4 w-4 mr-1.5" /> New Record
+            </Button>
+          </>}
+        >
           <Select value={clientFilter || '__all__'} onValueChange={v => setClientFilter(!v || v === '__all__' ? '' : v)}>
-            <SelectTrigger className="h-9 w-72 text-sm">
-              <SelectValue className="truncate">{(v: string) => v === '__all__' ? 'Client' : v}</SelectValue>
+            <SelectTrigger className={`${FILTER_TRIGGER} w-64`}>
+              <SelectValue className="truncate">{(v: string) => v === '__all__' ? 'All Clients' : v}</SelectValue>
             </SelectTrigger>
             <SelectContent className="min-w-[320px]">
               <SelectItem value="__all__">All Clients</SelectItem>
               {clientOptions.map(c => <SelectItem key={c.id} value={c.company_name}>{c.company_name}</SelectItem>)}
             </SelectContent>
           </Select>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <Label className="text-xs text-muted-foreground whitespace-nowrap">From</Label>
-          <Input type="date" className="h-9 w-40 text-sm" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
-        </div>
-        <div className="flex items-center gap-1.5">
-          <Label className="text-xs text-muted-foreground whitespace-nowrap">To</Label>
-          <Input type="date" className="h-9 w-40 text-sm" value={dateTo} onChange={e => setDateTo(e.target.value)} />
-        </div>
-        {(dateFrom || dateTo) && (
-          <Button variant="ghost" size="sm" onClick={() => { setDateFrom(''); setDateTo('') }}>Clear</Button>
-        )}
-        {clientFilter && (() => {
-          const sel = clientOptions.find(c => c.company_name === clientFilter)
-          return sel ? (
-            <div className="flex items-center gap-2">
+          <DateRangeFilter label="SI date" from={dateFrom} to={dateTo} onChange={(f, t) => { setDateFrom(f); setDateTo(t) }} />
+          <Segmented value={viewMode} onChange={setViewMode} options={[
+            { value: 'by-si', label: 'By SI', icon: LayoutGrid },
+            { value: 'all-items', label: 'All Items', icon: List },
+            { value: 'cross-ref', label: 'CSI vs DR', icon: Search },
+          ]} />
+          {clientFilter && (() => {
+            const sel = clientOptions.find(c => c.company_name === clientFilter)
+            return sel ? (
               <button
                 onClick={() => toggleCsiPortalVisibility(sel.id, sel.show_csi_in_portal)}
-                className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md border font-medium transition-colors ${sel.show_csi_in_portal ? 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100' : 'bg-gray-50 border-gray-300 text-gray-500 hover:bg-gray-100'}`}
+                className={`inline-flex h-9 items-center gap-1.5 rounded-md border px-3 text-xs font-medium transition-colors ${sel.show_csi_in_portal ? 'bg-emerald-50 border-emerald-300 text-emerald-700 hover:bg-emerald-100' : 'bg-gray-50 border-gray-300 text-gray-500 hover:bg-gray-100'}`}
                 title="Toggle whether CSI Issued is visible in the client portal"
               >
                 <span className={`inline-block h-2 w-2 rounded-full ${sel.show_csi_in_portal ? 'bg-emerald-500' : 'bg-gray-400'}`} />
                 Portal: CSI {sel.show_csi_in_portal ? 'Visible' : 'Hidden'}
               </button>
-              <button onClick={() => setClientFilter('')} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground border rounded-md px-2 py-1">
-                <X className="h-3 w-3" /> Clear
-              </button>
-            </div>
-          ) : null
-        })()}
-        <div className="flex items-center gap-2">
-          <Label className="text-xs text-muted-foreground whitespace-nowrap">View</Label>
-          <div className="flex border rounded-md overflow-hidden">
-            <button
-              onClick={() => setViewMode('by-si')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm ${viewMode === 'by-si' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
-            >
-              <LayoutGrid className="h-3.5 w-3.5" /> By SI
-            </button>
-            <button
-              onClick={() => setViewMode('all-items')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm border-l ${viewMode === 'all-items' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
-            >
-              <List className="h-3.5 w-3.5" /> All Items
-            </button>
-            <button
-              onClick={() => setViewMode('cross-ref')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm border-l ${viewMode === 'cross-ref' ? 'bg-red-600 text-white' : 'bg-background text-muted-foreground hover:bg-muted'}`}
-            >
-              <Search className="h-3.5 w-3.5" /> CSI vs DR
-            </button>
-          </div>
-        </div>
-        <Button variant="outline" onClick={viewMode === 'cross-ref' ? printCrossRefList : printCsiList} className="ml-auto border-gray-300 text-gray-700 gap-1.5">
-          <Printer className="h-4 w-4" /> Print
-        </Button>
-        <Button onClick={openAdd} className="bg-red-600 hover:bg-red-700">
-          <Plus className="h-4 w-4 mr-2" /> New Record
-        </Button>
-        {viewMode === 'by-si' && selectedSIs.size > 0 && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-muted-foreground">{selectedSIs.size} selected</span>
-            <Button size="sm" onClick={openBulkEmail} className="bg-red-600 hover:bg-red-700 h-9">
-              <Mail className="h-3.5 w-3.5 mr-1.5" /> Send Email
-            </Button>
-            <button onClick={() => setSelectedSIs(new Set())} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground border rounded-md px-2 py-1.5">
-              <X className="h-3 w-3" /> Clear
-            </button>
-          </div>
-        )}
-      </div>}
+            ) : null
+          })()}
+        </FilterBar>
+      )}
 
       {!open && <Card className="border-none shadow-md shadow-black/5 rounded-2xl overflow-hidden py-0 gap-0">
         <CardHeader className="pb-2 pt-5 px-5 bg-gradient-to-r from-muted/50 to-transparent">

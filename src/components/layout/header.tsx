@@ -1,18 +1,26 @@
 'use client'
 
+// Top bar of the staff system.
+//   Left   — menu (mobile), breadcrumb (sidebar group) and the page title.
+//   Middle — search: filters the current page's list, or jumps to a page (Ctrl+K).
+//   Right  — "New" quick-create menu, notifications, and the account menu.
+
 import { useEffect, useRef, useState } from 'react'
-import { BellRing, BellOff, Bell, Search, Menu, LogOut, Package, MessageSquare, ShoppingCart, MapPin, Phone, Mail, Globe } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import {
-  DropdownMenu, DropdownMenuContent, DropdownMenuItem,
-  DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
+  BellRing, BellOff, Bell, Search, Menu, LogOut, Plus, ChevronRight, ChevronDown,
+  Settings, UserCog, Globe, Receipt, ShoppingCart, FileText, TrendingUp, CornerDownLeft,
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { getPageTitle } from '@/lib/page-titles'
+import { getNavGroupLabel } from '@/components/layout/sidebar'
 import { notifyNew, deviceNotifySupported, deviceNotifyEnabled, enableDeviceNotify, disableDeviceNotify } from '@/lib/device-notify'
+import { NEW_EVENT } from '@/lib/use-open-on-new'
 import { toast } from 'sonner'
 import { useSearchContext } from '@/context/search-context'
 import { useCompany } from '@/context/company-context'
@@ -25,7 +33,7 @@ interface HeaderProps {
 
 const SEARCH_ITEMS = [
   { label: 'Dashboard',             href: '/dashboard',               section: 'Main' },
-  { label: 'CRM / Inquiry',        href: '/crm',                     section: 'CRM' },
+  { label: 'CRM / Inquiry',         href: '/crm',                     section: 'CRM' },
   { label: 'Purchase Orders',       href: '/purchase-orders',         section: 'Purchasing' },
   { label: 'Quotation',             href: '/quotation',               section: 'Purchasing' },
   { label: 'Sales Orders',          href: '/sales-orders',            section: 'Purchasing' },
@@ -34,18 +42,38 @@ const SEARCH_ITEMS = [
   { label: 'DR Logs',               href: '/dr-logs',                 section: 'Warehouse' },
   { label: 'CSI Monitoring',        href: '/csi-monitoring',          section: 'Warehouse' },
   { label: 'Pull Outs',             href: '/pull-outs',               section: 'Warehouse' },
-  { label: 'Accounting',            href: '/accounting',              section: 'Accounting' },
-  { label: 'Reports',               href: '/reports',                 section: 'Setup' },
+  { label: 'Sales Journal (CSI)',   href: '/accounting?tab=bookkeeping&sub=crj', section: 'Accounting' },
+  { label: 'Collections (OR)',      href: '/accounting?tab=collections', section: 'Accounting' },
+  { label: 'Cash Disbursements',    href: '/accounting?tab=bookkeeping&sub=cdj', section: 'Accounting' },
+  { label: 'General Journal',       href: '/accounting?tab=bookkeeping&sub=gj', section: 'Accounting' },
+  { label: 'Balance Check',         href: '/accounting?tab=bookkeeping&sub=check', section: 'Accounting' },
+  { label: 'General Ledger',        href: '/accounting?tab=bookkeeping&sub=gl', section: 'Accounting' },
+  { label: 'Trial Balance',         href: '/accounting?tab=bookkeeping&sub=tb', section: 'Accounting' },
+  { label: 'Income Statement',      href: '/accounting?tab=bookkeeping&sub=is', section: 'Accounting' },
+  { label: 'Balance Sheet',         href: '/accounting?tab=bookkeeping&sub=bs', section: 'Accounting' },
+  { label: 'BIR Compliance',        href: '/accounting?tab=bir',      section: 'Accounting' },
+  { label: 'Clients',               href: '/clients',                 section: '201 File' },
+  { label: 'Reports',               href: '/settings?tab=reports',    section: 'Settings' },
+  { label: 'Website Content',       href: '/settings?tab=website',    section: 'Settings' },
+  { label: 'PDF Document Header',   href: '/settings?tab=letterhead', section: 'Settings' },
   { label: 'Suppliers',             href: '/settings?tab=suppliers',  section: 'Master Data' },
   { label: 'Item List',             href: '/settings?tab=items',      section: 'Master Data' },
   { label: 'Categories',            href: '/settings?tab=categories', section: 'Master Data' },
   { label: 'Units of Measure',      href: '/settings?tab=uom',        section: 'Master Data' },
   { label: 'Company Profile Deck',  href: '/settings?tab=deck',       section: 'Settings' },
-  { label: 'Clients',               href: '/clients',                 section: 'Setup' },
   { label: 'User Management',       href: '/users',                   section: 'Users' },
   { label: 'Settings',              href: '/settings',                section: 'Settings' },
 ]
 
+// Quick-create: each page opens its create form when visited with ?new=1.
+const QUICK_NEW = [
+  { label: 'Sales Order',    href: '/sales-orders',    icon: Receipt },
+  { label: 'Quotation',      href: '/quotation',       icon: FileText },
+  { label: 'Purchase Order', href: '/purchase-orders', icon: ShoppingCart },
+  { label: 'CRM Lead',       href: '/crm',             icon: TrendingUp },
+]
+
+// Pages whose list the search box filters (elsewhere it searches pages).
 const DATA_PAGES = [
   '/crm', '/purchase-orders', '/quotation', '/sales-orders',
   '/receiving', '/inventory', '/dr-logs', '/csi-monitoring',
@@ -53,10 +81,23 @@ const DATA_PAGES = [
   '/setup', '/assets', '/pull-outs',
 ]
 
+const ROLE_LABEL: Record<string, string> = {
+  super_admin: 'Super Admin', admin: 'Admin', purchasing_officer: 'Purchasing', warehouse_manager: 'Warehouse Manager',
+  warehouse_staff: 'Warehouse', accounting_manager: 'Accounting Manager', accounting_staff: 'Accounting',
+  department_head: 'Department Head', employee: 'Staff', auditor: 'Auditor',
+}
 
 interface Notif { id: string; type: 'message' | 'order' | 'stock' | 'request' | 'lead'; title: string; message: string; read: boolean; time: string; href: string }
 
-export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
+const NOTIF_DOT: Record<Notif['type'], string> = {
+  message: 'bg-blue-500', order: 'bg-red-500', request: 'bg-rose-500', lead: 'bg-emerald-500', stock: 'bg-amber-500',
+}
+
+function initials(name: string) {
+  return name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]!.toUpperCase()).join('') || 'U'
+}
+
+export function Header({ onMenuClick }: HeaderProps) {
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -65,16 +106,21 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
   const { company } = useCompany()
   const [userName, setUserName] = useState('User')
   const [userEmail, setUserEmail] = useState('')
+  const [userRole, setUserRole] = useState('')
   const [userAvatarUrl, setUserAvatarUrl] = useState<string | null>(null)
   const [showResults, setShowResults] = useState(false)
+  const [activeIdx, setActiveIdx] = useState(0)
   const searchRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [scrolled, setScrolled] = useState(false)
+  const [mobileSearch, setMobileSearch] = useState(false)
 
   // Notifications
   const [notifs, setNotifs] = useState<Notif[]>([])
   const [notifOpen, setNotifOpen] = useState(false)
   const notifRef = useRef<HTMLDivElement>(null)
-  const [deviceOn, setDeviceOn] = useState(false)
-  useEffect(() => { setDeviceOn(deviceNotifyEnabled()) }, [])
+  // Only shown inside the (closed on load) notifications panel, so reading it on first render is safe.
+  const [deviceOn, setDeviceOn] = useState(() => typeof window !== 'undefined' && deviceNotifyEnabled())
 
   async function toggleDevice() {
     if (deviceOn) { disableDeviceNotify(); setDeviceOn(false); toast('Device notifications turned off'); return }
@@ -85,8 +131,8 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
   }
 
   const isDataPage = DATA_PAGES.some(p => pathname.startsWith(p))
-  // Every page's title + description lives here (lib/page-titles.ts).
   const pageTitle = getPageTitle(pathname, searchParams)
+  const group = getNavGroupLabel(pathname, searchParams)
 
   async function markNotifRead(n: Notif) {
     if (n.type === 'message') {
@@ -103,11 +149,11 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
     setNotifs(ns => ns.map(n => ({ ...n, read: true })))
   }
 
-  const navResults = (!isDataPage && query.trim().length > 0)
-    ? SEARCH_ITEMS.filter(item =>
-        item.label.toLowerCase().includes(query.toLowerCase()) ||
-        item.section.toLowerCase().includes(query.toLowerCase())
-      )
+  // On a data page the box filters the list; "Go to page" results still show
+  // when the text matches a page name, so navigation works from anywhere.
+  const q = query.trim().toLowerCase()
+  const navResults = q
+    ? SEARCH_ITEMS.filter(item => item.label.toLowerCase().includes(q) || (!isDataPage && item.section.toLowerCase().includes(q))).slice(0, 8)
     : []
 
   useEffect(() => {
@@ -120,7 +166,7 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
       ])
       const built: Notif[] = []
       for (const m of (msgs ?? [])) {
-        built.push({ id: `msg-${m.id}`, type: 'message', title: `Message from ${m.client_name || m.supplier_name || 'client'}`, message: `New message from ${m.client_name || m.supplier_name || 'client'}: "${(m.message ?? '').slice(0, 60)}${(m.message?.length ?? 0) > 60 ? '…' : ''}"`, read: false, time: m.sent_at, href: '/messages' })
+        built.push({ id: `msg-${m.id}`, type: 'message', title: `Message from ${m.client_name || m.supplier_name || 'client'}`, message: `"${(m.message ?? '').slice(0, 60)}${(m.message?.length ?? 0) > 60 ? '…' : ''}"`, read: false, time: m.sent_at, href: '/messages' })
       }
       for (const so of (orders ?? [])) {
         // Portal (SO-P-…) and website-cart orders arrive as drafts for review.
@@ -143,23 +189,41 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
       if (!user) return
       setUserEmail(user.email ?? '')
       const { data: profile } = await supabase.from('profiles').select('full_name, role, avatar_url').eq('id', user.id).single()
-      const name = profile?.full_name ?? user.email?.split('@')[0] ?? 'User'
-      setUserName(name)
-      setUserAvatarUrl((profile as any)?.avatar_url ?? null)
+      setUserName(profile?.full_name ?? user.email?.split('@')[0] ?? 'User')
+      setUserRole((profile as { role?: string } | null)?.role ?? '')
+      setUserAvatarUrl((profile as { avatar_url?: string } | null)?.avatar_url ?? null)
       await loadNotifs()
     }
     loadUser()
     const interval = setInterval(loadNotifs, 30000)
     return () => clearInterval(interval)
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (searchRef.current && !searchRef.current.contains(e.target as Node)) setShowResults(false)
       if (notifRef.current && !notifRef.current.contains(e.target as Node)) setNotifOpen(false)
     }
+    // Ctrl/⌘+K or "/" focuses search from anywhere.
+    function handleKey(e: KeyboardEvent) {
+      const typing = /^(INPUT|TEXTAREA|SELECT)$/.test((e.target as HTMLElement)?.tagName ?? '') || (e.target as HTMLElement)?.isContentEditable
+      if ((e.key === 'k' && (e.ctrlKey || e.metaKey)) || (e.key === '/' && !typing)) {
+        e.preventDefault()
+        inputRef.current?.focus()
+        setShowResults(true)
+      }
+    }
+    // The header sits above <main>, which is the element that scrolls.
+    const main = document.querySelector('main')
+    const onScroll = () => setScrolled((main?.scrollTop ?? 0) > 4)
     document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
+    document.addEventListener('keydown', handleKey)
+    main?.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleKey)
+      main?.removeEventListener('scroll', onScroll)
+    }
   }, [])
 
   async function handleSignOut() {
@@ -170,135 +234,154 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
   function navigateTo(href: string) {
     setQuery('')
     setShowResults(false)
+    setMobileSearch(false)
+    inputRef.current?.blur()
     router.push(href)
+  }
+
+  function quickNew(href: string) {
+    if (pathname === href) window.dispatchEvent(new Event(NEW_EVENT))
+    else router.push(`${href}?new=1`)
   }
 
   const unreadCount = notifs.filter(n => !n.read).length
   const companyName = company.company_name || 'CDSC Industrial Supply'
   const logoSrc = company.logo_url || '/cdsc-logo.jpg'
+  const roleLabel = ROLE_LABEL[userRole] ?? (userRole ? userRole.replace(/_/g, ' ') : 'Staff')
 
   return (
-    <header className="sticky top-0 z-30 bg-background/95 backdrop-blur border-b px-4 md:px-6 py-3">
-      <div className="flex items-center justify-between gap-3">
-        {/* Left: hamburger + logo when collapsed */}
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" className="lg:hidden h-9 w-9" onClick={onMenuClick}>
-            <Menu className="h-5 w-5" />
-          </Button>
-          {sidebarCollapsed && !pageTitle && (
-            <div className="hidden lg:flex items-center gap-2">
-              <div className="h-7 w-7 shrink-0 rounded-md overflow-hidden bg-white flex items-center justify-center">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={logoSrc} alt={companyName} className="h-full w-full object-contain p-0.5" />
-              </div>
-              <span className="text-sm font-semibold leading-tight">{companyName}</span>
-            </div>
-          )}
-          {pageTitle && (
-            <div className="flex min-w-0 items-center gap-3">
-              <span aria-hidden className="hidden h-9 w-1.5 shrink-0 rounded-full bg-linear-to-b from-[#E8112D] to-[#F43F5E] sm:block" />
-              <div className="min-w-0">
-                <h1 className="truncate text-lg font-bold leading-tight tracking-tight">{pageTitle.title}</h1>
-                <p className="hidden truncate text-xs text-muted-foreground md:block">{pageTitle.subtitle}</p>
-              </div>
+    <header className={cn(
+      'sticky top-0 z-30 border-b bg-background/90 backdrop-blur-md supports-backdrop-filter:bg-background/75 transition-shadow',
+      scrolled && 'shadow-[0_6px_20px_-14px_rgba(15,23,42,0.45)]',
+    )}>
+      <div aria-hidden className="h-0.5 w-full bg-linear-to-r from-[#E8112D] via-[#F43F5E] to-transparent" />
+      <div className="relative flex h-16 items-center gap-3 px-4 md:px-6">
+        {/* ── Left: menu + breadcrumb + title ── */}
+        <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0 lg:hidden" onClick={onMenuClick} aria-label="Open menu">
+          <Menu className="h-5 w-5" />
+        </Button>
+
+        <div className="min-w-0 flex-1 md:flex-none md:max-w-[38%] xl:max-w-[44%]">
+          {pageTitle ? (
+            <>
+              <nav aria-label="Breadcrumb" className="hidden items-center gap-1 text-[11px] font-medium text-muted-foreground sm:flex">
+                <button type="button" onClick={() => router.push('/dashboard')} className="hover:text-foreground">{companyName}</button>
+                {group && (<><ChevronRight className="h-3 w-3 opacity-50" /><span className="truncate">{group}</span></>)}
+              </nav>
+              <h1 className="truncate text-base font-bold leading-tight tracking-tight sm:text-lg" title={pageTitle.subtitle}>{pageTitle.title}</h1>
+              <p className="hidden truncate text-xs text-muted-foreground xl:block">{pageTitle.subtitle}</p>
+            </>
+          ) : (
+            <div className="flex items-center gap-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={logoSrc} alt="" className="h-8 w-8 rounded-md bg-white object-contain p-0.5" />
+              <span className="truncate text-sm font-semibold">{companyName}</span>
             </div>
           )}
         </div>
 
-        {/* Center: search */}
-        <div className="flex-1 max-w-sm" ref={searchRef}>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder={isDataPage ? 'Search this page…' : 'Search pages…'}
-              className="pl-9 h-9"
+        {/* ── Middle: search ── */}
+        {/* On phones the search opens as an overlay over the header row. */}
+        <div ref={searchRef} className={cn(
+          'flex-1 justify-center',
+          mobileSearch ? 'absolute inset-x-0 bottom-0 z-40 flex h-16 items-center gap-2 bg-background px-4 md:static md:h-auto md:px-0' : 'hidden md:flex',
+        )}>
+          <div className="relative w-full max-w-md">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <input
+              ref={inputRef}
+              placeholder={isDataPage ? 'Search this page or jump to…' : 'Search pages…'}
+              className="h-10 w-full rounded-xl border border-transparent bg-muted/60 pl-9 pr-16 text-sm outline-none transition placeholder:text-muted-foreground/80 hover:bg-muted focus:border-[#E8112D]/40 focus:bg-background focus:shadow-[0_0_0_4px_rgba(232,17,45,0.08)]"
               autoComplete="off"
               value={query}
-              onChange={e => { setQuery(e.target.value); setShowResults(true) }}
+              onChange={e => { setQuery(e.target.value); setShowResults(true); setActiveIdx(0) }}
               onFocus={() => setShowResults(true)}
               onKeyDown={e => {
-                if (e.key === 'Escape') { setShowResults(false); setQuery('') }
-                if (e.key === 'Enter' && navResults.length > 0) navigateTo(navResults[0].href)
+                if (e.key === 'Escape') { setShowResults(false); setQuery(''); setMobileSearch(false); inputRef.current?.blur() }
+                if (e.key === 'ArrowDown') { e.preventDefault(); setActiveIdx(i => Math.min(i + 1, navResults.length - 1)) }
+                if (e.key === 'ArrowUp') { e.preventDefault(); setActiveIdx(i => Math.max(i - 1, 0)) }
+                if (e.key === 'Enter' && navResults[activeIdx]) navigateTo(navResults[activeIdx].href)
               }}
             />
+            <kbd className="pointer-events-none absolute right-2.5 top-1/2 hidden -translate-y-1/2 rounded-md border bg-background px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground lg:block">Ctrl K</kbd>
             {showResults && navResults.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-popover border rounded-lg shadow-lg z-50 overflow-hidden">
-                {navResults.map(item => (
-                  <button key={item.href} onMouseDown={() => navigateTo(item.href)}
-                    className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-muted text-left">
+              <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-xl border bg-popover shadow-xl">
+                <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Go to page</p>
+                {navResults.map((item, i) => (
+                  <button key={item.href} onMouseDown={() => navigateTo(item.href)} onMouseEnter={() => setActiveIdx(i)}
+                    className={cn('flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm', i === activeIdx ? 'bg-muted' : 'hover:bg-muted/60')}>
                     <span className="font-medium">{item.label}</span>
-                    <span className="text-xs text-muted-foreground">{item.section}</span>
+                    <span className="flex items-center gap-2 text-xs text-muted-foreground">
+                      {item.section}
+                      {i === activeIdx && <CornerDownLeft className="h-3 w-3" />}
+                    </span>
                   </button>
                 ))}
               </div>
             )}
           </div>
+          {mobileSearch && (
+            <Button variant="ghost" size="sm" className="shrink-0 md:hidden" onClick={() => { setMobileSearch(false); setShowResults(false) }}>Cancel</Button>
+          )}
         </div>
 
-        {/* Right */}
-        <div className="flex items-center gap-1.5">
-          {/* Notification bell */}
+        {/* ── Right: actions ── */}
+        <div className="ml-auto flex shrink-0 items-center gap-1.5 md:ml-0">
+          <Button variant="ghost" size="icon" className="h-9 w-9 md:hidden" aria-label="Search"
+            onClick={() => { setMobileSearch(true); setTimeout(() => inputRef.current?.focus(), 0) }}>
+            <Search className="h-5 w-5" />
+          </Button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger className="hidden h-9 items-center gap-1.5 rounded-xl bg-linear-to-r from-[#E8112D] to-[#F43F5E] px-3.5 text-sm font-semibold text-white shadow-md shadow-red-500/25 outline-none transition hover:brightness-110 sm:inline-flex">
+              <Plus className="h-4 w-4" /> New <ChevronDown className="h-3.5 w-3.5 opacity-80" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              {QUICK_NEW.map(n => (
+                <DropdownMenuItem key={n.href} onClick={() => quickNew(n.href)}>
+                  <n.icon className="mr-2 h-4 w-4" />New {n.label}
+                </DropdownMenuItem>
+              ))}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={() => router.push('/accounting?tab=collections')}>
+                <Receipt className="mr-2 h-4 w-4" />Record a Collection
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Notifications */}
           <div className="relative" ref={notifRef}>
-            <Button
-              variant="ghost" size="icon"
-              className="h-9 w-9 relative"
-              onClick={() => setNotifOpen(v => !v)}
-            >
+            <Button variant="ghost" size="icon" className="relative h-9 w-9 rounded-xl" onClick={() => setNotifOpen(v => !v)} aria-label="Notifications">
               <Bell className="h-5 w-5" />
               {unreadCount > 0 && (
-                <span className="absolute top-1.5 right-1.5 h-4 min-w-[16px] px-0.5 rounded-full bg-red-600 text-[10px] font-bold text-white flex items-center justify-center leading-none">
+                <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-0.5 text-[10px] font-bold leading-none text-white ring-2 ring-background">
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}
             </Button>
 
             {notifOpen && (
-              <div className="absolute right-0 top-full mt-2 w-80 bg-popover border rounded-xl shadow-lg z-50 max-h-96 overflow-hidden flex flex-col">
-                {deviceNotifySupported() && (
-                  <button
-                    type="button"
-                    onClick={toggleDevice}
-                    className={cn('flex w-full items-center gap-2.5 border-b px-4 py-2.5 text-left text-xs transition-colors', deviceOn ? 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100' : 'bg-rose-50 text-rose-800 hover:bg-rose-100')}
-                  >
-                    {deviceOn ? <BellRing className="h-4 w-4 shrink-0" /> : <BellOff className="h-4 w-4 shrink-0" />}
-                    <span className="flex-1">
-                      <span className="block font-semibold">{deviceOn ? 'Device notifications on' : 'Turn on device notifications'}</span>
-                      <span className="block opacity-75">{deviceOn ? 'Alerts pop up on this device. Click to turn off.' : 'Get alerts on this computer or phone for new messages, orders and requests.'}</span>
-                    </span>
-                  </button>
-                )}
-                <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
-                  <span className="text-sm font-semibold">Notifications</span>
-                  {unreadCount > 0 && (
-                    <button onClick={() => markAllNotifsRead()}
-                      className="text-xs text-red-600 hover:underline">
-                      Mark all read
-                    </button>
-                  )}
+              <div className="absolute right-0 top-full z-50 mt-2 flex max-h-112 w-88 max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border bg-popover shadow-xl">
+                <div className="flex shrink-0 items-center justify-between border-b px-4 py-3">
+                  <span className="text-sm font-semibold">Notifications{unreadCount > 0 && <span className="ml-1.5 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700">{unreadCount}</span>}</span>
+                  {unreadCount > 0 && <button onClick={() => markAllNotifsRead()} className="text-xs font-medium text-red-600 hover:underline">Mark all read</button>}
                 </div>
                 <div className="overflow-y-auto">
                   {notifs.length === 0 ? (
-                    <div className="px-4 py-8 text-center text-sm text-muted-foreground">No new notifications</div>
+                    <div className="px-4 py-10 text-center text-sm text-muted-foreground">You&apos;re all caught up</div>
                   ) : notifs.map(n => (
                     <button
                       key={n.id}
-                      onClick={() => {
-                        markNotifRead(n)
-                        setNotifOpen(false)
-                        router.push(n.href)
-                      }}
-                      className={cn(
-                        'w-full text-left px-4 py-3 text-xs border-b last:border-0 hover:bg-muted/50 transition-colors',
-                        !n.read && 'bg-blue-50/50 dark:bg-blue-950/20',
-                      )}
+                      onClick={() => { markNotifRead(n); setNotifOpen(false); router.push(n.href) }}
+                      className={cn('w-full border-b px-4 py-3 text-left text-xs transition-colors last:border-0 hover:bg-muted/50', !n.read && 'bg-blue-50/50 dark:bg-blue-950/20')}
                     >
-                      <div className="flex items-start gap-2">
-                        <span className={cn('mt-0.5 shrink-0 h-1.5 w-1.5 rounded-full mt-1.5', n.read ? 'bg-transparent' : n.type === 'message' ? 'bg-blue-500' : n.type === 'order' ? 'bg-red-500' : n.type === 'request' ? 'bg-rose-500' : n.type === 'lead' ? 'bg-emerald-500' : 'bg-amber-500')} />
-                        <div>
-                          <p className="font-semibold text-foreground leading-snug">{n.title}</p>
-                          <p className="text-muted-foreground leading-snug">{n.message}</p>
+                      <div className="flex items-start gap-2.5">
+                        <span className={cn('mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full', n.read ? 'bg-transparent' : NOTIF_DOT[n.type])} />
+                        <div className="min-w-0">
+                          <p className="font-semibold leading-snug text-foreground">{n.title}</p>
+                          <p className="leading-snug text-muted-foreground">{n.message}</p>
                           {n.time && (
-                            <p className="text-muted-foreground mt-0.5">
+                            <p className="mt-0.5 text-muted-foreground/80">
                               {new Date(n.time).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
                             </p>
                           )}
@@ -307,38 +390,53 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
                     </button>
                   ))}
                 </div>
+                {deviceNotifySupported() && (
+                  <button
+                    type="button"
+                    onClick={toggleDevice}
+                    className={cn('flex w-full shrink-0 items-center gap-2.5 border-t px-4 py-2.5 text-left text-xs transition-colors', deviceOn ? 'text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400' : 'text-muted-foreground hover:bg-muted/60')}
+                  >
+                    {deviceOn ? <BellRing className="h-4 w-4 shrink-0" /> : <BellOff className="h-4 w-4 shrink-0" />}
+                    <span className="flex-1">{deviceOn ? 'Device alerts are on — click to turn off' : 'Turn on alerts on this device'}</span>
+                  </button>
+                )}
               </div>
             )}
           </div>
 
-          {/* Avatar dropdown */}
+          <span aria-hidden className="mx-1 hidden h-7 w-px bg-border sm:block" />
+
+          {/* Account */}
           <DropdownMenu>
-            <DropdownMenuTrigger className="h-9 w-9 rounded-full flex items-center justify-center hover:ring-2 hover:ring-red-500/30 outline-none transition-all">
+            <DropdownMenuTrigger className="flex items-center gap-2 rounded-xl p-1 pr-1.5 outline-none transition hover:bg-muted sm:pr-2.5" aria-label="Account menu">
               <Avatar className="h-8 w-8">
                 {userAvatarUrl && <AvatarImage src={userAvatarUrl} alt={userName} />}
-                <AvatarFallback className="bg-white p-0.5">
-                  <img src={logoSrc} alt={companyName} className="h-full w-full object-contain" />
-                </AvatarFallback>
+                <AvatarFallback className="bg-linear-to-br from-[#E8112D] to-[#F43F5E] text-xs font-bold text-white">{initials(userName)}</AvatarFallback>
               </Avatar>
+              <span className="hidden min-w-0 text-left leading-tight lg:block">
+                <span className="block max-w-36 truncate text-sm font-semibold">{userName}</span>
+                <span className="block max-w-36 truncate text-[11px] capitalize text-muted-foreground">{roleLabel}</span>
+              </span>
+              <ChevronDown className="hidden h-3.5 w-3.5 text-muted-foreground lg:block" />
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-72" align="end">
-              {/* Company logo + name */}
-              <div className="px-4 py-4 flex flex-col items-center gap-3 border-b text-center">
-                <div className="h-14 w-14 rounded-xl overflow-hidden shrink-0 border bg-white flex items-center justify-center">
-                  <img src={logoSrc} alt={companyName} className="h-full w-full object-contain p-1" />
-                </div>
-                <div>
-                  <p className="text-sm font-bold leading-tight">{companyName}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">{userEmail}</p>
+            <DropdownMenuContent className="w-64" align="end">
+              <div className="flex items-center gap-3 border-b px-3 py-3">
+                <Avatar className="h-10 w-10">
+                  {userAvatarUrl && <AvatarImage src={userAvatarUrl} alt={userName} />}
+                  <AvatarFallback className="bg-linear-to-br from-[#E8112D] to-[#F43F5E] text-sm font-bold text-white">{initials(userName)}</AvatarFallback>
+                </Avatar>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-semibold">{userName}</p>
+                  <p className="truncate text-xs text-muted-foreground">{userEmail}</p>
+                  <p className="mt-0.5 truncate text-[11px] capitalize text-muted-foreground">{roleLabel} · {companyName}</p>
                 </div>
               </div>
-              <div className="p-2">
-                <button
-                  onClick={handleSignOut}
-                  className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
-                >
-                  <LogOut className="h-4 w-4" /> Sign Out
-                </button>
+              <div className="p-1">
+                <DropdownMenuItem onClick={() => router.push('/settings')}><Settings className="mr-2 h-4 w-4" />Settings</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => router.push('/users')}><UserCog className="mr-2 h-4 w-4" />User Management</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => window.open('/', '_blank', 'noopener')}><Globe className="mr-2 h-4 w-4" />Visit Website</DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleSignOut} className="text-destructive focus:text-destructive"><LogOut className="mr-2 h-4 w-4" />Sign Out</DropdownMenuItem>
               </div>
             </DropdownMenuContent>
           </DropdownMenu>

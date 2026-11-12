@@ -23,12 +23,15 @@ import {
   FileText, Database, User, Globe, Phone, Mail, MapPin,
   CheckCircle2, Eye, EyeOff, Loader2, Plus, Trash2, X, Send,
   ChevronDown, ChevronUp, Download, Cloud, ExternalLink, RefreshCw, FileCheck2,
-  Presentation, Truck, Package, FolderTree, Ruler, Tag, SlidersHorizontal, Wallet,
+  Presentation, Truck, Package, FolderTree, Ruler, Tag, SlidersHorizontal, Wallet, FileBarChart, FileImage,
 } from 'lucide-react'
 import { sendEmail, htmlToPdfBase64 } from '@/lib/send-email'
 import { uploadImageToDrive } from '@/lib/upload-image'
 import { syncDatabaseBackup, type BackupSyncResult } from '@/lib/backup-sheets'
 import { BirFormsSettings } from '@/components/settings/bir-forms-settings'
+import { LetterheadSettings } from '@/components/settings/letterhead-settings'
+import { WebsiteContentSettings } from '@/components/settings/website-content-settings'
+import { ReportsCenter } from '@/components/reports/reports-center'
 import { deleteWithUndo } from '@/lib/delete-with-undo'
 
 
@@ -154,7 +157,7 @@ function defaultSettings(): Settings {
   }
 }
 
-type CompanyTab = 'profile' | 'deck' | 'bir_forms' | 'database' | 'backup' | 'security' | 'website'
+type CompanyTab = 'profile' | 'deck' | 'bir_forms' | 'database' | 'backup' | 'security' | 'website' | 'letterhead' | 'reports'
 type TabId = CompanyTab | MasterTab
 const isMasterTab = (t: string): t is MasterTab => MASTER_TABS.some(m => m.key === t)
 
@@ -165,9 +168,11 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode; desc: string; gro
   { id: 'deck',      label: 'Company Profile Deck', icon: <Presentation className="h-4 w-4" />, desc: 'Slides to present to clients, and a PDF to send them.', group: 'company' },
   { id: 'bir_forms', label: 'BIR Forms',          icon: <FileCheck2 className="h-4 w-4" />, desc: 'Reference images of each BIR return CDSC files, shown when generating forms.', group: 'company' },
   { id: 'backup',    label: 'Data Backup',        icon: <Cloud className="h-4 w-4" />,      desc: 'Mirror your data to Google Sheets or download a backup.', group: 'company' },
+  { id: 'letterhead', label: 'Document Header (PDF)', icon: <FileImage className="h-4 w-4" />, desc: 'Logo and company details (or a header image) at the top of every PDF.', group: 'company' },
   { id: 'database',  label: 'Proposal Database',  icon: <Database className="h-4 w-4" />,   desc: 'Saved client proposals and their templates.', group: 'company' },
+  { id: 'reports',   label: 'Reports',            icon: <FileBarChart className="h-4 w-4" />, desc: 'Generate and export system reports, and check storage use.', group: 'company' },
   { id: 'security',  label: 'Security',           icon: <Shield className="h-4 w-4" />,     desc: 'Password, sessions and sign-out of all devices.', group: 'company' },
-  { id: 'website',   label: 'Website',            icon: <Globe className="h-4 w-4" />,      desc: 'Demo video shown on the public website and client portal.', group: 'company' },
+  { id: 'website',   label: 'Website',            icon: <Globe className="h-4 w-4" />,      desc: 'Edit the public website — headlines, products, services, contact and demo video.', group: 'company' },
   { id: 'suppliers',  label: 'Suppliers',        icon: <Truck className="h-4 w-4" />,       desc: 'Supplier records, contacts, terms and default EWT.', group: 'master' },
   { id: 'items',      label: 'Item List',        icon: <Package className="h-4 w-4" />,     desc: 'Item master — codes, prices, photos and stock settings.', group: 'master' },
   { id: 'categories', label: 'Categories',       icon: <FolderTree className="h-4 w-4" />,  desc: 'Item categories.', group: 'master' },
@@ -1510,22 +1515,11 @@ function SettingsPageContent() {
 
       {isMasterTab(tab) && <MasterData tab={tab} />}
 
-      {tab === 'website' && (
-        <Card><CardContent className="space-y-4 pt-5">
-          <div className="space-y-1.5">
-            <Label>Demo Video URL</Label>
-            <Input placeholder="e.g. https://www.youtube.com/watch?v=… or a Google Drive link" {...S('live_video_url')} />
-            <p className="text-xs text-muted-foreground">
-              Shown in the &quot;See How Ordering Works&quot; section of the public website and by the Demo Video button on the client portal.
-              Leave blank to use the default CDSC Client Portal demo. Supports YouTube, Vimeo, Facebook, Google Drive or a direct video link.
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <Button onClick={save} disabled={saving} className="bg-[#E8112D] hover:bg-[#D10F28] text-white">{saving ? 'Saving…' : 'Save'}</Button>
-            <a href="/#demo" target="_blank" rel="noopener noreferrer" className="text-sm text-muted-foreground underline">Preview on the website</a>
-          </div>
-        </CardContent></Card>
-      )}
+      {tab === 'website' && <WebsiteContentSettings />}
+
+      {tab === 'letterhead' && <LetterheadSettings />}
+
+      {tab === 'reports' && <ReportsCenter />}
 
       {tab === 'security' && <SecurityTab />}
 

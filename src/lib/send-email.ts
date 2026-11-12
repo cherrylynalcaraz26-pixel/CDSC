@@ -1,4 +1,5 @@
 import jsPDF from 'jspdf'
+import type { LetterheadPdf } from '@/lib/letterhead'
 
 export interface POPdfData {
   companyName: string
@@ -7,6 +8,8 @@ export interface POPdfData {
   companyEmail?: string
   companyTin?: string
   logoDataUrl?: string
+  /** Settings → Document Header. When given it replaces the default logo + details block. */
+  letterhead?: LetterheadPdf
   poNumber: string
   poDate: string
   deliveryDate?: string
@@ -32,6 +35,7 @@ export interface SOPdfData {
   companyEmail?: string
   companyTin?: string
   logoDataUrl?: string
+  letterhead?: LetterheadPdf
   soNumber: string
   soDate: string
   clientName?: string
@@ -89,6 +93,75 @@ function makeSetFont(pdf: jsPDF) {
   }
 }
 
+function hexToRgb(hex: string): [number, number, number] {
+  const m = /^#?([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex)
+  return m ? [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)] : [185, 28, 28]
+}
+
+// Company header at the top of PO / SO PDFs. Uses Settings → Document Header
+// when the caller passes it; otherwise the logo + profile details as before.
+function drawPdfHeader(
+  pdf: jsPDF,
+  data: { companyName: string; companyAddress?: string; companyPhone?: string; companyEmail?: string; companyTin?: string; logoDataUrl?: string; letterhead?: LetterheadPdf },
+  setFont: (w?: 'normal' | 'bold') => void,
+  margin: number, W: number, y: number,
+): number {
+  const lh: LetterheadPdf = data.letterhead ?? {
+    mode: 'standard', logoDataUrl: data.logoDataUrl, name: data.companyName, accent: '#b91c1c', layout: 'logo-left', footer: '',
+    lines: [data.companyAddress, data.companyPhone, data.companyEmail, data.companyTin ? `TIN: ${data.companyTin}` : undefined].filter(Boolean) as string[],
+  }
+  const contentW = W - margin * 2
+  const finish = (bottom: number) => {
+    let yy = bottom + 6
+    pdf.setDrawColor(229, 231, 235)
+    pdf.line(margin, yy, W - margin, yy)
+    yy += 12
+    if (lh.footer) {
+      setFont(); pdf.setFontSize(8); pdf.setTextColor(107, 114, 128)
+      pdf.text(lh.footer, W / 2, yy, { align: 'center' })
+      yy += 12
+    }
+    return yy
+  }
+
+  if (lh.mode === 'image' && lh.imageDataUrl) {
+    try {
+      const props = pdf.getImageProperties(lh.imageDataUrl)
+      const h = Math.min(110, contentW * (props.height / props.width))
+      const w = h * (props.width / props.height)
+      pdf.addImage(lh.imageDataUrl, imgFormatFromDataUrl(lh.imageDataUrl), margin + (contentW - w) / 2, y, w, h)
+      return finish(y + h)
+    } catch { /* fall through to the standard layout */ }
+  }
+
+  const logoSize = 72
+  const hasLogo = !!lh.logoDataUrl
+  const [r, g, b] = hexToRgb(lh.accent)
+  if (lh.layout === 'centered') {
+    let yy = y
+    if (hasLogo) {
+      try { pdf.addImage(lh.logoDataUrl!, imgFormatFromDataUrl(lh.logoDataUrl!), W / 2 - logoSize / 2, yy, logoSize, logoSize); yy += logoSize + 6 } catch { /* skip */ }
+    }
+    setFont('bold'); pdf.setFontSize(14); pdf.setTextColor(r, g, b)
+    pdf.text(lh.name, W / 2, yy + 12, { align: 'center' })
+    setFont(); pdf.setFontSize(8); pdf.setTextColor(107, 114, 128)
+    lh.lines.forEach((line, i) => pdf.text(line, W / 2, yy + 24 + i * 10, { align: 'center' }))
+    return finish(yy + 24 + Math.max(0, lh.lines.length - 1) * 10 + 4)
+  }
+
+  const logoRight = lh.layout === 'logo-right'
+  if (hasLogo) {
+    try { pdf.addImage(lh.logoDataUrl!, imgFormatFromDataUrl(lh.logoDataUrl!), logoRight ? W - margin - logoSize : margin, y, logoSize, logoSize) } catch { /* skip */ }
+  }
+  const tx = logoRight ? margin : W - margin
+  const align = logoRight ? 'left' : 'right'
+  setFont('bold'); pdf.setFontSize(14); pdf.setTextColor(r, g, b)
+  pdf.text(lh.name, tx, y + 14, { align })
+  setFont(); pdf.setFontSize(8); pdf.setTextColor(107, 114, 128)
+  lh.lines.forEach((line, i) => pdf.text(line, tx, y + 26 + i * 10, { align }))
+  return finish(y + Math.max(hasLogo ? logoSize : 0, 26 + lh.lines.length * 10))
+}
+
 async function buildPOPdf(data: POPdfData): Promise<string> {
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' })
   const W = pdf.internal.pageSize.getWidth()
@@ -101,26 +174,7 @@ async function buildPOPdf(data: POPdfData): Promise<string> {
   const setFont = makeSetFont(pdf)
 
   // ── Header ────────────────────────────────────────────────────────────────
-  const logoSize = 80
-  if (data.logoDataUrl) {
-    try { pdf.addImage(data.logoDataUrl, imgFormatFromDataUrl(data.logoDataUrl), margin, y, logoSize, logoSize) }
-    catch { /* skip */ }
-  }
-  setFont('bold')
-  pdf.setFontSize(14)
-  pdf.setTextColor(185, 28, 28)
-  pdf.text(data.companyName, W - margin, y + 14, { align: 'right' })
-
-  setFont()
-  pdf.setFontSize(8)
-  pdf.setTextColor(107, 114, 128)
-  const rightLines = [data.companyAddress, data.companyPhone, data.companyEmail, data.companyTin ? `TIN: ${data.companyTin}` : undefined].filter(Boolean) as string[]
-  rightLines.forEach((line, i) => pdf.text(line, W - margin, y + 26 + i * 10, { align: 'right' }))
-
-  y += Math.max(logoSize, 26 + rightLines.length * 10) + 6
-  pdf.setDrawColor(229, 231, 235)
-  pdf.line(margin, y, W - margin, y)
-  y += 12
+  y = drawPdfHeader(pdf, data, setFont, margin, W, y)
 
   // ── Supplier / PO# ───────────────────────────────────────────────────────
   setFont('bold')
@@ -335,26 +389,7 @@ async function buildSOPdf(data: SOPdfData): Promise<string> {
   await loadQuestrialFont(pdf)
   const setFont = makeSetFont(pdf)
 
-  const logoSize = 80
-  if (data.logoDataUrl) {
-    try { pdf.addImage(data.logoDataUrl, imgFormatFromDataUrl(data.logoDataUrl), margin, y, logoSize, logoSize) }
-    catch { /* skip */ }
-  }
-  setFont('bold')
-  pdf.setFontSize(14)
-  pdf.setTextColor(185, 28, 28)
-  pdf.text(data.companyName, W - margin, y + 14, { align: 'right' })
-
-  setFont()
-  pdf.setFontSize(8)
-  pdf.setTextColor(107, 114, 128)
-  const rightLines = [data.companyAddress, data.companyPhone, data.companyEmail, data.companyTin ? `TIN: ${data.companyTin}` : undefined].filter(Boolean) as string[]
-  rightLines.forEach((line, i) => pdf.text(line, W - margin, y + 26 + i * 10, { align: 'right' }))
-
-  y += Math.max(logoSize, 26 + rightLines.length * 10) + 6
-  pdf.setDrawColor(229, 231, 235)
-  pdf.line(margin, y, W - margin, y)
-  y += 12
+  y = drawPdfHeader(pdf, data, setFont, margin, W, y)
 
   setFont('bold')
   pdf.setFontSize(8)

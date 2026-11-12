@@ -2,7 +2,8 @@ import Link from 'next/link'
 import Image from 'next/image'
 import type { Metadata } from 'next'
 import { ArrowRight, PackageSearch, Check, Stethoscope, Lock, Monitor, Package, Fan, Paintbrush, Armchair } from 'lucide-react'
-import { productCategories, extendedCatalog, furniture } from '@/lib/site-content'
+import { extendedCatalog, furniture } from '@/lib/site-content'
+import { getSiteContent } from '@/lib/site-content-server'
 
 const EXT_ICONS = [Stethoscope, Lock, Monitor, Package, Fan, Paintbrush]
 import { ProductCatalog } from '@/components/marketing/product-catalog'
@@ -21,7 +22,11 @@ const PHOTOS = [
   '/images/site/office-team.jpg',
 ]
 
-export default function ProductsPage() {
+// Content is editable in Settings → Website; refreshed at most every minute.
+export const revalidate = 60
+
+export default async function ProductsPage() {
+  const { productCategories } = await getSiteContent()
   return (
     <>
       <section className="relative overflow-hidden">

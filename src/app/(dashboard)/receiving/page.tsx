@@ -1,5 +1,7 @@
 'use client'
 
+import { DateRangeFilter } from '@/components/ui/filter-bar'
+
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { fetchAllRows } from '@/lib/supabase/fetch-all'
@@ -682,19 +684,9 @@ export default function ReceivingPage() {
             <CardHeader className="pb-3 flex flex-row items-center justify-between flex-wrap gap-3">
               <CardTitle className="text-base">Receiving Report History</CardTitle>
               <div className="flex items-center gap-2 flex-wrap">
-                <div className="flex items-center gap-1.5">
-                  <Label className="text-xs text-muted-foreground">From</Label>
-                  <Input type="date" className="h-8 w-36 text-xs" value={rrDateFrom} onChange={e => setRrDateFrom(e.target.value)} />
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <Label className="text-xs text-muted-foreground">To</Label>
-                  <Input type="date" className="h-8 w-36 text-xs" value={rrDateTo} onChange={e => setRrDateTo(e.target.value)} />
-                </div>
-                {(rrDateFrom || rrDateTo) && (
-                  <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => { setRrDateFrom(''); setRrDateTo('') }}>Clear</Button>
-                )}
-                <Button onClick={() => { resetRRForm(); setRrOpen(true) }} className="bg-red-600 hover:bg-red-700">
-                  <Plus className="h-4 w-4 mr-2" />New Receiving Report
+                <DateRangeFilter label="Delivery date" from={rrDateFrom} to={rrDateTo} onChange={(f, t) => { setRrDateFrom(f); setRrDateTo(t) }} />
+                <Button onClick={() => { resetRRForm(); setRrOpen(true) }} className="h-9 bg-red-600 hover:bg-red-700">
+                  <Plus className="h-4 w-4 mr-1.5" />New Receiving Report
                 </Button>
               </div>
             </CardHeader>
@@ -863,21 +855,7 @@ export default function ReceivingPage() {
               <h3 className="text-lg font-semibold">Sales Deliveries</h3>
               <p className="text-muted-foreground text-sm">Outgoing deliveries synced from DR Logs</p>
             </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <div className="flex items-center gap-1.5">
-                <Label className="text-xs text-muted-foreground">From</Label>
-                <Input type="date" className="h-8 w-36 text-xs" value={salesdDateFrom} onChange={e => setSalesdDateFrom(e.target.value)} />
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Label className="text-xs text-muted-foreground">To</Label>
-                <Input type="date" className="h-8 w-36 text-xs" value={salesdDateTo} onChange={e => setSalesdDateTo(e.target.value)} />
-              </div>
-              {(salesdDateFrom || salesdDateTo) && (
-                <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => { setSalesdDateFrom(''); setSalesdDateTo('') }}>
-                  Clear
-                </Button>
-              )}
-            </div>
+            <DateRangeFilter label="DR date" from={salesdDateFrom} to={salesdDateTo} onChange={(f, t) => { setSalesdDateFrom(f); setSalesdDateTo(t) }} />
           </div>
 
           <Card>

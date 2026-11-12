@@ -1,5 +1,7 @@
 'use client'
 
+import { FilterBar, Segmented, FILTER_TRIGGER } from '@/components/ui/filter-bar'
+
 import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -19,7 +21,8 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { UserPlus, MoreHorizontal, Search, Loader2, Users, KeyRound, Download } from 'lucide-react'
+import { UserPlus, MoreHorizontal, Search, Loader2, Users, KeyRound, Download, ShieldCheck, Briefcase, Building2, Truck, UserX } from 'lucide-react'
+import { KpiCard } from '@/components/ui/kpi-card'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
@@ -260,64 +263,55 @@ export default function UsersPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-end gap-3">
-        <div className="flex gap-2">
-          <Button onClick={() => setPortalOpen(true)} variant="outline">
-            <KeyRound className="h-4 w-4 mr-2" />Create Portal Account
-          </Button>
-          <Button onClick={() => setInviteOpen(true)} className="bg-[#E8112D] hover:bg-[#D10F28]">
-            <UserPlus className="h-4 w-4 mr-2" />Invite User
-          </Button>
-        </div>
-      </div>
-
       {/* Role cards — click to filter */}
-      <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         {([
-          { key: '',         label: 'Total Users', value: total,   color: '',                  view: null },
-          { key: 'admins',   label: 'Admins',      value: admins,  color: 'text-[#E8112D]',    view: 'staff' },
-          { key: 'staff',    label: 'Staff',       value: staff,   color: 'text-amber-600',    view: 'staff' },
-          { key: 'client',   label: 'Clients',     value: clients, color: 'text-blue-600',     view: 'portal' },
-          { key: 'vendor',   label: 'Vendors',     value: vendors, color: 'text-emerald-600',  view: 'portal' },
-          { key: 'inactive', label: 'Inactive',    value: total - active, color: 'text-gray-500', view: null },
+          { key: '',         label: 'Total Users', value: total,          icon: Users,       tone: 'slate',  view: null },
+          { key: 'admins',   label: 'Admins',      value: admins,         icon: ShieldCheck, tone: 'red',    view: 'staff' },
+          { key: 'staff',    label: 'Staff',       value: staff,          icon: Briefcase,   tone: 'amber',  view: 'staff' },
+          { key: 'client',   label: 'Clients',     value: clients,        icon: Building2,   tone: 'blue',   view: 'portal' },
+          { key: 'vendor',   label: 'Vendors',     value: vendors,        icon: Truck,       tone: 'green',  view: 'portal' },
+          { key: 'inactive', label: 'Inactive',    value: total - active, icon: UserX,       tone: 'violet', view: null },
         ] as const).map(c => (
-          <button key={c.label} type="button" title={c.key ? `Show ${c.label.toLowerCase()} only` : 'Show everyone'}
-            onClick={() => { setGroup(group === c.key ? '' : c.key); if (c.view) setView(c.view) }}
-            className={`rounded-xl bg-card p-4 text-left shadow-md shadow-black/5 transition hover:-translate-y-0.5 ${group === c.key && c.key ? 'ring-2 ring-[#E8112D]' : ''}`}>
-            <div className={`text-2xl font-bold ${c.color}`}>{loading ? '—' : c.value}</div>
-            <div className="text-xs text-muted-foreground">{c.label}</div>
-          </button>
+          <KpiCard key={c.label} label={c.label} value={loading ? '—' : c.value} icon={c.icon} tone={c.tone}
+            active={group === c.key && !!c.key}
+            onClick={() => { setGroup(group === c.key ? '' : c.key); if (c.view) setView(c.view) }} />
         ))}
       </div>
 
-      {/* Views */}
-      <div className="flex flex-wrap items-center gap-2">
-        {([['staff', 'Staff Users'], ['portal', 'Portal Accounts'], ['audit', 'Audit Logs']] as const).map(([k, l]) => (
-          <button key={k} type="button" onClick={() => setView(k)}
-            className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${view === k ? 'bg-[#E8112D] text-white' : 'bg-muted text-muted-foreground hover:bg-muted/70'}`}>
-            {l}
-          </button>
-        ))}
+      {/* Views + filters + actions */}
+      <FilterBar actions={<>
+        {view !== 'audit' && <span className="text-xs text-muted-foreground">{viewRows.length} account{viewRows.length !== 1 ? 's' : ''}</span>}
         {view !== 'audit' && (
-          <div className="ml-auto flex items-center gap-2">
-            <Select value={filterRole || '_all'} onValueChange={v => setFilterRole(!v || v === '_all' ? '' : v)}>
-              <SelectTrigger className="w-48 h-9">
-                <SelectValue>{() => `Roles: ${filterRole ? roleOf(filterRole).label : 'All'}`}</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="_all">All roles</SelectItem>
-                {ROLES.filter(r => view === 'portal' ? ['client', 'vendor'].includes(r.value) : !['client', 'vendor'].includes(r.value))
-                  .map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Button variant="outline" size="sm" className="h-9" onClick={exportUsersCsv}>
-              <Download className="h-3.5 w-3.5 mr-1.5" />Export CSV
-            </Button>
-            <span className="text-xs text-muted-foreground">{viewRows.length} account{viewRows.length !== 1 ? 's' : ''}</span>
-          </div>
+          <Button variant="outline" className="h-9" onClick={exportUsersCsv}>
+            <Download className="h-4 w-4 mr-1.5" />Export CSV
+          </Button>
         )}
-      </div>
+        <Button onClick={() => setPortalOpen(true)} variant="outline" className="h-9">
+          <KeyRound className="h-4 w-4 mr-1.5" />Create Portal Account
+        </Button>
+        <Button onClick={() => setInviteOpen(true)} className="h-9 bg-[#E8112D] hover:bg-[#D10F28]">
+          <UserPlus className="h-4 w-4 mr-1.5" />Invite User
+        </Button>
+      </>}>
+        <Segmented value={view} onChange={setView} options={[
+          { value: 'staff', label: 'Staff Users' },
+          { value: 'portal', label: 'Portal Accounts' },
+          { value: 'audit', label: 'Audit Logs' },
+        ]} />
+        {view !== 'audit' && (
+          <Select value={filterRole || '_all'} onValueChange={v => setFilterRole(!v || v === '_all' ? '' : v)}>
+            <SelectTrigger className={`${FILTER_TRIGGER} w-48`}>
+              <SelectValue>{() => filterRole ? roleOf(filterRole).label : 'All roles'}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="_all">All roles</SelectItem>
+              {ROLES.filter(r => view === 'portal' ? ['client', 'vendor'].includes(r.value) : !['client', 'vendor'].includes(r.value))
+                .map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        )}
+      </FilterBar>
 
       {view === 'audit' && <AuditLog />}
 

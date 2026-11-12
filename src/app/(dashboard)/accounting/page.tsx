@@ -1,5 +1,7 @@
 'use client'
 
+import { FilterBar, Segmented, FILTER_TRIGGER } from '@/components/ui/filter-bar'
+
 import { useState, useEffect, useCallback, Suspense } from 'react'
 import { useSearchParams, useRouter, usePathname } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
@@ -22,6 +24,7 @@ import {
 import {
   TrialBalanceReport, IncomeStatementReport, BalanceSheetReport, CashFlowReport, GeneralJournalPanel,
 } from '@/components/accounting/ledger-reports'
+import { BalanceCheck } from '@/components/accounting/balance-check'
 import { logAudit } from '@/lib/audit-log'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -30,7 +33,7 @@ import {
   Plus, Download, Loader2, BookOpen, Banknote, TrendingUp,
   Scale, FileSpreadsheet, Calculator, Receipt, FileText, DollarSign,
   MoreHorizontal, Printer, Eye, CheckCircle2, AlertTriangle,
-  ChevronDown, ChevronRight, SlidersHorizontal, Pencil, Link2, X,
+  ChevronDown, ChevronRight, SlidersHorizontal, Pencil, Link2, X, CalendarDays,
 } from 'lucide-react'
 import { useAccountRoles, splitPoPayment } from '@/lib/accounting-accounts'
 import { toast } from 'sonner'
@@ -233,7 +236,7 @@ function buildOrSequence(records: { id: string; or_number: string | null; status
 }
 
 // ── Date range filter (Preset year/quarter or Custom from/to) ─────────────────
-// Shared across Overview, Collections, and Bookkeeping so each tab can filter
+// Shared across Collections and Bookkeeping so each tab can filter
 // its data by the same Preset/Custom date range control.
 
 function useDateRangeFilter() {
@@ -277,185 +280,44 @@ function applyDateFilter<T>(df: DateRangeFilter, arr: T[], getDate: (item: T) =>
   })
 }
 
-function DateFilterBar({ df }: { df: DateRangeFilter }) {
+// Same look as every other page's filter bar (components/ui/filter-bar.tsx):
+// accounting periods are picked by Year → Quarter, or a custom From/To.
+function DateFilterBar({ df, actions, children }: { df: DateRangeFilter; actions?: React.ReactNode; children?: React.ReactNode }) {
   const yearOptions = Array.from({ length: 5 }, (_, i) => String(df.currentYear - i))
+  const active = !!(df.filterFrom || df.filterTo)
+  const QUARTER_LABEL: Record<string, string> = { all: 'All quarters', Q1: 'Q1 (Jan–Mar)', Q2: 'Q2 (Apr–Jun)', Q3: 'Q3 (Jul–Sep)', Q4: 'Q4 (Oct–Dec)' }
   return (
-    <div className="flex flex-wrap items-end gap-3 p-3 rounded-lg bg-muted/30 border">
-      <div className="flex items-center gap-2">
-        <Label className="text-xs whitespace-nowrap">Filter by</Label>
-        <Select value={df.useCustom ? 'custom' : 'preset'} onValueChange={v => df.setUseCustom(v === 'custom')}>
-          <SelectTrigger className="h-8 text-xs w-24"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="preset">Preset</SelectItem>
-            <SelectItem value="custom">Custom</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
+    <FilterBar actions={actions}>
+      <Segmented value={df.useCustom ? 'custom' : 'preset'} onChange={v => df.setUseCustom(v === 'custom')}
+        options={[{ value: 'preset', label: 'Period', icon: CalendarDays }, { value: 'custom', label: 'Custom dates' }]} />
       {!df.useCustom ? (
         <>
-          <div className="flex items-center gap-2">
-            <Label className="text-xs">Year</Label>
-            <Select value={df.filterYear} onValueChange={v => { df.setFilterYear(v ?? 'all'); df.setFilterQuarter('all') }}>
-              <SelectTrigger className="h-8 text-xs w-24"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Years</SelectItem>
-                {yearOptions.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex items-center gap-2">
-            <Label className="text-xs">Quarter</Label>
-            <Select value={df.filterQuarter} onValueChange={v => df.setFilterQuarter(v ?? 'all')} disabled={df.filterYear === 'all'}>
-              <SelectTrigger className="h-8 text-xs w-24"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Quarters</SelectItem>
-                <SelectItem value="Q1">Q1 (Jan–Mar)</SelectItem>
-                <SelectItem value="Q2">Q2 (Apr–Jun)</SelectItem>
-                <SelectItem value="Q3">Q3 (Jul–Sep)</SelectItem>
-                <SelectItem value="Q4">Q4 (Oct–Dec)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
+          <Select value={df.filterYear} onValueChange={v => { df.setFilterYear(v ?? 'all'); df.setFilterQuarter('all') }}>
+            <SelectTrigger className={`${FILTER_TRIGGER} w-36`}><span>{df.filterYear === 'all' ? 'All years' : df.filterYear}</span></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All years</SelectItem>
+              {yearOptions.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={df.filterQuarter} onValueChange={v => df.setFilterQuarter(v ?? 'all')} disabled={df.filterYear === 'all'}>
+            <SelectTrigger className={`${FILTER_TRIGGER} w-40`}><span>{QUARTER_LABEL[df.filterQuarter] ?? 'All quarters'}</span></SelectTrigger>
+            <SelectContent>
+              {Object.entries(QUARTER_LABEL).map(([v, l]) => <SelectItem key={v} value={v}>{l}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </>
       ) : (
-        <>
-          <div className="flex items-center gap-2">
-            <Label className="text-xs">From</Label>
-            <Input type="date" className="h-8 text-xs w-36" value={df.customFrom} onChange={e => df.setCustomFrom(e.target.value)} />
-          </div>
-          <div className="flex items-center gap-2">
-            <Label className="text-xs">To</Label>
-            <Input type="date" className="h-8 text-xs w-36" value={df.customTo} onChange={e => df.setCustomTo(e.target.value)} />
-          </div>
-        </>
+        <div className="flex items-center gap-1.5">
+          <Input type="date" aria-label="From" className="h-9 w-38 text-sm" value={df.customFrom} onChange={e => df.setCustomFrom(e.target.value)} />
+          <span className="text-xs text-muted-foreground">to</span>
+          <Input type="date" aria-label="To" className="h-9 w-38 text-sm" value={df.customTo} onChange={e => df.setCustomTo(e.target.value)} />
+        </div>
       )}
-      {(df.filterFrom || df.filterTo) && (
-        <span className="text-xs text-muted-foreground">{df.filterFrom ?? '—'} → {df.filterTo ?? '—'}</span>
+      {active && (
+        <span className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">{df.filterFrom ?? 'start'} → {df.filterTo ?? 'today'}</span>
       )}
-    </div>
-  )
-}
-
-// ── Overview Tab ──────────────────────────────────────────────────────────────
-
-function OverviewTab() {
-  const supabase = createClient()
-  const df = useDateRangeFilter()
-  const [summary, setSummary] = useState({ totalPO: 0, totalReceived: 0, totalEWT: 0, totalVAT: 0, pendingPayables: 0 })
-  const [recentPOs, setRecentPOs] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-  type RecentPoSortKey = 'po_number' | 'supplier' | 'total_amount' | 'vat_amount' | 'ewt_amount' | 'net_payable' | 'status'
-  const { sorted: sortedRecentPOs, sortKey: poSortKey, sortDir: poSortDir, onSort: onSortPo } = useTableSort<Record<string, unknown> & { supplier?: { company_name?: string } | null }, RecentPoSortKey>(recentPOs, (po, key) => {
-    if (key === 'supplier') return po.supplier?.company_name ?? ''
-    const v = po[key]
-    return typeof v === 'number' ? v : String(v ?? '')
-  })
-
-  useEffect(() => {
-    async function load() {
-      setLoading(true)
-      let poQuery = supabase.from('purchase_orders').select('total_amount, ewt_amount, vat_amount, status')
-      let rrQuery = supabase.from('receiving_reports').select('total_amount')
-      if (df.filterFrom) { poQuery = poQuery.gte('created_at', df.filterFrom); rrQuery = rrQuery.gte('created_at', df.filterFrom) }
-      if (df.filterTo) { poQuery = poQuery.lte('created_at', df.filterTo); rrQuery = rrQuery.lte('created_at', df.filterTo) }
-      const [pos, rrs] = await Promise.all([poQuery, rrQuery])
-      const poData = pos.data ?? []
-      const rrData = rrs.data ?? []
-      setSummary({
-        totalPO: poData.reduce((s: number, p: any) => s + (p.total_amount ?? 0), 0),
-        totalReceived: rrData.reduce((s: number, r: any) => s + (r.total_amount ?? 0), 0),
-        totalEWT: poData.reduce((s: number, p: any) => s + (p.ewt_amount ?? 0), 0),
-        totalVAT: poData.reduce((s: number, p: any) => s + (p.vat_amount ?? 0), 0),
-        pendingPayables: poData.filter((p: any) => p.status === 'approved' || p.status === 'sent').reduce((s: number, p: any) => s + (p.total_amount ?? 0), 0),
-      })
-      const { data: recent } = await supabase
-        .from('purchase_orders')
-        .select('po_number, supplier:suppliers(company_name), total_amount, vat_amount, ewt_amount, net_payable, status, created_at')
-        .order('created_at', { ascending: false })
-        .limit(10)
-      setRecentPOs(recent ?? [])
-      setLoading(false)
-    }
-    load()
-  }, [df.filterFrom, df.filterTo])
-
-  const cards = [
-    { title: 'PO Amount', value: fmt(summary.totalPO), icon: FileText, grad: 'from-blue-500 to-blue-600', tint: 'from-blue-50', shadow: 'shadow-blue-500/30' },
-    { title: 'Total Received', value: fmt(summary.totalReceived), icon: TrendingUp, grad: 'from-green-500 to-green-600', tint: 'from-green-50', shadow: 'shadow-green-500/30' },
-    { title: 'Pending Payables', value: fmt(summary.pendingPayables), icon: DollarSign, grad: 'from-red-500 to-red-600', tint: 'from-red-50', shadow: 'shadow-red-500/30' },
-    { title: 'EWT Withheld', value: fmt(summary.totalEWT), icon: Receipt, grad: 'from-purple-500 to-purple-600', tint: 'from-purple-50', shadow: 'shadow-purple-500/30' },
-    { title: 'Input VAT', value: fmt(summary.totalVAT), icon: Calculator, grad: 'from-amber-500 to-amber-600', tint: 'from-amber-50', shadow: 'shadow-amber-500/30' },
-  ]
-
-  return (
-    <div className="space-y-6">
-      <DateFilterBar df={df} />
-
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-        {cards.map(card => (
-          <Card key={card.title} className="relative overflow-hidden border-none">
-            <div className={`absolute inset-0 bg-gradient-to-br ${card.tint} to-transparent`} />
-            <CardContent className="relative pt-4 pb-3 flex items-start justify-between gap-3">
-              <div>
-                <div className="text-xl font-bold">{loading ? '—' : card.value}</div>
-                <div className="text-xs text-muted-foreground mt-0.5">{card.title}</div>
-              </div>
-              <div className={`h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br ${card.grad} flex items-center justify-center shadow-sm ${card.shadow}`}>
-                <card.icon className="h-5 w-5 text-white" />
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      <Card className="overflow-visible">
-        <CardHeader>
-          <CardTitle className="text-base">Recent Purchase Orders</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <Table containerClassName="overflow-x-clip">
-            <TableHeader className="sticky top-0 z-10 bg-background">
-              <TableRow>
-                <TableHead className="w-10">No.</TableHead>
-                <SortableTableHead label="PO Number" sortKey="po_number" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
-                <SortableTableHead label="Supplier" sortKey="supplier" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
-                <SortableTableHead label="Gross Amount" sortKey="total_amount" align="right" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
-                <SortableTableHead label="VAT (12%)" sortKey="vat_amount" align="right" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
-                <SortableTableHead label="EWT" sortKey="ewt_amount" align="right" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
-                <SortableTableHead label="Net Payable" sortKey="net_payable" align="right" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
-                <SortableTableHead label="Status" sortKey="status" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {loading ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Loading…</TableCell></TableRow>
-              ) : sortedRecentPOs.length === 0 ? (
-                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No purchase orders yet</TableCell></TableRow>
-              ) : sortedRecentPOs.map((po: any, i: number) => {
-                const gross = po.total_amount ?? 0
-                const vat = po.vat_amount ?? 0
-                const ewt = po.ewt_amount ?? 0
-                const net = po.net_payable ?? 0
-                return (
-                  <TableRow key={po.id ?? i} className="hover:bg-red-50/40 transition-colors">
-                    <TableCell className="text-muted-foreground text-xs">{i + 1}</TableCell>
-                    <TableCell className="font-mono text-sm">{po.po_number}</TableCell>
-                    <TableCell>{po.supplier?.company_name ?? '—'}</TableCell>
-                    <TableCell className="text-right">{fmt(gross)}</TableCell>
-                    <TableCell className="text-right text-blue-600">{fmt(vat)}</TableCell>
-                    <TableCell className="text-right text-red-600">({fmt(ewt)})</TableCell>
-                    <TableCell className="text-right font-medium">{fmt(net)}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className="text-xs capitalize">{po.status}</Badge>
-                    </TableCell>
-                  </TableRow>
-                )
-              })}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-    </div>
+      {children}
+    </FilterBar>
   )
 }
 
@@ -1394,12 +1256,19 @@ function CollectionsTab() {
         </CardContent>
       </Card>
 
-      <div className="flex items-end gap-3 flex-wrap justify-between">
-        <div className="flex items-end gap-3 flex-wrap">
-          <DateFilterBar df={df} />
-          <div className="flex items-center gap-2">
+      <DateFilterBar df={df} actions={<>
+          <Button variant="outline" size="icon" className="h-9 w-9" title="Calibrate Blank Form Print" onClick={openOrCalib}>
+            <SlidersHorizontal className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" className="h-9" onClick={openBlankFormDialog}>
+            <Printer className="h-4 w-4 mr-1.5" />Print Blank Form
+          </Button>
+          <Button onClick={() => { resetForm(); setOpen(true) }} className="h-9 bg-red-600 hover:bg-red-700">
+            <Plus className="h-4 w-4 mr-1.5" />New Collection
+          </Button>
+        </>}>
             <Select value={clientFilter} onValueChange={v => setClientFilter(v ?? '')}>
-              <SelectTrigger className="h-8 text-xs w-64">
+              <SelectTrigger className={`${FILTER_TRIGGER} w-64`}>
                 <SelectValue>{() => clientFilter || 'All Clients'}</SelectValue>
               </SelectTrigger>
               <SelectContent>
@@ -1410,24 +1279,11 @@ function CollectionsTab() {
               </SelectContent>
             </Select>
             {clientFilter && (
-              <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => setClientFilter('')}>
-                Clear
+              <Button variant="ghost" size="sm" className="h-9 px-2 text-xs" onClick={() => setClientFilter('')}>
+                <X className="h-3.5 w-3.5 mr-1" />Clear
               </Button>
             )}
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="icon" title="Calibrate Blank Form Print" onClick={openOrCalib}>
-            <SlidersHorizontal className="h-4 w-4" />
-          </Button>
-          <Button variant="outline" onClick={openBlankFormDialog}>
-            <Printer className="h-4 w-4 mr-2" />Print Blank Form
-          </Button>
-          <Button onClick={() => { resetForm(); setOpen(true) }} className="bg-red-600 hover:bg-red-700">
-            <Plus className="h-4 w-4 mr-2" />New Collection
-          </Button>
-        </div>
-      </div>
+      </DateFilterBar>
 
       <Card className="border-none shadow-md shadow-black/5 rounded-2xl overflow-hidden py-0 gap-0">
         <CardHeader className="pb-2 pt-5 px-5 bg-gradient-to-r from-muted/50 to-transparent">
@@ -2672,6 +2528,9 @@ function BookkeepingTab({ activeSub, onSubChange }: { activeSub: string; onSubCh
     return <div className="flex items-center justify-center h-64"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
   }
 
+  // Balance Check runs over the whole book (all dates), so it has no date filter.
+  if (activeSub === 'check') return <BalanceCheck />
+
   return (
     <div className="space-y-4">
       <DateFilterBar df={df} />
@@ -2704,7 +2563,9 @@ function AccountingPageContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const pathname = usePathname()
-  const activeTab = searchParams.get('tab') ?? 'overview'
+  // The old Overview tab (PO totals) was removed — Collections is the landing tab.
+  const rawTab = searchParams.get('tab') ?? 'collections'
+  const activeTab = rawTab === 'overview' ? 'collections' : rawTab
   const activeSub = searchParams.get('sub') ?? 'crj'
 
   // Drives the tab (and Bookkeeping's inner sub-tab) from the URL, so the sidebar can
@@ -2725,9 +2586,8 @@ function AccountingPageContent() {
 
   return (
     <div className="space-y-6">
-      <Tabs value={activeTab} onValueChange={v => setTab(v ?? 'overview')}>
+      <Tabs value={activeTab} onValueChange={v => setTab(v ?? 'collections')}>
         <div>
-          <TabsContent value="overview"><OverviewTab /></TabsContent>
           <TabsContent value="collections"><CollectionsTab /></TabsContent>
           <TabsContent value="bookkeeping"><BookkeepingTab activeSub={activeSub} onSubChange={setSub} /></TabsContent>
           <TabsContent value="bir"><BIRComplianceTab /></TabsContent>

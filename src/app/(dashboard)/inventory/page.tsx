@@ -1,5 +1,7 @@
 'use client'
 
+import { FilterBar, Segmented, FILTER_TRIGGER } from '@/components/ui/filter-bar'
+
 import { useState, useEffect, Fragment } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { fetchAllRows } from '@/lib/supabase/fetch-all'
@@ -137,12 +139,20 @@ function groupWhHistory(rows: LedgerRow[]): WhHistoryGroup[] {
   return groups
 }
 
-function KpiCard({ value, label, valueClass, icon: Icon, tint, grad, shadow }: {
+function KpiCard({ value, label, valueClass, icon: Icon, tint, grad, shadow, onClick, active = false }: {
   value: React.ReactNode; label: string; valueClass?: string
   icon: React.ComponentType<{ className?: string }>; tint: string; grad: string; shadow: string
+  // Clickable cards filter the list; the active one gets a bottom bar (no outline).
+  onClick?: () => void; active?: boolean
 }) {
   return (
-    <Card className="relative overflow-hidden border-none">
+    <Card
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      aria-pressed={onClick ? active : undefined}
+      className={`relative overflow-hidden border-none outline-none select-none ${onClick ? 'cursor-pointer transition hover:-translate-y-0.5 hover:shadow-md' : ''} ${active ? 'shadow-md' : ''}`}
+    >
+      {active && <span aria-hidden className={`absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r ${grad}`} />}
       <div className={`absolute inset-0 bg-gradient-to-br ${tint} to-transparent`} />
       <CardContent className="relative pt-4 pb-3 flex items-start justify-between gap-3">
         <div>
@@ -929,16 +939,20 @@ export default function InventoryPage() {
 
   const clients = Array.from(new Set(rows.map(r => r.client))).sort()
 
-  const filtered = rows.filter(r => {
+  // Client + search only — the KPI counts use this so clicking a status card
+  // doesn't zero out the other cards.
+  const baseFiltered = rows.filter(r => {
     const matchClient = clientFilter === 'all' || r.client === clientFilter
     const q = search.toLowerCase()
-    const matchSearch = !q || r.item_name.toLowerCase().includes(q) || r.client.toLowerCase().includes(q)
+    return matchClient && (!q || r.item_name.toLowerCase().includes(q) || r.client.toLowerCase().includes(q))
+  })
+  const filtered = baseFiltered.filter(r => {
     const matchStatus =
       statusFilter === 'all' ||
       (statusFilter === 'in_stock' && r.balance > 0) ||
       (statusFilter === 'balanced' && r.balance === 0) ||
       (statusFilter === 'deficit' && r.balance < 0)
-    return matchClient && matchSearch && matchStatus
+    return matchStatus
   })
 
   // Group by item for By Item view
@@ -966,11 +980,12 @@ export default function InventoryPage() {
 
   // KPI stats per view mode
   // By Client — client × item line rows
-  const totalItems = filtered.length
-  const uniqueClients = new Set(filtered.map(r => r.client)).size
-  const inStock  = filtered.filter(r => r.balance > 0).length
-  const balanced = filtered.filter(r => r.balance === 0).length
-  const negative = filtered.filter(r => r.balance < 0).length
+  const totalItems = baseFiltered.length
+  const uniqueClients = new Set(baseFiltered.map(r => r.client)).size
+  const inStock  = baseFiltered.filter(r => r.balance > 0).length
+  const balanced = baseFiltered.filter(r => r.balance === 0).length
+  const negative = baseFiltered.filter(r => r.balance < 0).length
+  const toggleStatus = (v: string) => setStatusFilter(statusFilter === v ? 'all' : v)
 
   // By Item — grouped across clients (byItemGroups is only built in that view)
   const itemGroupsInStock  = byItemGroups.filter(g => g.total_balance > 0).length
@@ -1307,13 +1322,16 @@ export default function InventoryPage() {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <KpiCard value={loading ? '—' : uniqueClients} label="Clients" valueClass="text-blue-600"
             icon={Users} tint="from-blue-50" grad="from-blue-500 to-blue-600" shadow="shadow-blue-500/30" />
-          <KpiCard value={loading ? '—' : totalItems} label="Line Items"
+          <KpiCard value={loading ? '—' : totalItems} label="Line Items" onClick={() => setStatusFilter('all')}
             icon={List} tint="from-red-50" grad="from-red-500 to-red-600" shadow="shadow-red-500/30" />
           <KpiCard value={loading ? '—' : inStock} label="In Stock" valueClass="text-green-600"
+            active={statusFilter === 'in_stock'} onClick={() => toggleStatus('in_stock')}
             icon={CheckCircle2} tint="from-green-50" grad="from-green-500 to-green-600" shadow="shadow-green-500/30" />
           <KpiCard value={loading ? '—' : balanced} label="Balanced" valueClass="text-gray-500"
+            active={statusFilter === 'balanced'} onClick={() => toggleStatus('balanced')}
             icon={Scale} tint="from-slate-50" grad="from-slate-400 to-slate-500" shadow="shadow-slate-500/30" />
           <KpiCard value={loading ? '—' : negative} label="Deficit" valueClass="text-red-600"
+            active={statusFilter === 'deficit'} onClick={() => toggleStatus('deficit')}
             icon={AlertTriangle} tint="from-red-50" grad="from-red-500 to-red-600" shadow="shadow-red-500/30" />
         </div>
       )}
@@ -1349,59 +1367,14 @@ export default function InventoryPage() {
       )}
 
       {/* View toggle + Filters + Actions — hidden when report is open */}
-      {!reportOpen && <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex items-center gap-1.5">
-          <Label className="text-xs text-muted-foreground whitespace-nowrap">View</Label>
-          <div className="flex border rounded-md overflow-hidden">
-            <button
-              className={`px-4 py-1.5 text-sm font-medium transition-colors ${viewMode === 'by_client' ? 'bg-red-600 text-white' : 'hover:bg-muted text-muted-foreground'}`}
-              onClick={() => setViewMode('by_client')}
-            >By Client</button>
-            <button
-              className={`px-4 py-1.5 text-sm font-medium transition-colors ${viewMode === 'by_item' ? 'bg-red-600 text-white' : 'hover:bg-muted text-muted-foreground'}`}
-              onClick={() => setViewMode('by_item')}
-            >By Item</button>
-            <button
-              className={`px-4 py-1.5 text-sm font-medium transition-colors ${viewMode === 'by_warehouse' ? 'bg-red-600 text-white' : 'hover:bg-muted text-muted-foreground'}`}
-              onClick={() => setViewMode('by_warehouse')}
-            >By Warehouse</button>
-          </div>
-        </div>
-        {viewMode !== 'by_warehouse' && (
-          <div className="flex items-center gap-1.5">
-            <Label className="text-xs text-muted-foreground whitespace-nowrap">Client</Label>
-            <Select value={clientFilter} onValueChange={v => setClientFilter(v ?? 'all')}>
-              <SelectTrigger className="w-72">
-                <SelectValue className="truncate">{(v: string) => v === 'all' ? 'Client' : v}</SelectValue>
-              </SelectTrigger>
-              <SelectContent className="min-w-[320px]">
-                <SelectItem value="all">All Clients</SelectItem>
-                {clients.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-        <div className="flex items-center gap-1.5">
-          <Label className="text-xs text-muted-foreground whitespace-nowrap">Status</Label>
-          <Select value={statusFilter} onValueChange={v => setStatusFilter(v ?? 'all')}>
-            <SelectTrigger className="w-40">
-              <SelectValue>{(v: string) => v === 'all' ? 'Status' : v === 'in_stock' ? 'In Stock' : v === 'balanced' ? 'Balanced' : v === 'deficit' ? 'Deficit' : v}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
-              <SelectItem value="in_stock">In Stock</SelectItem>
-              <SelectItem value="balanced">Balanced</SelectItem>
-              <SelectItem value="deficit">Deficit</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex gap-2 ml-auto">
+      {!reportOpen && (
+        <FilterBar actions={<>
           {viewMode === 'by_warehouse' && (
-            <Button variant="outline" onClick={openAllTransactions} className="border-gray-300 text-gray-700 gap-1.5">
+            <Button variant="outline" onClick={openAllTransactions} className="h-9 gap-1.5">
               <History className="h-4 w-4" /> Transactions
             </Button>
           )}
-          <Button variant="outline" onClick={printInventoryList} className="border-gray-300 text-gray-700 gap-1.5">
+          <Button variant="outline" onClick={printInventoryList} className="h-9 gap-1.5">
             <Printer className="h-4 w-4" /> Print
           </Button>
           <Button
@@ -1411,15 +1384,45 @@ export default function InventoryPage() {
               setReportOpen(v => !v)
             }}
             disabled={rows.length === 0}
-            className={reportOpen ? 'border-red-300 text-red-600 bg-red-50 gap-1.5' : 'border-gray-300 text-gray-700 gap-1.5'}
+            className="h-9 gap-1.5"
           >
-            <FileText className="h-4 w-4" /> {reportOpen ? 'Close Report' : 'Generate Report'}
+            <FileText className="h-4 w-4" /> Generate Report
           </Button>
-          <Button onClick={openAddDialog} className="bg-red-600 hover:bg-red-700 text-white">
+          <Button onClick={openAddDialog} className="h-9 bg-red-600 hover:bg-red-700 text-white">
             <Plus className="h-4 w-4 mr-1.5" /> Add Stock
           </Button>
-        </div>
-      </div>}
+        </>}>
+          <Segmented value={viewMode} onChange={setViewMode} options={[
+            { value: 'by_client', label: 'By Client' },
+            { value: 'by_item', label: 'By Item' },
+            { value: 'by_warehouse', label: 'By Warehouse' },
+          ]} />
+          {viewMode !== 'by_warehouse' && (
+            <Select value={clientFilter} onValueChange={v => setClientFilter(v ?? 'all')}>
+              <SelectTrigger className={`${FILTER_TRIGGER} w-64`}>
+                <SelectValue className="truncate">{(v: string) => v === 'all' ? 'All Clients' : v}</SelectValue>
+              </SelectTrigger>
+              <SelectContent className="min-w-[320px]">
+                <SelectItem value="all">All Clients</SelectItem>
+                {clients.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          )}
+          {viewMode !== 'by_warehouse' && (
+            <Select value={statusFilter} onValueChange={v => setStatusFilter(v ?? 'all')}>
+              <SelectTrigger className={`${FILTER_TRIGGER} w-40`}>
+                <SelectValue>{(v: string) => v === 'all' ? 'All Statuses' : v === 'in_stock' ? 'In Stock' : v === 'balanced' ? 'Balanced' : v === 'deficit' ? 'Deficit' : v}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="in_stock">In Stock</SelectItem>
+                <SelectItem value="balanced">Balanced</SelectItem>
+                <SelectItem value="deficit">Deficit</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        </FilterBar>
+      )}
 
       {/* Actions — stay visible even while the report is open, so it can be closed */}
       {reportOpen && (

@@ -1,5 +1,9 @@
 'use client'
 
+import { FilterBar, Segmented, FILTER_TRIGGER } from '@/components/ui/filter-bar'
+import { KpiCard } from '@/components/ui/kpi-card'
+import { UserCheck, UserX, Factory, Users as UsersIcon } from 'lucide-react'
+
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
@@ -356,35 +360,27 @@ export default function ClientsPage() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-end gap-4">
-        <Button onClick={openCreate} className="bg-red-600 hover:bg-red-700">
-          <Plus className="h-4 w-4 mr-2" /> New Client
-        </Button>
-      </div>
-
-      {/* Stats */}
+      {/* Stats — click to filter */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {[
-          { label: 'Total Clients', value: total, color: '' },
-          { label: 'Active', value: active, color: 'text-green-600' },
-          { label: 'Inactive', value: inactive, color: 'text-gray-400' },
-          { label: 'Industries', value: industries.length, color: 'text-blue-600' },
-        ].map(s => (
-          <Card key={s.label}>
-            <CardContent className="pt-4 pb-3">
-              <div className={`text-2xl font-bold ${s.color}`}>{loading ? '—' : s.value}</div>
-              <div className="text-xs text-muted-foreground">{s.label}</div>
-            </CardContent>
-          </Card>
-        ))}
+        <KpiCard label="Total Clients" value={loading ? '—' : total} icon={UsersIcon} tone="slate"
+          onClick={() => { setFilterStatus(''); setFilterIndustry('') }} />
+        <KpiCard label="Active" value={loading ? '—' : active} icon={UserCheck} tone="green"
+          active={filterStatus === 'active'} onClick={() => setFilterStatus(filterStatus === 'active' ? '' : 'active')} />
+        <KpiCard label="Inactive" value={loading ? '—' : inactive} icon={UserX} tone="amber"
+          active={filterStatus === 'inactive'} onClick={() => setFilterStatus(filterStatus === 'inactive' ? '' : 'inactive')} />
+        <KpiCard label="Industries" value={loading ? '—' : industries.length} icon={Factory} tone="blue" />
       </div>
 
-      {/* Filters + View Toggle */}
-      <div className="flex items-center gap-3 flex-wrap">
+      {/* Filters + view toggle + actions */}
+      <FilterBar actions={<>
+        <span className="text-xs text-muted-foreground">{filtered.length} client{filtered.length !== 1 ? 's' : ''}</span>
+        <Button onClick={openCreate} className="h-9 bg-red-600 hover:bg-red-700">
+          <Plus className="h-4 w-4 mr-1.5" /> New Client
+        </Button>
+      </>}>
         <Select value={filterStatus || '_all'} onValueChange={(v: string | null) => setFilterStatus(!v || v === '_all' ? '' : v)}>
-          <SelectTrigger className="w-40 h-9">
-            <SelectValue>{() => `Status: ${filterStatus ? (filterStatus === 'active' ? 'Active' : 'Inactive') : 'All'}`}</SelectValue>
+          <SelectTrigger className={`${FILTER_TRIGGER} w-40`}>
+            <SelectValue>{() => filterStatus ? (filterStatus === 'active' ? 'Active' : 'Inactive') : 'All Status'}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="_all">All Status</SelectItem>
@@ -393,20 +389,19 @@ export default function ClientsPage() {
           </SelectContent>
         </Select>
         <Select value={filterIndustry || '_all'} onValueChange={(v: string | null) => setFilterIndustry(!v || v === '_all' ? '' : v)}>
-          <SelectTrigger className="w-52 h-9">
-            <SelectValue>{() => `Industries: ${filterIndustry || 'All'}`}</SelectValue>
+          <SelectTrigger className={`${FILTER_TRIGGER} w-52`}>
+            <SelectValue>{() => filterIndustry || 'All Industries'}</SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="_all">All Industries</SelectItem>
             {industries.map(i => <SelectItem key={i!} value={i!}>{i}</SelectItem>)}
           </SelectContent>
         </Select>
-        <span className="text-xs text-muted-foreground">{filtered.length} client{filtered.length !== 1 ? 's' : ''}</span>
-        <div className="ml-auto flex items-center border rounded-md overflow-hidden">
-          <button onClick={() => setView('table')} className={`px-2.5 py-1.5 ${view === 'table' ? 'bg-muted' : 'hover:bg-muted/50'}`}><List className="h-4 w-4" /></button>
-          <button onClick={() => setView('grid')} className={`px-2.5 py-1.5 ${view === 'grid' ? 'bg-muted' : 'hover:bg-muted/50'}`}><LayoutGrid className="h-4 w-4" /></button>
-        </div>
-      </div>
+        <Segmented value={view} onChange={setView} options={[
+          { value: 'table', label: 'List', icon: List },
+          { value: 'grid', label: 'Cards', icon: LayoutGrid },
+        ]} />
+      </FilterBar>
 
       {/* Table View */}
       {view === 'table' && (

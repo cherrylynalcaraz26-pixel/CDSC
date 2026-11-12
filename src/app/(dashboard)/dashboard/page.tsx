@@ -7,6 +7,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { fetchAllRows } from '@/lib/supabase/fetch-all'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -87,6 +88,7 @@ const axisProps = { stroke: AXIS, fontSize: 11, tickLine: false, axisLine: false
 
 export default function DashboardPage() {
   const supabase = createClient()
+  const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [sos, setSos] = useState<{ so_date: string | null; created_at: string; client_name: string | null; total_amount: number | null; status: string }[]>([])
   const [pos, setPos] = useState<{ po_date: string | null; created_at: string; gross_amount: number | null; total_amount: number | null; status: string }[]>([])
@@ -159,10 +161,10 @@ export default function DashboardPage() {
 
   const sum = (rows: Row[]) => rows.filter(r => (r.date ?? '').startsWith(thisMonth)).reduce((s, r) => s + r.amount, 0)
   const tiles = [
-    { label: 'Sales this month', value: peso(sum(salesRows)), icon: TrendingUp, tone: 'red' as const },
-    { label: 'Collected this month', value: peso(sum(cashIn)), icon: Wallet, tone: 'green' as const },
-    { label: 'Spent this month', value: peso(sum(cashOut)), icon: Banknote, tone: 'blue' as const },
-    { label: 'Open orders', icon: ClipboardList, tone: 'amber' as const, value: String(orderStatus.reduce((s, r) => s + (r.stage === 'Completed' ? 0 : r['Sales Orders'] + r['Purchase Orders']), 0)) },
+    { label: 'Sales this month', value: peso(sum(salesRows)), icon: TrendingUp, tone: 'red' as const, href: '/sales-orders' },
+    { label: 'Collected this month', value: peso(sum(cashIn)), icon: Wallet, tone: 'green' as const, href: '/accounting?tab=collections' },
+    { label: 'Spent this month', value: peso(sum(cashOut)), icon: Banknote, tone: 'blue' as const, href: '/accounting?tab=bookkeeping&sub=cdj' },
+    { label: 'Open orders', icon: ClipboardList, tone: 'amber' as const, href: '/purchase-orders', value: String(orderStatus.reduce((s, r) => s + (r.stage === 'Completed' ? 0 : r['Sales Orders'] + r['Purchase Orders']), 0)) },
   ]
 
   if (loading) {
@@ -174,7 +176,8 @@ export default function DashboardPage() {
       <WelcomeBanner />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {tiles.map(t => <KpiCard key={t.label} label={t.label} value={t.value} icon={t.icon} tone={t.tone} />)}
+        {/* Each tile opens the page behind the number. */}
+        {tiles.map(t => <KpiCard key={t.label} label={t.label} value={t.value} icon={t.icon} tone={t.tone} sub="Open →" onClick={() => router.push(t.href)} />)}
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">

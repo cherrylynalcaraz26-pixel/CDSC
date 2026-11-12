@@ -26,7 +26,7 @@ const PAGES: Record<string, PageTitle> = {
   '/bir': { title: 'BIR Compliance', subtitle: 'Deadlines, filings, VAT, income tax and withholding' },
   '/assets': { title: 'Asset Accountability', subtitle: 'Fixed assets, assignments, transfers and disposals' },
   '/client-requests': { title: 'Client Requests', subtitle: 'Purchase requests submitted by clients via the portal' },
-  '/clients': { title: 'Clients', subtitle: 'Client accounts and contacts' },
+  '/clients': { title: 'Clients · 201 File', subtitle: 'Client records, contacts and documents' },
   '/employee-requests': { title: 'My Requests', subtitle: 'Office supplies, IT equipment, uniforms and consumables' },
   '/items/categories': { title: 'Categories', subtitle: 'Item categories' },
   '/messages': { title: 'Messages', subtitle: 'Conversations with clients and suppliers' },
@@ -37,10 +37,10 @@ const PAGES: Record<string, PageTitle> = {
 
 // Accounting is one route with ?tab= / &sub= sections.
 const ACCOUNTING: Record<string, PageTitle> = {
-  overview: { title: 'Accounting Overview', subtitle: 'Cash position, receivables, payables and this period at a glance' },
-  collections: { title: 'Collections (OR)', subtitle: 'Payments received from clients — Official Receipts' },
+  collections: { title: 'Collections (OR)', subtitle: 'Payments received from clients — each OR settles Accounts Receivable' },
   bir: { title: 'BIR Compliance', subtitle: 'Deadlines, filings, VAT, income tax and withholding' },
-  crj: { title: 'Sales Journal', subtitle: 'Sales billed (CSI) and cash received (OR), journalized' },
+  crj: { title: 'Sales Journal (CSI)', subtitle: 'Sales billed on Charge Sales Invoices — each SI books Accounts Receivable' },
+  check: { title: 'Balance Check', subtitle: 'Do the books balance? Every source document against the ledger' },
   cdj: { title: 'Cash Disbursements', subtitle: 'Payments to suppliers and expenses, with EWT' },
   gj: { title: 'General Journal', subtitle: 'Adjusting and other manual journal entries' },
   gl: { title: 'General Ledger', subtitle: 'Every posted entry, account by account' },
@@ -54,17 +54,25 @@ const ACCOUNTING: Record<string, PageTitle> = {
 const SETTINGS_TABS: Record<string, string> = {
   suppliers: 'Suppliers', items: 'Item List', categories: 'Categories', uom: 'Units of Measure',
   brands: 'Brands', attributes: 'Attributes', payees: 'Payees', deck: 'Company Profile Deck',
+  reports: 'Reports Center', website: 'Website', letterhead: 'Document Header (PDF)',
+}
+const SETTINGS_SUBTITLES: Record<string, string> = {
+  'Company Profile Deck': 'Slides and PDF to present CDSC to clients',
+  'Reports Center': 'Generate and export system reports',
+  'Website': 'Edit the text shown on the public website',
+  'Document Header (PDF)': 'Logo and company details printed at the top of every PDF',
 }
 
 export function getPageTitle(pathname: string, search: URLSearchParams): PageTitle | null {
   if (pathname === '/accounting') {
-    const tab = search.get('tab') ?? 'overview'
+    const raw = search.get('tab') ?? 'collections'
+    const tab = raw === 'overview' ? 'collections' : raw
     const key = tab === 'bookkeeping' ? (search.get('sub') ?? 'crj') : tab
     return ACCOUNTING[key] ?? PAGES['/accounting']
   }
   if (pathname === '/settings') {
     const t = SETTINGS_TABS[search.get('tab') ?? '']
-    if (t) return { title: t, subtitle: t === 'Company Profile Deck' ? 'Slides and PDF to present CDSC to clients' : 'Settings → Master Data' }
+    if (t) return { title: t, subtitle: SETTINGS_SUBTITLES[t] ?? 'Settings → Master Data' }
   }
   // Longest matching route wins (/warehouse/transfer before /warehouse).
   const hit = Object.keys(PAGES)

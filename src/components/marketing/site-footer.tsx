@@ -1,9 +1,13 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { Phone, Mail, MapPin } from 'lucide-react'
-import { nav, company, productCategories } from '@/lib/site-content'
+import { nav, companyWithContact } from '@/lib/site-content'
+import { getSiteContent } from '@/lib/site-content-server'
 
-export function SiteFooter() {
+export async function SiteFooter() {
+  const content = await getSiteContent()
+  const { productCategories } = content
+  const company = companyWithContact(content.contact)
   return (
     <footer id="site-footer" className="relative overflow-hidden bg-cdsc-paper text-cdsc-ink/65 print:hidden">
       <div aria-hidden className="h-1 w-full bg-linear-to-r from-cdsc-accent via-red-500 to-rose-400" />

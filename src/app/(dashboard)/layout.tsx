@@ -174,7 +174,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </Suspense>
 
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
-          <Suspense fallback={<div className="h-[61px] border-b" />}>
+          <Suspense fallback={<div className="h-[66px] border-b" />}>
             <Header onMenuClick={() => setMobileOpen(true)} sidebarCollapsed={sidebarCollapsed} />
           </Suspense>
           <main className="flex-1 overflow-y-auto p-4 md:p-6 pb-24 lg:pb-6">

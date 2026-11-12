@@ -33,15 +33,19 @@ export function KpiCard({
     <Tag
       type={onClick ? 'button' : undefined}
       onClick={onClick}
+      aria-pressed={onClick ? active : undefined}
       className={cn(
-        'group relative w-full overflow-hidden rounded-2xl bg-card p-4 text-left shadow-[0_6px_24px_-12px_rgba(15,23,42,0.25)] ring-1 ring-black/[0.04] transition duration-300 sm:p-5',
-        onClick && 'cursor-pointer hover:-translate-y-0.5 hover:shadow-[0_16px_36px_-16px_rgba(15,23,42,0.35)]',
-        active && 'ring-2 ring-[#E8112D]/60',
+        // No outline/ring on click or focus — the active filter shows as the
+        // coloured bottom bar and a faint tint instead.
+        'group relative w-full overflow-hidden rounded-2xl bg-card p-4 text-left shadow-[0_6px_24px_-12px_rgba(15,23,42,0.25)] transition duration-300 outline-none focus:outline-none focus-visible:outline-none sm:p-5 [-webkit-tap-highlight-color:transparent]',
+        onClick && 'cursor-pointer select-none hover:-translate-y-0.5 hover:shadow-[0_16px_36px_-16px_rgba(15,23,42,0.35)]',
+        active && 'shadow-[0_16px_36px_-16px_rgba(15,23,42,0.35)]',
         className,
       )}
     >
-      <span aria-hidden className={cn('pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full blur-2xl transition duration-500 group-hover:scale-125', t.glow)} />
-      <span aria-hidden className={cn('absolute inset-x-0 bottom-0 h-[3px] origin-left scale-x-0 bg-linear-to-r transition duration-500 group-hover:scale-x-100', t.bar, active && 'scale-x-100')} />
+      <span aria-hidden className={cn('pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full blur-2xl transition duration-500 group-hover:scale-125', t.glow, active && 'scale-150')} />
+      {active && <span aria-hidden className={cn('pointer-events-none absolute inset-0', t.glow, 'opacity-60')} />}
+      <span aria-hidden className={cn('absolute inset-x-0 bottom-0 h-1 origin-left scale-x-0 bg-linear-to-r transition duration-500 group-hover:scale-x-100', t.bar, active && 'scale-x-100')} />
       <div className="relative flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>

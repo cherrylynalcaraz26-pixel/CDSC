@@ -1,5 +1,11 @@
 'use client'
 
+import { KpiCard } from '@/components/ui/kpi-card'
+
+import { useOpenOnNew } from '@/lib/use-open-on-new'
+
+import { useLetterhead, letterheadHtml, letterheadForPdf } from '@/lib/letterhead'
+
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { fetchAllRows } from '@/lib/supabase/fetch-all'
@@ -110,6 +116,8 @@ export default function PurchaseOrdersPage() {
   const [saving, setSaving] = useState(false)
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'form' | 'preview'>('form')
+  const letterhead = useLetterhead()
+  const [poStatusFilter, setPoStatusFilter] = useState<string>('all')
   const [companyInfo, setCompanyInfo] = useState<{
     company_name: string; address: string; phone: string; email: string; tin: string; logo_url?: string
   } | null>(null)
@@ -427,6 +435,7 @@ export default function PurchaseOrdersPage() {
     return `${prefix}${String(lastNum + 1).padStart(5, '0')}`
   }
 
+  useOpenOnNew(() => { handleOpenCreate() })
   async function handleOpenCreate() {
     resetForm()
     setPoNumber(await nextPoNumber())
@@ -753,7 +762,6 @@ export default function PurchaseOrdersPage() {
 
   function buildPOHtml(po: PO, items: { item_name: string; quantity: number; unit: string | null; unit_price: number; selling_price: number | null; total_amount: number }[] = []) {
     const supplierName = (po.supplier as any)?.company_name ?? '-'
-    const logoUrl = companyInfo?.logo_url || (typeof window !== 'undefined' ? `${window.location.origin}/cdsc-logo.jpg` : '/cdsc-logo.jpg')
     const poDate = po.po_date ? new Date(po.po_date + 'T00:00:00').toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }) : '-'
     const delDate = po.delivery_date ? new Date(po.delivery_date + 'T00:00:00').toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }) : null
     const fmtN = (n: number) => (n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })
@@ -775,17 +783,7 @@ export default function PurchaseOrdersPage() {
       table{border-collapse:collapse;width:100%}
       @media print{body{margin:0;padding:24px}}
     </style></head><body>
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:12px;border-bottom:1px solid #e5e7eb;margin-bottom:14px">
-      <div><img src="${logoUrl}" style="width:64px;height:64px;object-fit:cover;border-radius:4px"/></div>
-      <div style="text-align:right">
-        <div style="font-size:14px;font-weight:bold;color:#b91c1c;margin-bottom:2px">${companyInfo?.company_name ?? 'CDSC Industrial Supply'}</div>
-        <div style="font-size:9px;color:#6b7280">
-          ${companyInfo?.address ? `<div>${companyInfo.address}</div>` : ''}
-          ${companyInfo?.phone || companyInfo?.email ? `<div>${[companyInfo.phone, companyInfo.email].filter(Boolean).join(' | ')}</div>` : ''}
-          ${companyInfo?.tin ? `<div>TIN: ${companyInfo.tin}</div>` : ''}
-        </div>
-      </div>
-    </div>
+    ${letterheadHtml(letterhead, companyInfo)}
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;padding-bottom:12px;border-bottom:1px solid #e5e7eb;margin-bottom:14px">
       <div>
         <div style="font-size:9px;font-weight:600;color:#9ca3af;text-transform:uppercase;margin-bottom:2px">Supplier</div>
@@ -923,6 +921,7 @@ export default function PurchaseOrdersPage() {
       companyEmail: companyInfo?.email ?? undefined,
       companyTin: companyInfo?.tin ?? undefined,
       logoDataUrl,
+      letterhead: await letterheadForPdf(letterhead, companyInfo),
       poNumber: po?.po_number ?? poNumber ?? '-',
       poDate: po?.po_date ?? new Date().toISOString().split('T')[0],
       deliveryDate: po?.delivery_date ?? deliveryDate ?? undefined,
@@ -962,15 +961,14 @@ export default function PurchaseOrdersPage() {
 
   const fmt = (n: number) => `₱${n.toLocaleString('en-PH', { minimumFractionDigits: 2 })}`
 
-  const displayedPos = query.trim()
-    ? pos.filter(p => {
-        const q = query.toLowerCase()
-        return (p.po_number ?? '').toLowerCase().includes(q) ||
-          (p.supplier?.company_name ?? '').toLowerCase().includes(q) ||
-          (p.invoice_no ?? '').toLowerCase().includes(q) ||
-          (p.status ?? '').toLowerCase().includes(q)
-      })
-    : pos
+  const displayedPos = pos.filter(p => {
+    if (poStatusFilter !== 'all' && p.status !== poStatusFilter) return false
+    const q = query.trim().toLowerCase()
+    return !q || (p.po_number ?? '').toLowerCase().includes(q) ||
+      (p.supplier?.company_name ?? '').toLowerCase().includes(q) ||
+      (p.invoice_no ?? '').toLowerCase().includes(q) ||
+      (p.status ?? '').toLowerCase().includes(q)
+  })
 
   type PoSortKey = 'po_number' | 'invoice_no' | 'supplier' | 'po_date' | 'delivery_date' | 'gross_amount' | 'vat_amount' | 'ewt_amount' | 'net_payable' | 'status'
   const { sorted: sortedPos, sortKey: poSortKey, sortDir: poSortDir, onSort: onSortPo } = useTableSort<PO, PoSortKey>(displayedPos, (po, key) => {
@@ -1025,68 +1023,17 @@ export default function PurchaseOrdersPage() {
       </div>
 
       {!open && (
+        // Click a status card to filter the PO list below; click again to clear.
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
-          <Card className="relative overflow-hidden border-none">
-            <div className="absolute inset-0 bg-gradient-to-br from-red-50 to-transparent" />
-            <CardContent className="relative pt-5 pb-4 flex items-start justify-between gap-3">
-              <div>
-                <div className="text-2xl font-bold">{loading ? '—' : fmt(counts.total)}</div>
-                <div className="text-sm text-muted-foreground mt-0.5">Total PO Value</div>
-              </div>
-              <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center shadow-sm shadow-red-500/30">
-                <Wallet className="h-5 w-5 text-white" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="relative overflow-hidden border-none">
-            <div className="absolute inset-0 bg-gradient-to-br from-purple-50 to-transparent" />
-            <CardContent className="relative pt-5 pb-4 flex items-start justify-between gap-3">
-              <div>
-                <div className="text-2xl font-bold text-purple-700">{loading ? '—' : fmt(counts.ewtThisMonth)}</div>
-                <div className="text-sm text-muted-foreground mt-0.5">EWT to Remit (this month)</div>
-                <div className="text-[11px] text-muted-foreground/70">From POs paid in {format(new Date(), 'MMMM')}</div>
-              </div>
-              <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-sm shadow-purple-500/30">
-                <Landmark className="h-5 w-5 text-white" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="relative overflow-hidden border-none">
-            <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-transparent" />
-            <CardContent className="relative pt-5 pb-4 flex items-start justify-between gap-3">
-              <div>
-                <div className="text-2xl font-bold text-blue-600">{loading ? '—' : counts.open}</div>
-                <div className="text-sm text-muted-foreground mt-0.5">Pending Orders</div>
-              </div>
-              <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm shadow-blue-500/30">
-                <Clock3 className="h-5 w-5 text-white" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="relative overflow-hidden border-none">
-            <div className="absolute inset-0 bg-gradient-to-br from-amber-50 to-transparent" />
-            <CardContent className="relative pt-5 pb-4 flex items-start justify-between gap-3">
-              <div>
-                <div className="text-2xl font-bold text-yellow-600">{loading ? '—' : counts.partial}</div>
-                <div className="text-sm text-muted-foreground mt-0.5">Partial Delivery</div>
-              </div>
-              <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-amber-500 to-amber-600 flex items-center justify-center shadow-sm shadow-amber-500/30">
-                <AlertCircle className="h-5 w-5 text-white" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="relative overflow-hidden border-none">
-            <div className="absolute inset-0 bg-gradient-to-br from-green-50 to-transparent" />
-            <CardContent className="relative pt-5 pb-4 flex items-start justify-between gap-3">
-              <div>
-                <div className="text-2xl font-bold text-green-600">{loading ? '—' : counts.completed}</div>
-                <div className="text-sm text-muted-foreground mt-0.5">Completed</div>
-              </div>
-              <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center shadow-sm shadow-green-500/30">
-                <CheckCircle2 className="h-5 w-5 text-white" />
-              </div>
-            </CardContent>
-          </Card>
+          <KpiCard label="Total PO Value" value={loading ? '—' : fmt(counts.total)} icon={Wallet} tone="red"
+            onClick={() => setPoStatusFilter('all')} />
+          <KpiCard label="EWT to Remit (this month)" value={loading ? '—' : fmt(counts.ewtThisMonth)} sub={`From POs paid in ${format(new Date(), 'MMMM')}`} icon={Landmark} tone="violet" />
+          <KpiCard label="Pending Orders" value={loading ? '—' : counts.open} icon={Clock3} tone="blue"
+            active={poStatusFilter === 'open'} onClick={() => setPoStatusFilter(poStatusFilter === 'open' ? 'all' : 'open')} />
+          <KpiCard label="Partial Delivery" value={loading ? '—' : counts.partial} icon={AlertCircle} tone="amber"
+            active={poStatusFilter === 'partially_delivered'} onClick={() => setPoStatusFilter(poStatusFilter === 'partially_delivered' ? 'all' : 'partially_delivered')} />
+          <KpiCard label="Completed" value={loading ? '—' : counts.completed} icon={CheckCircle2} tone="green"
+            active={poStatusFilter === 'completed'} onClick={() => setPoStatusFilter(poStatusFilter === 'completed' ? 'all' : 'completed')} />
         </div>
       )}
 

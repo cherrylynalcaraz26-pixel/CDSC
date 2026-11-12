@@ -1,5 +1,9 @@
 'use client'
 
+import { useOpenOnNew } from '@/lib/use-open-on-new'
+
+import { useLetterhead, letterheadHtml, letterheadForPdf } from '@/lib/letterhead'
+
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -90,6 +94,7 @@ export default function QuotationPage() {
   const [quotations, setQuotations] = useState<Quotation[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [items, setItems] = useState<ItemOption[]>([])
+  const letterhead = useLetterhead()
   const [companyInfo, setCompanyInfo] = useState<SystemSettings | null>(null)
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
@@ -228,6 +233,7 @@ export default function QuotationPage() {
 
   useEffect(() => { load() }, [])
 
+  useOpenOnNew(() => { resetForm(); setOpen(true) })
   function resetForm() {
     setQuoteNumber(''); setQuoteDate(today()); setValidUntil(''); setClientId('')
     setSubject(''); setLines([emptyLine()]); setNotes(''); setVatType('exclusive'); setEwtType('none')
@@ -529,20 +535,11 @@ export default function QuotationPage() {
           }).join('')}
         </tbody>
       </table>` : ''
-    const logoUrl = companyInfo?.logo_url || (typeof window !== 'undefined' ? `${window.location.origin}/cdsc-logo.jpg` : '/cdsc-logo.jpg')
     return `<!DOCTYPE html><html><head><title>Quotation</title>
       <style>body{font-family:Arial,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:0;padding:24px 24px 64px 24px;font-size:11px;}@media print{body{margin:0;}}</style>
     </head><body>
       <div>
-        <div style="display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1px solid #e5e7eb;padding-bottom:12px;margin-bottom:12px;">
-          <div>
-            <img src="${logoUrl}" alt="CDSC" style="width:48px;height:48px;border-radius:4px;object-fit:cover;flex-shrink:0;" />
-          </div>
-          <div style="text-align:right;">
-            <div style="font-size:13px;font-weight:700;color:#b91c1c;line-height:1.25;margin-bottom:2px;">${companyInfo?.company_name ?? 'CDSC Industrial Supply'}</div>
-            <div style="font-size:9px;color:#6b7280;">${companyInfo?.address ?? ''}${companyInfo?.phone ? '<br/>' + companyInfo.phone : ''}${companyInfo?.email ? '<br/>' + companyInfo.email : ''}${companyInfo?.tin ? '<br/>TIN: ' + companyInfo.tin : ''}</div>
-          </div>
-        </div>
+        ${letterheadHtml(letterhead, companyInfo)}
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;border-bottom:1px solid #e5e7eb;padding-bottom:12px;margin-bottom:12px;">
           <div>
             <div style="font-size:9px;font-weight:600;text-transform:uppercase;color:#9ca3af;">Quote To</div>

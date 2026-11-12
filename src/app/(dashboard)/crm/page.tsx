@@ -1,5 +1,9 @@
 'use client'
 
+import { FilterBar, Segmented, FILTER_TRIGGER } from '@/components/ui/filter-bar'
+
+import { useOpenOnNew } from '@/lib/use-open-on-new'
+
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { KpiCard } from '@/components/ui/kpi-card'
@@ -120,6 +124,7 @@ export default function CRMPage() {
 
   const [contactName, setContactName] = useState<PersonName>(emptyName())
   function openNew() { setEditingLead(null); setForm(emptyForm); setContactName(emptyName()); setDialogOpen(true) }
+  useOpenOnNew(openNew)
 
   function openEdit(lead: CRMLead) {
     setEditingLead(lead)
@@ -212,7 +217,8 @@ export default function CRMPage() {
       l.company_name.toLowerCase().includes(q) ||
       (l.contact_person ?? '').toLowerCase().includes(q) ||
       (l.product_interest ?? '').toLowerCase().includes(q)
-    const matchStage = stageFilter === 'all' || l.stage === stageFilter
+    // 'active' = still in the pipeline (the Pipeline Value KPI card).
+    const matchStage = stageFilter === 'all' || l.stage === stageFilter || (stageFilter === 'active' && !['won', 'lost'].includes(l.stage))
     const matchPriority = priorityFilter === 'all' || l.priority === priorityFilter
     return matchSearch && matchStage && matchPriority
   })
@@ -246,10 +252,15 @@ export default function CRMPage() {
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <KpiCard label="Total Leads" value={leads.length} sub={`${stageCounts.new_lead} new`} icon={Users} tone="red" />
-        <KpiCard label="Pipeline Value" value={fmt(pipelineValue)} sub={`${leads.filter(l => !['won', 'lost'].includes(l.stage)).length} active leads`} icon={TrendingUp} tone="blue" />
-        <KpiCard label="Won" value={stageCounts.won} sub={`${fmt(totalValue)} closed`} icon={Trophy} tone="green" />
-        <KpiCard label="In Negotiation" value={stageCounts.negotiation} sub={`${stageCounts.proposal_sent} proposals out`} icon={Target} tone="violet" />
+        {/* Click a card to filter the list; click again to clear. */}
+        <KpiCard label="Total Leads" value={leads.length} sub={`${stageCounts.new_lead} new`} icon={Users} tone="red"
+          onClick={() => setStageFilter('all')} />
+        <KpiCard label="Pipeline Value" value={fmt(pipelineValue)} sub={`${leads.filter(l => !['won', 'lost'].includes(l.stage)).length} active leads`} icon={TrendingUp} tone="blue"
+          active={stageFilter === 'active'} onClick={() => setStageFilter(stageFilter === 'active' ? 'all' : 'active')} />
+        <KpiCard label="Won" value={stageCounts.won} sub={`${fmt(totalValue)} closed`} icon={Trophy} tone="green"
+          active={stageFilter === 'won'} onClick={() => setStageFilter(stageFilter === 'won' ? 'all' : 'won')} />
+        <KpiCard label="In Negotiation" value={stageCounts.negotiation} sub={`${stageCounts.proposal_sent} proposals out`} icon={Target} tone="violet"
+          active={stageFilter === 'negotiation'} onClick={() => setStageFilter(stageFilter === 'negotiation' ? 'all' : 'negotiation')} />
       </div>
 
       {/* Pipeline stage progress */}
@@ -277,44 +288,42 @@ export default function CRMPage() {
         </div>
       </div>
 
-      {/* Filters + view toggle */}
-      <div className="flex flex-wrap gap-2 items-end">
-        <div className="flex items-center gap-2">
-          <Label className="text-xs text-muted-foreground whitespace-nowrap">Priority</Label>
-          <Select value={priorityFilter} onValueChange={v => setPriorityFilter(v ?? 'all')}>
-            <SelectTrigger className="w-[140px] h-8 text-sm">
-              {priorityFilter === 'all'
-                ? <span className="text-muted-foreground">All Priorities</span>
-                : <span>{PRIORITY_META[priorityFilter as Priority]?.label}</span>}
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Priorities</SelectItem>
-              {(['low','medium','high','urgent'] as Priority[]).map(p => (
-                <SelectItem key={p} value={p}>{PRIORITY_META[p].label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="ml-auto flex items-center gap-2">
-          <Button onClick={openNew} className="bg-red-600 hover:bg-red-700 text-white gap-1.5">
-            <Plus className="w-4 h-4" /> New Lead
-          </Button>
-          <div className="flex items-center border rounded-lg overflow-hidden">
-            <button
-              onClick={() => setView('table')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors ${view === 'table' ? 'bg-red-600 text-white' : 'text-muted-foreground hover:bg-muted'}`}
-            >
-              <List className="w-3.5 h-3.5" /> List
-            </button>
-            <button
-              onClick={() => setView('kanban')}
-              className={`flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium border-l transition-colors ${view === 'kanban' ? 'bg-red-600 text-white' : 'text-muted-foreground hover:bg-muted'}`}
-            >
-              <LayoutGrid className="w-3.5 h-3.5" /> Board
-            </button>
-          </div>
-        </div>
-      </div>
+      {/* Filters + view toggle — shared layout (components/ui/filter-bar.tsx) */}
+      <FilterBar actions={
+        <Button onClick={openNew} className="h-9 bg-red-600 hover:bg-red-700 text-white gap-1.5">
+          <Plus className="w-4 h-4" /> New Lead
+        </Button>
+      }>
+        <Select value={stageFilter} onValueChange={v => setStageFilter(v ?? 'all')}>
+          <SelectTrigger className={`${FILTER_TRIGGER} w-44`}>
+            <span className={stageFilter === 'all' ? 'text-muted-foreground' : ''}>
+              {stageFilter === 'all' ? 'All Stages' : stageFilter === 'active' ? 'Active pipeline' : STAGE_META[stageFilter as keyof typeof STAGE_META]?.label ?? stageFilter}
+            </span>
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Stages</SelectItem>
+            <SelectItem value="active">Active pipeline</SelectItem>
+            {PIPELINE_STAGES.map(st => <SelectItem key={st} value={st}>{STAGE_META[st].label}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Select value={priorityFilter} onValueChange={v => setPriorityFilter(v ?? 'all')}>
+          <SelectTrigger className={`${FILTER_TRIGGER} w-40`}>
+            {priorityFilter === 'all'
+              ? <span className="text-muted-foreground">All Priorities</span>
+              : <span>{PRIORITY_META[priorityFilter as Priority]?.label}</span>}
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Priorities</SelectItem>
+            {(['low','medium','high','urgent'] as Priority[]).map(p => (
+              <SelectItem key={p} value={p}>{PRIORITY_META[p].label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Segmented value={view} onChange={setView} options={[
+          { value: 'kanban', label: 'Board', icon: LayoutGrid },
+          { value: 'table', label: 'List', icon: List },
+        ]} />
+      </FilterBar>
 
       {loading ? (
         <div className="flex justify-center py-16">

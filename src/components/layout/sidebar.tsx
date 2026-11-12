@@ -9,10 +9,10 @@ import {
   LayoutDashboard, Users, Package, ShoppingCart, FileText,
   Truck, Warehouse, RotateCcw, UserCheck, Calculator,
   FileBarChart, Settings, ChevronDown, ChevronRight, Building2,
-  ArrowRightLeft, LogOut, X, Wrench,
-  Receipt, PanelLeftClose, PanelLeftOpen, ClipboardList, BoxesIcon,
+  LogOut, X,
+  Receipt, ClipboardList, BoxesIcon,
   TrendingUp, Globe, UserCog, PackageOpen, BookText, Landmark, FileCheck2, Wallet,
-  BookOpen, Banknote, BarChart3, Scale, FileSpreadsheet,
+  BookOpen, Banknote, BarChart3, Scale, FileSpreadsheet, FolderOpen, ShieldCheck,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useCompany } from '@/context/company-context'
@@ -47,11 +47,13 @@ const navigation: NavItem[] = [
   },
   // Accounting grouped the same way as the CHEM app: what you enter daily,
   // what you review and file, and the financial statements.
+  // Sales Journal (CSI billed → Dr A/R) and Collections (OR received → Cr A/R)
+  // are two different books of the same receivable cycle, so both stay.
   {
     label: 'Accounting · Daily Entry', icon: Calculator,
     children: [
+      { label: 'Sales Journal (CSI)', href: '/accounting?tab=bookkeeping&sub=crj', icon: BookOpen },
       { label: 'Collections (OR)', href: '/accounting?tab=collections', icon: Receipt },
-      { label: 'Sales Journal', href: '/accounting?tab=bookkeeping&sub=crj', icon: BookOpen },
       { label: 'Cash Disbursements', href: '/accounting?tab=bookkeeping&sub=cdj', icon: Banknote },
       { label: 'General Journal', href: '/accounting?tab=bookkeeping&sub=gj', icon: BookText },
     ],
@@ -59,7 +61,7 @@ const navigation: NavItem[] = [
   {
     label: 'Accounting · Reports', icon: FileBarChart,
     children: [
-      { label: 'Overview', href: '/accounting?tab=overview', icon: Calculator },
+      { label: 'Balance Check', href: '/accounting?tab=bookkeeping&sub=check', icon: ShieldCheck },
       { label: 'General Ledger', href: '/accounting?tab=bookkeeping&sub=gl', icon: BarChart3 },
       { label: 'Trial Balance', href: '/accounting?tab=bookkeeping&sub=tb', icon: Scale },
       { label: 'BIR Compliance', href: '/accounting?tab=bir', icon: Landmark },
@@ -74,14 +76,14 @@ const navigation: NavItem[] = [
       { label: 'Cash Flow Statement', href: '/accounting?tab=bookkeeping&sub=cf', icon: Wallet },
     ],
   },
+  // 201 File — the master records of the people CDSC deals with.
   {
-    label: 'Records', icon: Wrench,
+    label: '201 File', icon: FolderOpen,
     children: [
       { label: 'Clients', href: '/clients', icon: Users },
-      { label: 'Reports', href: '/reports', icon: FileBarChart },
     ],
   },
-  // Settings now also holds Master Data (the old Setup / Configuration page).
+  // Settings also holds Master Data and the Reports Center.
   { label: 'Settings', href: '/settings', icon: Settings },
 ]
 
@@ -101,6 +103,11 @@ function checkActive(pathname: string, href: string, search: URLSearchParams) {
     if (current !== value) return false
   }
   return true
+}
+
+/** Sidebar group that holds the current page (for the header breadcrumb). */
+export function getNavGroupLabel(pathname: string, search: URLSearchParams): string | null {
+  return navigation.find(n => n.children && hasActiveChild(pathname, search, n.children))?.label ?? null
 }
 
 function itemMatches(pathname: string, search: URLSearchParams, item: NavItem): boolean {
@@ -132,18 +139,20 @@ function BadgePill({ count, inverted = false }: { count: number; inverted?: bool
 }
 
 function NavLink({
-  item, collapsed, onNavigate, badges,
+  item, collapsed, onNavigate, badges, open = false, onToggle,
 }: {
   item: NavItem
   collapsed: boolean
   onNavigate?: () => void
   badges: Record<string, number>
+  // Accordion: the sidebar keeps one group open at a time.
+  open?: boolean
+  onToggle?: () => void
 }) {
   const pathname = usePathname()
   const searchParams = useSearchParams()
   const active = item.href ? checkActive(pathname, item.href, searchParams) : false
   const childActive = item.children ? hasActiveChild(pathname, searchParams, item.children) : false
-  const [open, setOpen] = useState(() => childActive)
   const badge = sumBadge(item, badges)
 
   if (item.children) {
@@ -215,7 +224,8 @@ function NavLink({
     return (
       <div>
         <button
-          onClick={() => setOpen(o => !o)}
+          onClick={onToggle}
+          aria-expanded={open}
           className={cn(
             'w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] font-medium transition-colors',
             childActive ? 'text-white bg-white/5' : 'text-white/50 hover:text-white/80 hover:bg-white/10',
@@ -284,10 +294,20 @@ function SidebarContent({
   onNavigate?: () => void
 }) {
   const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
   const { company } = useCompany()
   const logoSrc = company.logo_url || '/cdsc-logo.jpg'
   const displayName = company.company_name || 'CDSC Industrial Supply'
   const [badges, setBadges] = useState<Record<string, number>>({})
+
+  // Accordion: only one group is open. Selecting a page collapses every other
+  // group and opens the one that holds the page (none, for a top-level page).
+  const activeGroup = navigation.find(n => n.children && hasActiveChild(pathname, searchParams, n.children))?.label ?? null
+  const [openGroup, setOpenGroup] = useState<string | null>(activeGroup)
+  const routeKey = `${pathname}?${searchParams.toString()}`
+  const [lastRoute, setLastRoute] = useState(routeKey)
+  if (lastRoute !== routeKey) { setLastRoute(routeKey); setOpenGroup(activeGroup) }
 
   useEffect(() => {
     const supabase = createClient()
@@ -353,7 +373,11 @@ function SidebarContent({
 
       <nav className={cn('flex-1 overflow-y-auto pb-2 space-y-0.5 scrollbar-thin', collapsed ? 'px-1.5' : 'px-2')}>
         {navigation.map(item => (
-          <NavLink key={item.label} item={item} collapsed={collapsed} onNavigate={onNavigate} badges={badges} />
+          <NavLink
+            key={item.label} item={item} collapsed={collapsed} onNavigate={onNavigate} badges={badges}
+            open={openGroup === item.label}
+            onToggle={() => setOpenGroup(g => (g === item.label ? null : item.label))}
+          />
         ))}
       </nav>
 

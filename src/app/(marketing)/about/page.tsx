@@ -4,9 +4,8 @@ import type { Metadata } from 'next'
 import {
   Target, Eye, ShieldCheck, MessageCircle, Scale, Wrench, Handshake, BadgeCheck, ArrowRight, Building2, FileText,
 } from 'lucide-react'
-import {
-  company, companyOverview, mission, vision, coreValues, credentials, registration, heroStats, profileHero,
-} from '@/lib/site-content'
+import { credentials, registration, companyWithContact } from '@/lib/site-content'
+import { getSiteContent } from '@/lib/site-content-server'
 import { Reveal, CountUp } from '@/components/marketing/profile-motion'
 
 export const metadata: Metadata = {
@@ -22,7 +21,13 @@ function Badge({ children }: { children: React.ReactNode }) {
   return <span className="inline-flex rounded-full bg-cdsc-tint px-3.5 py-1.5 text-[0.7rem] font-bold uppercase tracking-wider text-cdsc-accent">{children}</span>
 }
 
-export default function AboutPage() {
+// Content is editable in Settings → Website; refreshed at most every minute.
+export const revalidate = 60
+
+export default async function AboutPage() {
+  const content = await getSiteContent()
+  const { companyOverview, mission, vision, coreValues, heroStats, profileHero } = content
+  const company = companyWithContact(content.contact)
   return (
     <>
       {/* Hero */}

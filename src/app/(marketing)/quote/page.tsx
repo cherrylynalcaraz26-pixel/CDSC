@@ -2,14 +2,18 @@ import type { Metadata } from 'next'
 import Image from 'next/image'
 import { QuoteRequestForm } from '@/components/marketing/quote-request-form'
 import { CompanyContactCards } from '@/components/marketing/company-contact'
-import { procurementProcess } from '@/lib/site-content'
+import { getSiteContent } from '@/lib/site-content-server'
 
 export const metadata: Metadata = {
   title: 'Request a Quotation',
   description: 'Send CDSC Industrial Supply your product requirement, quantity, specifications, and target delivery date for a quotation.',
 }
 
-export default function QuotePage() {
+// Content is editable in Settings → Website; refreshed at most every minute.
+export const revalidate = 60
+
+export default async function QuotePage() {
+  const { procurementProcess } = await getSiteContent()
   return (
     <>
       <section className="relative overflow-hidden">
