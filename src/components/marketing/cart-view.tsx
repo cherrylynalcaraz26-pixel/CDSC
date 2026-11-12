@@ -5,7 +5,21 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { useCart, cartCount, useCartHydrated } from '@/lib/cart-store'
 import { getErrorMessage } from '@/lib/error-message'
-import { Minus, Plus, Trash2, Package, ShoppingCart, CheckCircle2, Loader2, ArrowLeft, Send } from 'lucide-react'
+import {
+  Minus, Plus, Trash2, Package, ShoppingCart, CheckCircle2, Loader2, ArrowLeft, Send,
+  Banknote, Landmark, Smartphone, FileCheck2, CalendarClock, type LucideIcon,
+} from 'lucide-react'
+
+// Mode of payment chosen at checkout. No payment is taken online — the choice is
+// saved on the draft Sales Order (in its remarks) so staff can send the matching
+// payment instructions with the order confirmation.
+const PAYMENT_MODES: { value: string; label: string; hint: string; Icon: LucideIcon }[] = [
+  { value: 'Cash on Delivery', label: 'Cash on Delivery', hint: 'Pay in cash when the items arrive', Icon: Banknote },
+  { value: 'Bank Transfer / Deposit', label: 'Bank Transfer', hint: 'Bank details sent with your confirmation', Icon: Landmark },
+  { value: 'GCash / Maya', label: 'GCash / Maya', hint: 'E-wallet details sent with your confirmation', Icon: Smartphone },
+  { value: 'Check', label: 'Check', hint: 'Dated or post-dated check upon delivery', Icon: FileCheck2 },
+  { value: 'Credit Terms (approved accounts)', label: 'Credit Terms', hint: 'For accounts with approved terms (e.g. 30 days)', Icon: CalendarClock },
+]
 
 const inputClass =
   'w-full rounded-md border border-cdsc-line bg-white px-3 py-2.5 text-sm text-cdsc-ink outline-none transition focus:border-cdsc-accent focus:ring-2 focus:ring-cdsc-accent/20'
@@ -34,9 +48,11 @@ export function CartView() {
   const remove = useCart(s => s.remove)
   const clear = useCart(s => s.clear)
   const [form, setForm] = useState(EMPTY)
+  const [payment, setPayment] = useState('')
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [done, setDone] = useState<string | null>(null)
+  const [paid, setPaid] = useState('')
   // The cart lives in localStorage — wait for it before rendering to avoid a flash of "empty".
   const hydrated = useCartHydrated()
 
@@ -46,14 +62,22 @@ export function CartView() {
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
+    if (!payment) { setError('Please choose a mode of payment.'); return }
     setSending(true)
     const { data, error } = await createClient().rpc('submit_web_order', {
-      p_customer: form,
+      // payment_method is also sent on its own so a future version of
+      // submit_web_order can store it in a dedicated column.
+      p_customer: {
+        ...form,
+        payment_method: payment,
+        notes: [`Mode of payment: ${payment}`, form.notes.trim()].filter(Boolean).join('\n'),
+      },
       p_items: items.map(i => ({ item_id: i.item_id, quantity: i.quantity })),
     })
     setSending(false)
     if (error) { setError(getErrorMessage(error, 'Could not send your order. Please try again.')); return }
     clear()
+    setPaid(payment)
     setDone((data as { so_number?: string } | null)?.so_number ?? 'received')
   }
 
@@ -66,6 +90,11 @@ export function CartView() {
           {done !== 'received' && <>Your reference number is <strong className="text-cdsc-ink">{done}</strong>. </>}
           Our team will review your order and contact you to confirm pricing, availability and delivery.
         </p>
+        {paid && (
+          <p className="mx-auto mt-4 inline-flex items-center gap-2 rounded-full bg-cdsc-tint px-4 py-1.5 text-xs font-semibold text-cdsc-accent">
+            Mode of payment: {paid}
+          </p>
+        )}
         <Link href="/products" className="mt-8 inline-flex items-center gap-2 rounded-md bg-cdsc-accent px-6 py-3 text-sm font-semibold text-white hover:bg-cdsc-accent-dark">
           Continue Shopping
         </Link>
@@ -91,20 +120,20 @@ export function CartView() {
   }
 
   return (
-    <section className="mx-auto max-w-7xl px-6 py-14">
+    <section className="mx-auto w-full max-w-screen-2xl px-6 py-14 lg:px-10">
       <Link href="/products#shop" className="inline-flex items-center gap-1.5 text-sm text-cdsc-ink/60 hover:text-cdsc-accent">
         <ArrowLeft className="h-4 w-4" /> Continue shopping
       </Link>
-      <h1 className="mt-3 text-3xl font-semibold text-cdsc-ink">Your Cart</h1>
+      <h1 className="mt-3 text-4xl font-black text-cdsc-ink">Your <span className="text-cdsc-accent">Cart</span></h1>
       <p className="mt-1 text-sm text-cdsc-ink/60">
         {cartCount(items)} item{cartCount(items) === 1 ? '' : 's'} · Prices and availability are confirmed by our team after you send your order.
       </p>
 
-      <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_420px]">
+      <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_480px]">
         {/* Items */}
         <ul className="space-y-3">
           {items.map(i => (
-            <li key={i.item_id} className="flex items-center gap-4 rounded-xl bg-white p-3 shadow-sm shadow-black/5">
+            <li key={i.item_id} className="flex items-center gap-4 rounded-2xl bg-white p-3 shadow-sm shadow-black/5 transition hover:shadow-md motion-safe:animate-rise">
               <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-cdsc-paper">
                 {i.image_url
                   // eslint-disable-next-line @next/next/no-img-element
@@ -132,7 +161,7 @@ export function CartView() {
         </ul>
 
         {/* Checkout */}
-        <form onSubmit={submit} className="h-fit space-y-4 rounded-2xl bg-cdsc-paper p-6 lg:sticky lg:top-28">
+        <form onSubmit={submit} className="h-fit space-y-4 rounded-3xl bg-cdsc-paper p-6 lg:sticky lg:top-28">
           <h2 className="text-lg font-semibold text-cdsc-ink">Your Details</h2>
           <Field label="Company / Business Name" required>
             <input required value={form.company_name} onChange={set('company_name')} className={inputClass} autoComplete="organization" />
@@ -156,6 +185,31 @@ export function CartView() {
             <Field label="Municipality"><input value={form.municipality} onChange={set('municipality')} className={inputClass} /></Field>
             <Field label="City / Province"><input value={form.city} onChange={set('city')} className={inputClass} /></Field>
           </div>
+          <fieldset>
+            <legend className="mb-2 pt-1 text-xs font-semibold uppercase tracking-wider text-cdsc-ink/50">
+              Mode of Payment <span className="text-cdsc-accent">*</span>
+            </legend>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {PAYMENT_MODES.map(({ value, label, hint, Icon }) => {
+                const on = payment === value
+                return (
+                  <label
+                    key={value}
+                    className={`flex cursor-pointer items-start gap-3 rounded-xl bg-white p-3 transition ${on ? 'shadow-md ring-2 ring-cdsc-accent' : 'shadow-sm hover:shadow-md'}`}
+                  >
+                    <input type="radio" name="payment" value={value} checked={on} onChange={() => setPayment(value)} className="sr-only" />
+                    <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition ${on ? 'bg-linear-to-br from-cdsc-accent to-orange-500 text-white' : 'bg-cdsc-tint text-cdsc-accent'}`}>
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold text-cdsc-ink">{label}</span>
+                      <span className="block text-[11px] leading-snug text-cdsc-ink/55">{hint}</span>
+                    </span>
+                  </label>
+                )
+              })}
+            </div>
+          </fieldset>
           <Field label="Notes (delivery date, specs, brand preference…)">
             <textarea rows={3} value={form.notes} onChange={set('notes')} className={inputClass} />
           </Field>
@@ -163,11 +217,11 @@ export function CartView() {
           <button
             type="submit"
             disabled={sending}
-            className="flex w-full items-center justify-center gap-2 rounded-md bg-cdsc-accent px-5 py-3 text-sm font-semibold text-white transition-colors hover:bg-cdsc-accent-dark disabled:opacity-60"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-linear-to-r from-cdsc-accent to-orange-500 px-5 py-3.5 text-sm font-bold text-white shadow-lg shadow-cdsc-accent/25 transition hover:-translate-y-0.5 hover:shadow-xl disabled:translate-y-0 disabled:opacity-60"
           >
             {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Send Order
           </button>
-          <p className="text-center text-[11px] text-cdsc-ink/50">No payment is taken online. We&apos;ll send you a confirmation and quotation.</p>
+          <p className="text-center text-[11px] text-cdsc-ink/50">No payment is taken online. We&apos;ll send a confirmation and quotation with the payment details for your chosen mode.</p>
         </form>
       </div>
     </section>

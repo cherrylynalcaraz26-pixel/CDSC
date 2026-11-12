@@ -7,13 +7,13 @@ import { cn } from '@/lib/utils'
 
 // Default demo walkthrough. Can be overridden with the "Demo Video URL"
 // field in Company Profile settings (system_settings.live_video_url).
-const DEMO_VIDEO_URL = 'https://drive.google.com/file/d/1aGKS4Wk70ExguzxeB5HpL9OgPZdUpl4h/view?usp=sharing'
-const DEMO_VIDEO_TITLE = 'CDSC Client Portal demo v3'
+export const DEMO_VIDEO_URL = 'https://drive.google.com/file/d/1aGKS4Wk70ExguzxeB5HpL9OgPZdUpl4h/view?usp=sharing'
+export const DEMO_VIDEO_TITLE = 'CDSC Client Portal demo v3'
 
 // Turns a pasted video link into something embeddable. Supports YouTube
 // (watch/live/shorts/youtu.be), Vimeo, Facebook, Google Drive, direct video
 // files, and falls back to embedding the URL as-is in an iframe.
-function toEmbed(url: string): { kind: 'iframe' | 'video'; src: string } {
+export function toEmbed(url: string): { kind: 'iframe' | 'video'; src: string } {
   const u = url.trim()
   const yt = u.match(/(?:youtube\.com\/(?:watch\?.*v=|live\/|shorts\/|embed\/)|youtu\.be\/)([\w-]{6,})/)
   if (yt) return { kind: 'iframe', src: `https://www.youtube.com/embed/${yt[1]}?autoplay=1` }

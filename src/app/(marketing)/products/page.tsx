@@ -26,7 +26,7 @@ export default function ProductsPage() {
 
       <ProductCatalog />
 
-      <section className="mx-auto max-w-7xl px-6 py-20">
+      <section className="mx-auto max-w-screen-2xl px-6 lg:px-10 py-20">
         <h2 className="mb-6 text-2xl font-semibold text-cdsc-ink sm:text-3xl">What We Supply</h2>
         <div className="grid gap-6 sm:grid-cols-2">
           {productCategories.map((cat, i) => {

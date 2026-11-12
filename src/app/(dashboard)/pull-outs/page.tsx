@@ -21,7 +21,9 @@ import { toast } from 'sonner'
 import { format } from 'date-fns'
 import {
   Plus, Trash2, Loader2, PackageOpen, CalendarClock, Truck, PackageCheck, MapPin, Phone, Pencil, Printer,
+  FileSignature, List, Boxes,
 } from 'lucide-react'
+import { PullOutLetterDialog } from '@/components/pull-outs/pull-out-letter'
 
 type Status = 'pending' | 'scheduled' | 'picked_up' | 'received' | 'cancelled'
 type SourceType = 'client' | 'supplier' | 'other'
@@ -64,7 +66,7 @@ interface PullOut {
   status: Status
   remarks: string | null
   created_at: string
-  items?: { id: string; item_name: string; quantity: number; unit: string | null; condition: string | null }[]
+  items?: { id: string; item_name: string; quantity: number; unit: string | null; condition: string | null; quantity_received: number | null; remarks: string | null }[]
   [k: string]: unknown
 }
 
@@ -99,18 +101,23 @@ export default function PullOutsPage() {
   const [contact, setContact] = useState<PersonName>(emptyName())
   const [addr, setAddr] = useState<Address>(emptyAddress())
   const [lines, setLines] = useState<Line[]>([emptyLine()])
+  const [letterFor, setLetterFor] = useState<PullOut | null>(null)
+  const [view, setView] = useState<'pullouts' | 'items'>('pullouts')
+  const [catalog, setCatalog] = useState<{ item_name: string; unit_of_measure: string | null }[]>([])
 
   // `loading` starts true; later reloads (after save/status change) refresh in place.
   function fetchAll() {
     return Promise.all([
-      supabase.from('pull_outs').select('*, items:pull_out_items(id, item_name, quantity, unit, condition)').order('created_at', { ascending: false }),
+      supabase.from('pull_outs').select('*, items:pull_out_items(id, item_name, quantity, unit, condition, quantity_received, remarks)').order('created_at', { ascending: false }),
       supabase.from('clients').select('*').eq('status', 'active').order('company_name'),
       supabase.from('suppliers').select('*').eq('is_active', true).order('company_name'),
-    ]).then(([po, cl, su]) => {
+      supabase.from('items').select('item_name, unit_of_measure').order('item_name').limit(1000),
+    ]).then(([po, cl, su, it]) => {
       if (po.error) toast.error(getErrorMessage(po.error, 'Could not load pull outs — has migration 037 been applied?'))
       setRows((po.data ?? []) as PullOut[])
       setClients(cl.data ?? [])
       setSuppliers(su.data ?? [])
+      setCatalog((it.data ?? []) as typeof catalog)
       setLoading(false)
     })
   }
@@ -275,6 +282,9 @@ export default function PullOutsPage() {
     setTimeout(() => { win.focus(); win.print() }, 400)
   }
 
+  // "Items" view: every item across the pull outs matching the status filter / search.
+  const itemRows = shown.flatMap(r => (r.items ?? []).map(i => ({ ...i, po: r })))
+
   const partyList = form.source_type === 'client' ? clients : form.source_type === 'supplier' ? suppliers : []
 
   return (
@@ -303,7 +313,17 @@ export default function PullOutsPage() {
 
       <Card className="overflow-visible">
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 pb-3">
-          <CardTitle className="text-base">Pull Out List</CardTitle>
+          <div className="flex items-center gap-3">
+            <CardTitle className="text-base">{view === 'pullouts' ? 'Pull Out List' : 'List of Items'}</CardTitle>
+            <div className="flex rounded-lg bg-muted p-0.5">
+              {([['pullouts', 'Pull Outs', List], ['items', 'Items', Boxes]] as const).map(([v, label, Icon]) => (
+                <button key={v} type="button" onClick={() => setView(v)}
+                  className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition ${view === v ? 'bg-white text-[#F84400] shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+                  <Icon className="h-3.5 w-3.5" />{label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="flex flex-wrap items-center gap-2">
             <Select value={statusFilter} onValueChange={v => setStatusFilter((v ?? 'open') as typeof statusFilter)}>
               <SelectTrigger className="h-9 w-[170px]">
@@ -323,6 +343,44 @@ export default function PullOutsPage() {
           </div>
         </CardHeader>
         <CardContent className="overflow-x-auto p-0">
+          {view === 'items' ? (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-10">#</TableHead>
+                <TableHead>Item</TableHead>
+                <TableHead className="text-right">Qty</TableHead>
+                <TableHead>Unit</TableHead>
+                <TableHead>Condition</TableHead>
+                <TableHead className="text-right">Received</TableHead>
+                <TableHead>Pull Out No.</TableHead>
+                <TableHead>Pick Up From</TableHead>
+                <TableHead>Schedule</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow><TableCell colSpan={10} className="py-10 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" /></TableCell></TableRow>
+              ) : itemRows.length === 0 ? (
+                <TableRow><TableCell colSpan={10} className="py-12 text-center text-muted-foreground">No items to pick up here.</TableCell></TableRow>
+              ) : itemRows.map((x, n) => (
+                <TableRow key={x.id}>
+                  <TableCell className="text-xs text-muted-foreground">{n + 1}</TableCell>
+                  <TableCell className="text-sm font-medium">{x.item_name}{x.remarks && <div className="text-xs font-normal text-muted-foreground">{x.remarks}</div>}</TableCell>
+                  <TableCell className="text-right tabular-nums">{Number(x.quantity).toLocaleString('en-PH')}</TableCell>
+                  <TableCell className="text-xs">{x.unit ?? '—'}</TableCell>
+                  <TableCell className="text-xs">{x.condition || '—'}</TableCell>
+                  <TableCell className="text-right text-xs tabular-nums">{Number(x.quantity_received ?? 0) > 0 ? Number(x.quantity_received).toLocaleString('en-PH') : '—'}</TableCell>
+                  <TableCell className="font-mono text-xs font-semibold text-[#F84400]">{x.po.pull_out_number ?? '—'}</TableCell>
+                  <TableCell className="text-xs">{x.po.location_name}</TableCell>
+                  <TableCell className="whitespace-nowrap text-xs">{x.po.scheduled_date ? format(new Date(x.po.scheduled_date + 'T00:00:00'), 'MMM d, yyyy') : '—'}</TableCell>
+                  <TableCell><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS[x.po.status].cls}`}>{STATUS[x.po.status].label}</span></TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          ) : (
           <Table>
             <TableHeader>
               <TableRow>
@@ -374,6 +432,7 @@ export default function PullOutsPage() {
                             Mark {STATUS[next].label}
                           </Button>
                         )}
+                        <Button size="icon" variant="ghost" className="h-8 w-8 text-[#F84400]" title="Authorization letter" onClick={() => setLetterFor(r)}><FileSignature className="h-4 w-4" /></Button>
                         <Button size="icon" variant="ghost" className="h-8 w-8" title="Print slip" onClick={() => printSlip(r)}><Printer className="h-4 w-4" /></Button>
                         <Button size="icon" variant="ghost" className="h-8 w-8" title="Edit" onClick={() => openEdit(r)}><Pencil className="h-4 w-4" /></Button>
                         {r.status !== 'cancelled' && r.status !== 'received' && (
@@ -387,8 +446,17 @@ export default function PullOutsPage() {
               })}
             </TableBody>
           </Table>
+          )}
         </CardContent>
       </Card>
+
+      {letterFor && (
+        <PullOutLetterDialog
+          key={letterFor.id}
+          pullOut={{ ...letterFor, reasonLabel: REASONS[letterFor.reason] ?? letterFor.reason }}
+          onClose={() => setLetterFor(null)}
+        />
+      )}
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent size="landscape">
@@ -472,8 +540,12 @@ export default function PullOutsPage() {
                 <div className="space-y-2 rounded-xl bg-muted/40 p-3">
                   {lines.map((l, i) => (
                     <div key={i} className="grid grid-cols-12 gap-2">
-                      <Input className="col-span-5" placeholder="Item name" value={l.item_name}
-                        onChange={e => setLines(p => p.map((x, j) => j === i ? { ...x, item_name: e.target.value } : x))} />
+                      <Input className="col-span-5" placeholder="Item name (type or pick from inventory)" value={l.item_name} list="pull-out-item-master"
+                        onChange={e => {
+                          const name = e.target.value
+                          const hit = catalog.find(c => c.item_name === name)
+                          setLines(p => p.map((x, j) => j === i ? { ...x, item_name: name, unit: hit?.unit_of_measure || x.unit } : x))
+                        }} />
                       <Input className="col-span-2" type="number" min={0} placeholder="Qty" value={l.quantity}
                         onChange={e => setLines(p => p.map((x, j) => j === i ? { ...x, quantity: e.target.value } : x))} />
                       <Input className="col-span-2" placeholder="Unit" value={l.unit}
@@ -486,6 +558,7 @@ export default function PullOutsPage() {
                       </Button>
                     </div>
                   ))}
+                  <datalist id="pull-out-item-master">{catalog.map((c, k) => <option key={k} value={c.item_name} />)}</datalist>
                   <Button type="button" variant="outline" size="sm" onClick={() => setLines(p => [...p, emptyLine()])}>
                     <Plus className="mr-1.5 h-3.5 w-3.5" />Add Item
                   </Button>

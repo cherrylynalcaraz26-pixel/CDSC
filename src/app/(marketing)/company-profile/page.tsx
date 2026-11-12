@@ -105,7 +105,7 @@ export default function CompanyProfilePage() {
         <div aria-hidden className="pointer-events-none absolute -right-24 -top-24 h-[500px] w-[500px] rounded-full bg-white/[.08] motion-safe:animate-float" />
         <div aria-hidden className="pointer-events-none absolute -left-20 bottom-20 h-72 w-72 rounded-full bg-white/[.06] motion-safe:animate-float-slow" />
 
-        <div className="relative z-10 mx-auto w-full max-w-7xl px-6 pb-28 pt-20">
+        <div className="relative z-10 mx-auto w-full max-w-screen-2xl px-6 lg:px-10 pb-28 pt-20">
           <div className="max-w-3xl">
             <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold text-white/90 backdrop-blur">
               <Check className="h-3.5 w-3.5 text-orange-200" /> {profileHero.badge}
@@ -167,7 +167,7 @@ export default function CompanyProfilePage() {
 
       {/* ═══════════ ABOUT / OVERVIEW ═══════════ */}
       <section className="bg-white py-24 print:break-after-page">
-        <Reveal className="mx-auto grid max-w-7xl items-center gap-16 px-6 lg:grid-cols-2">
+        <Reveal className="mx-auto grid max-w-screen-2xl items-center gap-16 px-6 lg:grid-cols-2">
           <div>
             <Badge><Star className="h-3 w-3 fill-current" /> About CDSC</Badge>
             <h2 className="mt-5 text-3xl font-black leading-tight text-cdsc-ink sm:text-5xl">
@@ -225,7 +225,7 @@ export default function CompanyProfilePage() {
 
       {/* ═══════════ MISSION / VISION / VALUES ═══════════ */}
       <section className="bg-black py-24 print:break-after-page">
-        <div className="mx-auto max-w-7xl px-6">
+        <div className="mx-auto max-w-screen-2xl px-6 lg:px-10">
           <Reveal>
             <SectionHeading dark badge="Why CDSC" title="Mission & Vision" />
           </Reveal>
@@ -270,7 +270,7 @@ export default function CompanyProfilePage() {
 
       {/* ═══════════ MARKETS / INDUSTRIES ═══════════ */}
       <section className="bg-white py-24 print:break-after-page">
-        <div className="mx-auto max-w-7xl px-6">
+        <div className="mx-auto max-w-screen-2xl px-6 lg:px-10">
           <Reveal>
             <SectionHeading
               badge="Who We Serve"
@@ -302,7 +302,7 @@ export default function CompanyProfilePage() {
 
       {/* ═══════════ PRODUCTS ═══════════ */}
       <section className="bg-cdsc-paper py-24 print:break-after-page">
-        <div className="mx-auto max-w-7xl px-6">
+        <div className="mx-auto max-w-screen-2xl px-6 lg:px-10">
           <Reveal>
             <SectionHeading
               badge="Product Catalog"
@@ -339,7 +339,7 @@ export default function CompanyProfilePage() {
 
       {/* ═══════════ FURNITURE ═══════════ */}
       <section className="bg-white py-24 print:break-after-page">
-        <Reveal className="mx-auto grid max-w-7xl items-center gap-14 px-6 lg:grid-cols-2">
+        <Reveal className="mx-auto grid max-w-screen-2xl items-center gap-14 px-6 lg:grid-cols-2">
           <div className="relative">
             <div aria-hidden className="absolute inset-0 -rotate-2 rounded-3xl bg-linear-to-br from-cdsc-tint to-red-100" />
             <div className="relative grid grid-cols-2 gap-4 p-6">
@@ -384,7 +384,7 @@ export default function CompanyProfilePage() {
 
       {/* ═══════════ SERVICES ═══════════ */}
       <section className="bg-cdsc-paper py-24 print:break-after-page">
-        <div className="mx-auto max-w-7xl px-6">
+        <div className="mx-auto max-w-screen-2xl px-6 lg:px-10">
           <Reveal>
             <SectionHeading badge="What We Do" title="Our Services" />
           </Reveal>
@@ -407,7 +407,7 @@ export default function CompanyProfilePage() {
 
       {/* ═══════════ PROCUREMENT PROCESS ═══════════ */}
       <section className="bg-white py-24 print:break-after-page">
-        <div className="mx-auto max-w-7xl px-6">
+        <div className="mx-auto max-w-screen-2xl px-6 lg:px-10">
           <Reveal>
             <SectionHeading badge="How It Works" title="Procurement Process" />
           </Reveal>
@@ -426,7 +426,7 @@ export default function CompanyProfilePage() {
 
       {/* ═══════════ INVENTORY SYSTEM ═══════════ */}
       <section className="bg-black py-24 print:break-after-page">
-        <div className="mx-auto max-w-7xl px-6">
+        <div className="mx-auto max-w-screen-2xl px-6 lg:px-10">
           <Reveal>
             <SectionHeading dark badge="Smart Operations" title="Built-In Inventory System" intro={inventorySystem.description} />
           </Reveal>
@@ -479,7 +479,7 @@ export default function CompanyProfilePage() {
 
       {/* ═══════════ WHY CDSC + CREDENTIALS ═══════════ */}
       <section className="bg-cdsc-paper py-24 print:break-after-page">
-        <div className="mx-auto max-w-7xl px-6">
+        <div className="mx-auto max-w-screen-2xl px-6 lg:px-10">
           <Reveal>
             <SectionHeading badge="Our Edge" title="Why Choose CDSC" />
           </Reveal>
@@ -512,7 +512,7 @@ export default function CompanyProfilePage() {
 
       {/* ═══════════ CONTACT ═══════════ */}
       <section className="bg-white py-24">
-        <Reveal className="mx-auto max-w-7xl px-6">
+        <Reveal className="mx-auto max-w-screen-2xl px-6 lg:px-10">
           <div className="relative mb-12 overflow-hidden rounded-[28px] bg-linear-to-br from-cdsc-accent via-red-500 to-orange-500 bg-[length:200%_200%] shadow-2xl motion-safe:animate-gradient-shift">
             <div className="relative bg-[linear-gradient(rgba(255,255,255,.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.05)_1px,transparent_1px)] bg-[size:40px_40px] px-6 py-10 sm:p-16">
               <div className="relative z-10 max-w-xl">

@@ -19,12 +19,13 @@ import {
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { UserPlus, MoreHorizontal, Search, Loader2, Users, KeyRound } from 'lucide-react'
+import { UserPlus, MoreHorizontal, Search, Loader2, Users, KeyRound, Download } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
 import { NameFields } from '@/components/forms/person-address-fields'
 import { emptyName, joinName, nameFromRow, nameColumns, type PersonName } from '@/lib/person-address'
+import { AuditLog } from '@/components/admin/audit-log'
 
 const ROLES = [
   { value: 'super_admin',         label: 'Super-Admin',         color: 'bg-red-100 text-red-800' },
@@ -70,6 +71,11 @@ export default function UsersPage() {
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
   const [filterRole, setFilterRole] = useState('')
+  // CHEM-style layout: Staff Users / Portal Accounts / Audit Logs, role cards as filters, sortable columns
+  const [view, setView] = useState<'staff' | 'portal' | 'audit'>('staff')
+  const [group, setGroup] = useState<'' | 'admins' | 'staff' | 'inactive' | 'client' | 'vendor'>('')
+  const [sortKey, setSortKey] = useState<'name' | 'role' | 'status' | 'joined'>('name')
+  const [sortAsc, setSortAsc] = useState(true)
   const [inviteOpen, setInviteOpen] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const [editing, setEditing] = useState<Profile | null>(null)
@@ -226,74 +232,116 @@ export default function UsersPage() {
   const vendors    = profiles.filter(p => p.role === 'vendor').length
   const staff      = profiles.filter(p => !['super_admin','admin','client','vendor'].includes(p.role)).length
 
+  const isPortal = (r: string) => r === 'client' || r === 'vendor'
+  const viewRows = filtered
+    .filter(p => (view === 'portal' ? isPortal(p.role) : !isPortal(p.role)))
+    .filter(p => {
+      if (group === 'admins') return p.role === 'super_admin' || p.role === 'admin'
+      if (group === 'staff') return !['super_admin', 'admin', 'client', 'vendor'].includes(p.role)
+      if (group === 'client' || group === 'vendor') return p.role === group
+      if (group === 'inactive') return (p.status ?? 'active') !== 'active'
+      return true
+    })
+    .sort((x, y) => {
+      const v = (p: Profile) => sortKey === 'name' ? (p.full_name ?? p.email ?? '').toLowerCase()
+        : sortKey === 'role' ? roleOf(p.role).label : sortKey === 'status' ? (p.status ?? 'active') : p.created_at
+      const c = v(x).localeCompare(v(y))
+      return sortAsc ? c : -c
+    })
+  function sortBy(k: typeof sortKey) { if (k === sortKey) setSortAsc(a => !a); else { setSortKey(k); setSortAsc(true) } }
+  const sortMark = (k: typeof sortKey) => (sortKey === k ? (sortAsc ? ' ▲' : ' ▼') : '')
+  function exportUsersCsv() {
+    const rows = [['Name', 'Email', 'Role', 'Company', 'Department', 'Employee ID', 'Status', 'Joined'],
+      ...viewRows.map(p => [p.full_name ?? '', p.email ?? '', roleOf(p.role).label, p.company ?? '', p.department ?? '', p.employee_id ?? '', p.status ?? 'active', p.created_at.slice(0, 10)])]
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }))
+    const a = document.createElement('a'); a.href = url; a.download = view === 'portal' ? 'Portal_Accounts.csv' : 'Users.csv'; a.click(); URL.revokeObjectURL(url)
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-lg bg-red-600/10 flex items-center justify-center">
-            <Users className="h-5 w-5 text-red-600" />
+          <div className="h-9 w-9 rounded-lg bg-[#F84400]/10 flex items-center justify-center">
+            <Users className="h-5 w-5 text-[#F84400]" />
           </div>
           <div>
-            <h1 className="text-2xl font-semibold leading-none">Users</h1>
-            <p className="text-muted-foreground text-sm mt-0.5">Manage system access and roles</p>
+            <h1 className="text-2xl font-semibold leading-none">User Management</h1>
+            <p className="text-muted-foreground text-sm mt-0.5">Staff logins, client &amp; vendor portal accounts, and the audit trail</p>
           </div>
         </div>
         <div className="flex gap-2">
-          <Button onClick={() => setPortalOpen(true)} variant="outline" className="border-blue-300 text-blue-700 hover:bg-blue-50">
+          <Button onClick={() => setPortalOpen(true)} variant="outline">
             <KeyRound className="h-4 w-4 mr-2" />Create Portal Account
           </Button>
-          <Button onClick={() => setInviteOpen(true)} className="bg-red-600 hover:bg-red-700">
+          <Button onClick={() => setInviteOpen(true)} className="bg-[#F84400] hover:bg-[#e03d00]">
             <UserPlus className="h-4 w-4 mr-2" />Invite User
           </Button>
         </div>
       </div>
 
-      {/* Stats */}
+      {/* Role cards — click to filter */}
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
-        {[
-          { label: 'Total Users', value: total,   color: '' },
-          { label: 'Active',      value: active,  color: 'text-green-600' },
-          { label: 'Admins',      value: admins,  color: 'text-red-600' },
-          { label: 'Staff',       value: staff,   color: 'text-amber-600' },
-          { label: 'Clients',     value: clients, color: 'text-blue-600' },
-          { label: 'Vendors',     value: vendors, color: 'text-emerald-600' },
-        ].map(s => (
-          <Card key={s.label}>
-            <CardContent className="pt-4 pb-3">
-              <div className={`text-2xl font-bold ${s.color}`}>{loading ? '—' : s.value}</div>
-              <div className="text-xs text-muted-foreground">{s.label}</div>
-            </CardContent>
-          </Card>
+        {([
+          { key: '',         label: 'Total Users', value: total,   color: '',                  view: null },
+          { key: 'admins',   label: 'Admins',      value: admins,  color: 'text-[#F84400]',    view: 'staff' },
+          { key: 'staff',    label: 'Staff',       value: staff,   color: 'text-amber-600',    view: 'staff' },
+          { key: 'client',   label: 'Clients',     value: clients, color: 'text-blue-600',     view: 'portal' },
+          { key: 'vendor',   label: 'Vendors',     value: vendors, color: 'text-emerald-600',  view: 'portal' },
+          { key: 'inactive', label: 'Inactive',    value: total - active, color: 'text-gray-500', view: null },
+        ] as const).map(c => (
+          <button key={c.label} type="button" title={c.key ? `Show ${c.label.toLowerCase()} only` : 'Show everyone'}
+            onClick={() => { setGroup(group === c.key ? '' : c.key); if (c.view) setView(c.view) }}
+            className={`rounded-xl bg-card p-4 text-left shadow-md shadow-black/5 transition hover:-translate-y-0.5 ${group === c.key && c.key ? 'ring-2 ring-[#F84400]' : ''}`}>
+            <div className={`text-2xl font-bold ${c.color}`}>{loading ? '—' : c.value}</div>
+            <div className="text-xs text-muted-foreground">{c.label}</div>
+          </button>
         ))}
       </div>
 
-      {/* Filters */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <Select value={filterRole || '_all'} onValueChange={v => setFilterRole(!v || v === '_all' ? '' : v)}>
-          <SelectTrigger className="w-48 h-9">
-            <SelectValue>{() => `Roles: ${filterRole ? roleOf(filterRole).label : 'All'}`}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="_all">All roles</SelectItem>
-            {ROLES.map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <span className="text-xs text-muted-foreground">{filtered.length} user{filtered.length !== 1 ? 's' : ''}</span>
+      {/* Views */}
+      <div className="flex flex-wrap items-center gap-2">
+        {([['staff', 'Staff Users'], ['portal', 'Portal Accounts'], ['audit', 'Audit Logs']] as const).map(([k, l]) => (
+          <button key={k} type="button" onClick={() => setView(k)}
+            className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${view === k ? 'bg-[#F84400] text-white' : 'bg-muted text-muted-foreground hover:bg-muted/70'}`}>
+            {l}
+          </button>
+        ))}
+        {view !== 'audit' && (
+          <div className="ml-auto flex items-center gap-2">
+            <Select value={filterRole || '_all'} onValueChange={v => setFilterRole(!v || v === '_all' ? '' : v)}>
+              <SelectTrigger className="w-48 h-9">
+                <SelectValue>{() => `Roles: ${filterRole ? roleOf(filterRole).label : 'All'}`}</SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="_all">All roles</SelectItem>
+                {ROLES.filter(r => view === 'portal' ? ['client', 'vendor'].includes(r.value) : !['client', 'vendor'].includes(r.value))
+                  .map(r => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Button variant="outline" size="sm" className="h-9" onClick={exportUsersCsv}>
+              <Download className="h-3.5 w-3.5 mr-1.5" />Export CSV
+            </Button>
+            <span className="text-xs text-muted-foreground">{viewRows.length} account{viewRows.length !== 1 ? 's' : ''}</span>
+          </div>
+        )}
       </div>
 
+      {view === 'audit' && <AuditLog />}
+
       {/* Table */}
-      <div className="rounded-lg border bg-card">
+      {view !== 'audit' && <div className="rounded-xl bg-card shadow-md shadow-black/5">
         <Table containerClassName="overflow-x-clip">
           <TableHeader className="sticky top-0 z-10 bg-background">
             <TableRow>
-              <TableHead>User</TableHead>
-              <TableHead>Employee ID</TableHead>
-              <TableHead>Role</TableHead>
+              <TableHead><button type="button" onClick={() => sortBy('name')} className="font-medium">User{sortMark('name')}</button></TableHead>
+              <TableHead>{view === 'portal' ? 'Linked Account' : 'Employee ID'}</TableHead>
+              <TableHead><button type="button" onClick={() => sortBy('role')} className="font-medium">Role{sortMark('role')}</button></TableHead>
               <TableHead>Company</TableHead>
-              <TableHead>Department</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Joined</TableHead>
+              <TableHead>{view === 'portal' ? 'Portal' : 'Department'}</TableHead>
+              <TableHead><button type="button" onClick={() => sortBy('status')} className="font-medium">Account{sortMark('status')}</button></TableHead>
+              <TableHead><button type="button" onClick={() => sortBy('joined')} className="font-medium">Joined{sortMark('joined')}</button></TableHead>
               <TableHead className="w-10" />
             </TableRow>
           </TableHeader>
@@ -302,11 +350,11 @@ export default function UsersPage() {
               <TableRow><TableCell colSpan={8} className="text-center py-12">
                 <Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" />
               </TableCell></TableRow>
-            ) : filtered.length === 0 ? (
+            ) : viewRows.length === 0 ? (
               <TableRow><TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
-                {search || filterRole ? 'No users match your filters.' : 'No users yet. Invite someone to get started.'}
+                {search || filterRole || group ? 'No accounts match your filters.' : view === 'portal' ? 'No portal accounts yet.' : 'No users yet. Invite someone to get started.'}
               </TableCell></TableRow>
-            ) : filtered.map(p => {
+            ) : viewRows.map(p => {
               const role = roleOf(p.role)
               const isActive = (p.status ?? 'active') === 'active'
               return (
@@ -324,16 +372,16 @@ export default function UsersPage() {
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell className="text-sm font-mono text-muted-foreground">{p.employee_id ?? '—'}</TableCell>
+                  <TableCell className="text-sm font-mono text-muted-foreground">{view === 'portal' ? (p.company ? '✓ ' + p.company : '—') : p.employee_id ?? '—'}</TableCell>
                   <TableCell>
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${role.color}`}>{role.label}</span>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">{p.company ?? '—'}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{p.department ?? '—'}</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{view === 'portal' ? (p.role === 'vendor' ? 'Vendor portal' : 'Client portal') : p.department ?? '—'}</TableCell>
                   <TableCell>
                     <button onClick={() => toggleStatus(p)}>
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium cursor-pointer ${isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                        {isActive ? 'Active' : 'Inactive'}
+                        {isActive ? 'Active' : 'Deactivated'}
                       </span>
                     </button>
                   </TableCell>
@@ -358,7 +406,7 @@ export default function UsersPage() {
             })}
           </TableBody>
         </Table>
-      </div>
+      </div>}
 
       {/* Create Portal Account Dialog */}
       <Dialog open={portalOpen} onOpenChange={setPortalOpen}>

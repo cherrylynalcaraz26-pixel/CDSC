@@ -19,13 +19,13 @@ import {
   Building2, Upload, RotateCcw, Save, Shield,
   FileText, Database, User, Globe, Phone, Mail, MapPin,
   CheckCircle2, Eye, EyeOff, Loader2, Plus, Trash2, X, Send,
-  ChevronDown, ChevronUp, Download, Cloud, ExternalLink, RefreshCw,
+  ChevronDown, ChevronUp, Download, Cloud, ExternalLink, RefreshCw, FileCheck2,
 } from 'lucide-react'
 import { sendEmail, htmlToPdfBase64 } from '@/lib/send-email'
 import { uploadImageToDrive } from '@/lib/upload-image'
 import { syncDatabaseBackup, type BackupSyncResult } from '@/lib/backup-sheets'
+import { BirFormsSettings } from '@/components/settings/bir-forms-settings'
 
-const AUDIT_VISIBLE_ROLES = ['super_admin', 'admin', 'auditor']
 
 const BUSINESS_TYPES = [
   'Sole Proprietorship', 'Partnership', 'Corporation', 'Trading Corporation',
@@ -149,13 +149,17 @@ function defaultSettings(): Settings {
   }
 }
 
-type TabId = 'profile' | 'database' | 'backup' | 'security'
+type TabId = 'profile' | 'bir_forms' | 'database' | 'backup' | 'security' | 'website'
 
-const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
-  { id: 'profile',   label: 'Company & Business Profile', icon: <Building2 className="h-3.5 w-3.5" /> },
-  { id: 'database',  label: 'Proposal Database',  icon: <Database className="h-3.5 w-3.5" /> },
-  { id: 'backup',    label: 'Data Backup',        icon: <Cloud className="h-3.5 w-3.5" /> },
-  { id: 'security',  label: 'Security',           icon: <Shield className="h-3.5 w-3.5" /> },
+// Settings sections, laid out like the CHEM app: a list on the left with a one-line
+// description each, Company Profile first and the rest alphabetical.
+const TABS: { id: TabId; label: string; icon: React.ReactNode; desc: string }[] = [
+  { id: 'profile',   label: 'Company & Business Profile', icon: <Building2 className="h-4 w-4" />, desc: 'Business details, tax profile (VAT, withholding, employees), mission and proposal defaults.' },
+  { id: 'bir_forms', label: 'BIR Forms',          icon: <FileCheck2 className="h-4 w-4" />, desc: 'Reference images of each BIR return CDSC files, shown when generating forms.' },
+  { id: 'backup',    label: 'Data Backup',        icon: <Cloud className="h-4 w-4" />,      desc: 'Mirror your data to Google Sheets or download a backup.' },
+  { id: 'database',  label: 'Proposal Database',  icon: <Database className="h-4 w-4" />,   desc: 'Saved client proposals and their templates.' },
+  { id: 'security',  label: 'Security',           icon: <Shield className="h-4 w-4" />,     desc: 'Password, sessions and sign-out of all devices.' },
+  { id: 'website',   label: 'Website',            icon: <Globe className="h-4 w-4" />,      desc: 'Demo video shown on the public website and client portal.' },
 ]
 
 // ── Collapsible form section ──────────────────────────────────────────────────
@@ -594,102 +598,6 @@ function LivePreview({ s }: { s: Settings }) {
 
 // ── Security Tab ──────────────────────────────────────────────────────────────
 
-interface AuditLogEntry {
-  id: string
-  user_id: string | null
-  action: string
-  table_name: string
-  record_id: string | null
-  old_values: Record<string, unknown> | null
-  new_values: Record<string, unknown> | null
-  created_at: string
-}
-
-const AUDIT_ACTION_CLS: Record<string, string> = {
-  create: 'bg-green-100 text-green-700',
-  update: 'bg-blue-100 text-blue-700',
-  void:   'bg-red-100 text-red-700',
-}
-
-// Read-only trail of who created, edited, or voided a books-of-accounts row —
-// required documentation for a BIR Computerized Accounting System. Gated to
-// the same roles as the audit_logs table's own RLS read policy.
-function AuditLogSection() {
-  const supabase = createClient()
-  const [visible, setVisible] = useState(false)
-  const [checking, setChecking] = useState(true)
-  const [entries, setEntries] = useState<AuditLogEntry[]>([])
-  const [loading, setLoading] = useState(true)
-  const [emailsById, setEmailsById] = useState<Record<string, string>>({})
-
-  useEffect(() => {
-    (async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) { setChecking(false); return }
-      const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-      const allowed = !!profile && AUDIT_VISIBLE_ROLES.includes((profile as { role: string }).role)
-      setVisible(allowed)
-      setChecking(false)
-      if (!allowed) return
-      const { data, error } = await supabase
-        .from('audit_logs')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(50)
-      if (error) toast.error(getErrorMessage(error))
-      else {
-        const rows = (data ?? []) as AuditLogEntry[]
-        setEntries(rows)
-        const ids = [...new Set(rows.map(r => r.user_id).filter((id): id is string => !!id))]
-        if (ids.length > 0) {
-          const { data: profiles } = await supabase.from('profiles').select('id, email').in('id', ids)
-          setEmailsById(Object.fromEntries((profiles ?? []).map((p: { id: string; email: string | null }) => [p.id, p.email ?? p.id])))
-        }
-      }
-      setLoading(false)
-    })()
-  }, [])
-
-  if (checking || !visible) return null
-
-  return (
-    <div>
-      <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider mb-4">Audit Log</h3>
-      <Card>
-        <CardContent className="pt-5">
-          <p className="text-xs text-muted-foreground mb-4">
-            Who created, edited, or voided a Collections / Disbursements record, and when. Visible to Super-Admin, Admin, and Auditor roles only.
-          </p>
-          {loading ? (
-            <div className="flex items-center justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-muted-foreground" /></div>
-          ) : entries.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-6">No activity logged yet.</p>
-          ) : (
-            <div className="space-y-0 max-h-[420px] overflow-y-auto">
-              {entries.map(e => (
-                <div key={e.id} className="flex items-center justify-between gap-3 py-2.5 border-b last:border-0 text-sm">
-                  <div className="min-w-0 flex items-center gap-2.5">
-                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium uppercase shrink-0 ${AUDIT_ACTION_CLS[e.action] ?? 'bg-gray-100 text-gray-600'}`}>
-                      {e.action}
-                    </span>
-                    <div className="min-w-0">
-                      <div className="font-medium truncate">{e.table_name}{e.record_id ? ` · ${e.record_id.slice(0, 8)}` : ''}</div>
-                      <div className="text-xs text-muted-foreground truncate">
-                        {e.user_id ? (emailsById[e.user_id] ?? e.user_id) : 'System'}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-xs text-muted-foreground shrink-0">{new Date(e.created_at).toLocaleString('en-PH')}</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
-
 function SecurityTab() {
   const supabase = createClient()
   const [email, setEmail] = useState('')
@@ -791,7 +699,7 @@ function SecurityTab() {
         </Card>
       </div>
 
-      <AuditLogSection />
+      <p className="text-xs text-muted-foreground">The audit trail of who created, edited or voided records is under <a href="/users" className="underline">User Management → Audit Logs</a>.</p>
     </div>
   )
 }
@@ -1552,23 +1460,42 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      <div className="border-b mb-6">
-        <div className="flex gap-0 overflow-x-auto">
-          {TABS.map(t => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
-                tab === t.id
-                  ? 'border-red-600 text-red-600'
-                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30'
-              }`}
-            >
-              {t.icon}{t.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
+      <nav className="space-y-1 lg:sticky lg:top-20 lg:self-start" aria-label="Settings sections">
+        {TABS.map(t => (
+          <button
+            key={t.id}
+            onClick={() => setTab(t.id)}
+            className={`w-full rounded-xl px-3 py-2.5 text-left transition-colors ${
+              tab === t.id ? 'bg-[#F84400] text-white shadow-md shadow-orange-900/20' : 'hover:bg-muted'
+            }`}
+          >
+            <span className="flex items-center gap-2 text-sm font-semibold">{t.icon}{t.label}</span>
+            <span className={`mt-0.5 block text-xs leading-snug ${tab === t.id ? 'text-white/85' : 'text-muted-foreground'}`}>{t.desc}</span>
+          </button>
+        ))}
+      </nav>
+      <div className="min-w-0">
+      <h2 className="mb-4 text-lg font-semibold">{TABS.find(t => t.id === tab)?.label}</h2>
+
+      {tab === 'bir_forms' && <BirFormsSettings />}
+
+      {tab === 'website' && (
+        <Card><CardContent className="space-y-4 pt-5">
+          <div className="space-y-1.5">
+            <Label>Demo Video URL</Label>
+            <Input placeholder="e.g. https://www.youtube.com/watch?v=… or a Google Drive link" {...S('live_video_url')} />
+            <p className="text-xs text-muted-foreground">
+              Shown in the &quot;See How Ordering Works&quot; section of the public website and by the Demo Video button on the client portal.
+              Leave blank to use the default CDSC Client Portal demo. Supports YouTube, Vimeo, Facebook, Google Drive or a direct video link.
+            </p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Button onClick={save} disabled={saving} className="bg-[#F84400] hover:bg-[#e03d00] text-white">{saving ? 'Saving…' : 'Save'}</Button>
+            <a href="/#demo" target="_blank" rel="noopener noreferrer" className="text-sm text-muted-foreground underline">Preview on the website</a>
+          </div>
+        </CardContent></Card>
+      )}
 
       {tab === 'security' && <SecurityTab />}
 
@@ -1817,11 +1744,6 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <Label>Demo Video URL</Label>
-                <Input placeholder="e.g. https://www.youtube.com/watch?v=… or a video/stream link" {...S('live_video_url')} />
-                <p className="text-xs text-muted-foreground">Played by the &quot;Demo Video&quot; button on the Client Dashboard. Leave blank to use the default CDSC Client Portal demo. Supports YouTube, Vimeo, Facebook, Google Drive, or a direct video link.</p>
-              </div>
             </div>
             </CollapsibleSection>
 
@@ -2008,6 +1930,8 @@ export default function SettingsPage() {
           </div>
         </div>
       )}
+      </div>
+      </div>
     </div>
   )
 }

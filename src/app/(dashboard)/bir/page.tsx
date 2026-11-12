@@ -19,6 +19,9 @@ import { format } from 'date-fns'
 import { htmlToPdfBase64 } from '@/lib/send-email'
 import { uploadImageToDrive } from '@/lib/upload-image'
 import { getErrorMessage } from '@/lib/error-message'
+import { ComplianceCalendarView } from '@/components/bir/compliance-calendar-view'
+import { IncomeTaxEstimate } from '@/components/bir/income-tax-estimate'
+import { CalendarDays, ClipboardList, Calculator, TrendingUp, Send } from 'lucide-react'
 import {
   obligationsForTaxYear, deadlinesBetween, defaultApplicableForms, allBirForms, DUE_SOON_DAYS,
   type BirDeadline, type Frequency, type TaxProfile,
@@ -34,70 +37,13 @@ interface BirFormDef {
 }
 interface BirForm extends BirFormDef { status: 'filed' | 'overdue' | 'due_soon' | 'pending' }
 
-const FILING_STATUS_CLS: Record<string, string> = {
-  filed: 'bg-green-100 text-green-700 border-green-300',
-  overdue: 'bg-red-200 text-red-800 border-red-400',
-  due_soon: 'bg-red-100 text-red-700 border-red-300',
-  pending: 'bg-yellow-100 text-yellow-700 border-yellow-300',
-}
-
-// Groups BIR forms by the year/month of their due date, so each month can render
-// as its own mini calendar grid with due dates marked on the right day.
-function groupFormsByMonth(forms: BirForm[]) {
-  const map = new Map<string, { year: number; month: number; forms: BirForm[] }>()
-  for (const f of forms) {
-    const d = new Date(f.due)
-    const key = `${d.getFullYear()}-${d.getMonth()}`
-    if (!map.has(key)) map.set(key, { year: d.getFullYear(), month: d.getMonth(), forms: [] })
-    map.get(key)!.forms.push(f)
-  }
-  return [...map.values()].sort((a, b) => a.year - b.year || a.month - b.month)
-}
-
-function FilingMonthCalendar({ year, month, forms }: { year: number; month: number; forms: BirForm[] }) {
-  const firstDow = new Date(year, month, 1).getDay()
-  const daysInMonth = new Date(year, month + 1, 0).getDate()
-  const cells: (number | null)[] = [...Array(firstDow).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => i + 1)]
-  const byDay = new Map<number, BirForm[]>()
-  for (const f of forms) {
-    const day = new Date(f.due).getDate()
-    if (!byDay.has(day)) byDay.set(day, [])
-    byDay.get(day)!.push(f)
-  }
-  const monthLabel = new Date(year, month, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-  return (
-    <div className="border rounded-lg p-3 w-64">
-      <div className="text-sm font-semibold mb-2 text-center">{monthLabel}</div>
-      <div className="grid grid-cols-7 gap-1 text-center text-[10px] text-muted-foreground mb-1">
-        {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map(d => <div key={d}>{d}</div>)}
-      </div>
-      <div className="grid grid-cols-7 gap-1">
-        {cells.map((day, i) => {
-          const dayForms = day ? byDay.get(day) : undefined
-          const firstStatus = dayForms?.[0]?.status
-          const cls = firstStatus ? FILING_STATUS_CLS[firstStatus] : 'border-transparent'
-          return (
-            <div
-              key={i}
-              title={dayForms?.map(f => `${f.form} — ${f.description}`).join('\n')}
-              className={`aspect-square flex items-center justify-center text-xs rounded border ${day ? cls : ''}`}
-            >
-              {day ?? ''}
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
 interface EwtRow { supplier: string; tin: string | null; atc: string | null; address: string | null; gross: number; vat_excl: number; ewt_rate: number; ewt: number }
 interface SlspRow { month: string; supplier: string; tin: string | null; refNo: string; gross: number; vat: number; net: number }
 interface VatSummaryRow { month: string; gross_sales: number; output_vat: number; gross_purchases: number; input_vat: number; net_vat: number }
 
 export default function BIRPage() {
   const supabase = createClient()
-  const [activeTab, setActiveTab] = useState('monitor')
+  const [activeTab, setActiveTab] = useState('calendar')
   const [loadingTax, setLoadingTax] = useState(true)
   const [ewtRows, setEwtRows] = useState<EwtRow[]>([])
   const [slspRows, setSlspRows] = useState<SlspRow[]>([])
@@ -384,12 +330,6 @@ export default function BIRPage() {
       return { ...row, cells, filedCount, overdueCount, totalTaxDue: amounts.length ? amounts.reduce((x, y) => x + y, 0) : null }
     })
   }, [monitorYear, applicable, profile, toDef, filings])
-
-  // Flattens the grid's 16 quarter-cells into the shape the Filing Calendar
-  // mini month-grids already know how to render.
-  const calendarForms: BirForm[] = useMemo(() => quarterlyGrid.flatMap(row =>
-    row.cells.map(cell => ({ ...cell, key: `${row.form}_${cell.period}`, status: cell.status }))
-  ), [quarterlyGrid])
 
   // A row click (anywhere but the Period/Amendments badges) opens history —
   // defaults to the first still-unfiled quarter so Generate has a real period
@@ -1127,73 +1067,69 @@ export default function BIRPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold">BIR Compliance Module</h2>
-          <p className="text-muted-foreground text-sm">Philippine BIR filing management, tax computation, and alphalist generation</p>
+          <h2 className="text-2xl font-bold">BIR Compliance</h2>
+          <p className="text-muted-foreground text-sm">Deadlines, filings, VAT, income tax and withholding — in one place</p>
         </div>
         <Button className="gap-2" onClick={runFilingReadyCheck}>
           <Zap className="h-4 w-4" /> BIR Filing Ready Check
         </Button>
       </div>
 
-      {/* Readiness Score */}
-      <Card className="border-primary/30 bg-primary/5">
-        <CardContent className="pt-5">
-          <div className="flex items-center gap-6">
-            <div className="text-center">
-              <div className="text-4xl font-bold text-primary">{readinessScore}%</div>
-              <div className="text-sm text-muted-foreground">Filing Ready</div>
-            </div>
-            <div className="flex-1">
-              <Progress value={readinessScore} className="h-3 mb-3" />
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                {readinessChecks.map(check => (
-                  <div key={check.check} className="flex items-start gap-2 text-xs">
-                    {check.status === 'pass'
-                      ? <CheckCircle2 className="h-3.5 w-3.5 text-green-500 shrink-0 mt-0.5" />
-                      : check.status === 'warning'
-                      ? <AlertTriangle className="h-3.5 w-3.5 text-yellow-500 shrink-0 mt-0.5" />
-                      : <XCircle className="h-3.5 w-3.5 text-red-500 shrink-0 mt-0.5" />
-                    }
-                    <div>
-                      <div className="font-medium">{check.check}</div>
-                      <div className="text-muted-foreground">{check.detail}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="monitor">Filing Monitor</TabsTrigger>
-          <TabsTrigger value="ewt">EWT Summary</TabsTrigger>
-          <TabsTrigger value="vat">VAT Summary</TabsTrigger>
-          <TabsTrigger value="alphalist">Alphalist</TabsTrigger>
-          <TabsTrigger value="slsp">SLSP</TabsTrigger>
+        <TabsList className="flex-wrap h-auto">
+          <TabsTrigger value="calendar" className="gap-1.5"><CalendarDays className="h-3.5 w-3.5" />Compliance Calendar</TabsTrigger>
+          <TabsTrigger value="monitor" className="gap-1.5"><ClipboardList className="h-3.5 w-3.5" />Filing Tracker</TabsTrigger>
+          <TabsTrigger value="vat" className="gap-1.5"><Calculator className="h-3.5 w-3.5" />VAT &amp; SLSP</TabsTrigger>
+          <TabsTrigger value="income" className="gap-1.5"><TrendingUp className="h-3.5 w-3.5" />Income Tax</TabsTrigger>
+          <TabsTrigger value="ewt" className="gap-1.5"><Send className="h-3.5 w-3.5" />EWT &amp; Alphalist</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="monitor">
-          <Card className="mb-4">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Filing Calendar — Due Dates</CardTitle>
-              <CardDescription>Each highlighted day has a BIR form due for {monitorYear} — hover a date for details</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-4 mb-4">
-                {groupFormsByMonth(calendarForms).map(g => (
-                  <FilingMonthCalendar key={`${g.year}-${g.month}`} year={g.year} month={g.month} forms={g.forms} />
-                ))}
-              </div>
-              <div className="flex flex-wrap gap-4 text-xs">
-                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded border bg-green-100 border-green-300" />Filed</span>
-                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded border bg-red-200 border-red-400" />Overdue</span>
-                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded border bg-yellow-100 border-yellow-300" />Pending</span>
+        <TabsContent value="calendar">
+          <ComplianceCalendarView
+            applicable={applicable}
+            profile={profile}
+            amountFor={amountFor}
+            onOpenApplicable={() => { setApplicableDraft(applicable); setApplicableOpen(true) }}
+            onChanged={loadFilings}
+          />
+        </TabsContent>
+
+        <TabsContent value="income">
+          <IncomeTaxEstimate isCorporate={isCorporate} />
+        </TabsContent>
+
+        <TabsContent value="monitor" className="space-y-4">
+          {/* Readiness Score */}
+          <Card className="border-primary/30 bg-primary/5">
+            <CardContent className="pt-5">
+              <div className="flex items-center gap-6">
+                <div className="text-center">
+                  <div className="text-4xl font-bold text-primary">{readinessScore}%</div>
+                  <div className="text-sm text-muted-foreground">Filing Ready</div>
+                </div>
+                <div className="flex-1">
+                  <Progress value={readinessScore} className="h-3 mb-3" />
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    {readinessChecks.map(check => (
+                      <div key={check.check} className="flex items-start gap-2 text-xs">
+                        {check.status === 'pass'
+                          ? <CheckCircle2 className="h-3.5 w-3.5 text-green-500 shrink-0 mt-0.5" />
+                          : check.status === 'warning'
+                          ? <AlertTriangle className="h-3.5 w-3.5 text-yellow-500 shrink-0 mt-0.5" />
+                          : <XCircle className="h-3.5 w-3.5 text-red-500 shrink-0 mt-0.5" />
+                        }
+                        <div>
+                          <div className="font-medium">{check.check}</div>
+                          <div className="text-muted-foreground">{check.detail}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
+
           <Card className="overflow-visible">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
@@ -1298,7 +1234,7 @@ export default function BIRPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="ewt">
+        <TabsContent value="ewt" className="space-y-6">
           <Card className="overflow-visible">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
@@ -1353,60 +1289,6 @@ export default function BIRPage() {
               </Table>
             </CardContent>
           </Card>
-        </TabsContent>
-
-        <TabsContent value="vat">
-          <Card className="overflow-visible">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-base">VAT Summary — BIR Form 2550Q</CardTitle>
-                  <CardDescription>Output VAT from vatable sales and Input VAT from purchases, by month</CardDescription>
-                </div>
-                <Button size="sm" variant="outline" onClick={() => toast.success('VAT summary exported')}>
-                  <Download className="h-4 w-4 mr-1" />Export
-                </Button>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <Table containerClassName="overflow-x-clip">
-                <TableHeader className="sticky top-0 z-10 bg-background">
-                  <TableRow>
-                    <TableHead>Month</TableHead>
-                    <TableHead className="text-right">Gross Purchases</TableHead>
-                    <TableHead className="text-right">Input VAT (12%)</TableHead>
-                    <TableHead className="text-right">Output VAT</TableHead>
-                    <TableHead className="text-right">Net VAT Payable</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {vatSummaryRows.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} className="text-center py-6 text-muted-foreground text-sm">No VAT-bearing transactions recorded yet.</TableCell></TableRow>
-                  ) : vatSummaryRows.map(row => (
-                    <TableRow key={row.month}>
-                      <TableCell className="font-medium">{row.month}</TableCell>
-                      <TableCell className="text-right">₱{row.gross_purchases.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                      <TableCell className="text-right text-blue-600">₱{row.input_vat.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                      <TableCell className="text-right">₱{row.output_vat.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                      <TableCell className="text-right font-semibold">₱{row.net_vat.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                    </TableRow>
-                  ))}
-                  {vatSummaryRows.length > 0 && (
-                    <TableRow className="bg-muted/50 font-bold">
-                      <TableCell>TOTAL</TableCell>
-                      <TableCell className="text-right">₱{vatSummaryRows.reduce((s, r) => s + r.gross_purchases, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                      <TableCell className="text-right text-blue-600">₱{vatSummaryRows.reduce((s, r) => s + r.input_vat, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                      <TableCell className="text-right">₱{vatSummaryRows.reduce((s, r) => s + r.output_vat, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                      <TableCell className="text-right">₱{vatSummaryRows.reduce((s, r) => s + r.net_vat, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="alphalist">
           <Card className="overflow-visible">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
@@ -1458,7 +1340,55 @@ export default function BIRPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="slsp">
+        <TabsContent value="vat" className="space-y-6">
+          <Card className="overflow-visible">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base">VAT Summary — BIR Form 2550Q</CardTitle>
+                  <CardDescription>Output VAT from vatable sales and Input VAT from purchases, by month</CardDescription>
+                </div>
+                <Button size="sm" variant="outline" onClick={() => toast.success('VAT summary exported')}>
+                  <Download className="h-4 w-4 mr-1" />Export
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Table containerClassName="overflow-x-clip">
+                <TableHeader className="sticky top-0 z-10 bg-background">
+                  <TableRow>
+                    <TableHead>Month</TableHead>
+                    <TableHead className="text-right">Gross Purchases</TableHead>
+                    <TableHead className="text-right">Input VAT (12%)</TableHead>
+                    <TableHead className="text-right">Output VAT</TableHead>
+                    <TableHead className="text-right">Net VAT Payable</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {vatSummaryRows.length === 0 ? (
+                    <TableRow><TableCell colSpan={5} className="text-center py-6 text-muted-foreground text-sm">No VAT-bearing transactions recorded yet.</TableCell></TableRow>
+                  ) : vatSummaryRows.map(row => (
+                    <TableRow key={row.month}>
+                      <TableCell className="font-medium">{row.month}</TableCell>
+                      <TableCell className="text-right">₱{row.gross_purchases.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
+                      <TableCell className="text-right text-blue-600">₱{row.input_vat.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
+                      <TableCell className="text-right">₱{row.output_vat.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
+                      <TableCell className="text-right font-semibold">₱{row.net_vat.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
+                    </TableRow>
+                  ))}
+                  {vatSummaryRows.length > 0 && (
+                    <TableRow className="bg-muted/50 font-bold">
+                      <TableCell>TOTAL</TableCell>
+                      <TableCell className="text-right">₱{vatSummaryRows.reduce((s, r) => s + r.gross_purchases, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
+                      <TableCell className="text-right text-blue-600">₱{vatSummaryRows.reduce((s, r) => s + r.input_vat, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
+                      <TableCell className="text-right">₱{vatSummaryRows.reduce((s, r) => s + r.output_vat, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
+                      <TableCell className="text-right">₱{vatSummaryRows.reduce((s, r) => s + r.net_vat, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
           <Card className="overflow-visible">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
@@ -1511,6 +1441,8 @@ export default function BIRPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+
       </Tabs>
 
       {/* Auto-filled Form Generator */}

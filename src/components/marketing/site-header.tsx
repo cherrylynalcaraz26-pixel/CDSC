@@ -19,20 +19,20 @@ export function SiteHeader() {
   return (
     <header id="site-header" className="sticky top-0 z-40 w-full print:hidden">
       {/* Top utility bar */}
-      <div className="hidden border-b border-cdsc-line bg-cdsc-paper text-cdsc-ink/70 sm:block">
-        <div className="mx-auto flex max-w-7xl items-center justify-end gap-6 px-6 py-2 text-xs">
-          <a href={company.phoneHref} className="flex items-center gap-1.5 hover:text-cdsc-navy">
-            <Phone className="h-3.5 w-3.5 text-cdsc-accent" /> {company.phone}
+      <div className="hidden bg-black text-white/70 sm:block">
+        <div className="mx-auto flex max-w-screen-2xl items-center justify-end gap-6 px-6 py-2 text-xs">
+          <a href={company.phoneHref} className="flex items-center gap-1.5 transition hover:text-white">
+            <Phone className="h-3.5 w-3.5 text-orange-400" /> {company.phone}
           </a>
-          <a href={company.emailHref} className="flex items-center gap-1.5 hover:text-cdsc-navy">
-            <Mail className="h-3.5 w-3.5 text-cdsc-accent" /> {company.email}
+          <a href={company.emailHref} className="flex items-center gap-1.5 transition hover:text-white">
+            <Mail className="h-3.5 w-3.5 text-orange-400" /> {company.email}
           </a>
         </div>
       </div>
 
       {/* Main nav */}
-      <div className="border-b border-cdsc-line bg-white/95 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-3">
+      <div className="bg-white/90 shadow-sm shadow-black/5 backdrop-blur-md">
+        <div className="mx-auto flex max-w-screen-2xl items-center justify-between gap-4 px-6 py-3">
           <Link href="/" className="flex shrink-0 items-center gap-2.5" onClick={() => setOpen(false)}>
             <div className="relative h-9 w-20 shrink-0">
               <Image src="/cdsc-logo.jpg" alt="CDSC Industrial Supply logo" fill className="object-contain" priority />
@@ -48,11 +48,18 @@ export function SiteHeader() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  'text-sm font-medium text-cdsc-ink/70 transition-colors hover:text-cdsc-navy',
-                  pathname === item.href && 'text-cdsc-navy font-semibold'
+                  'group relative py-1 text-sm font-medium text-cdsc-ink/70 transition-colors hover:text-cdsc-accent',
+                  pathname === item.href && 'text-cdsc-accent font-semibold'
                 )}
               >
                 {item.label}
+                <span
+                  aria-hidden
+                  className={cn(
+                    'absolute inset-x-0 -bottom-0.5 h-0.5 origin-left rounded-full bg-linear-to-r from-cdsc-accent to-orange-500 transition-transform duration-300',
+                    pathname === item.href ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
+                  )}
+                />
               </Link>
             ))}
           </nav>
@@ -72,7 +79,7 @@ export function SiteHeader() {
             </Link>
             <Link
               href="/quote"
-              className="hidden items-center gap-1.5 rounded-md bg-cdsc-navy px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-cdsc-navy-dark sm:inline-flex"
+              className="hidden items-center gap-1.5 rounded-xl bg-linear-to-r from-cdsc-accent to-orange-500 px-4 py-2.5 text-sm font-bold text-white shadow-md shadow-cdsc-accent/25 transition hover:-translate-y-0.5 hover:shadow-lg sm:inline-flex"
             >
               Request a Quotation <ArrowRight className="h-3.5 w-3.5" />
             </Link>
@@ -88,7 +95,7 @@ export function SiteHeader() {
         </div>
 
         {open && (
-          <nav className="border-t border-cdsc-line bg-white px-6 py-4 lg:hidden">
+          <nav className="bg-white px-6 py-4 shadow-lg motion-safe:animate-rise lg:hidden">
             <ul className="flex flex-col gap-1">
               {nav.map(item => (
                 <li key={item.href}>
@@ -115,7 +122,7 @@ export function SiteHeader() {
               <Link
                 href="/quote"
                 onClick={() => setOpen(false)}
-                className="mt-1 inline-flex items-center justify-center gap-1.5 rounded-md bg-cdsc-navy px-4 py-2.5 text-sm font-semibold text-white"
+                className="mt-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-linear-to-r from-cdsc-accent to-orange-500 px-4 py-2.5 text-sm font-bold text-white"
               >
                 Request a Quotation <ArrowRight className="h-3.5 w-3.5" />
               </Link>

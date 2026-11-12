@@ -47,7 +47,7 @@ export function FloatingMessages() {
             onClick={e => e.stopPropagation()}
             className="fixed bottom-36 right-3 left-3 top-16 lg:left-auto lg:top-auto lg:bottom-24 lg:right-6 lg:w-[min(1000px,calc(100vw-20rem))] lg:h-[min(680px,calc(100vh-8rem))] flex flex-col rounded-2xl bg-background shadow-2xl shadow-black/25 overflow-hidden"
           >
-            <div className="flex items-center justify-between px-4 py-2.5 bg-red-600 text-white">
+            <div className="flex items-center justify-between px-4 py-2.5 bg-[#F84400] text-white">
               <span className="flex items-center gap-2 text-sm font-semibold">
                 <MessageSquare className="h-4 w-4" /> Messages
               </span>
@@ -71,7 +71,7 @@ export function FloatingMessages() {
               </div>
             </div>
             <div className="flex-1 overflow-y-auto p-4 bg-muted/30">
-              <MessagesView />
+              <MessagesView embedded />
             </div>
           </div>
         </div>
@@ -82,13 +82,13 @@ export function FloatingMessages() {
         onClick={() => setOpen(o => !o)}
         title={unread ? `Messages (${unread} unread)` : 'Messages'}
         className={cn(
-          'fixed z-50 right-4 bottom-20 lg:right-6 lg:bottom-6 h-14 w-14 rounded-full bg-red-600 text-white shadow-lg shadow-red-900/30',
-          'flex items-center justify-center transition-transform hover:scale-105 hover:bg-red-700',
+          'fixed z-50 right-4 bottom-20 lg:right-6 lg:bottom-6 h-14 w-14 rounded-full bg-[#F84400] text-white shadow-lg shadow-orange-900/30',
+          'flex items-center justify-center transition-transform hover:scale-105 hover:bg-[#e03d00]',
         )}
       >
         {open ? <X className="h-6 w-6" /> : <MessageSquare className="h-6 w-6" />}
         {!!unread && !open && (
-          <span className="absolute -top-1 -right-1 min-w-[22px] h-[22px] px-1 rounded-full bg-white text-red-600 text-[11px] font-bold flex items-center justify-center shadow">
+          <span className="absolute -top-1 -right-1 min-w-[22px] h-[22px] px-1 rounded-full bg-white text-[#F84400] text-[11px] font-bold flex items-center justify-center shadow">
             {unread > 99 ? '99+' : unread}
           </span>
         )}

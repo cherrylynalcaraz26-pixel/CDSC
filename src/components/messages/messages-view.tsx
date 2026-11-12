@@ -11,10 +11,10 @@ import { getErrorMessage } from '@/lib/error-message'
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
-import { MessageSquare, Send, CheckCheck, Search, Plus, Paperclip, X, FileText } from 'lucide-react'
+import { MessageSquare, Send, CheckCheck, Search, Plus, Paperclip, X, FileText, ImagePlus } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
-import { uploadFileToDrive } from '@/lib/upload-image'
+import { uploadFileToDrive, isImageAttachment, driveImageSrc } from '@/lib/upload-image'
 
 type PartyType = 'client' | 'supplier'
 
@@ -45,6 +45,8 @@ interface ClientMessage {
   attachment_name: string | null
   reply_attachment_url: string | null
   reply_attachment_name: string | null
+  attachments?: Attachment[] | null
+  reply_attachments?: Attachment[] | null
   clients: ClientInfo | null
   suppliers: SupplierInfo | null
 }
@@ -128,13 +130,110 @@ function AttachmentChip({ url, name, tone = 'muted' }: { url: string; name: stri
   )
 }
 
-export function MessagesView() {
+interface Attachment { url: string; name: string }
+
+const EMOJIS = ['😀', '😊', '😂', '🙂', '😉', '😍', '🤝', '👍', '👌', '🙏', '👏', '🎉', '✅', '❌', '⚠️', '📦', '🚚', '🧾', '💰', '📅', '⏰', '📞', '📧', '📌', '🔧', '🛠️', '🔥', '💯', '❤️', '🙌', '🤔', '😅']
+
+// Every file on one side of a message: the list column, or the legacy single file.
+function filesOf(list: Attachment[] | null | undefined, url: string | null, name: string | null): Attachment[] {
+  if (Array.isArray(list) && list.length) return list
+  return url ? [{ url, name: name || 'Attachment' }] : []
+}
+
+function AttachmentGrid({ files, tone = 'muted' }: { files: Attachment[]; tone?: 'muted' | 'onRed' }) {
+  if (!files.length) return null
+  const images = files.filter(a => isImageAttachment(a.name))
+  const others = files.filter(a => !isImageAttachment(a.name))
+  return (
+    <div className="mt-1.5 space-y-1.5">
+      {images.length > 0 && (
+        <div className={`grid gap-1 ${images.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+          {images.map(a => (
+            <a key={a.url} href={a.url} target="_blank" rel="noopener noreferrer" className="block overflow-hidden rounded-lg">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={driveImageSrc(a.url)} alt={a.name} className="h-32 w-full max-w-[220px] object-cover" loading="lazy" />
+            </a>
+          ))}
+        </div>
+      )}
+      {others.map(a => <AttachmentChip key={a.url} url={a.url} name={a.name} tone={tone} />)}
+    </div>
+  )
+}
+
+/** Small emoji palette that inserts at the caret of the given textarea. */
+function EmojiButton({ onPick }: { onPick: (e: string) => void }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="relative">
+      <button type="button" onClick={() => setOpen(o => !o)} title="Emoji"
+        className="flex items-center rounded-md border border-input px-2 py-1.5 text-base leading-none hover:bg-muted">🙂</button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
+          <div className="absolute bottom-full left-0 z-50 mb-2 grid w-64 grid-cols-8 gap-1 rounded-xl bg-popover p-2 shadow-xl shadow-black/15">
+            {EMOJIS.map(e => (
+              <button key={e} type="button" onClick={() => { onPick(e); setOpen(false) }} className="rounded-md p-1 text-lg hover:bg-muted">{e}</button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function FilePicker({ files, onChange, label = 'Attach' }: { files: File[]; onChange: (f: File[]) => void; label?: string }) {
+  return (
+    <>
+      <label className="flex cursor-pointer items-center gap-1.5 rounded-md border border-input px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground">
+        <ImagePlus className="h-3.5 w-3.5" /> {label}
+        <input type="file" multiple accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" className="hidden"
+          onChange={e => { const picked = Array.from(e.target.files ?? []); if (picked.length) onChange([...files, ...picked].slice(0, 10)); e.target.value = '' }} />
+      </label>
+    </>
+  )
+}
+
+function PendingFiles({ files, onRemove }: { files: File[]; onRemove: (i: number) => void }) {
+  if (!files.length) return null
+  return (
+    <div className="mt-2 flex flex-wrap gap-2">
+      {files.map((f, i) => (
+        <div key={i} className="relative">
+          {f.type.startsWith('image/')
+            // eslint-disable-next-line @next/next/no-img-element
+            ? <img src={URL.createObjectURL(f)} alt={f.name} className="h-14 w-14 rounded-lg object-cover" />
+            : <div className="flex h-14 max-w-[140px] items-center gap-1 rounded-lg bg-muted px-2 text-xs"><Paperclip className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{f.name}</span></div>}
+          <button type="button" onClick={() => onRemove(i)} className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-foreground text-background">
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+async function uploadAll(files: File[]): Promise<Attachment[]> {
+  return Promise.all(files.map(f => uploadFileToDrive(f, { folder: 'Messages' })))
+}
+
+// Attachment columns for a send. The list column is only written for 2+ files,
+// so single-file sends keep working before migration 039 adds it.
+function attachmentColumns(prefix: 'reply_' | '', list: Attachment[]) {
+  return {
+    [`${prefix}attachment_url`]: list[0]?.url ?? null,
+    [`${prefix}attachment_name`]: list[0]?.name ?? null,
+    ...(list.length > 1 ? { [`${prefix}attachments`]: list } : {}),
+  }
+}
+
+export function MessagesView({ embedded = false }: { embedded?: boolean } = {}) {
   const supabase = createClient()
   const [messages, setMessages] = useState<ClientMessage[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
   const [replyText, setReplyText] = useState('')
-  const [replyFile, setReplyFile] = useState<File | null>(null)
+  const [replyFiles, setReplyFiles] = useState<File[]>([])
   const [replying, setReplying] = useState(false)
   const [filter, setFilter] = useState<'all' | 'unread' | 'replied'>('all')
   const [search, setSearch] = useState('')
@@ -148,7 +247,7 @@ export function MessagesView() {
   const [partyFilter, setPartyFilter] = useState('')
   const [pickedPartyId, setPickedPartyId] = useState<string | null>(null)
   const [newMessageText, setNewMessageText] = useState('')
-  const [newConvFile, setNewConvFile] = useState<File | null>(null)
+  const [newConvFiles, setNewConvFiles] = useState<File[]>([])
   const [creatingConv, setCreatingConv] = useState(false)
 
   async function load() {
@@ -203,26 +302,30 @@ export function MessagesView() {
   }
 
   async function sendReply() {
-    if (!selected || (!replyText.trim() && !replyFile)) return
+    if (!selected || (!replyText.trim() && replyFiles.length === 0)) return
     const target = selected.lastMessage
     setReplying(true)
     try {
-      let attachment: { url: string; name: string } | null = null
-      if (replyFile) attachment = await uploadFileToDrive(replyFile, { folder: 'Messages' })
+      const files = await uploadAll(replyFiles)
       const now = new Date().toISOString()
-      const payload = {
-        reply: replyText.trim(),
-        replied_at: now,
-        status: 'replied',
-        reply_attachment_url: attachment?.url ?? null,
-        reply_attachment_name: attachment?.name ?? null,
+      const reply = { reply: replyText.trim(), replied_at: now, status: 'replied', ...attachmentColumns('reply_', files) }
+      if (!target.reply && !target.reply_attachment_url) {
+        // Answer the client's latest message.
+        const { error } = await supabase.from('client_messages').update(reply).eq('id', target.id)
+        if (error) throw error
+      } else {
+        // Already answered — send a new message in the same thread instead of overwriting.
+        const { error } = await supabase.from('client_messages').insert({
+          client_id: target.client_id ?? null, client_name: target.client_name ?? null,
+          supplier_id: target.supplier_id ?? null, supplier_name: target.supplier_name ?? null,
+          message: '', sent_at: now, ...reply,
+        })
+        if (error) throw error
       }
-      const { error } = await supabase.from('client_messages').update(payload).eq('id', target.id)
-      if (error) throw error
-      setMessages(ms => ms.map(m => m.id === target.id ? { ...m, ...payload } : m))
       setReplyText('')
-      setReplyFile(null)
-      toast.success('Reply saved.')
+      setReplyFiles([])
+      await load()
+      toast.success('Message sent')
     } catch (err: unknown) {
       toast.error(getErrorMessage(err, 'Failed to send reply'))
     }
@@ -232,7 +335,7 @@ export function MessagesView() {
   function openConversation(conv: Conversation) {
     setSelectedKey(conv.key)
     setReplyText('')
-    setReplyFile(null)
+    setReplyFiles([])
     markConversationRead(conv)
   }
 
@@ -241,7 +344,7 @@ export function MessagesView() {
     setPickedPartyId(null)
     setPartyFilter('')
     setNewMessageText('')
-    setNewConvFile(null)
+    setNewConvFiles([])
     setNewConvOpen(true)
     setPartyOptionsLoading(true)
     const [{ data: clientData }, { data: supplierData }] = await Promise.all([
@@ -263,13 +366,12 @@ export function MessagesView() {
   )
 
   async function startNewConversation() {
-    if (!pickedPartyId || (!newMessageText.trim() && !newConvFile)) return
+    if (!pickedPartyId || (!newMessageText.trim() && newConvFiles.length === 0)) return
     const party = currentPartyOptions.find(c => c.id === pickedPartyId)
     if (!party) return
     setCreatingConv(true)
     try {
-      let attachment: { url: string; name: string } | null = null
-      if (newConvFile) attachment = await uploadFileToDrive(newConvFile, { folder: 'Messages' })
+      const files = await uploadAll(newConvFiles)
       const now = new Date().toISOString()
       const { error } = await supabase.from('client_messages').insert({
         client_id: newConvType === 'client' ? party.id : null,
@@ -278,8 +380,7 @@ export function MessagesView() {
         supplier_name: newConvType === 'supplier' ? party.company_name : null,
         message: '',
         reply: newMessageText.trim(),
-        reply_attachment_url: attachment?.url ?? null,
-        reply_attachment_name: attachment?.name ?? null,
+        ...attachmentColumns('reply_', files),
         replied_at: now,
         sent_at: now,
         status: 'replied',
@@ -322,9 +423,9 @@ export function MessagesView() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className={`space-y-6 ${embedded ? 'relative min-h-full' : ''}`}>
       {/* Header */}
-      <div className="flex items-center gap-3">
+      <div className={`flex items-center gap-3 ${embedded ? 'hidden' : ''}`}>
         <div className="h-9 w-9 rounded-lg bg-red-600/10 flex items-center justify-center">
           <MessageSquare className="h-5 w-5 text-red-600" />
         </div>
@@ -335,10 +436,18 @@ export function MessagesView() {
         {unreadCount > 0 && (
           <span className="ml-2 px-2 py-0.5 rounded-full bg-red-600 text-white text-xs font-bold">{unreadCount} new</span>
         )}
-        <Button onClick={openNewConversation} className="ml-auto gap-2 bg-red-600 hover:bg-red-700">
-          <Plus className="h-4 w-4" /> New Conversation
-        </Button>
       </div>
+
+      {/* New conversation — round + button, lower right */}
+      <button
+        type="button"
+        onClick={openNewConversation}
+        title="New conversation"
+        aria-label="New conversation"
+        className={`${embedded ? 'fixed bottom-40 right-7 lg:bottom-28 lg:right-10' : 'fixed bottom-24 right-5 lg:bottom-8 lg:right-8'} z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#F84400] text-white shadow-lg shadow-orange-900/30 transition-transform hover:scale-105`}
+      >
+        <Plus className="h-6 w-6" />
+      </button>
 
       {/* Main panel */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 min-h-[500px]">
@@ -384,7 +493,7 @@ export function MessagesView() {
                       </div>
                       {conv.contact && <div className="text-xs text-muted-foreground truncate">{conv.contact}</div>}
                       <div className="text-xs text-muted-foreground truncate mt-0.5">
-                        {conv.lastMessage.message || conv.lastMessage.reply || (conv.lastMessage.attachment_name || conv.lastMessage.reply_attachment_name ? '📎 Attachment' : '')}
+                        {conv.lastMessage.message || conv.lastMessage.reply || (conv.lastMessage.attachment_name || conv.lastMessage.reply_attachment_name ? '📷 Photo / file' : '')}
                       </div>
                     </div>
                   </div>
@@ -440,7 +549,7 @@ export function MessagesView() {
                         <div className="flex justify-start">
                           <div className="max-w-[80%] bg-muted rounded-2xl rounded-bl-sm px-4 py-2.5">
                             {m.message.trim() && <p className="text-sm whitespace-pre-wrap">{m.message}</p>}
-                            {m.attachment_url && <AttachmentChip url={m.attachment_url} name={m.attachment_name} />}
+                            <AttachmentGrid files={filesOf(m.attachments, m.attachment_url, m.attachment_name)} />
                             <p className="text-[10px] text-muted-foreground mt-1">
                               {m.sent_at ? format(new Date(m.sent_at), 'MMM d, yyyy · h:mm a') : '—'}
                             </p>
@@ -451,7 +560,7 @@ export function MessagesView() {
                         <div className="flex justify-end">
                           <div className="max-w-[80%] bg-red-600 text-white rounded-2xl rounded-br-sm px-4 py-2.5">
                             {m.reply && <p className="text-sm whitespace-pre-wrap">{m.reply}</p>}
-                            {m.reply_attachment_url && <AttachmentChip url={m.reply_attachment_url} name={m.reply_attachment_name} tone="onRed" />}
+                            <AttachmentGrid files={filesOf(m.reply_attachments, m.reply_attachment_url, m.reply_attachment_name)} tone="onRed" />
                             <p className="text-[10px] text-white/70 mt-1 flex items-center gap-1 justify-end">
                               <CheckCheck className="h-3 w-3" />
                               {m.replied_at ? format(new Date(m.replied_at), 'MMM d, yyyy · h:mm a') : ''}
@@ -465,33 +574,23 @@ export function MessagesView() {
 
                 {/* Reply input */}
                 <div className="mt-auto shrink-0">
-                  <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">
-                    {selected.lastMessage.reply ? 'Update Reply' : 'Write a Reply'}
-                  </p>
                   <Textarea
                     rows={3}
-                    placeholder="Type your reply here…"
+                    placeholder="Type a message…"
                     value={replyText}
                     onChange={e => setReplyText(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) sendReply() }}
                     className="resize-none"
                   />
-                  {replyFile && (
-                    <div className="flex items-center gap-1.5 mt-2 text-xs bg-muted px-2 py-1 rounded-lg w-fit">
-                      <Paperclip className="h-3.5 w-3.5" />
-                      <span className="truncate max-w-[220px]">{replyFile.name}</span>
-                      <button onClick={() => setReplyFile(null)} className="text-muted-foreground hover:text-destructive">
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  )}
+                  <PendingFiles files={replyFiles} onRemove={i => setReplyFiles(fs => fs.filter((_, j) => j !== i))} />
                   <div className="flex justify-between items-center mt-3">
-                    <label className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground cursor-pointer px-2 py-1.5 rounded-md border border-input">
-                      <Paperclip className="h-3.5 w-3.5" /> Attach File
-                      <input type="file" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) setReplyFile(f); e.target.value = '' }} />
-                    </label>
-                    <Button onClick={sendReply} disabled={(!replyText.trim() && !replyFile) || replying} className="gap-2">
+                    <div className="flex items-center gap-2">
+                      <FilePicker files={replyFiles} onChange={setReplyFiles} label="Photos / files" />
+                      <EmojiButton onPick={e => setReplyText(t => t + e)} />
+                    </div>
+                    <Button onClick={sendReply} disabled={(!replyText.trim() && replyFiles.length === 0) || replying} className="gap-2 bg-[#F84400] hover:bg-[#e03d00]">
                       <Send className="h-4 w-4" />
-                      {replying ? 'Saving…' : selected.lastMessage.reply ? 'Update Reply' : 'Send Reply'}
+                      {replying ? 'Sending…' : 'Send'}
                     </Button>
                   </div>
                 </div>
@@ -556,26 +655,18 @@ export function MessagesView() {
                 onChange={e => setNewMessageText(e.target.value)}
                 className="resize-none"
               />
-              {newConvFile && (
-                <div className="flex items-center gap-1.5 text-xs bg-muted px-2 py-1 rounded-lg w-fit">
-                  <Paperclip className="h-3.5 w-3.5" />
-                  <span className="truncate max-w-[220px]">{newConvFile.name}</span>
-                  <button onClick={() => setNewConvFile(null)} className="text-muted-foreground hover:text-destructive">
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              )}
-              <label className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground cursor-pointer px-2 py-1.5 rounded-md border border-input w-fit">
-                <Paperclip className="h-3.5 w-3.5" /> Attach File
-                <input type="file" className="hidden" onChange={e => { const f = e.target.files?.[0]; if (f) setNewConvFile(f); e.target.value = '' }} />
-              </label>
+              <PendingFiles files={newConvFiles} onRemove={i => setNewConvFiles(fs => fs.filter((_, j) => j !== i))} />
+              <div className="flex items-center gap-2">
+                <FilePicker files={newConvFiles} onChange={setNewConvFiles} label="Photos / files" />
+                <EmojiButton onPick={e => setNewMessageText(t => t + e)} />
+              </div>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setNewConvOpen(false)}>Cancel</Button>
             <Button
               onClick={startNewConversation}
-              disabled={!pickedPartyId || (!newMessageText.trim() && !newConvFile) || creatingConv}
+              disabled={!pickedPartyId || (!newMessageText.trim() && newConvFiles.length === 0) || creatingConv}
               className="bg-red-600 hover:bg-red-700"
             >
               {creatingConv ? 'Starting…' : 'Start Conversation'}

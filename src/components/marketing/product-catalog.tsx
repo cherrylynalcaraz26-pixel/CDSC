@@ -60,7 +60,7 @@ export function ProductCatalog() {
   const count = cartCount(cart)
 
   return (
-    <section id="shop" className="mx-auto max-w-7xl px-6 pb-4 pt-20">
+    <section id="shop" className="mx-auto max-w-screen-2xl px-6 lg:px-10 pb-4 pt-20">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2 className="text-2xl font-semibold text-cdsc-ink sm:text-3xl">Shop Our Catalog</h2>
