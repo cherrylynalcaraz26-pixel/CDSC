@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import {
   Plus, Loader2, MoreHorizontal, Trophy, XCircle, LayoutGrid, List,
-  Link2, ExternalLink, Pencil, Trash2, Users, TrendingUp, Target,
+  Pencil, Trash2, Users, TrendingUp, Target,
   Phone, Mail, Calendar, Tag, ChevronRight, Building2,
 } from 'lucide-react'
 import { useSearchContext } from '@/context/search-context'
@@ -352,28 +352,6 @@ export default function CRMPage() {
           </Select>
         </div>
         <div className="ml-auto flex items-center gap-2">
-          <button
-            onClick={() => {
-              const url = `${window.location.origin}/inquiry`
-              navigator.clipboard.writeText(url).then(() => {
-                const el = document.getElementById('copy-fb')
-                if (el) { el.textContent = 'Copied!'; setTimeout(() => { el.textContent = 'Copy Link' }, 2000) }
-              })
-            }}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-          >
-            <Link2 className="w-4 h-4" />
-            <span id="copy-fb">Copy Link</span>
-          </button>
-          <a
-            href="/inquiry"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-border text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-          >
-            <ExternalLink className="w-4 h-4" />
-            Open Form
-          </a>
           <Button onClick={openNew} className="bg-red-600 hover:bg-red-700 text-white gap-1.5">
             <Plus className="w-4 h-4" /> New Lead
           </Button>

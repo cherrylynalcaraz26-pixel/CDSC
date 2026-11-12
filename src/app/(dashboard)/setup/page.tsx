@@ -27,6 +27,7 @@ import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { uploadImageToDrive } from '@/lib/upload-image'
 import { useSearchContext } from '@/context/search-context'
+import { EWT_TYPES, EWT_TYPE_ORDER, ewtTypeFromRate, isEwtType, type EwtType } from '@/lib/po-tax'
 
 /* ─── UOM ─────────────────────────────────────────────── */
 interface UOM { id: string; code: string; name: string; description: string | null; is_active: boolean }
@@ -677,13 +678,15 @@ interface Supplier {
   vat_classification: string | null; supplier_category: string | null
   payment_terms: string | null; lead_time_days: number | null
   atc_code: string | null; ewt_rate: number | null; is_active: boolean
+  default_ewt_type: string | null; bir_registered_address: string | null
   logo_url: string | null
   auth_user_id: string | null; portal_access: boolean | null
 }
 const emptySupplierForm = () => ({
   company_name: '', contact_person: '', mobile_number: '', email: '',
   address: '', tin: '', vat_registered: 'true', supplier_category: '',
-  payment_terms: '30 days', lead_time_days: '7', atc_code: '', ewt_rate: '2',
+  payment_terms: '30 days', lead_time_days: '7', default_ewt_type: 'GOODS_1' as EwtType,
+  bir_registered_address: '',
   vat_classification: 'vatable',
 })
 
@@ -781,7 +784,8 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
       supplier_category: s.supplier_category ?? '',
       payment_terms: s.payment_terms ?? '30 days',
       lead_time_days: String(s.lead_time_days ?? 7),
-      atc_code: s.atc_code ?? '', ewt_rate: String(s.ewt_rate ?? 2),
+      default_ewt_type: isEwtType(s.default_ewt_type) ? s.default_ewt_type : ewtTypeFromRate(s.ewt_rate),
+      bir_registered_address: s.bir_registered_address ?? '',
       vat_classification: s.vat_classification ?? 'vatable',
     })
     setLogoFile(null); setLogoPreview(s.logo_url ?? null)
@@ -825,8 +829,11 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
       supplier_category: form.supplier_category || null,
       payment_terms: form.payment_terms || null,
       lead_time_days: Number(form.lead_time_days) || null,
-      atc_code: form.atc_code || null,
-      ewt_rate: Number(form.ewt_rate) || null,
+      bir_registered_address: form.bir_registered_address || null,
+      default_ewt_type: form.default_ewt_type,
+      // Legacy fields kept in sync for the BIR page / Form 2307 exports.
+      atc_code: EWT_TYPES[form.default_ewt_type].atc,
+      ewt_rate: EWT_TYPES[form.default_ewt_type].rate * 100 || null,
       logo_url: logoUrl,
     }
     const { error } = editing
@@ -1044,26 +1051,35 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
               </Select>
             </div>
             <div className="space-y-1.5">
-              <Label>ATC Code (BIR)</Label>
-              <Select value={form.atc_code} onValueChange={sf('atc_code')}>
-                <SelectTrigger><SelectValue placeholder="Select ATC" /></SelectTrigger>
+              <Label>Default EWT Type</Label>
+              <Select
+                value={form.default_ewt_type}
+                onValueChange={v => setForm(p => ({ ...p, default_ewt_type: isEwtType(v) ? v : 'NONE' }))}
+              >
+                <SelectTrigger>
+                  <span className="text-sm">
+                    {form.default_ewt_type === 'NONE'
+                      ? 'None'
+                      : `${EWT_TYPES[form.default_ewt_type].label} ${EWT_TYPES[form.default_ewt_type].rate * 100}% — ${EWT_TYPES[form.default_ewt_type].atc}`}
+                  </span>
+                </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="WI010">WI010 – Goods (2%)</SelectItem>
-                  <SelectItem value="WI020">WI020 – Services (2%)</SelectItem>
-                  <SelectItem value="WI030">WI030 – Rent (5%)</SelectItem>
-                  <SelectItem value="WC160">WC160 – Professional (10%)</SelectItem>
-                  <SelectItem value="WC158">WC158 – Professional (15%)</SelectItem>
+                  {EWT_TYPE_ORDER.map(t => (
+                    <SelectItem key={t} value={t}>
+                      {t === 'NONE' ? 'None' : `${EWT_TYPES[t].label} ${EWT_TYPES[t].rate * 100}% — ${EWT_TYPES[t].atc}`}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
+              <p className="text-[11px] text-muted-foreground">Applied to new POs only when CDSC is a Top Withholding Agent.</p>
             </div>
-            <div className="space-y-1.5">
-              <Label>EWT Rate (%)</Label>
-              <Select value={form.ewt_rate} onValueChange={sf('ewt_rate')}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {['1','2','5','10','15'].map(r => <SelectItem key={r} value={r}>{r}%</SelectItem>)}
-                </SelectContent>
-              </Select>
+            <div className="space-y-1.5 sm:col-span-3">
+              <Label>BIR Registered Address</Label>
+              <Input
+                placeholder="As shown on the supplier's BIR Certificate of Registration (for Form 2307)"
+                value={form.bir_registered_address}
+                onChange={e => setForm(p => ({ ...p, bir_registered_address: e.target.value }))}
+              />
             </div>
             <div className="space-y-1.5">
               <Label>Lead Time (days)</Label>

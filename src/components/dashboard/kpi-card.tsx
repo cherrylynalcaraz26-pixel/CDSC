@@ -14,7 +14,7 @@ interface KPICardProps {
 
 export function KPICard({ title, value, subtitle, icon: Icon, trend, variant = 'default', className }: KPICardProps) {
   const variantStyles = {
-    default: 'border-border',
+    default: 'border-none',
     warning: 'border-yellow-500/50 bg-yellow-50/50 dark:bg-yellow-950/20',
     danger: 'border-red-500/50 bg-red-50/50 dark:bg-red-950/20',
     success: 'border-green-500/50 bg-green-50/50 dark:bg-green-950/20',
@@ -28,7 +28,7 @@ export function KPICard({ title, value, subtitle, icon: Icon, trend, variant = '
   }
 
   return (
-    <Card className={cn('border', variantStyles[variant], className)}>
+    <Card className={cn(variantStyles[variant], className)}>
       <CardContent className="p-5">
         <div className="flex items-start justify-between">
           <div className="flex-1">

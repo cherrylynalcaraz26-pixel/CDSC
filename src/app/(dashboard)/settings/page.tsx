@@ -61,6 +61,7 @@ interface Settings {
   live_video_url: string
   vat_registered: boolean
   default_vat_rate: number
+  is_top_withholding_agent: boolean
   ewt_default_rate: number
   fiscal_year_start: string
   industry: string
@@ -85,10 +86,10 @@ function defaultSettings(): Settings {
   return {
     company_name: 'CDSC Industrial Supply',
     company_short_name: 'CDSC',
-    legal_suffix: 'Corporation',
+    legal_suffix: '',
     tagline: 'Supplying Solutions, Building Partnerships',
-    business_type: 'Trading Corporation',
-    brand_positioning: 'CDSC Industrial Supply Corporation is your trusted one-stop source for industrial supplies, safety equipment, and construction materials in Batangas and across the Philippines. We combine competitive pricing with reliable delivery to keep your operations running smoothly.',
+    business_type: 'Sole Proprietorship',
+    brand_positioning: 'CDSC Industrial Supply is your trusted one-stop source for industrial supplies, safety equipment, and construction materials in Batangas and across the Philippines. We combine competitive pricing with reliable delivery to keep your operations running smoothly.',
     mission_statement: 'To provide industries and businesses with quality industrial supplies and exceptional service, delivered on time, every time — empowering our clients to achieve operational excellence and sustainable growth.',
     sec_reg_no: '',
     tin: '',
@@ -99,18 +100,19 @@ function defaultSettings(): Settings {
     phone: '',
     mobile: '',
     email: 'cdsc.gmot@gmail.com',
-    website: 'cdscindustrialsupply.netlify.app',
+    website: 'cdsc-eight.vercel.app',
     logo_url: '',
     registration_doc_url: '',
     live_video_url: '',
     vat_registered: true,
     default_vat_rate: 12,
+    is_top_withholding_agent: false,
     ewt_default_rate: 2,
     fiscal_year_start: '01-01',
     industry: 'Industrial Supply & Distribution',
     founded_year: '',
     employees_count: '',
-    about_company: 'CDSC Industrial Supply Corporation is a Philippine-based trading company specializing in the supply and distribution of industrial materials, safety equipment, hardware, and general construction supplies.\n\nStrategically located in Sto. Tomas, Batangas, we serve manufacturers, contractors, and businesses across Region IV-A (CALABARZON) and beyond. Our team is committed to sourcing quality products from trusted local and international suppliers, ensuring that our clients receive the best value for their investment.\n\nWith a customer-first approach, CDSC Industrial Supply has built a strong reputation for reliability, competitive pricing, and responsive service — making us the preferred industrial supply partner for businesses of all sizes.',
+    about_company: 'CDSC Industrial Supply is a Philippine-based trading company specializing in the supply and distribution of industrial materials, safety equipment, hardware, and general construction supplies.\n\nStrategically located in Sto. Tomas, Batangas, we serve manufacturers, contractors, and businesses across Region IV-A (CALABARZON) and beyond. Our team is committed to sourcing quality products from trusted local and international suppliers, ensuring that our clients receive the best value for their investment.\n\nWith a customer-first approach, CDSC Industrial Supply has built a strong reputation for reliability, competitive pricing, and responsive service — making us the preferred industrial supply partner for businesses of all sizes.',
     core_services: [
       {
         name: 'Industrial Supply & Distribution',
@@ -136,11 +138,11 @@ function defaultSettings(): Settings {
     key_clients: '',
     certifications: 'PhilGEPS Registered\nDTI Registered Business',
     years_of_experience: '',
-    proposal_introduction: 'Dear Sir/Madam,\n\nThank you for the opportunity to present this proposal. CDSC Industrial Supply Corporation is pleased to offer our products and services to meet your operational requirements.\n\nWe are a trusted supplier of industrial materials, safety equipment, and general supplies based in Sto. Tomas, Batangas, serving clients across CALABARZON and the Philippines. Our commitment is to deliver quality products on time, at competitive prices, with the service reliability you can depend on.',
-    executive_summary: 'CDSC Industrial Supply Corporation proposes to supply the required industrial materials, equipment, and/or services as specified herein. We commit to delivering quality-assured products sourced from reputable manufacturers and distributors.\n\nOur key value propositions:\n• Competitive and transparent pricing\n• Timely delivery with reliable logistics\n• Dedicated account management\n• Quality products from trusted suppliers\n• Flexible payment terms for qualified clients\n\nWe are confident that this proposal represents the best combination of quality, reliability, and value for your organization.',
+    proposal_introduction: 'Dear Sir/Madam,\n\nThank you for the opportunity to present this proposal. CDSC Industrial Supply is pleased to offer our products and services to meet your operational requirements.\n\nWe are a trusted supplier of industrial materials, safety equipment, and general supplies based in Sto. Tomas, Batangas, serving clients across CALABARZON and the Philippines. Our commitment is to deliver quality products on time, at competitive prices, with the service reliability you can depend on.',
+    executive_summary: 'CDSC Industrial Supply proposes to supply the required industrial materials, equipment, and/or services as specified herein. We commit to delivering quality-assured products sourced from reputable manufacturers and distributors.\n\nOur key value propositions:\n• Competitive and transparent pricing\n• Timely delivery with reliable logistics\n• Dedicated account management\n• Quality products from trusted suppliers\n• Flexible payment terms for qualified clients\n\nWe are confident that this proposal represents the best combination of quality, reliability, and value for your organization.',
     scope_of_work: 'The scope of this proposal covers the supply and delivery of the following:\n\n1. Products / Materials — As detailed in the attached quotation or purchase order.\n2. Delivery — Delivery to the client\'s designated location within the agreed lead time.\n3. Quality Assurance — All items delivered shall meet the specifications indicated in the order and shall be free from defects.\n4. Documentation — Complete delivery receipts, sales invoices, and product documentation shall be provided upon delivery.\n\nAny items not listed herein are considered out of scope and will be subject to a separate quotation.',
     terms_and_conditions: '1. VALIDITY — This proposal is valid for thirty (30) days from the date of issuance unless otherwise stated.\n\n2. PAYMENT TERMS — Payment shall be made as agreed. Overdue accounts are subject to a 2% monthly interest charge.\n\n3. DELIVERY — Lead times are subject to stock availability. CDSC shall notify the client promptly of any delays.\n\n4. PRICES — Quoted prices are exclusive of VAT (12%) unless otherwise stated. Prices are subject to change without prior notice due to supplier adjustments.\n\n5. RETURNS — Items may be returned within seven (7) days of delivery, provided they are in original condition, unused, and accompanied by the original delivery receipt. Custom or special-order items are non-returnable.\n\n6. WARRANTY — Warranty terms follow the original manufacturer\'s warranty, if applicable. CDSC does not cover damages arising from misuse or improper installation.\n\n7. FORCE MAJEURE — CDSC shall not be liable for delays caused by events beyond our reasonable control, including natural disasters, government orders, or supply chain disruptions.\n\n8. GOVERNING LAW — This agreement is governed by the laws of the Republic of the Philippines.',
-    payment_schedule: '• 50% Down Payment — Upon approval and signing of Purchase Order\n• 50% Balance — Upon delivery and acceptance of goods\n\nAlternatively, full payment may be made within thirty (30) days from invoice date for qualified accounts with approved credit terms.\n\nAccepted payment methods: Bank transfer (BDO / BPI / UnionBank), check payable to CDSC Industrial Supply Corporation, or cash.',
+    payment_schedule: '• 50% Down Payment — Upon approval and signing of Purchase Order\n• 50% Balance — Upon delivery and acceptance of goods\n\nAlternatively, full payment may be made within thirty (30) days from invoice date for qualified accounts with approved credit terms.\n\nAccepted payment methods: Bank transfer (BDO / BPI / UnionBank), check payable to CDSC Industrial Supply, or cash.',
     validity_period: '30 days',
   }
 }
@@ -1631,7 +1633,7 @@ export default function SettingsPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label>Business Type</Label>
-                  <Select value={settings.business_type} onValueChange={v => set('business_type', v ?? 'Trading Corporation')}>
+                  <Select value={settings.business_type} onValueChange={v => set('business_type', v ?? 'Sole Proprietorship')}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       {BUSINESS_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
@@ -1729,6 +1731,26 @@ export default function SettingsPage() {
                 <div className="space-y-1.5">
                   <Label>Fiscal Year Start (MM-DD)</Label>
                   <Input placeholder="01-01" {...S('fiscal_year_start')} />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label>Top Withholding Agent (TWA)</Label>
+                  <Select
+                    value={settings.is_top_withholding_agent ? 'yes' : 'no'}
+                    onValueChange={v => set('is_top_withholding_agent', v === 'yes')}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="no">No — not a Top Withholding Agent</SelectItem>
+                      <SelectItem value="yes">Yes — BIR-designated Top Withholding Agent</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    When Yes, new purchase orders default to each supplier&apos;s EWT type (Goods 1% / Services 2% / Rental 5%).
+                    When No, they default to no EWT.
+                  </p>
                 </div>
               </div>
             </div>

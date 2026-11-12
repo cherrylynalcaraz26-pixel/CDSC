@@ -1382,7 +1382,7 @@ function CollectionsTab() {
         </div>
       </div>
 
-      <Card className="border-none shadow-md shadow-black/5 ring-1 ring-black/5 rounded-2xl overflow-hidden py-0 gap-0">
+      <Card className="border-none shadow-md shadow-black/5 rounded-2xl overflow-hidden py-0 gap-0">
         <CardHeader className="pb-2 pt-5 px-5 bg-gradient-to-r from-muted/50 to-transparent">
           <CardTitle className="text-base flex items-center gap-2">
             <Receipt className="h-4 w-4 text-red-600" />Collection Records

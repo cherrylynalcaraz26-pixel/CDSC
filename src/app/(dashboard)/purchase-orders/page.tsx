@@ -19,13 +19,17 @@ import {
   Plus, Printer, Loader2,
   Trash2, CheckCircle2, XCircle, ArrowRightLeft, X,
   Package, Search, Mail, Send, Pencil, FileText,
-  ChevronDown, ChevronUp, Wallet, Clock3, AlertCircle, Store, GripVertical, Paperclip,
+  ChevronDown, ChevronUp, Wallet, Clock3, AlertCircle, Store, GripVertical, Paperclip, Landmark,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
 import { sendEmail, POPdfData } from '@/lib/send-email'
 import { uploadFileToDrive, uploadImageToDrive, isImageAttachment, isPdfAttachment, driveImageSrc, driveEmbedUrl } from '@/lib/upload-image'
+import {
+  computePO, defaultEwtType, ewtTypeFromRate, isEwtType, EWT_TYPES, EWT_TYPE_ORDER,
+  type EwtType, type PriceBasis,
+} from '@/lib/po-tax'
 
 interface ItemOption {
   item_code: string
@@ -70,19 +74,27 @@ interface PO {
   remarks: string | null
   supplier?: { company_name: string } | null
   invoice_no?: string | null
+  price_basis?: PriceBasis | null
+  ewt_type?: EwtType | null
+  gross_amount?: number | null
+  vatable_amount?: number | null
+  ewt_rate?: number | null
+  ewt_atc?: string | null
+  amount_paid?: number | null
+  payment_variance?: boolean | null
 }
 
-interface Supplier { id: string; company_name: string; payment_terms: string | null; ewt_rate: number | null; email: string | null }
+interface Supplier {
+  id: string; company_name: string; payment_terms: string | null; ewt_rate: number | null; email: string | null
+  vat_registered: boolean | null; tin: string | null; default_ewt_type: EwtType | null
+}
+
+// Gross (invoice total incl. VAT) for a stored PO. Falls back to total_amount
+// for rows saved before gross_amount existed.
+const poGross = (po: PO) => Number(po.gross_amount) || Number(po.total_amount) || 0
 interface POLine   { item_name: string; quantity: string; unit: string; unit_price: string; selling_price: string }
 const emptyLine = (): POLine => ({ item_name: '', quantity: '1', unit: 'piece', unit_price: '', selling_price: '' })
 
-type EWTType = 'none' | 'goods' | 'services' | 'rental'
-const EWT_CFG: Record<EWTType, { label: string; rate: number; atc: string; desc: string }> = {
-  none:     { label: 'None',     rate: 0,    atc: '',      desc: '' },
-  goods:    { label: 'Goods',    rate: 0.01, atc: 'WC158', desc: 'Purchase of Goods' },
-  services: { label: 'Services', rate: 0.02, atc: 'WC157', desc: 'Purchase of Services' },
-  rental:   { label: 'Rental',   rate: 0.05, atc: 'WC160', desc: 'Rental' },
-}
 
 export default function PurchaseOrdersPage() {
   const supabase = createClient()
@@ -253,11 +265,16 @@ export default function PurchaseOrdersPage() {
   const [csiSuppliers, setCsiSuppliers] = useState<Set<string>>(new Set())
   const [collectedSuppliers, setCollectedSuppliers] = useState<Set<string>>(new Set())
 
-  // VAT mode
-  const [vatInclusive, setVatInclusive] = useState(false)
+  // Price basis — whether the entered unit prices already include VAT
+  const [priceBasis, setPriceBasis] = useState<PriceBasis>('VAT_INCLUSIVE')
 
   // EWT
-  const [ewtType, setEwtType] = useState<EWTType>('services')
+  const [ewtType, setEwtType] = useState<EwtType>('NONE')
+  const [isTopWithholdingAgent, setIsTopWithholdingAgent] = useState(false)
+  const [vatRatePct, setVatRatePct] = useState(12)
+
+  // Payments (disbursements linked by PO number) — for "EWT to remit this month"
+  const [poPaymentDates, setPoPaymentDates] = useState<Record<string, string>>({})
 
   // Prepared By / Approved By
   const [preparedBy, setPreparedBy] = useState('')
@@ -280,14 +297,28 @@ export default function PurchaseOrdersPage() {
         .from('purchase_orders')
         .select('*, supplier:suppliers(company_name)')
         .order('created_at', { ascending: false }),
-      supabase.from('suppliers').select('id, company_name, payment_terms, ewt_rate, email').eq('is_active', true).order('company_name'),
+      supabase.from('suppliers').select('id, company_name, payment_terms, ewt_rate, email, vat_registered, tin, default_ewt_type').eq('is_active', true).order('company_name'),
       supabase.from('items').select('item_code, item_name, unit_of_measure, status, cost, selling_price').order('item_name'),
     ])
     setPOs((poData ?? []) as PO[])
-    setSuppliers(supData ?? [])
+    setSuppliers((supData ?? []) as Supplier[])
     setItems((itemData ?? []) as ItemOption[])
-    const { data: sysData } = await supabase.from('system_settings').select('company_name, address, phone, email, tin, logo_url').single()
-    if (sysData) setCompanyInfo(sysData)
+    const { data: sysData } = await supabase.from('system_settings')
+      .select('company_name, address, phone, email, tin, logo_url, is_top_withholding_agent, default_vat_rate').single()
+    if (sysData) {
+      const { is_top_withholding_agent, default_vat_rate, ...info } = sysData
+      setCompanyInfo(info)
+      setIsTopWithholdingAgent(!!is_top_withholding_agent)
+      setVatRatePct(Number(default_vat_rate) || 12)
+    }
+    const { data: disbData } = await supabase.from('disbursements')
+      .select('po_number, disb_date, status').not('po_number', 'is', null).neq('status', 'voided')
+    const payDates: Record<string, string> = {}
+    for (const d of disbData ?? []) {
+      // latest payment date per PO
+      if (d.po_number && (!payDates[d.po_number] || d.disb_date > payDates[d.po_number])) payDates[d.po_number] = d.disb_date
+    }
+    setPoPaymentDates(payDates)
     const { data: wsData } = await supabase.from('warehouse_stock').select('item_name, quantity')
     if (wsData) {
       const map: Record<string, number> = {}
@@ -346,25 +377,29 @@ export default function PurchaseOrdersPage() {
   // Computed totals
   const subtotal = lines.reduce((s, l) => s + (parseFloat(l.unit_price) || 0) * (parseFloat(l.quantity) || 0), 0)
   const selectedSupplier = suppliers.find(s => s.id === supplierId)
-  const ewtCfg = EWT_CFG[ewtType]
-  const taxRate = ewtCfg.rate
-  const taxLabel = ewtType !== 'none' ? `EWT — ${ewtCfg.atc}` : 'EWT'
+  const supplierVatStatus = selectedSupplier?.vat_registered === false ? 'NON_VAT' : 'VAT'
+  const ewtCfg = EWT_TYPES[ewtType]
+  const taxLabel = ewtType !== 'NONE' ? `EWT ${ewtCfg.rate * 100}% (${ewtCfg.atc})` : 'EWT'
 
   const discountAmount = subtotal * (discountRate / 100)
   const netSubtotal = subtotal - discountAmount
-  const vatAmount = vatInclusive ? netSubtotal * (0.12 / 1.12) : netSubtotal * 0.12
-  // EWT is withheld on the VAT-exclusive amount. netSubtotal is already VAT-exclusive
-  // unless vatInclusive is on, in which case the 12% baked into it must be stripped first.
-  const taxAmount = (vatInclusive ? netSubtotal / 1.12 : netSubtotal) * taxRate
-  const totalAmount = vatInclusive ? netSubtotal : netSubtotal + vatAmount
-  const netPayable = subtotal - vatAmount
+  const calc = computePO({ lineTotal: netSubtotal, priceBasis, supplierVatStatus, ewtType, vatRate: vatRatePct / 100 })
+  const grossAmount = calc.gross
+  const vatAmount = calc.vat
+  const taxAmount = calc.ewt
+  const netPayable = calc.netPayable
+
+  function supplierDefaultEwt(s: Supplier | undefined): EwtType | null {
+    if (!s) return null
+    return isEwtType(s.default_ewt_type) ? s.default_ewt_type : ewtTypeFromRate(s.ewt_rate)
+  }
 
   function resetForm() {
     setEditingId(null)
     setSupplierId(''); setPoNumber(''); setDeliveryDate(''); setInvoiceNo('')
     setPaymentTerms('30 days'); setRemarks(''); setLines([emptyLine()])
     setActiveTab('form'); setDiscountType('none'); setDiscountCustom('')
-    setEwtType('services'); setPreparedBy(''); setApprovedBy(''); setVatInclusive(false)
+    setEwtType('NONE'); setPreparedBy(''); setApprovedBy(''); setPriceBasis('VAT_INCLUSIVE')
   }
 
   // Next sequential PO-<year>-NNNNN number, continuing the highest number already
@@ -419,9 +454,9 @@ export default function PurchaseOrdersPage() {
     else if (dr === 5) setDiscountType('5')
     else { setDiscountType('custom'); setDiscountCustom(String(dr)) }
 
-    // Restore EWT type based on saved ewt_amount vs subtotal ratio
-    if ((po.ewt_amount ?? 0) === 0) setEwtType('none')
-    else setEwtType('services')
+    // Restore price basis and EWT type
+    setPriceBasis(po.price_basis === 'VAT_EXCLUSIVE' ? 'VAT_EXCLUSIVE' : 'VAT_INCLUSIVE')
+    setEwtType(isEwtType(po.ewt_type) ? po.ewt_type : 'NONE')
 
     // Load existing line items
     const { data: poItems } = await supabase
@@ -469,13 +504,19 @@ export default function PurchaseOrdersPage() {
       payment_terms: paymentTerms || null,
       remarks: remarks || null,
       subtotal,
-      vat_amount: vatAmount,
-      ewt_amount: taxAmount,
       discount_rate: discountRate,
       discount_amount: discountAmount,
       tax_type: 'ewt',
-      total_amount: totalAmount,
-      net_payable: netPayable,
+      price_basis: priceBasis,
+      ewt_type: ewtType,
+      gross_amount: calc.gross,
+      vatable_amount: calc.vatable,
+      vat_amount: calc.vat,
+      ewt_rate: calc.ewtRate,
+      ewt_atc: calc.ewtAtc,
+      ewt_amount: calc.ewt,
+      total_amount: calc.gross, // kept equal to gross for older readers
+      net_payable: calc.netPayable,
     }
     let error
     let savedPoId = editingId
@@ -708,7 +749,8 @@ export default function PurchaseOrdersPage() {
     const fmtN = (n: number) => (n ?? 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })
     const hasEwt = (po.ewt_amount ?? 0) > 0
     const hasDiscount = (po.discount_rate ?? 0) > 0
-    const vNetSub = (po.subtotal ?? 0) - (po.discount_amount ?? 0)
+    const vGross = poGross(po)
+    const vEwtLabel = po.ewt_atc ? `EWT ${(Number(po.ewt_rate) || 0) * 100}% (${po.ewt_atc})` : 'EWT'
     const rows = items.map((it, i) => `
       <tr style="background:${i % 2 === 0 ? '#fff' : '#f9fafb'}">
         <td style="padding:4px 6px;color:#9ca3af;text-align:center">${i + 1}</td>
@@ -766,9 +808,11 @@ export default function PurchaseOrdersPage() {
     <div style="display:flex;justify-content:flex-end;margin-bottom:20px">
       <div style="width:200px">
         ${hasDiscount ? `<div style="display:flex;justify-content:space-between;padding-bottom:4px;font-size:10px"><span style="color:#6b7280">Discount (${po.discount_rate}%)</span><span style="color:#ea580c">-${fmtN(po.discount_amount)}</span></div>` : ''}
-        ${hasEwt ? `<div style="display:flex;justify-content:space-between;padding-bottom:4px;font-size:10px"><span style="color:#6b7280">EWT</span><span style="color:#b91c1c">-${fmtN(po.ewt_amount)}</span></div>` : ''}
+        <div style="display:flex;justify-content:space-between;padding-bottom:4px;font-size:10px"><span style="color:#6b7280">Total Amount (gross)</span><span>${fmtN(vGross)}</span></div>
+        ${(po.vat_amount ?? 0) > 0 ? `<div style="display:flex;justify-content:space-between;padding-bottom:4px;font-size:10px"><span style="color:#6b7280">VAT portion (included)</span><span style="color:#2563eb">${fmtN(po.vat_amount)}</span></div>` : ''}
+        ${hasEwt ? `<div style="display:flex;justify-content:space-between;padding-bottom:4px;font-size:10px"><span style="color:#6b7280">Less: ${vEwtLabel}</span><span style="color:#b91c1c">-${fmtN(po.ewt_amount)}</span></div>` : ''}
         <div style="border-top:1px solid #e5e7eb;padding-top:4px;display:flex;justify-content:space-between;font-weight:bold;font-size:12px">
-          <span>Total</span><span style="color:#b91c1c">${fmtN(vNetSub)}</span>
+          <span>Net Payable</span><span style="color:#b91c1c">${fmtN(po.net_payable ?? vGross)}</span>
         </div>
       </div>
     </div>
@@ -882,6 +926,10 @@ export default function PurchaseOrdersPage() {
       vatAmount: po?.vat_amount ?? vatAmount,
       ewtAmount: po?.ewt_amount ?? taxAmount,
       netPayable: po?.net_payable ?? netPayable,
+      grossAmount: po ? poGross(po) : grossAmount,
+      ewtLabel: po
+        ? (po.ewt_atc ? `EWT ${(Number(po.ewt_rate) || 0) * 100}% (${po.ewt_atc})` : 'EWT')
+        : taxLabel,
     }
   }
 
@@ -914,7 +962,7 @@ export default function PurchaseOrdersPage() {
       })
     : pos
 
-  type PoSortKey = 'po_number' | 'invoice_no' | 'supplier' | 'po_date' | 'delivery_date' | 'subtotal' | 'vat_amount' | 'ewt_amount' | 'net_payable' | 'status'
+  type PoSortKey = 'po_number' | 'invoice_no' | 'supplier' | 'po_date' | 'delivery_date' | 'gross_amount' | 'vat_amount' | 'ewt_amount' | 'net_payable' | 'status'
   const { sorted: sortedPos, sortKey: poSortKey, sortDir: poSortDir, onSort: onSortPo } = useTableSort<PO, PoSortKey>(displayedPos, (po, key) => {
     switch (key) {
       case 'po_number': return po.po_number ?? ''
@@ -922,7 +970,7 @@ export default function PurchaseOrdersPage() {
       case 'supplier': return po.supplier?.company_name ?? ''
       case 'po_date': return po.po_date ?? ''
       case 'delivery_date': return po.delivery_date ?? ''
-      case 'subtotal': return po.subtotal ?? 0
+      case 'gross_amount': return poGross(po)
       case 'vat_amount': return po.vat_amount ?? 0
       case 'ewt_amount': return po.ewt_amount ?? 0
       case 'net_payable': return po.net_payable ?? 0
@@ -934,7 +982,8 @@ export default function PurchaseOrdersPage() {
     open: pos.filter(p => p.status === 'open').length,
     partial: pos.filter(p => p.status === 'partially_delivered').length,
     completed: pos.filter(p => p.status === 'completed').length,
-    total: pos.reduce((s, p) => s + (p.total_amount ?? 0), 0),
+    total: pos.reduce((s, p) => s + poGross(p), 0),
+    ewtThisMonth: pos.filter(p => p.status !== 'cancelled' && (poPaymentDates[p.po_number ?? ''] ?? '').startsWith(format(new Date(), 'yyyy-MM'))).reduce((s, p) => s + (Number(p.ewt_amount) || 0), 0),
   }
 
   const activeItems = items.filter(it => it.status === 'active')
@@ -969,7 +1018,7 @@ export default function PurchaseOrdersPage() {
       </div>
 
       {!open && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
           <Card className="relative overflow-hidden border-none">
             <div className="absolute inset-0 bg-gradient-to-br from-red-50 to-transparent" />
             <CardContent className="relative pt-5 pb-4 flex items-start justify-between gap-3">
@@ -979,6 +1028,19 @@ export default function PurchaseOrdersPage() {
               </div>
               <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center shadow-sm shadow-red-500/30">
                 <Wallet className="h-5 w-5 text-white" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="relative overflow-hidden border-none">
+            <div className="absolute inset-0 bg-gradient-to-br from-purple-50 to-transparent" />
+            <CardContent className="relative pt-5 pb-4 flex items-start justify-between gap-3">
+              <div>
+                <div className="text-2xl font-bold text-purple-700">{loading ? '—' : fmt(counts.ewtThisMonth)}</div>
+                <div className="text-sm text-muted-foreground mt-0.5">EWT to Remit (this month)</div>
+                <div className="text-[11px] text-muted-foreground/70">From POs paid in {format(new Date(), 'MMMM')}</div>
+              </div>
+              <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-sm shadow-purple-500/30">
+                <Landmark className="h-5 w-5 text-white" />
               </div>
             </CardContent>
           </Card>
@@ -1104,8 +1166,8 @@ export default function PurchaseOrdersPage() {
                   <SortableTableHead label="Supplier" sortKey="supplier" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
                   <SortableTableHead label="PO Date" sortKey="po_date" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
                   <SortableTableHead label="Delivery Date" sortKey="delivery_date" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
-                  <SortableTableHead label="Subtotal" sortKey="subtotal" align="right" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
-                  <SortableTableHead label="VAT 12%" sortKey="vat_amount" align="right" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
+                  <SortableTableHead label="Gross Amount" sortKey="gross_amount" align="right" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
+                  <SortableTableHead label="VAT" sortKey="vat_amount" align="right" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
                   <SortableTableHead label="EWT" sortKey="ewt_amount" align="right" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
                   <SortableTableHead label="Net Payable" sortKey="net_payable" align="right" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
                   <SortableTableHead label="Status" sortKey="status" activeKey={poSortKey} direction={poSortDir} onSort={onSortPo} />
@@ -1145,10 +1207,20 @@ export default function PurchaseOrdersPage() {
                       <TableCell className="text-sm whitespace-nowrap">
                         {po.delivery_date ? format(new Date(po.delivery_date), 'MMM d, yyyy') : '—'}
                       </TableCell>
-                      <TableCell className="text-right text-sm">{fmt(po.subtotal ?? 0)}</TableCell>
+                      <TableCell className="text-right text-sm">{fmt(poGross(po))}</TableCell>
                       <TableCell className="text-right text-sm text-blue-600">{fmt(po.vat_amount ?? 0)}</TableCell>
                       <TableCell className="text-right text-sm text-red-700">{fmt(po.ewt_amount ?? 0)}</TableCell>
-                      <TableCell className="text-right font-semibold">{fmt(po.net_payable ?? 0)}</TableCell>
+                      <TableCell className="text-right font-semibold">
+                        {fmt(po.net_payable ?? 0)}
+                        {po.payment_variance && (
+                          <span
+                            className="ml-1.5 inline-block text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 align-middle"
+                            title={`Amount paid ${fmt(Number(po.amount_paid) || 0)} differs from net payable — settle the difference with the supplier`}
+                          >
+                            Payment variance
+                          </span>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${sCfg.cls}`}>{sCfg.label}</span>
                       </TableCell>
@@ -1262,6 +1334,7 @@ export default function PurchaseOrdersPage() {
                         setSupplierId(v ?? '')
                         const sup = suppliers.find(s => s.id === v)
                         if (sup?.payment_terms) setPaymentTerms(sup.payment_terms)
+                        setEwtType(defaultEwtType(isTopWithholdingAgent, supplierDefaultEwt(sup)))
                       }}>
                         <SelectTrigger className="flex-1">
                           {supplierId
@@ -1276,6 +1349,17 @@ export default function PurchaseOrdersPage() {
                         </Button>
                       )}
                     </div>
+                    {selectedSupplier && (
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                        <span>
+                          VAT status:{' '}
+                          <span className={`font-semibold ${supplierVatStatus === 'VAT' ? 'text-blue-700' : 'text-foreground'}`}>
+                            {supplierVatStatus === 'VAT' ? 'VAT Registered' : 'Non-VAT'}
+                          </span>
+                        </span>
+                        <span>TIN: <span className="font-semibold text-foreground">{selectedSupplier.tin || '—'}</span></span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Payment Terms */}
@@ -1343,38 +1427,55 @@ export default function PurchaseOrdersPage() {
                     </div>
                   </div>
 
-                  {/* VAT Mode */}
+                  {/* Price basis */}
                   <div className="space-y-1.5">
-                    <Label>VAT Mode</Label>
-                    <div className="flex gap-2 flex-wrap">
-                      {[{ label: 'VAT Exclusive', value: false }, { label: 'VAT Inclusive', value: true }].map(opt => (
-                        <button key={String(opt.value)} type="button" onClick={() => setVatInclusive(opt.value)}
-                          className={`px-3 py-1.5 text-sm rounded-md border font-medium transition-colors ${vatInclusive === opt.value ? 'bg-red-600 text-white border-red-600' : 'bg-background text-muted-foreground hover:bg-muted border-input'}`}>
+                    <Label>Price Basis</Label>
+                    <div className="flex flex-col gap-1.5 sm:flex-row sm:gap-5">
+                      {([
+                        { value: 'VAT_INCLUSIVE', label: 'Prices include VAT' },
+                        { value: 'VAT_EXCLUSIVE', label: 'Prices exclude VAT' },
+                      ] as const).map(opt => (
+                        <label key={opt.value} className="flex items-center gap-2 text-sm cursor-pointer">
+                          <input
+                            type="radio" name="price-basis" value={opt.value}
+                            checked={priceBasis === opt.value}
+                            onChange={() => setPriceBasis(opt.value)}
+                            className="h-4 w-4 accent-red-600"
+                          />
                           {opt.label}
-                        </button>
+                        </label>
                       ))}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      {vatInclusive ? 'VAT is already included in the unit price (price ÷ 1.12)' : 'VAT (12%) will be added on top of the subtotal'}
+                      {supplierVatStatus === 'NON_VAT'
+                        ? 'Non-VAT supplier — no VAT is computed.'
+                        : priceBasis === 'VAT_INCLUSIVE'
+                          ? `Unit prices already include ${vatRatePct}% VAT (amount before VAT = total ÷ ${1 + vatRatePct / 100}).`
+                          : `${vatRatePct}% VAT is added on top of the unit prices.`}
                     </p>
                   </div>
 
                   {/* EWT */}
                   <div className="space-y-1.5">
                     <Label>EWT (Expanded Withholding Tax)</Label>
-                    <div className="flex gap-2 flex-wrap">
-                      {(['none', 'goods', 'services', 'rental'] as EWTType[]).map(opt => (
-                        <button key={opt} type="button" onClick={() => setEwtType(opt)}
-                          className={`px-3 py-1.5 text-sm rounded-md border font-medium transition-colors ${ewtType === opt ? 'bg-red-600 text-white border-red-600' : 'bg-background text-muted-foreground hover:bg-muted border-input'}`}>
-                          {opt === 'none' ? 'None' : `${EWT_CFG[opt].label} (${EWT_CFG[opt].rate * 100}%)`}
-                        </button>
-                      ))}
-                    </div>
-                    {ewtType !== 'none' && (
-                      <p className="text-xs text-muted-foreground">
-                        ATC: <span className="font-semibold text-foreground">{ewtCfg.atc}</span> — {ewtCfg.desc} @ {ewtCfg.rate * 100}%
-                      </p>
-                    )}
+                    <Select value={ewtType} onValueChange={v => setEwtType(isEwtType(v) ? v : 'NONE')}>
+                      <SelectTrigger className="w-full">
+                        <span className="text-sm">
+                          {ewtType === 'NONE' ? 'None' : `${ewtCfg.label} ${ewtCfg.rate * 100}% (${ewtCfg.atc})`}
+                        </span>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {EWT_TYPE_ORDER.map(t => (
+                          <SelectItem key={t} value={t}>
+                            {t === 'NONE' ? 'None' : `${EWT_TYPES[t].label} ${EWT_TYPES[t].rate * 100}% — ${EWT_TYPES[t].atc}`}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Required only if CDSC is a Top Withholding Agent, or for rentals/professional fees/contractors.
+                      {!isTopWithholdingAgent && ' CDSC is currently not set as a Top Withholding Agent (Company Profile).'}
+                    </p>
                   </div>
 
                 </CardContent>
@@ -1490,8 +1591,10 @@ export default function PurchaseOrdersPage() {
                     <div className="flex justify-end">
                       <div className="w-52 space-y-0.5 text-[10px]">
                         {discountRate > 0 && <div className="flex justify-between"><span className="text-gray-500">Discount ({discountRate}%)</span><span className="text-orange-600">−₱{discountAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
-                        {ewtType !== 'none' && <div className="flex justify-between"><span className="text-gray-500">{taxLabel}</span><span className="text-red-700">−₱{taxAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
-                        <div className="flex justify-between border-t pt-0.5 font-bold text-[11px]"><span>Total</span><span className="text-red-700">₱{netSubtotal.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+                        <div className="flex justify-between"><span className="text-gray-500">Total Amount (gross)</span><span>₱{grossAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
+                        {vatAmount > 0 && <div className="flex justify-between"><span className="text-gray-500">VAT portion (included)</span><span className="text-blue-600">₱{vatAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
+                        {ewtType !== 'NONE' && <div className="flex justify-between"><span className="text-gray-500">Less: {taxLabel}</span><span className="text-red-700">−₱{taxAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
+                        <div className="flex justify-between border-t pt-0.5 font-bold text-[11px]"><span>Net Payable</span><span className="text-red-700">₱{netPayable.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
                       </div>
                     </div>
 
@@ -1636,13 +1739,23 @@ export default function PurchaseOrdersPage() {
           <Card>
             <CardContent className="pt-5 space-y-4">
               <div className="rounded-lg bg-muted/30 p-4 space-y-1 text-sm max-w-sm ml-auto">
-                <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{fmt(subtotal)}</span></div>
+                {discountRate > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Line items subtotal</span><span>{fmt(subtotal)}</span></div>}
                 {discountRate > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Discount ({discountRate}%)</span><span className="text-orange-600">− {fmt(discountAmount)}</span></div>}
-                {discountRate > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Net Subtotal</span><span>{fmt(netSubtotal)}</span></div>}
-                <div className="flex justify-between"><span className="text-muted-foreground">Input VAT (12%)</span><span className="text-blue-600">{fmt(vatAmount)}</span></div>
-                {ewtType !== 'none' && <div className="flex justify-between"><span className="text-muted-foreground">{taxLabel} ({ewtCfg.rate * 100}%)</span><span className="text-red-700">− {fmt(taxAmount)}</span></div>}
+                <div className="flex justify-between"><span className="text-muted-foreground">Total amount (gross)</span><span>{fmt(calc.gross)}</span></div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Less: VAT portion <span className="text-[11px]">(info only, not deducted)</span></span>
+                  <span className="text-blue-600">{fmt(calc.vat)}</span>
+                </div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Amount before VAT</span><span>{fmt(calc.vatable)}</span></div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">
+                    {ewtType === 'NONE' ? 'EWT' : `EWT (${ewtCfg.rate * 100}%, ${ewtCfg.atc})`}
+                  </span>
+                  <span className="text-red-700">({fmt(calc.ewt)})</span>
+                </div>
                 <div className="h-px bg-border my-1" />
-                <div className="flex justify-between font-bold"><span>Net Payable</span><span className="text-red-600">{fmt(netPayable)}</span></div>
+                <div className="flex justify-between font-bold"><span>NET PAYABLE TO SUPPLIER</span><span className="text-red-600">{fmt(calc.netPayable)}</span></div>
+                <div className="flex justify-between text-xs"><span className="text-muted-foreground">Remit to BIR</span><span className="font-medium">{fmt(calc.ewt)}</span></div>
               </div>
 
               <div className="flex justify-end gap-2 pt-2 border-t mt-4">
@@ -1787,10 +1900,18 @@ export default function PurchaseOrdersPage() {
 
               <div className="flex justify-end">
                 <div className="w-56 space-y-1 text-xs">
-                  <div className="flex justify-between"><span className="text-muted-foreground">Subtotal</span><span>{fmt(viewPO.subtotal ?? 0)}</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">VAT 12%</span><span className="text-blue-600">{fmt(viewPO.vat_amount ?? 0)}</span></div>
-                  <div className="flex justify-between"><span className="text-muted-foreground">EWT</span><span className="text-red-700">-{fmt(viewPO.ewt_amount ?? 0)}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">Gross Amount</span><span>{fmt(poGross(viewPO))}</span></div>
+                  <div className="flex justify-between"><span className="text-muted-foreground">VAT portion (info)</span><span className="text-blue-600">{fmt(viewPO.vat_amount ?? 0)}</span></div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">EWT{viewPO.ewt_atc ? ` (${(Number(viewPO.ewt_rate) || 0) * 100}%, ${viewPO.ewt_atc})` : ''}</span>
+                    <span className="text-red-700">-{fmt(viewPO.ewt_amount ?? 0)}</span>
+                  </div>
                   <div className="flex justify-between border-t pt-1 font-semibold text-sm"><span>Net Payable</span><span>{fmt(viewPO.net_payable ?? 0)}</span></div>
+                  {viewPO.payment_variance && (
+                    <div className="mt-1 rounded-md bg-amber-50 px-2 py-1 text-[11px] text-amber-800">
+                      Payment variance — paid {fmt(Number(viewPO.amount_paid) || 0)}, net payable is {fmt(viewPO.net_payable ?? 0)}.
+                    </div>
+                  )}
                 </div>
               </div>
 

@@ -23,6 +23,7 @@ import { format } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
 import { sendEmail, SOPdfData } from '@/lib/send-email'
 import { fetchAllRows } from '@/lib/supabase/fetch-all'
+import { computePO, defaultEwtType, ewtTypeFromRate, isEwtType } from '@/lib/po-tax'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { format as fmtDate } from 'date-fns'
 
@@ -48,7 +49,7 @@ interface SOLine { item_name: string; quantity: string; unit: string; unit_price
 interface SOItem { id: string; item_name: string; quantity: number; unit: string | null; unit_price: number; selling_price: number | null; total_amount: number; is_custom?: boolean }
 interface ItemOption { item_code: string; item_name: string; unit_of_measure: string; cost: number | null; selling_price: number | null }
 interface ClientOption { id: string; company_name: string; payment_terms?: string | null }
-interface SupplierOption { id: string; company_name: string }
+interface SupplierOption { id: string; company_name: string; vat_registered: boolean | null; default_ewt_type: string | null; ewt_rate: number | null }
 interface SystemSettings { company_name: string; address: string; phone: string; email: string; tin: string; logo_url?: string }
 interface QuickPOItem { lineIdx: number; item_name: string; unit: string; quantity: string; unit_cost: string; include: boolean }
 
@@ -161,7 +162,7 @@ export default function SalesOrdersPage() {
       supabase.from('items').select('item_code,item_name,unit_of_measure,cost,selling_price').eq('status', 'active').order('item_name'),
       supabase.from('clients').select('id,company_name,payment_terms').eq('status', 'active').order('company_name'),
       supabase.from('system_settings').select('company_name, address, phone, email, tin, logo_url').single(),
-      supabase.from('suppliers').select('id,company_name').eq('is_active', true).order('company_name'),
+      supabase.from('suppliers').select('id,company_name,vat_registered,default_ewt_type,ewt_rate').eq('is_active', true).order('company_name'),
     ])
     const soList = (soData ?? []) as SO[]
     setSOs(soList)
@@ -321,19 +322,39 @@ export default function SalesOrdersPage() {
     })
     const totalCost = rows.reduce((s, r) => s + r.total_cost, 0)
     const { data: { user } } = await supabase.auth.getUser()
+    // Same VAT/EWT rules as the Purchase Orders form (src/lib/po-tax.ts): item costs
+    // are treated as VAT-inclusive, and EWT defaults per the supplier only when CDSC
+    // is a Top Withholding Agent. Both can be adjusted afterwards by editing the PO.
+    const sup = suppliers.find(s => s.id === quickPOSupplierId)
+    const { data: tax } = await supabase.from('system_settings').select('is_top_withholding_agent, default_vat_rate').single()
+    const supplierEwt = isEwtType(sup?.default_ewt_type) ? sup.default_ewt_type : ewtTypeFromRate(sup?.ewt_rate)
+    const ewtType = defaultEwtType(!!tax?.is_top_withholding_agent, supplierEwt)
+    const calc = computePO({
+      lineTotal: totalCost,
+      priceBasis: 'VAT_INCLUSIVE',
+      supplierVatStatus: sup?.vat_registered === false ? 'NON_VAT' : 'VAT',
+      ewtType,
+      vatRate: (Number(tax?.default_vat_rate) || 12) / 100,
+    })
     const { data: po, error } = await supabase.from('purchase_orders').insert({
       supplier_id: quickPOSupplierId,
       po_date: new Date().toISOString().split('T')[0],
       status: 'open',
       remarks: quickPONotes || null,
       subtotal: totalCost,
-      vat_amount: 0,
-      ewt_amount: 0,
       discount_rate: 0,
       discount_amount: 0,
       tax_type: 'ewt',
-      total_amount: totalCost,
-      net_payable: totalCost,
+      price_basis: 'VAT_INCLUSIVE',
+      ewt_type: ewtType,
+      gross_amount: calc.gross,
+      vatable_amount: calc.vatable,
+      vat_amount: calc.vat,
+      ewt_rate: calc.ewtRate,
+      ewt_atc: calc.ewtAtc,
+      ewt_amount: calc.ewt,
+      total_amount: calc.gross,
+      net_payable: calc.netPayable,
       created_by: user?.id,
     }).select('id, po_number').single()
     if (error) { toast.error(getErrorMessage(error)); setQuickPOSaving(false); return }

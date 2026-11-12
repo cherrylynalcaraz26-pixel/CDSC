@@ -1454,7 +1454,7 @@ export default function CSIMonitoringPage() {
 
       {!open && (
       <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-        <Card className="relative overflow-hidden border-none shadow-md shadow-black/5 ring-1 ring-black/5 rounded-2xl">
+        <Card className="relative overflow-hidden border-none shadow-md shadow-black/5 rounded-2xl">
           <div className="absolute inset-0 bg-gradient-to-br from-red-50 to-transparent" />
           <CardContent className="relative pt-4 pb-3 flex items-start justify-between gap-3">
             <div>
@@ -1466,7 +1466,7 @@ export default function CSIMonitoringPage() {
             </div>
           </CardContent>
         </Card>
-        <Card className="relative overflow-hidden border-none shadow-md shadow-black/5 ring-1 ring-black/5 rounded-2xl">
+        <Card className="relative overflow-hidden border-none shadow-md shadow-black/5 rounded-2xl">
           <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-transparent" />
           <CardContent className="relative pt-4 pb-3 flex items-start justify-between gap-3">
             <div>
@@ -1478,7 +1478,7 @@ export default function CSIMonitoringPage() {
             </div>
           </CardContent>
         </Card>
-        <Card className="relative overflow-hidden border-none shadow-md shadow-black/5 ring-1 ring-black/5 rounded-2xl">
+        <Card className="relative overflow-hidden border-none shadow-md shadow-black/5 rounded-2xl">
           <div className="absolute inset-0 bg-gradient-to-br from-green-50 to-transparent" />
           <CardContent className="relative pt-4 pb-3 flex items-start justify-between gap-3">
             <div>
@@ -1566,7 +1566,7 @@ export default function CSIMonitoringPage() {
             {/* Row 1: Revenue bar + Revenue Share stacked */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               {/* Revenue Bar Chart */}
-              <Card className="lg:col-span-2 border-none shadow-md shadow-black/5 ring-1 ring-black/5 rounded-2xl">
+              <Card className="lg:col-span-2 border-none shadow-md shadow-black/5 rounded-2xl">
                 <CardHeader className="pb-2 pt-4 px-5">
                   <CardTitle className="text-sm font-semibold">Revenue by Client</CardTitle>
                   <p className="text-xs text-muted-foreground">Total invoiced amount per client</p>
@@ -1597,7 +1597,7 @@ export default function CSIMonitoringPage() {
               </Card>
 
               {/* Revenue Share – stacked progress breakdown */}
-              <Card className="flex flex-col border-none shadow-md shadow-black/5 ring-1 ring-black/5 rounded-2xl">
+              <Card className="flex flex-col border-none shadow-md shadow-black/5 rounded-2xl">
                 <CardHeader className="pb-2 pt-4 px-5">
                   <CardTitle className="text-sm font-semibold">Revenue Share</CardTitle>
                   <p className="text-xs text-muted-foreground">% of total per client</p>
@@ -1644,7 +1644,7 @@ export default function CSIMonitoringPage() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Monthly Revenue Trend */}
               {trendData.length > 1 && (
-                <Card className="border-none shadow-md shadow-black/5 ring-1 ring-black/5 rounded-2xl">
+                <Card className="border-none shadow-md shadow-black/5 rounded-2xl">
                   <CardHeader className="pb-2 pt-4 px-5">
                     <CardTitle className="text-sm font-semibold">Monthly Revenue Trend</CardTitle>
                     <p className="text-xs text-muted-foreground">Last 12 months</p>
@@ -1670,7 +1670,7 @@ export default function CSIMonitoringPage() {
               )}
 
               {/* SI Count vs Line Items grouped bar */}
-              <Card className="border-none shadow-md shadow-black/5 ring-1 ring-black/5 rounded-2xl">
+              <Card className="border-none shadow-md shadow-black/5 rounded-2xl">
                 <CardHeader className="pb-2 pt-4 px-5">
                   <CardTitle className="text-sm font-semibold">SI Count vs Line Items</CardTitle>
                   <p className="text-xs text-muted-foreground">Invoice activity per client</p>
@@ -1779,7 +1779,7 @@ export default function CSIMonitoringPage() {
         )}
       </div>}
 
-      {!open && <Card className="border-none shadow-md shadow-black/5 ring-1 ring-black/5 rounded-2xl overflow-hidden py-0 gap-0">
+      {!open && <Card className="border-none shadow-md shadow-black/5 rounded-2xl overflow-hidden py-0 gap-0">
         <CardHeader className="pb-2 pt-5 px-5 bg-gradient-to-r from-muted/50 to-transparent">
           <CardTitle className="text-base flex items-center gap-2">
             <FileText className="h-4 w-4 text-red-600" /> Charge Sales Invoice Log

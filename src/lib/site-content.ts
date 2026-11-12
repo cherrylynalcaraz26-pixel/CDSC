@@ -5,9 +5,9 @@
 
 export const company = {
   name: 'CDSC Industrial Supply',
-  legalName: 'CDSC Industrial Supply Corporation',
+  legalName: 'CDSC Industrial Supply',
   tagline: 'Supplying Solutions, Building Partnerships',
-  businessType: 'Trading Corporation',
+  businessType: 'Sole Proprietorship',
   industry: 'Industrial Supply & Distribution',
   vatRegistered: true,
   addressLine1: '113 San Isidro Sur',
@@ -28,7 +28,7 @@ export const vision =
   'To become a trusted industrial supply and procurement partner for businesses across Batangas and the Philippines.'
 
 export const companyOverview = [
-  'CDSC Industrial Supply Corporation is a Philippine based B2B industrial supply and procurement company, specializing in the supply and distribution of industrial materials, safety equipment, hardware, and general construction supplies. We provide products and sourcing support to businesses, industrial facilities, contractors, and organizations.',
+  'CDSC Industrial Supply is a DTI-registered, Philippine based B2B industrial supply and procurement company, specializing in the supply and distribution of industrial materials, safety equipment, hardware, and general construction supplies. We provide products and sourcing support to businesses, industrial facilities, contractors, and organizations.',
   'Strategically located in Sto. Tomas, Batangas, we serve manufacturers, contractors, and businesses across Region IV-A (CALABARZON) and beyond. We source quality products from trusted local and international suppliers, and help customers simplify purchasing through practical sourcing solutions, responsive communication, and dependable fulfillment support.',
 ]
 

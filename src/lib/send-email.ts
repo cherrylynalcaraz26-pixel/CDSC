@@ -20,6 +20,9 @@ export interface POPdfData {
   vatAmount: number
   ewtAmount?: number
   netPayable: number
+  /** Invoice total incl. VAT. When given, VAT is shown as info-only (never deducted). */
+  grossAmount?: number
+  ewtLabel?: string
 }
 
 export interface SOPdfData {
@@ -255,10 +258,20 @@ async function buildPOPdf(data: POPdfData): Promise<string> {
     y += 13
   }
 
+  if (data.grossAmount != null) {
+    pdf.setDrawColor(229, 231, 235)
+    pdf.line(totX, y - 3, W - margin, y - 3)
+    pdf.setTextColor(107, 114, 128)
+    pdf.text('Total Amount (gross)', totX, y)
+    pdf.setTextColor(31, 41, 55)
+    pdf.text(fmtAmt(data.grossAmount), W - margin, y, { align: 'right' })
+    y += 13
+  }
+
   pdf.setDrawColor(229, 231, 235)
   pdf.line(totX, y - 3, W - margin, y - 3)
   pdf.setTextColor(107, 114, 128)
-  pdf.text('VAT (12%)', totX, y)
+  pdf.text(data.grossAmount != null ? 'VAT portion (included)' : 'VAT (12%)', totX, y)
   pdf.setTextColor(37, 99, 235)
   pdf.text(fmtAmt(data.vatAmount), W - margin, y, { align: 'right' })
   y += 13
@@ -267,7 +280,7 @@ async function buildPOPdf(data: POPdfData): Promise<string> {
     pdf.setDrawColor(229, 231, 235)
     pdf.line(totX, y - 3, W - margin, y - 3)
     pdf.setTextColor(107, 114, 128)
-    pdf.text('EWT', totX, y)
+    pdf.text(data.ewtLabel ?? 'EWT', totX, y)
     pdf.setTextColor(185, 28, 28)
     pdf.text(`-${fmtAmt(data.ewtAmount ?? 0)}`, W - margin, y, { align: 'right' })
     y += 13
