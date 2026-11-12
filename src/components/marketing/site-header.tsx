@@ -19,13 +19,13 @@ export function SiteHeader() {
   return (
     <header id="site-header" className="sticky top-0 z-40 w-full print:hidden">
       {/* Top utility bar */}
-      <div className="hidden bg-black text-white/70 sm:block">
+      <div className="hidden bg-linear-to-r from-cdsc-accent to-rose-500 text-white/90 sm:block">
         <div className="mx-auto flex max-w-screen-2xl items-center justify-end gap-6 px-6 py-2 text-xs">
           <a href={company.phoneHref} className="flex items-center gap-1.5 transition hover:text-white">
-            <Phone className="h-3.5 w-3.5 text-orange-400" /> {company.phone}
+            <Phone className="h-3.5 w-3.5" /> {company.phone}
           </a>
           <a href={company.emailHref} className="flex items-center gap-1.5 transition hover:text-white">
-            <Mail className="h-3.5 w-3.5 text-orange-400" /> {company.email}
+            <Mail className="h-3.5 w-3.5" /> {company.email}
           </a>
         </div>
       </div>
@@ -35,7 +35,7 @@ export function SiteHeader() {
         <div className="mx-auto flex max-w-screen-2xl items-center justify-between gap-4 px-6 py-3">
           <Link href="/" className="flex shrink-0 items-center gap-2.5" onClick={() => setOpen(false)}>
             <div className="relative h-9 w-20 shrink-0">
-              <Image src="/cdsc-logo.jpg" alt="CDSC Industrial Supply logo" fill className="object-contain" priority />
+              <Image src="/cdsc-logo.png" alt="CDSC Industrial Supply logo" fill sizes="80px" className="object-contain" priority />
             </div>
             <span className="hidden text-sm font-semibold leading-tight text-cdsc-ink md:block">
               CDSC<br className="hidden lg:block" /> Industrial Supply
@@ -56,7 +56,7 @@ export function SiteHeader() {
                 <span
                   aria-hidden
                   className={cn(
-                    'absolute inset-x-0 -bottom-0.5 h-0.5 origin-left rounded-full bg-linear-to-r from-cdsc-accent to-orange-500 transition-transform duration-300',
+                    'absolute inset-x-0 -bottom-0.5 h-0.5 origin-left rounded-full bg-linear-to-r from-cdsc-accent to-rose-500 transition-transform duration-300',
                     pathname === item.href ? 'scale-x-100' : 'scale-x-0 group-hover:scale-x-100'
                   )}
                 />
@@ -79,7 +79,7 @@ export function SiteHeader() {
             </Link>
             <Link
               href="/quote"
-              className="hidden items-center gap-1.5 rounded-xl bg-linear-to-r from-cdsc-accent to-orange-500 px-4 py-2.5 text-sm font-bold text-white shadow-md shadow-cdsc-accent/25 transition hover:-translate-y-0.5 hover:shadow-lg sm:inline-flex"
+              className="hidden items-center gap-1.5 rounded-xl bg-linear-to-r from-cdsc-accent to-rose-500 px-4 py-2.5 text-sm font-bold text-white shadow-md shadow-cdsc-accent/25 transition hover:-translate-y-0.5 hover:shadow-lg sm:inline-flex"
             >
               Request a Quotation <ArrowRight className="h-3.5 w-3.5" />
             </Link>
@@ -122,7 +122,7 @@ export function SiteHeader() {
               <Link
                 href="/quote"
                 onClick={() => setOpen(false)}
-                className="mt-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-linear-to-r from-cdsc-accent to-orange-500 px-4 py-2.5 text-sm font-bold text-white"
+                className="mt-1 inline-flex items-center justify-center gap-1.5 rounded-xl bg-linear-to-r from-cdsc-accent to-rose-500 px-4 py-2.5 text-sm font-bold text-white"
               >
                 Request a Quotation <ArrowRight className="h-3.5 w-3.5" />
               </Link>

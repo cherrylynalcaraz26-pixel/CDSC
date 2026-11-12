@@ -19,6 +19,7 @@ import {
 import { Plus, SlidersHorizontal } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
+import { confirmRemoveLine } from '@/components/ui/confirm'
 
 interface Adjustment {
   id: string
@@ -63,7 +64,7 @@ export default function StockAdjustmentPage() {
   useEffect(() => { load() }, [])
 
   function addLine() { setLines(l => [...l, { item_id: '', qty_before: 0, qty_after: 0 }]) }
-  function removeLine(i: number) { setLines(l => l.filter((_, idx) => idx !== i)) }
+  async function removeLine(i: number) { if (!(await confirmRemoveLine(lines[i]))) return; setLines(l => l.filter((_, idx) => idx !== i)) }
   function updateLine(i: number, field: keyof AdjLine, value: string | number) {
     setLines(l => l.map((line, idx) => idx === i ? { ...line, [field]: value } : line))
   }

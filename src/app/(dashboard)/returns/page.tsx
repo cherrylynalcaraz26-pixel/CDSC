@@ -19,6 +19,7 @@ import {
 import { Plus, RotateCcw } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
+import { confirmRemoveLine } from '@/components/ui/confirm'
 
 interface Return {
   id: string
@@ -62,7 +63,7 @@ export default function ReturnsPage() {
   useEffect(() => { load() }, [])
 
   function addLine() { setLines(l => [...l, { item_id: '', qty: 1, unit_cost: 0, item_name: '' }]) }
-  function removeLine(i: number) { setLines(l => l.filter((_, idx) => idx !== i)) }
+  async function removeLine(i: number) { if (!(await confirmRemoveLine(lines[i]))) return; setLines(l => l.filter((_, idx) => idx !== i)) }
   function updateLine(i: number, field: keyof ReturnLine, value: string | number) {
     const updated = [...lines]
     if (field === 'item_id') {

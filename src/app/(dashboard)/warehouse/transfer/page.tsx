@@ -19,6 +19,7 @@ import {
 import { Plus, ArrowRightLeft } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
+import { confirmRemoveLine } from '@/components/ui/confirm'
 
 interface Transfer {
   id: string
@@ -66,7 +67,7 @@ export default function StockTransferPage() {
   useEffect(() => { load() }, [])
 
   function addLine() { setLines(l => [...l, { item_id: '', qty: 1 }]) }
-  function removeLine(i: number) { setLines(l => l.filter((_, idx) => idx !== i)) }
+  async function removeLine(i: number) { if (!(await confirmRemoveLine(lines[i]))) return; setLines(l => l.filter((_, idx) => idx !== i)) }
   function updateLine(i: number, field: keyof TransferLine, value: string | number) {
     setLines(l => l.map((line, idx) => idx === i ? { ...line, [field]: value } : line))
   }

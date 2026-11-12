@@ -34,6 +34,8 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   Cell, Legend, AreaChart, Area,
 } from 'recharts'
+import { confirmRemoveLine } from '@/components/ui/confirm'
+import { deleteWithUndo } from '@/lib/delete-with-undo'
 
 interface ItemOption { item_name: string; unit_of_measure: string; selling_price: number | null }
 interface ClientOption {
@@ -1028,11 +1030,9 @@ export default function CSIMonitoringPage() {
 
   async function confirmDelete() {
     if (deleteId === null) return
-    const { error } = await supabase.from('csi_records').delete().eq('id', deleteId)
-    if (error) { toast.error(getErrorMessage(error)); setDeleteId(null); return }
+    const id = deleteId
     setDeleteId(null)
-    load()
-    toast.success('Record deleted')
+    await deleteWithUndo(supabase, { table: 'csi_records', id, label: 'CSI record', skipConfirm: true, onChange: load })
   }
 
   const totalItems = items.reduce((s, it) => s + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0), 0)
@@ -1424,7 +1424,7 @@ export default function CSIMonitoringPage() {
                           </TableCell>
                           <TableCell className="py-1.5">
                             <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
-                              onClick={() => setItems(prev => prev.filter((_, idx) => idx !== i))} disabled={items.length === 1}>
+                              onClick={async () => { if (await confirmRemoveLine(item)) setItems(prev => prev.filter((_, idx) => idx !== i)) }} disabled={items.length === 1}>
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                           </TableCell>

@@ -7,6 +7,7 @@ import { Plus, Trash2, Loader2, ChevronLeft, Send, X } from 'lucide-react'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import { getErrorMessage } from '@/lib/error-message'
+import { confirmRemoveLine } from '@/components/ui/confirm'
 
 interface RequestItem {
   item_name: string
@@ -212,7 +213,7 @@ export default function NewQuotationRequestPage() {
                     <div>
                       {items.length > 1 ? (
                         <button type="button"
-                          onClick={() => setItems(p => p.filter((_, idx) => idx !== i))}
+                          onClick={async () => { if (await confirmRemoveLine(item)) setItems(p => p.filter((_, idx) => idx !== i)) }}
                           className="h-9 w-9 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors">
                           <Trash2 className="h-4 w-4" />
                         </button>

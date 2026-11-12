@@ -30,6 +30,9 @@ import {
   computePO, defaultEwtType, ewtTypeFromRate, isEwtType, EWT_TYPES, EWT_TYPE_ORDER,
   type EwtType, type PriceBasis,
 } from '@/lib/po-tax'
+import { confirmRemoveLine } from '@/components/ui/confirm'
+import { deleteWithUndo } from '@/lib/delete-with-undo'
+import { confirmDelete } from '@/components/ui/confirm'
 
 interface ItemOption {
   item_code: string
@@ -250,10 +253,16 @@ export default function PurchaseOrdersPage() {
   }
 
   async function deletePOAttachment(id: string, poNumber: string | null) {
-    const { error } = await supabase.from('po_attachments').delete().eq('id', id)
-    if (error) { toast.error(getErrorMessage(error)); return }
-    await loadPOAttachments(poNumber)
-    if (poNumber) setPoAttachmentCounts(prev => ({ ...prev, [poNumber]: Math.max(0, (prev[poNumber] ?? 1) - 1) }))
+    let removed = true
+    const ok = await deleteWithUndo(supabase, {
+      table: 'po_attachments', id, label: 'attachment',
+      onChange: async () => {
+        await loadPOAttachments(poNumber)
+        if (poNumber) setPoAttachmentCounts(prev => ({ ...prev, [poNumber]: Math.max(0, (prev[poNumber] ?? 1) + (removed ? -1 : 1)) }))
+        removed = !removed
+      },
+    })
+    if (!ok) return
   }
 
   // Edit
@@ -723,6 +732,7 @@ export default function PurchaseOrdersPage() {
   }
 
   async function deletePO(id: string) {
+    if (!(await confirmDelete('this purchase order'))) return
     const { data: saved } = await supabase.from('purchase_orders').select('*').eq('id', id).single()
     const { error } = await supabase.from('purchase_orders').delete().eq('id', id)
     if (error) { toast.error(getErrorMessage(error)); return }
@@ -1718,7 +1728,7 @@ export default function PurchaseOrdersPage() {
                           <TableCell className="py-1.5">
                             {lines.length > 1 && (
                               <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                onClick={() => setLines(p => p.filter((_, idx) => idx !== i))}>
+                                onClick={async () => { if (await confirmRemoveLine(line)) setLines(p => p.filter((_, idx) => idx !== i)) }}>
                                 <Trash2 className="h-3.5 w-3.5" />
                               </Button>
                             )}

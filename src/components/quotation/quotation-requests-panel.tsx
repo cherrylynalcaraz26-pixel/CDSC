@@ -19,6 +19,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useSearchContext } from '@/context/search-context'
 import { RfqFlowStepper } from '@/components/quotation/rfq-flow'
+import { confirmRemoveLine } from '@/components/ui/confirm'
 
 interface ItemOption { item_name: string; unit_of_measure: string; cost: number | null; selling_price: number | null }
 interface SupplierOption { id: string; company_name: string; payment_terms: string | null; lead_time_days: number | null }
@@ -586,7 +587,7 @@ export default function QuotationRequestsPanel({ onQuotationCreated }: { onQuota
                           <TableCell className="py-1.5">
                             {editLines.length > 1 && (
                               <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                onClick={() => setEditLines(prev => prev.filter((_, i) => i !== idx))}>
+                                onClick={async () => { if (await confirmRemoveLine(line)) setEditLines(prev => prev.filter((_, i) => i !== idx)) }}>
                                 <Trash2 className="h-3.5 w-3.5" />
                               </Button>
                             )}

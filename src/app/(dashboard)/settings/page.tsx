@@ -25,6 +25,7 @@ import { sendEmail, htmlToPdfBase64 } from '@/lib/send-email'
 import { uploadImageToDrive } from '@/lib/upload-image'
 import { syncDatabaseBackup, type BackupSyncResult } from '@/lib/backup-sheets'
 import { BirFormsSettings } from '@/components/settings/bir-forms-settings'
+import { deleteWithUndo } from '@/lib/delete-with-undo'
 
 
 const BUSINESS_TYPES = [
@@ -932,12 +933,7 @@ function ProposalDatabaseTab({ settings, proposals, loading, onReload }: {
   }
 
   async function deleteProposal(id: number) {
-    const { error } = await supabase.from('proposals').delete().eq('id', id)
-    if (error) toast.error(getErrorMessage(error))
-    else {
-      toast.success('Proposal deleted')
-      await onReload()
-    }
+    await deleteWithUndo(supabase, { table: 'proposals', id, label: 'proposal', onChange: onReload })
   }
 
   function openEmailDialog(p: Proposal) {

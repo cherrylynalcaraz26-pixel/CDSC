@@ -33,6 +33,7 @@ import {
   emptyName, emptyAddress, joinName, joinAddress, nameFromRow, nameColumns, addressFromRow, addressColumns,
   type PersonName, type Address,
 } from '@/lib/person-address'
+import { deleteWithUndo } from '@/lib/delete-with-undo'
 
 /* ─── UOM ─────────────────────────────────────────────── */
 interface UOM { id: string; code: string; name: string; description: string | null; is_active: boolean }
@@ -77,10 +78,9 @@ function UOMTab({ configSelector }: { configSelector: React.ReactNode }) {
 
   async function del() {
     if (!deleteId) return
-    const { error } = await supabase.from('uom_list').delete().eq('id', deleteId)
-    if (error) toast.error(getErrorMessage(error))
-    else { toast.success('Deleted'); load() }
+    const id = deleteId
     setDeleteId(null)
+    await deleteWithUndo(supabase, { table: 'uom_list', id, label: 'unit of measure', skipConfirm: true, onChange: load })
   }
 
   return (
@@ -216,10 +216,9 @@ function BrandsTab({ configSelector }: { configSelector: React.ReactNode }) {
 
   async function del() {
     if (!deleteId) return
-    const { error } = await supabase.from('brands').delete().eq('id', deleteId)
-    if (error) toast.error(getErrorMessage(error))
-    else { toast.success('Deleted'); load() }
+    const id = deleteId
     setDeleteId(null)
+    await deleteWithUndo(supabase, { table: 'brands', id, label: 'brand', skipConfirm: true, onChange: load })
   }
 
   const { sorted: sortedRows, sortKey: brandSortKey, sortDir: brandSortDir, onSort: onSortBrands } = useTableSort<Brand, BrandSortKey>(rows, (r, key) => {
@@ -388,10 +387,9 @@ function AttributesTab({ configSelector }: { configSelector: React.ReactNode }) 
 
   async function del() {
     if (!deleteId) return
-    const { error } = await supabase.from('attributes').delete().eq('id', deleteId)
-    if (error) toast.error(getErrorMessage(error))
-    else { toast.success('Deleted'); load() }
+    const id = deleteId
     setDeleteId(null)
+    await deleteWithUndo(supabase, { table: 'attributes', id, label: 'attribute', skipConfirm: true, onChange: load })
   }
 
   const { sorted: sortedRows, sortKey: attrSortKey, sortDir: attrSortDir, onSort: onSortAttrs } = useTableSort<Attribute, AttributeSortKey>(rows, (r, key) => {
@@ -574,10 +572,9 @@ function CategoriesTab({ configSelector }: { configSelector: React.ReactNode }) 
 
   async function del() {
     if (!deleteId) return
-    const { error } = await supabase.from('categories').delete().eq('id', deleteId)
-    if (error) toast.error(getErrorMessage(error))
-    else { toast.success('Deleted'); load() }
+    const id = deleteId
     setDeleteId(null)
+    await deleteWithUndo(supabase, { table: 'categories', id, label: 'category', skipConfirm: true, onChange: load })
   }
 
   return (
@@ -862,10 +859,9 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
 
   async function del() {
     if (!deleteId) return
-    const { error } = await supabase.from('suppliers').delete().eq('id', deleteId)
-    if (error) toast.error(getErrorMessage(error))
-    else { toast.success('Deleted'); load() }
+    const id = deleteId
     setDeleteId(null)
+    await deleteWithUndo(supabase, { table: 'suppliers', id, label: 'supplier', skipConfirm: true, onChange: load })
   }
 
   return (
@@ -1515,10 +1511,9 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
 
   async function del() {
     if (!deleteId) return
-    const { error } = await supabase.from('items').delete().eq('id', deleteId)
-    if (error) toast.error(getErrorMessage(error))
-    else { toast.success('Deleted'); load() }
+    const id = deleteId
     setDeleteId(null)
+    await deleteWithUndo(supabase, { table: 'items', id, label: 'item', skipConfirm: true, onChange: load })
   }
 
   return (
@@ -1965,10 +1960,9 @@ function PayeesTab({ configSelector }: { configSelector: React.ReactNode }) {
 
   async function del() {
     if (!deleteId) return
-    const { error } = await supabase.from('payees').delete().eq('id', deleteId)
-    if (error) toast.error(getErrorMessage(error))
-    else { toast.success('Deleted'); load() }
+    const id = deleteId
     setDeleteId(null)
+    await deleteWithUndo(supabase, { table: 'payees', id, label: 'payee', skipConfirm: true, onChange: load })
   }
 
   const { sorted: sortedRows, sortKey: payeeSortKey, sortDir: payeeSortDir, onSort: onSortPayees } = useTableSort<Payee, PayeeSortKey>(rows, (r, key) => {

@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Search, Loader2, Pencil, AlertTriangle, Plus, MoreHorizontal, Trash2, FileText, Printer, Mail, Send, Truck, Package, History, ArrowDownCircle, ArrowUpCircle, Users, List, CheckCircle2, Scale, Wallet, Boxes, ArrowUp, ArrowDown, ArrowUpDown, ChevronUp, ChevronDown, X, User } from 'lucide-react'
 import { toast } from 'sonner'
+import { confirmRemoveLine } from '@/components/ui/confirm'
 import { useSearchContext } from '@/context/search-context'
 import { sendEmail } from '@/lib/send-email'
 
@@ -829,7 +830,8 @@ export default function InventoryPage() {
     setAddItems(prev => [...prev, { item_name: '', quantity: '', unit: '' }])
   }
 
-  function removeAddItemRow(idx: number) {
+  async function removeAddItemRow(idx: number) {
+    if (!(await confirmRemoveLine(addItems[idx]))) return
     setAddItems(prev => prev.length > 1 ? prev.filter((_, i) => i !== idx) : prev)
   }
 

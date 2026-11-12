@@ -22,6 +22,8 @@ import { uploadImageToDrive } from '@/lib/upload-image'
 import Image from 'next/image'
 import QuotationRequestsPanel from '@/components/quotation/quotation-requests-panel'
 import { getErrorMessage } from '@/lib/error-message'
+import { confirmRemoveLine } from '@/components/ui/confirm'
+import { confirmDelete } from '@/components/ui/confirm'
 
 interface Client { id: string; company_name: string; email: string | null }
 interface ItemOption { item_name: string; description: string | null; unit_of_measure: string; cost: number | null; selling_price: number | null; image_url: string | null; image_urls: string[] | null }
@@ -277,6 +279,7 @@ export default function QuotationPage() {
   }
 
   async function deleteQuotation(id: string) {
+    if (!(await confirmDelete('this quotation'))) return
     const snapshot = quotations.find(q => q.id === id)
     const { data: itemSnapshot } = await supabase
       .from('quotation_items')
@@ -1070,7 +1073,7 @@ export default function QuotationPage() {
                       <TableCell className="py-1.5">
                         {lines.length > 1 && (
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                            onClick={() => setLines(prev => prev.filter((_, i) => i !== idx))}>
+                            onClick={async () => { if (await confirmRemoveLine(line)) setLines(prev => prev.filter((_, i) => i !== idx)) }}>
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         )}

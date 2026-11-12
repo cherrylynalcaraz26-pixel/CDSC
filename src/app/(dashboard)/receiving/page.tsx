@@ -22,6 +22,8 @@ import {
 import { toast } from 'sonner'
 import { useSearchContext } from '@/context/search-context'
 import { isImageAttachment, isPdfAttachment, driveImageSrc, driveEmbedUrl } from '@/lib/upload-image'
+import { confirmRemoveLine } from '@/components/ui/confirm'
+import { deleteWithUndo } from '@/lib/delete-with-undo'
 
 interface PO { id: string; po_number: string; status: string; supplier?: { company_name: string } | null; delivery_date: string | null }
 interface RR { id: string; rr_number: string; po_number: string; supplier: string | null; delivery_date: string; received_by: string; status: string; dr_number?: string | null }
@@ -391,11 +393,13 @@ export default function ReceivingPage() {
 
   async function confirmDeleteRR() {
     if (!deleteRRId) return
-    const { error } = await supabase.from('receiving_reports').delete().eq('id', deleteRRId)
-    if (error) { toast.error(getErrorMessage(error)); setDeleteRRId(null); return }
+    const id = deleteRRId
     setDeleteRRId(null)
-    toast.success('Receiving report deleted.')
-    loadRR()
+    await deleteWithUndo(supabase, {
+      table: 'receiving_reports', id, label: 'receiving report', skipConfirm: true,
+      children: [{ table: 'rr_items', fk: 'rr_id' }],
+      onChange: () => { loadRR(); loadPoItemsMap() },
+    })
   }
 
   function printRR(rr: RR) {
@@ -1041,7 +1045,7 @@ export default function ReceivingPage() {
                             <TableCell className="py-1.5"><Input className="h-8 text-sm" placeholder="Reason" value={row.reason} onChange={e => updateReturnItem(idx, 'reason', e.target.value)} /></TableCell>
                             <TableCell className="py-1.5">
                               {returnItems.length > 1 && (
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => setReturnItems(prev => prev.filter((_, i) => i !== idx))}>
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={async () => { if (await confirmRemoveLine(row)) setReturnItems(prev => prev.filter((_, i) => i !== idx)) }}>
                                   <Trash2 className="h-3.5 w-3.5" />
                                 </Button>
                               )}
@@ -1306,7 +1310,7 @@ export default function ReceivingPage() {
                         <TableCell className="py-1.5"><Input className="h-8 text-sm bg-muted/30" value={row.unit} readOnly /></TableCell>
                         <TableCell className="py-1.5">
                           {salesdItems.length > 1 && (
-                            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={() => setSalesdItems(prev => prev.filter((_, i) => i !== idx))}>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive" onClick={async () => { if (await confirmRemoveLine(row)) setSalesdItems(prev => prev.filter((_, i) => i !== idx)) }}>
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                           )}

@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/table'
 import { Plus, Pencil, Trash2, Tag } from 'lucide-react'
 import { toast } from 'sonner'
+import { deleteWithUndo } from '@/lib/delete-with-undo'
 
 interface Category {
   id: string
@@ -81,9 +82,9 @@ export default function CategoriesPage() {
 
   async function confirmDelete() {
     if (!deleteId) return
-    const { error } = await supabase.from('categories').delete().eq('id', deleteId)
-    if (error) { toast.error(getErrorMessage(error)) } else { toast.success('Category deleted'); load() }
+    const id = deleteId
     setDeleteId(null)
+    await deleteWithUndo(supabase, { table: 'categories', id, label: 'category', skipConfirm: true, onChange: load })
   }
 
   return (

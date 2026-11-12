@@ -26,6 +26,8 @@ import { fetchAllRows } from '@/lib/supabase/fetch-all'
 import { computePO, defaultEwtType, ewtTypeFromRate, isEwtType } from '@/lib/po-tax'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { format as fmtDate } from 'date-fns'
+import { confirmRemoveLine } from '@/components/ui/confirm'
+import { confirmDelete } from '@/components/ui/confirm'
 
 type SOStatus = 'draft' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'cancelled'
 
@@ -471,6 +473,7 @@ export default function SalesOrdersPage() {
   }
 
   async function deleteSO(id: string) {
+    if (!(await confirmDelete('this sales order'))) return
     const { data: saved } = await supabase.from('sales_orders').select('*').eq('id', id).single()
     const { error } = await supabase.from('sales_orders').delete().eq('id', id)
     if (error) { toast.error(getErrorMessage(error)); return }
@@ -1297,7 +1300,7 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
                           <TableCell className="py-1.5">
                             {lines.length > 1 && (
                               <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                                onClick={() => setLines(p => p.filter((_, idx) => idx !== i))}>
+                                onClick={async () => { if (await confirmRemoveLine(line)) setLines(p => p.filter((_, idx) => idx !== i)) }}>
                                 <Trash2 className="h-3.5 w-3.5" />
                               </Button>
                             )}

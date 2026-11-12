@@ -9,6 +9,7 @@ import {
   FileCheck2, CheckCircle2, AlertCircle, Camera, ImagePlus, X,
 } from 'lucide-react'
 import { uploadImageToDrive, cacheBustImageUrl } from '@/lib/upload-image'
+import { deleteWithUndo } from '@/lib/delete-with-undo'
 
 type Tab = 'account' | 'bir' | 'department' | 'password'
 
@@ -207,10 +208,14 @@ export default function PortalSettingsPage() {
   }
 
   async function deleteDepartment(id: string) {
-    const { error } = await supabase.from('client_departments').delete().eq('id', id)
-    if (error) { toast.error(getErrorMessage(error)); return }
-    setDepartments(prev => prev.filter(d => d.id !== id))
-    toast.success('Department removed')
+    const dept = departments.find(d => d.id === id)
+    await deleteWithUndo(supabase, {
+      table: 'client_departments', id, label: `department "${dept?.name ?? ''}"`,
+      onChange: async () => {
+        const { data } = await supabase.from('client_departments').select('id, name').eq('client_id', clientId).order('name')
+        setDepartments(data ?? [])
+      },
+    })
   }
 
   if (loading) {

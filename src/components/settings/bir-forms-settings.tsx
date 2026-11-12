@@ -14,6 +14,7 @@ import { toast } from 'sonner'
 import { getErrorMessage } from '@/lib/error-message'
 import { uploadImageToDrive, driveImageSrc } from '@/lib/upload-image'
 import { allBirForms, defaultApplicableForms, type TaxProfile } from '@/lib/bir/compliance-calendar'
+import { deleteWithUndo } from '@/lib/delete-with-undo'
 
 // Turns a Google Drive share link into a direct image link the browser can render.
 function normalizeUrl(raw: string): string {
@@ -86,10 +87,15 @@ export function BirFormsSettings() {
   }
 
   async function remove(code: string) {
-    const { error } = await supabase.from('bir_form_templates').delete().eq('form_code', code)
-    if (error) { toast.error(getErrorMessage(error)); return }
-    setTemplates(prev => { const n = { ...prev }; delete n[code]; return n })
-    toast.success('Removed')
+    const url = templates[code]
+    let gone = false
+    await deleteWithUndo(supabase, {
+      table: 'bir_form_templates', key: 'form_code', id: code, label: `${code} form image`,
+      onChange: () => {
+        gone = !gone
+        setTemplates(prev => { const n = { ...prev }; if (gone) delete n[code]; else n[code] = url; return n })
+      },
+    })
   }
 
   if (loading) return <div className="py-10 text-center"><Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" /></div>

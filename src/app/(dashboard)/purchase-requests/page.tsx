@@ -18,6 +18,8 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
+import { confirmRemoveLine } from '@/components/ui/confirm'
+import { confirmDelete } from '@/components/ui/confirm'
 
 interface ItemOption { item_code: string; item_name: string; unit_of_measure: string }
 
@@ -132,6 +134,7 @@ export default function PurchaseRequestsPage() {
   }
 
   async function deletePR(id: string) {
+    if (!(await confirmDelete('this purchase request'))) return
     const { data: saved } = await supabase.from('purchase_requests').select('*').eq('id', id).single()
     const { error } = await supabase.from('purchase_requests').delete().eq('id', id)
     if (error) { toast.error(getErrorMessage(error)); return }
@@ -474,7 +477,7 @@ export default function PurchaseRequestsPage() {
                         </div>
                         <Button
                           variant="ghost" size="icon" className="h-7 w-7 text-destructive"
-                          onClick={() => setLines(p => p.filter((_, idx) => idx !== i))}
+                          onClick={async () => { if (await confirmRemoveLine(line)) setLines(p => p.filter((_, idx) => idx !== i)) }}
                           disabled={lines.length === 1}
                         >
                           <Trash2 className="h-3.5 w-3.5" />

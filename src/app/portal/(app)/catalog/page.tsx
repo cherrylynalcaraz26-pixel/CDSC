@@ -29,6 +29,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { deleteWithUndo } from '@/lib/delete-with-undo'
 
 interface CatalogItem {
   id: string
@@ -339,10 +340,9 @@ function VendorCatalogPageContent() {
 
   async function confirmDelete() {
     if (!deleteId) return
-    const { error } = await supabase.from('vendor_catalog_items').delete().eq('id', deleteId)
-    if (error) toast.error(getErrorMessage(error))
-    else { toast.success('Item removed'); load() }
+    const id = deleteId
     setDeleteId(null)
+    await deleteWithUndo(supabase, { table: 'vendor_catalog_items', id, label: 'catalog item', skipConfirm: true, onChange: load })
   }
 
   async function addAllToCatalog(section: string, rows: { item_name: string; unit_of_measure?: string | null; price?: number | null }[]) {

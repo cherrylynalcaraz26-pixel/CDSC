@@ -28,6 +28,7 @@ import { useSearchContext } from '@/context/search-context'
 import { usePersistedState } from '@/lib/use-persisted-state'
 import { uploadImageToDrive } from '@/lib/upload-image'
 import { parseDrNumbers } from '@/lib/utils'
+import { confirmRemoveLine } from '@/components/ui/confirm'
 
 interface Supplier { id: string; company_name: string }
 interface Client {
@@ -596,7 +597,8 @@ export default function DRLogsPage() {
     setItems(prev => [...prev, emptyItem()])
   }
 
-  function removeItemRow(index: number) {
+  async function removeItemRow(index: number) {
+    if (!(await confirmRemoveLine(items[index]))) return
     setItems(prev => prev.length === 1 ? [emptyItem()] : prev.filter((_, i) => i !== index))
   }
 

@@ -35,6 +35,7 @@ import {
   emptyName, emptyAddress, joinName, joinAddress, nameFromRow, nameColumns, addressFromRow, addressColumns,
   type PersonName, type Address,
 } from '@/lib/person-address'
+import { deleteWithUndo } from '@/lib/delete-with-undo'
 
 const INDUSTRIES = [
   'Construction', 'Manufacturing', 'Mining', 'Oil & Gas', 'Power & Energy',
@@ -279,9 +280,8 @@ export default function ClientsPage() {
   }
 
   async function handleDelete(c: Client) {
-    const { error } = await supabase.from('clients').delete().eq('id', c.id)
-    if (error) toast.error(getErrorMessage(error))
-    else { toast.success('Client deleted'); setDeleteConfirm(null); load() }
+    setDeleteConfirm(null)
+    await deleteWithUndo(supabase, { table: 'clients', id: c.id, label: `client "${c.company_name}"`, skipConfirm: true, onChange: load })
   }
 
   async function toggleStatus(c: Client) {

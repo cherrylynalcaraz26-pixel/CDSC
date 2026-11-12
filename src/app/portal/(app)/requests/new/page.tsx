@@ -8,6 +8,7 @@ import { toast } from 'sonner'
 import Link from 'next/link'
 import { uploadImageToDrive } from '@/lib/upload-image'
 import { getErrorMessage } from '@/lib/error-message'
+import { confirmRemoveLine } from '@/components/ui/confirm'
 
 const MAX_LINE_ITEMS = 50
 
@@ -462,7 +463,7 @@ export default function NewRequestPage() {
                     <div className="shrink-0">
                       {items.length > 1 ? (
                         <button type="button"
-                          onClick={() => setItems(p => p.filter((_, idx) => idx !== i))}
+                          onClick={async () => { if (await confirmRemoveLine(item)) setItems(p => p.filter((_, idx) => idx !== i)) }}
                           className="h-9 w-9 flex items-center justify-center rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors">
                           <Trash2 className="h-4 w-4" />
                         </button>

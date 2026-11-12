@@ -5,17 +5,18 @@ import {
   type LucideIcon,
   Target, Eye, ShieldCheck, MessageCircle, Scale, Wrench, Handshake, BadgeCheck,
   Package, Search, ClipboardList, Boxes, Truck, Puzzle, Phone, Mail, MapPin, Clock,
-  ArrowRight, Check, Star, Users, Award, Zap, TrendingUp, ArrowDownToLine, ArrowUpFromLine,
+  ArrowRight, Check, Users, Award, Plug,
   Factory, HardHat, Cog, Car, Building2, Warehouse, Briefcase, Landmark, GraduationCap,
   HeartPulse, FlaskConical, Store, House, Stethoscope, Lock, Monitor, Fan, Paintbrush,
-  Armchair, Archive, LayoutDashboard, RefreshCw, CalendarCheck, ExternalLink,
+  Armchair, Archive, ExternalLink,
 } from 'lucide-react'
 import { PrintButton } from '@/components/marketing/print-button'
-import { Reveal, CountUp, ProgressBar } from '@/components/marketing/profile-motion'
+import { Reveal, CountUp } from '@/components/marketing/profile-motion'
+import { InventorySystemShowcase } from '@/components/marketing/inventory-showcase'
 import {
   company, productCategories, services, industries, procurementProcess, coreValues, whyCds,
   companyOverview, mission, vision, credentials, profileHero, heroStats, registration,
-  additionalMarkets, extendedCatalog, furniture, inventorySystem,
+  additionalMarkets, extendedCatalog, furniture,
 } from '@/lib/site-content'
 
 export const metadata: Metadata = {
@@ -27,7 +28,12 @@ export const metadata: Metadata = {
 const VALUE_ICONS = [ShieldCheck, MessageCircle, Scale, Wrench, Handshake]
 const SERVICE_ICONS = [Package, Search, ClipboardList, Boxes, Truck, Puzzle]
 const FURNITURE_ICONS = [Armchair, House, Archive, Briefcase]
-const SYSTEM_ICONS = [LayoutDashboard, Search, ArrowDownToLine, ArrowUpFromLine, RefreshCw, CalendarCheck]
+const MARKET_PHOTOS: [string, string][] = [
+  ['Manufacturing', '/images/site/manufacturing-line.jpg'],
+  ['Construction', '/images/site/construction-site.jpg'],
+  ['Engineering', '/images/site/lab-engineer.jpg'],
+  ['Logistics', '/images/site/logistics-port.jpg'],
+]
 
 const MARKET_ICONS: Record<string, LucideIcon> = {
   Manufacturing: Factory,
@@ -48,7 +54,7 @@ const MARKET_ICONS: Record<string, LucideIcon> = {
 
 const PRODUCT_ICONS: Record<string, LucideIcon> = {
   'Industrial Supplies': Wrench,
-  'Electrical Supplies': Zap,
+  'Electrical Supplies': Plug,
   'Safety Supplies': HardHat,
   'Mechanical Supplies': Cog,
   'Office and Facility Supplies': Briefcase,
@@ -68,7 +74,7 @@ function Badge({ children, dark = false }: { children: React.ReactNode; dark?: b
     <span
       className={
         dark
-          ? 'inline-flex items-center gap-1.5 rounded-full border border-cdsc-accent/25 bg-cdsc-accent/10 px-3 py-1.5 text-[0.7rem] font-bold uppercase tracking-wider text-red-400'
+          ? 'inline-flex items-center gap-1.5 rounded-full border border-white/25 bg-white/10 px-3 py-1.5 text-[0.7rem] font-bold uppercase tracking-wider text-white'
           : 'inline-flex items-center gap-1.5 rounded-full bg-cdsc-tint px-3 py-1.5 text-[0.7rem] font-bold uppercase tracking-wider text-cdsc-accent'
       }
     >
@@ -97,7 +103,9 @@ export default function CompanyProfilePage() {
   return (
     <div className="[print-color-adjust:exact] print:text-[11px]">
       {/* ═══════════ HERO ═══════════ */}
-      <section className="relative flex min-h-[calc(100vh-4rem)] items-center overflow-hidden bg-linear-to-br from-cdsc-accent via-red-500 to-orange-500 bg-[length:300%_300%] motion-safe:animate-gradient-shift print:min-h-0 print:break-after-page">
+      <section className="relative flex min-h-[calc(100svh-5.75rem)] items-center overflow-hidden bg-cdsc-accent print:min-h-0 print:break-after-page">
+        <Image src="/images/site/warehouse-aisle.jpg" alt="" fill priority sizes="100vw" className="object-cover motion-safe:animate-ken-burns" />
+        <div aria-hidden className="absolute inset-0 bg-linear-to-r from-cdsc-accent/95 via-red-600/85 to-rose-500/50" />
         <div
           aria-hidden
           className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.05)_1px,transparent_1px)] bg-[size:60px_60px]"
@@ -108,12 +116,12 @@ export default function CompanyProfilePage() {
         <div className="relative z-10 mx-auto w-full max-w-screen-2xl px-6 lg:px-10 pb-28 pt-20">
           <div className="max-w-3xl">
             <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold text-white/90 backdrop-blur">
-              <Check className="h-3.5 w-3.5 text-orange-200" /> {profileHero.badge}
+              {profileHero.badge}
             </div>
 
             <div className="mb-6 flex items-center gap-4">
               <div className="relative h-14 w-32 rounded-lg bg-white p-1.5">
-                <Image src="/cdsc-logo.jpg" alt="CDSC Industrial Supply logo" fill className="object-contain p-1.5" priority />
+                <Image src="/cdsc-logo.png" alt="CDSC Industrial Supply logo" fill sizes="128px" className="object-contain p-1.5" priority />
               </div>
               <div className="text-white">
                 <p className="text-sm font-bold">{company.name}</p>
@@ -124,7 +132,7 @@ export default function CompanyProfilePage() {
             <h1 className="text-5xl font-black leading-[1.05] tracking-tight text-white sm:text-7xl">
               {profileHero.headline[0]}
               <br />
-              <span className="text-orange-200">{profileHero.headline[1]}</span>
+              <span className="text-red-100">{profileHero.headline[1]}</span>
               <br />
               {profileHero.headline[2]}
             </h1>
@@ -169,7 +177,7 @@ export default function CompanyProfilePage() {
       <section className="bg-white py-24 print:break-after-page">
         <Reveal className="mx-auto grid max-w-screen-2xl items-center gap-16 px-6 lg:grid-cols-2">
           <div>
-            <Badge><Star className="h-3 w-3 fill-current" /> About CDSC</Badge>
+            <Badge>About CDSC</Badge>
             <h2 className="mt-5 text-3xl font-black leading-tight text-cdsc-ink sm:text-5xl">
               Your Trusted
               <br />
@@ -194,7 +202,10 @@ export default function CompanyProfilePage() {
           </div>
 
           <div className="relative">
-            <div aria-hidden className="absolute inset-0 rotate-2 rounded-3xl bg-linear-to-br from-cdsc-tint to-red-100" />
+            <div aria-hidden className="absolute -inset-3 rotate-2 overflow-hidden rounded-3xl">
+              <Image src="/images/site/meeting.jpg" alt="" fill sizes="50vw" className="object-cover" />
+              <div className="absolute inset-0 bg-cdsc-accent/30" />
+            </div>
             <div className="relative rounded-3xl border border-cdsc-line bg-white p-8 shadow-xl">
               <div className="mb-6 flex items-center gap-3 border-b border-cdsc-line pb-6">
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cdsc-accent">
@@ -224,42 +235,42 @@ export default function CompanyProfilePage() {
       </section>
 
       {/* ═══════════ MISSION / VISION / VALUES ═══════════ */}
-      <section className="bg-black py-24 print:break-after-page">
+      <section className="bg-cdsc-tint py-24 print:break-after-page">
         <div className="mx-auto max-w-screen-2xl px-6 lg:px-10">
           <Reveal>
-            <SectionHeading dark badge="Why CDSC" title="Mission & Vision" />
+            <SectionHeading badge="Why CDSC" title="Mission & Vision" />
           </Reveal>
           <Reveal className="grid gap-6 md:grid-cols-2">
             {[
               { Icon: Target, title: 'Our Mission', text: mission, iconBg: 'bg-linear-to-br from-cdsc-accent to-cdsc-accent-dark shadow-lg shadow-cdsc-accent/30' },
-              { Icon: Eye, title: 'Our Vision', text: vision, iconBg: 'bg-linear-to-br from-neutral-600 to-neutral-900' },
+              { Icon: Eye, title: 'Our Vision', text: vision, iconBg: 'bg-linear-to-br from-rose-400 to-rose-600 shadow-lg shadow-rose-500/30' },
             ].map(({ Icon, title, text, iconBg }) => (
               <div
                 key={title}
-                className="relative overflow-hidden rounded-3xl border border-white/[.07] bg-white/[.04] p-8 transition hover:-translate-y-1 hover:shadow-2xl hover:shadow-cdsc-accent/20"
+                className="relative overflow-hidden rounded-3xl bg-white p-8 shadow-sm transition hover:-translate-y-1 hover:shadow-2xl hover:shadow-cdsc-accent/20"
               >
                 <div className={`mb-6 flex h-14 w-14 items-center justify-center rounded-2xl ${iconBg}`}>
                   <Icon className="h-6 w-6 text-white" />
                 </div>
-                <h3 className="mb-4 text-2xl font-black text-white">{title}</h3>
-                <p className="text-sm leading-relaxed text-white/60">{text}</p>
-                <div aria-hidden className="absolute right-0 top-0 h-36 w-36 rounded-bl-full bg-cdsc-accent/[.08]" />
+                <h3 className="mb-4 text-2xl font-black text-cdsc-ink">{title}</h3>
+                <p className="text-sm leading-relaxed text-cdsc-ink/65">{text}</p>
+                <div aria-hidden className="absolute right-0 top-0 h-36 w-36 rounded-bl-full bg-cdsc-tint" />
               </div>
             ))}
           </Reveal>
 
           <Reveal className="mt-14">
-            <h3 className="mb-6 text-center text-sm font-bold uppercase tracking-widest text-white/50">Core Values</h3>
+            <h3 className="mb-6 text-center text-sm font-bold uppercase tracking-widest text-cdsc-ink/50">Core Values</h3>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
               {coreValues.map((v, i) => {
                 const Icon = VALUE_ICONS[i]
                 return (
-                  <div key={v.title} className="group rounded-2xl border border-white/[.07] bg-white/[.03] p-5 text-center transition hover:-translate-y-1">
-                    <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-cdsc-accent/15 text-red-400 transition group-hover:bg-cdsc-accent group-hover:text-white">
+                  <div key={v.title} className="group rounded-2xl bg-white p-5 text-center shadow-sm hover:shadow-lg transition hover:-translate-y-1">
+                    <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-xl bg-cdsc-tint text-cdsc-accent transition group-hover:bg-cdsc-accent group-hover:text-white">
                       <Icon className="h-5 w-5" />
                     </div>
-                    <p className="mt-3 text-sm font-bold text-white">{v.title}</p>
-                    <p className="mt-1 text-xs leading-relaxed text-white/55">{v.description}</p>
+                    <p className="mt-3 text-sm font-bold text-cdsc-ink">{v.title}</p>
+                    <p className="mt-1 text-xs leading-relaxed text-cdsc-ink/60">{v.description}</p>
                   </div>
                 )
               })}
@@ -277,6 +288,15 @@ export default function CompanyProfilePage() {
               title="Industries & Markets We Serve"
               intro="From startup offices to large industrial operations, we have the supplies to support your business."
             />
+          </Reveal>
+          <Reveal className="mb-10 grid grid-cols-2 gap-4 lg:grid-cols-4">
+            {MARKET_PHOTOS.map(([label, src]) => (
+              <div key={label} className="group relative h-44 overflow-hidden rounded-3xl">
+                <Image src={src} alt={label} fill sizes="(min-width:1024px) 25vw, 50vw" className="object-cover transition duration-700 group-hover:scale-110" />
+                <div aria-hidden className="absolute inset-0 bg-linear-to-t from-cdsc-accent/85 to-transparent" />
+                <p className="absolute bottom-3 left-4 text-sm font-black text-white">{label}</p>
+              </div>
+            ))}
           </Reveal>
           <Reveal className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
             {allMarkets.map(m => {
@@ -425,57 +445,7 @@ export default function CompanyProfilePage() {
       </section>
 
       {/* ═══════════ INVENTORY SYSTEM ═══════════ */}
-      <section className="bg-black py-24 print:break-after-page">
-        <div className="mx-auto max-w-screen-2xl px-6 lg:px-10">
-          <Reveal>
-            <SectionHeading dark badge="Smart Operations" title="Built-In Inventory System" intro={inventorySystem.description} />
-          </Reveal>
-
-          <Reveal className="mb-9 grid gap-6 md:grid-cols-2">
-            {([
-              { tone: 'in', label: 'Stock IN', Icon: ArrowDownToLine, bars: inventorySystem.stockIn },
-              { tone: 'out', label: 'Stock OUT', Icon: ArrowUpFromLine, bars: inventorySystem.stockOut },
-            ] as const).map(({ tone, label, Icon, bars }) => (
-              <div key={label} className="rounded-3xl border border-white/[.07] bg-white/[.04] p-7">
-                <div className="mb-6 flex items-center gap-3">
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${tone === 'in' ? 'bg-linear-to-br from-green-600 to-green-500' : 'bg-linear-to-br from-cdsc-accent-dark to-cdsc-accent'}`}>
-                    <Icon className="h-4 w-4 text-white" />
-                  </div>
-                  <span className={`rounded-full border px-3 py-1 text-xs font-bold ${tone === 'in' ? 'border-green-500/20 bg-green-500/10 text-green-400' : 'border-cdsc-accent/20 bg-cdsc-accent/10 text-red-400'}`}>
-                    {label}
-                  </span>
-                </div>
-                <div className="space-y-4">
-                  {bars.map(b => (
-                    <div key={b.label}>
-                      <div className="mb-1.5 flex justify-between text-xs">
-                        <span className="text-white/55">{b.label}</span>
-                        <span className="font-bold text-white">{b.percent}%</span>
-                      </div>
-                      <ProgressBar percent={b.percent} tone={tone} />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </Reveal>
-
-          <Reveal className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {inventorySystem.features.map((f, i) => {
-              const Icon = SYSTEM_ICONS[i]
-              return (
-                <div key={f.title} className="group rounded-2xl border border-white/[.07] bg-white/[.03] p-6 transition hover:-translate-y-1 hover:shadow-2xl hover:shadow-cdsc-accent/15">
-                  <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-cdsc-accent/10 text-red-400 transition group-hover:bg-cdsc-accent group-hover:text-white">
-                    <Icon className="h-5 w-5" />
-                  </div>
-                  <h3 className="mb-2 text-sm font-bold text-white">{f.title}</h3>
-                  <p className="text-xs leading-relaxed text-white/55">{f.description}</p>
-                </div>
-              )
-            })}
-          </Reveal>
-        </div>
-      </section>
+      <InventorySystemShowcase />
 
       {/* ═══════════ WHY CDSC + CREDENTIALS ═══════════ */}
       <section className="bg-cdsc-paper py-24 print:break-after-page">
@@ -484,9 +454,9 @@ export default function CompanyProfilePage() {
             <SectionHeading badge="Our Edge" title="Why Choose CDSC" />
           </Reveal>
           <Reveal className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {whyCds.map(card => (
-              <div key={card.title} className="rounded-2xl border border-cdsc-line bg-white p-6 transition hover:-translate-y-1 hover:border-cdsc-accent hover:shadow-xl">
-                <TrendingUp className="h-5 w-5 text-cdsc-accent" />
+            {whyCds.map((card, i) => (
+              <div key={card.title} className="rounded-2xl bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-xl">
+                <span className="text-3xl font-black leading-none text-cdsc-accent/20">{String(i + 1).padStart(2, '0')}</span>
                 <h3 className="mt-3 text-sm font-bold text-cdsc-ink">{card.title}</h3>
                 <p className="mt-1.5 text-xs leading-relaxed text-cdsc-ink/60">{card.description}</p>
               </div>
@@ -513,11 +483,11 @@ export default function CompanyProfilePage() {
       {/* ═══════════ CONTACT ═══════════ */}
       <section className="bg-white py-24">
         <Reveal className="mx-auto max-w-screen-2xl px-6 lg:px-10">
-          <div className="relative mb-12 overflow-hidden rounded-[28px] bg-linear-to-br from-cdsc-accent via-red-500 to-orange-500 bg-[length:200%_200%] shadow-2xl motion-safe:animate-gradient-shift">
+          <div className="relative mb-12 overflow-hidden rounded-[28px] bg-linear-to-br from-cdsc-accent via-red-500 to-rose-500 bg-[length:200%_200%] shadow-2xl motion-safe:animate-gradient-shift">
             <div className="relative bg-[linear-gradient(rgba(255,255,255,.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.05)_1px,transparent_1px)] bg-[size:40px_40px] px-6 py-10 sm:p-16">
               <div className="relative z-10 max-w-xl">
                 <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3.5 py-1.5 text-[0.7rem] font-bold uppercase tracking-wider text-white/90">
-                  <Zap className="h-3 w-3" /> Ready to Order?
+                  Ready to Order?
                 </span>
                 <h2 className="mt-6 text-4xl font-black leading-tight text-white sm:text-5xl">Let&apos;s Talk Supply.</h2>
                 <p className="mt-4 max-w-md leading-relaxed text-white/80">

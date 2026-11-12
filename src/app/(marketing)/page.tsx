@@ -1,14 +1,10 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import type { Metadata } from 'next'
-import {
-  ArrowRight, ShieldCheck, MessageCircle, SlidersHorizontal, Scale, Building2, Handshake, Boxes,
-  Wrench, Zap, Cog, PackageSearch, Phone, Check, PlayCircle, ShoppingCart, Sparkles,
-} from 'lucide-react'
-import {
-  productCategories, whyCds, industries, additionalMarkets, procurementProcess, company, heroStats,
-} from '@/lib/site-content'
+import { ArrowRight, Phone, PlayCircle, ShoppingCart, PackageSearch, Handshake } from 'lucide-react'
+import { productCategories, whyCds, industries, additionalMarkets, procurementProcess, company, heroStats } from '@/lib/site-content'
 import { DemoVideoSection } from '@/components/marketing/demo-video-section'
+import { InventorySystemShowcase } from '@/components/marketing/inventory-showcase'
 import { Reveal, CountUp } from '@/components/marketing/profile-motion'
 
 export const metadata: Metadata = {
@@ -17,19 +13,31 @@ export const metadata: Metadata = {
     'Reliable industrial, electrical, safety, and mechanical supplies with sourcing and procurement support for manufacturing, construction, and facility operations across the Philippines.',
 }
 
-const WHY_ICONS = [ShieldCheck, MessageCircle, SlidersHorizontal, Scale, Building2, Handshake, Boxes]
-const CATEGORY_ICONS = [Wrench, Zap, ShieldCheck, Cog, Building2]
+// Real photos (public/images/site) for the five main supply categories.
+const CATEGORY_PHOTOS = [
+  '/images/site/industrial-tools.jpg',
+  '/images/site/electrical-panel.jpg',
+  '/images/site/safety-electrician.jpg',
+  '/images/site/mechanical-pump.jpg',
+  '/images/site/office-team.jpg',
+]
+const INDUSTRY_PHOTOS: [string, string][] = [
+  ['Manufacturing', '/images/site/manufacturing-line.jpg'],
+  ['Construction', '/images/site/construction-site.jpg'],
+  ['Engineering', '/images/site/engineering-plans.jpg'],
+  ['Warehousing & Logistics', '/images/site/logistics-port.jpg'],
+]
 const MARKETS = [...industries, ...additionalMarkets].map(m => m.name)
+// The built-in system gets its own showcase section below.
+const WHY = whyCds.filter(w => !/inventory system/i.test(w.title))
 
-// Same visual language as /company-profile: animated red→orange gradient hero,
-// black feature bands, white/paper content bands, rounded cards that lift on hover.
-function Badge({ children, dark = false }: { children: React.ReactNode; dark?: boolean }) {
+function Badge({ children, light = false }: { children: React.ReactNode; light?: boolean }) {
   return (
     <span
       className={
-        dark
-          ? 'inline-flex items-center gap-1.5 rounded-full border border-orange-400/25 bg-orange-500/10 px-3 py-1.5 text-[0.7rem] font-bold uppercase tracking-wider text-orange-300'
-          : 'inline-flex items-center gap-1.5 rounded-full bg-cdsc-tint px-3 py-1.5 text-[0.7rem] font-bold uppercase tracking-wider text-cdsc-accent'
+        light
+          ? 'inline-flex items-center rounded-full border border-white/25 bg-white/10 px-3.5 py-1.5 text-[0.7rem] font-bold uppercase tracking-wider text-white backdrop-blur'
+          : 'inline-flex items-center rounded-full bg-cdsc-tint px-3.5 py-1.5 text-[0.7rem] font-bold uppercase tracking-wider text-cdsc-accent'
       }
     >
       {children}
@@ -37,12 +45,12 @@ function Badge({ children, dark = false }: { children: React.ReactNode; dark?: b
   )
 }
 
-function Heading({ badge, title, intro, dark = false }: { badge: string; title: React.ReactNode; intro?: string; dark?: boolean }) {
+function Heading({ badge, title, intro }: { badge: string; title: React.ReactNode; intro?: string }) {
   return (
     <div className="mx-auto mb-14 max-w-3xl text-center">
-      <Badge dark={dark}>{badge}</Badge>
-      <h2 className={`mt-5 text-3xl font-black leading-tight sm:text-5xl ${dark ? 'text-white' : 'text-cdsc-ink'}`}>{title}</h2>
-      {intro && <p className={`mt-4 text-base leading-relaxed ${dark ? 'text-white/60' : 'text-cdsc-ink/60'}`}>{intro}</p>}
+      <Badge>{badge}</Badge>
+      <h2 className="mt-5 text-3xl font-black leading-tight text-cdsc-ink sm:text-5xl">{title}</h2>
+      {intro && <p className="mt-4 text-base leading-relaxed text-cdsc-ink/60">{intro}</p>}
     </div>
   )
 }
@@ -52,90 +60,49 @@ const WRAP = 'mx-auto w-full max-w-screen-2xl px-6 lg:px-10'
 export default function HomePage() {
   return (
     <>
-      {/* ═══════════ HERO — fills the window ═══════════ */}
-      <section className="relative flex min-h-[calc(100svh-3.75rem)] items-center overflow-hidden bg-linear-to-br from-cdsc-accent via-red-500 to-orange-500 bg-[length:300%_300%] motion-safe:animate-gradient-shift sm:min-h-[calc(100svh-5.75rem)]">
+      {/* ═══════════ HERO — real photo, fills the window ═══════════ */}
+      <section className="relative flex min-h-[calc(100svh-3.75rem)] items-center overflow-hidden sm:min-h-[calc(100svh-5.75rem)]">
+        <Image src="/images/site/hero-warehouse.jpg" alt="" fill priority sizes="100vw" className="object-cover motion-safe:animate-ken-burns" />
+        <div aria-hidden className="absolute inset-0 bg-linear-to-r from-cdsc-accent/95 via-red-600/80 to-rose-500/40" />
         <div
           aria-hidden
           className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.05)_1px,transparent_1px)] bg-[size:60px_60px]"
         />
-        <div aria-hidden className="pointer-events-none absolute -right-24 -top-24 h-[520px] w-[520px] rounded-full bg-white/[.08] motion-safe:animate-float" />
-        <div aria-hidden className="pointer-events-none absolute -left-20 bottom-24 h-72 w-72 rounded-full bg-white/[.06] motion-safe:animate-float-slow" />
 
-        <div className={`relative z-10 grid items-center gap-14 pb-32 pt-16 lg:grid-cols-[1.15fr_1fr] ${WRAP}`}>
-          <div className="motion-safe:animate-rise">
-            <div className="mb-7 inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-xs font-semibold text-white/90 backdrop-blur">
-              <Check className="h-3.5 w-3.5 text-orange-200" /> Industrial Supply · Procurement · Sourcing
-            </div>
-            <h1 className="text-5xl font-black leading-[1.04] tracking-tight text-white sm:text-6xl xl:text-7xl">
+        <div className={`relative z-10 pb-32 pt-16 ${WRAP}`}>
+          <div className="max-w-3xl motion-safe:animate-rise">
+            <Badge light>Industrial Supply · Procurement · Sourcing</Badge>
+            <h1 className="mt-7 text-5xl font-black leading-[1.04] tracking-tight text-white sm:text-6xl xl:text-7xl">
               Industrial Supply
               <br />
-              <span className="text-orange-200">Solutions Built</span>
+              <span className="text-red-100">Solutions Built</span>
               <br />
               Around Your Business
             </h1>
-            <p className="mt-6 max-w-xl text-lg leading-relaxed text-white/80">
+            <p className="mt-6 max-w-xl text-lg leading-relaxed text-white/85">
               Reliable products, sourcing support, and procurement solutions for businesses, industrial facilities,
               contractors, and organizations across the Philippines.
             </p>
             <div className="mt-10 flex flex-wrap gap-4">
-              <Link
-                href="/quote"
-                className="inline-flex items-center gap-2 rounded-2xl bg-white px-7 py-3.5 font-bold text-cdsc-accent shadow-lg transition hover:-translate-y-0.5 hover:shadow-2xl"
-              >
+              <Link href="/quote" className="inline-flex items-center gap-2 rounded-2xl bg-white px-7 py-3.5 font-bold text-cdsc-accent shadow-lg transition hover:-translate-y-0.5 hover:shadow-2xl">
                 Request a Quotation <ArrowRight className="h-4 w-4" />
               </Link>
-              <Link
-                href="/products#shop"
-                className="inline-flex items-center gap-2 rounded-2xl border border-white/25 bg-white/10 px-7 py-3.5 font-bold text-white backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/20"
-              >
+              <Link href="/products#shop" className="inline-flex items-center gap-2 rounded-2xl border border-white/30 bg-white/10 px-7 py-3.5 font-bold text-white backdrop-blur transition hover:-translate-y-0.5 hover:bg-white/20">
                 <ShoppingCart className="h-4 w-4" /> Shop Products
               </Link>
-              <a
-                href="#demo"
-                className="inline-flex items-center gap-2 rounded-2xl px-5 py-3.5 font-bold text-white transition hover:bg-white/10"
-              >
+              <a href="#demo" className="inline-flex items-center gap-2 rounded-2xl px-5 py-3.5 font-bold text-white transition hover:bg-white/10">
                 <PlayCircle className="h-5 w-5" /> Watch Demo
               </a>
             </div>
-
             <div className="mt-14 grid max-w-2xl grid-cols-2 gap-3 sm:grid-cols-4">
               {heroStats.map(s => (
-                <div key={s.label} className="rounded-2xl border border-white/15 bg-white/[.08] p-4 text-center backdrop-blur-md transition hover:-translate-y-1 hover:bg-white/[.14]">
+                <div key={s.label} className="rounded-2xl border border-white/20 bg-white/10 p-4 text-center backdrop-blur-md transition hover:-translate-y-1 hover:bg-white/15">
                   <div className="text-3xl font-black text-white">
                     {s.animate ? <CountUp to={s.value} suffix={s.suffix} /> : `${s.value}${s.suffix}`}
                   </div>
-                  <div className="mt-1 text-[0.65rem] font-semibold uppercase tracking-wider text-white/60">{s.label}</div>
+                  <div className="mt-1 text-[0.65rem] font-semibold uppercase tracking-wider text-white/70">{s.label}</div>
                 </div>
               ))}
-            </div>
-          </div>
-
-          {/* Floating brand card */}
-          <div className="relative hidden lg:block motion-safe:animate-rise-late">
-            <div aria-hidden className="absolute inset-0 rotate-3 rounded-[2rem] bg-white/15" />
-            <div className="relative rounded-[2rem] bg-white p-8 shadow-2xl shadow-black/20 motion-safe:animate-float-slow">
-              <div className="flex items-center gap-4 border-b border-cdsc-line pb-6">
-                <div className="relative h-14 w-32 shrink-0">
-                  <Image src="/cdsc-logo.jpg" alt="CDSC Industrial Supply logo" fill className="object-contain" priority />
-                </div>
-                <div>
-                  <p className="text-sm font-black text-cdsc-ink">{company.name}</p>
-                  <p className="text-xs italic text-cdsc-ink/50">&ldquo;{company.tagline}&rdquo;</p>
-                </div>
-              </div>
-              <ul className="mt-6 space-y-4">
-                {procurementProcess.map(step => (
-                  <li key={step.step} className="flex items-start gap-3">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-cdsc-accent to-orange-500 text-xs font-black text-white">
-                      {step.step}
-                    </span>
-                    <div>
-                      <p className="text-sm font-bold text-cdsc-ink">{step.title}</p>
-                      <p className="text-xs leading-relaxed text-cdsc-ink/55">{step.description}</p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
             </div>
           </div>
         </div>
@@ -154,19 +121,16 @@ export default function HomePage() {
               href="/industries"
               aria-hidden={i >= MARKETS.length}
               tabIndex={i >= MARKETS.length ? -1 : undefined}
-              className="mr-4 flex shrink-0 items-center gap-2 rounded-full bg-cdsc-paper px-5 py-2.5 text-sm font-semibold text-cdsc-ink/70 transition hover:bg-cdsc-accent hover:text-white"
+              className="mr-3 flex shrink-0 items-center gap-2.5 rounded-full bg-cdsc-paper px-5 py-2.5 text-sm font-semibold text-cdsc-ink/70 transition hover:bg-cdsc-accent hover:text-white"
             >
-              <Sparkles className="h-3.5 w-3.5 text-orange-500" /> {name}
+              <span className="h-1.5 w-1.5 rounded-full bg-cdsc-accent" /> {name}
             </Link>
           ))}
         </div>
       </section>
 
-      {/* ═══════════ DEMO VIDEO ═══════════ */}
-      <DemoVideoSection />
-
-      {/* ═══════════ WHAT WE SUPPLY ═══════════ */}
-      <section className="bg-white py-24">
+      {/* ═══════════ WHAT WE SUPPLY — photo cards ═══════════ */}
+      <section className="bg-white pb-24 pt-12">
         <div className={WRAP}>
           <Reveal>
             <Heading
@@ -175,66 +139,93 @@ export default function HomePage() {
               intro="Tell us what you need and we will help source it — from stock categories to hard-to-find requirements."
             />
           </Reveal>
-          <Reveal className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {productCategories.map((cat, i) => {
-              const Icon = CATEGORY_ICONS[i] ?? Boxes
-              return (
-                <div
-                  key={cat.name}
-                  className="group rounded-2xl bg-white p-7 shadow-[0_4px_24px_-8px_rgba(0,0,0,0.12)] transition duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-cdsc-accent/20"
-                >
-                  <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-cdsc-tint text-cdsc-accent transition group-hover:rotate-6 group-hover:bg-linear-to-br group-hover:from-cdsc-accent group-hover:to-orange-500 group-hover:text-white">
-                    <Icon className="h-5 w-5" />
-                  </div>
-                  <h3 className="mt-5 text-lg font-bold text-cdsc-ink">{cat.name}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-cdsc-ink/60">{cat.description}</p>
+          <Reveal className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {productCategories.map((cat, i) => (
+              <Link
+                key={cat.name}
+                href={`/products?category=${encodeURIComponent(cat.name)}#shop`}
+                className="group overflow-hidden rounded-3xl bg-white shadow-[0_8px_30px_-12px_rgba(0,0,0,0.18)] transition duration-300 hover:-translate-y-1.5 hover:shadow-2xl hover:shadow-cdsc-accent/20"
+              >
+                <div className="relative h-52 overflow-hidden">
+                  <Image src={CATEGORY_PHOTOS[i] ?? CATEGORY_PHOTOS[0]} alt={cat.name} fill sizes="(min-width:1024px) 33vw, (min-width:640px) 50vw, 100vw" className="object-cover transition duration-700 group-hover:scale-110" />
+                  <div aria-hidden className="absolute inset-0 bg-linear-to-t from-cdsc-ink/60 via-transparent to-transparent" />
+                  <h3 className="absolute bottom-4 left-5 right-5 text-xl font-black text-white">{cat.name}</h3>
                 </div>
-              )
-            })}
-            <div className="flex flex-col justify-between rounded-2xl bg-linear-to-br from-cdsc-accent to-orange-500 p-7 text-white shadow-lg shadow-cdsc-accent/25 transition duration-300 hover:-translate-y-1.5">
-              <div>
-                <PackageSearch className="h-7 w-7" />
-                <h3 className="mt-5 text-lg font-bold">Custom Sourcing</h3>
-                <p className="mt-2 text-sm leading-relaxed text-white/85">
+                <div className="p-6">
+                  <p className="text-sm leading-relaxed text-cdsc-ink/60">{cat.description}</p>
+                  <span className="mt-4 inline-flex items-center gap-1.5 text-sm font-bold text-cdsc-accent transition-all group-hover:gap-2.5">
+                    View products <ArrowRight className="h-4 w-4" />
+                  </span>
+                </div>
+              </Link>
+            ))}
+            <div className="relative flex flex-col justify-end overflow-hidden rounded-3xl p-7 text-white shadow-lg shadow-cdsc-accent/25 transition duration-300 hover:-translate-y-1.5">
+              <Image src="/images/site/warehouse-aisle.jpg" alt="" fill sizes="(min-width:1024px) 33vw, 100vw" className="object-cover" />
+              <div aria-hidden className="absolute inset-0 bg-linear-to-t from-cdsc-accent via-cdsc-accent/85 to-rose-500/50" />
+              <div className="relative">
+                <PackageSearch className="h-8 w-8" />
+                <h3 className="mt-4 text-xl font-black">Custom Sourcing</h3>
+                <p className="mt-2 text-sm leading-relaxed text-white/90">
                   Can&apos;t find what you need? CDSC can source specific products according to your requirements.
                 </p>
+                <Link href="/quote" className="mt-6 inline-flex items-center gap-1.5 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-cdsc-accent transition hover:gap-2.5">
+                  Submit Your Requirement <ArrowRight className="h-4 w-4" />
+                </Link>
               </div>
-              <Link href="/quote" className="mt-6 inline-flex items-center gap-1.5 text-sm font-bold hover:gap-2.5 transition-all">
-                Submit Your Requirement <ArrowRight className="h-4 w-4" />
-              </Link>
             </div>
           </Reveal>
         </div>
       </section>
 
-      {/* ═══════════ WHY CDSC (black band, like the profile) ═══════════ */}
-      <section className="relative overflow-hidden bg-black py-24">
-        <div aria-hidden className="pointer-events-none absolute -right-40 top-10 h-96 w-96 rounded-full bg-cdsc-accent/20 blur-3xl" />
-        <div aria-hidden className="pointer-events-none absolute -left-40 bottom-0 h-96 w-96 rounded-full bg-orange-500/10 blur-3xl" />
-        <div className={`relative ${WRAP}`}>
+      {/* ═══════════ DEMO VIDEO ═══════════ */}
+      <DemoVideoSection />
+
+      {/* ═══════════ INDUSTRIES — photo mosaic ═══════════ */}
+      <section className="bg-white py-24">
+        <div className={WRAP}>
           <Reveal>
-            <Heading dark badge="Why CDSC" title="Why Businesses Choose CDSC" intro="Your requirement. Our responsibility." />
+            <Heading badge="Who We Serve" title="Industries We Supply" intro="Purchasing support built around the way each sector actually operates." />
           </Reveal>
-          <Reveal className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {whyCds.map((card, i) => {
-              const Icon = WHY_ICONS[i] ?? ShieldCheck
-              return (
-                <div
-                  key={card.title}
-                  className="group relative overflow-hidden rounded-3xl bg-white/[.05] p-7 transition duration-300 hover:-translate-y-1.5 hover:bg-white/[.07] hover:shadow-2xl hover:shadow-cdsc-accent/20"
-                >
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-cdsc-accent/15 text-orange-300 transition group-hover:bg-linear-to-br group-hover:from-cdsc-accent group-hover:to-orange-500 group-hover:text-white">
-                    <Icon className="h-5 w-5" />
-                  </div>
-                  <h3 className="mt-5 text-base font-bold text-white">{card.title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-white/55">{card.description}</p>
-                  <div aria-hidden className="absolute right-0 top-0 h-28 w-28 rounded-bl-full bg-cdsc-accent/[.08] transition group-hover:bg-cdsc-accent/[.16]" />
+          <Reveal className="grid auto-rows-[220px] gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {INDUSTRY_PHOTOS.map(([name, src], i) => (
+              <Link
+                key={name}
+                href="/industries"
+                className={`group relative overflow-hidden rounded-3xl ${i === 0 ? 'lg:col-span-2 lg:row-span-2' : ''} ${i === 3 ? 'lg:col-span-2' : ''}`}
+              >
+                <Image src={src} alt={name} fill sizes="(min-width:1024px) 50vw, 100vw" className="object-cover transition duration-700 group-hover:scale-110" />
+                <div aria-hidden className="absolute inset-0 bg-linear-to-t from-cdsc-accent/90 via-cdsc-accent/20 to-transparent opacity-80 transition group-hover:opacity-100" />
+                <div className="absolute bottom-5 left-6 right-6 flex items-end justify-between gap-3 text-white">
+                  <h3 className="text-xl font-black sm:text-2xl">{name}</h3>
+                  <ArrowRight className="h-5 w-5 shrink-0 transition group-hover:translate-x-1" />
                 </div>
-              )
-            })}
+              </Link>
+            ))}
           </Reveal>
         </div>
       </section>
+
+      {/* ═══════════ WHY CDSC ═══════════ */}
+      <section className="bg-cdsc-tint py-24">
+        <div className={WRAP}>
+          <Reveal>
+            <Heading badge="Why CDSC" title="Why Businesses Choose CDSC" intro="Your requirement. Our responsibility." />
+          </Reveal>
+          <Reveal className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {WHY.map((card, i) => (
+              <div key={card.title} className="group relative overflow-hidden rounded-3xl bg-white p-7 shadow-sm transition duration-300 hover:-translate-y-1.5 hover:shadow-xl hover:shadow-cdsc-accent/15">
+                <span className="text-5xl font-black leading-none text-cdsc-accent/15 transition group-hover:text-cdsc-accent/30">{String(i + 1).padStart(2, '0')}</span>
+                <h3 className="mt-3 text-lg font-bold text-cdsc-ink">{card.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-cdsc-ink/60">{card.description}</p>
+                <div aria-hidden className="absolute inset-x-7 bottom-0 h-1 origin-left scale-x-0 rounded-t-full bg-linear-to-r from-cdsc-accent to-rose-500 transition duration-500 group-hover:scale-x-100" />
+              </div>
+            ))}
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ═══════════ BUILT-IN INVENTORY SYSTEM ═══════════ */}
+      <InventorySystemShowcase />
 
       {/* ═══════════ PROCUREMENT PROCESS ═══════════ */}
       <section className="bg-cdsc-paper py-24">
@@ -246,11 +237,11 @@ export default function HomePage() {
               intro="We assist with product sourcing, supplier coordination, quotation preparation, and fulfillment — so purchasing stays straightforward."
             />
           </Reveal>
-          <Reveal className="relative grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
-            <div aria-hidden className="absolute left-0 right-0 top-10 hidden h-0.5 bg-linear-to-r from-cdsc-accent via-orange-400 to-orange-200 lg:block" />
+          <Reveal className="relative grid gap-6 pt-6 sm:grid-cols-2 lg:grid-cols-4">
+            <div aria-hidden className="absolute left-0 right-0 top-16 hidden h-0.5 bg-linear-to-r from-cdsc-accent via-rose-400 to-rose-200 lg:block" />
             {procurementProcess.map(step => (
-              <div key={step.step} className="relative rounded-2xl bg-white p-7 text-center shadow-sm transition duration-300 hover:-translate-y-1.5 hover:shadow-xl">
-                <span className="relative mx-auto -mt-14 mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-linear-to-br from-cdsc-accent to-orange-500 text-lg font-black text-white shadow-lg shadow-cdsc-accent/30 ring-8 ring-cdsc-paper">
+              <div key={step.step} className="relative rounded-3xl bg-white p-7 text-center shadow-sm transition duration-300 hover:-translate-y-1.5 hover:shadow-xl">
+                <span className="relative mx-auto -mt-14 mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-linear-to-br from-cdsc-accent to-rose-500 text-lg font-black text-white shadow-lg shadow-cdsc-accent/30 ring-8 ring-cdsc-paper">
                   {step.step}
                 </span>
                 <h3 className="text-base font-bold text-cdsc-ink">{step.title}</h3>
@@ -261,40 +252,39 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ═══════════ PARTNER + FINAL CTA ═══════════ */}
+      {/* ═══════════ CTA + PARTNER ═══════════ */}
       <section className="bg-white py-24">
         <Reveal className={`grid gap-6 lg:grid-cols-2 ${WRAP}`}>
-          <div className="relative overflow-hidden rounded-3xl bg-linear-to-br from-cdsc-accent via-red-500 to-orange-500 bg-[length:300%_300%] p-10 text-white motion-safe:animate-gradient-shift">
-            <div aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full bg-white/10 motion-safe:animate-float" />
-            <h2 className="relative text-3xl font-black leading-tight sm:text-4xl">Have a Requirement?<br />Let&apos;s Work on It.</h2>
-            <p className="relative mt-4 max-w-md text-white/85">
-              Send us your product requirements and our team will identify the right sourcing and supply options.
-            </p>
-            <div className="relative mt-8 flex flex-wrap gap-3">
-              <Link href="/quote" className="inline-flex items-center gap-2 rounded-2xl bg-white px-6 py-3 font-bold text-cdsc-accent transition hover:-translate-y-0.5 hover:shadow-xl">
-                Request a Quotation <ArrowRight className="h-4 w-4" />
-              </Link>
-              <a href={company.phoneHref} className="inline-flex items-center gap-2 rounded-2xl border border-white/30 bg-white/10 px-6 py-3 font-bold transition hover:bg-white/20">
-                <Phone className="h-4 w-4" /> {company.phone}
-              </a>
+          <div className="relative overflow-hidden rounded-3xl p-10 text-white">
+            <Image src="/images/site/welding.jpg" alt="" fill sizes="(min-width:1024px) 50vw, 100vw" className="object-cover" />
+            <div aria-hidden className="absolute inset-0 bg-linear-to-br from-cdsc-accent/95 via-red-600/85 to-rose-500/70" />
+            <div className="relative">
+              <h2 className="text-3xl font-black leading-tight sm:text-4xl">Have a Requirement?<br />Let&apos;s Work on It.</h2>
+              <p className="mt-4 max-w-md text-white/90">Send us your product requirements and our team will identify the right sourcing and supply options.</p>
+              <div className="mt-8 flex flex-wrap gap-3">
+                <Link href="/quote" className="inline-flex items-center gap-2 rounded-2xl bg-white px-6 py-3 font-bold text-cdsc-accent transition hover:-translate-y-0.5 hover:shadow-xl">
+                  Request a Quotation <ArrowRight className="h-4 w-4" />
+                </Link>
+                <a href={company.phoneHref} className="inline-flex items-center gap-2 rounded-2xl border border-white/30 bg-white/10 px-6 py-3 font-bold backdrop-blur transition hover:bg-white/20">
+                  <Phone className="h-4 w-4" /> {company.phone}
+                </a>
+              </div>
             </div>
           </div>
-          <div className="relative overflow-hidden rounded-3xl bg-black p-10 text-white">
-            <div aria-hidden className="pointer-events-none absolute -bottom-20 -right-20 h-72 w-72 rounded-full bg-cdsc-accent/25 blur-3xl" />
-            <Handshake className="relative h-9 w-9 text-orange-300" />
-            <h2 className="relative mt-5 text-3xl font-black leading-tight sm:text-4xl">Interested in Partnering with CDSC?</h2>
-            <p className="relative mt-4 max-w-md text-white/60">
+          <div className="relative overflow-hidden rounded-3xl bg-cdsc-tint p-10">
+            <div aria-hidden className="pointer-events-none absolute -bottom-24 -right-24 h-72 w-72 rounded-full bg-cdsc-accent/10" />
+            <span className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-cdsc-accent shadow-sm"><Handshake className="h-7 w-7" /></span>
+            <h2 className="relative mt-5 text-3xl font-black leading-tight text-cdsc-ink sm:text-4xl">Interested in Partnering with CDSC?</h2>
+            <p className="relative mt-4 max-w-md text-cdsc-ink/65">
               We work with reliable suppliers, vendors, and business partners. If you supply industrial, electrical,
               safety, or related products, we&apos;d like to hear from you.
             </p>
-            <Link href="/inquiry" className="relative mt-8 inline-flex items-center gap-2 rounded-2xl bg-linear-to-r from-cdsc-accent to-orange-500 px-6 py-3 font-bold transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-cdsc-accent/30">
+            <Link href="/inquiry" className="relative mt-8 inline-flex items-center gap-2 rounded-2xl bg-linear-to-r from-cdsc-accent to-rose-500 px-6 py-3 font-bold text-white transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-cdsc-accent/30">
               Partner with Us <ArrowRight className="h-4 w-4" />
             </Link>
           </div>
         </Reveal>
-        <p className="mt-10 text-center text-xs text-cdsc-ink/40">
-          {company.name} &middot; {company.addressFull}
-        </p>
+        <p className="mt-10 text-center text-xs text-cdsc-ink/40">{company.name} &middot; {company.addressFull}</p>
       </section>
     </>
   )

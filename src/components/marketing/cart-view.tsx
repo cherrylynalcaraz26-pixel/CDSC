@@ -198,7 +198,7 @@ export function CartView() {
                     className={`flex cursor-pointer items-start gap-3 rounded-xl bg-white p-3 transition ${on ? 'shadow-md ring-2 ring-cdsc-accent' : 'shadow-sm hover:shadow-md'}`}
                   >
                     <input type="radio" name="payment" value={value} checked={on} onChange={() => setPayment(value)} className="sr-only" />
-                    <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition ${on ? 'bg-linear-to-br from-cdsc-accent to-orange-500 text-white' : 'bg-cdsc-tint text-cdsc-accent'}`}>
+                    <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg transition ${on ? 'bg-linear-to-br from-cdsc-accent to-rose-500 text-white' : 'bg-cdsc-tint text-cdsc-accent'}`}>
                       <Icon className="h-4 w-4" />
                     </span>
                     <span className="min-w-0">
@@ -217,7 +217,7 @@ export function CartView() {
           <button
             type="submit"
             disabled={sending}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-linear-to-r from-cdsc-accent to-orange-500 px-5 py-3.5 text-sm font-bold text-white shadow-lg shadow-cdsc-accent/25 transition hover:-translate-y-0.5 hover:shadow-xl disabled:translate-y-0 disabled:opacity-60"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl bg-linear-to-r from-cdsc-accent to-rose-500 px-5 py-3.5 text-sm font-bold text-white shadow-lg shadow-cdsc-accent/25 transition hover:-translate-y-0.5 hover:shadow-xl disabled:translate-y-0 disabled:opacity-60"
           >
             {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />} Send Order
           </button>

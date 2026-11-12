@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea'
 import { Plus, Trash2, UserCheck } from 'lucide-react'
 import { toast } from 'sonner'
+import { confirmRemoveLine } from '@/components/ui/confirm'
 
 const mockERs = [
   { id: '1', er_number: 'ER-2025-00034', request_type: 'office_supplies', purpose: 'Monthly supplies', status: 'submitted', date: '2025-06-07', items: 5 },
@@ -127,7 +128,7 @@ export default function EmployeeRequestsPage() {
                       <SelectTrigger className="w-24 h-8 text-sm"><SelectValue /></SelectTrigger>
                       <SelectContent>{['piece', 'box', 'set', 'pack'].map(u => <SelectItem key={u} value={u}>{u}</SelectItem>)}</SelectContent>
                     </Select>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setItems(p => p.filter((_, idx) => idx !== i))} disabled={items.length === 1}><Trash2 className="h-3.5 w-3.5" /></Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={async () => { if (await confirmRemoveLine(it)) setItems(p => p.filter((_, idx) => idx !== i)) }} disabled={items.length === 1}><Trash2 className="h-3.5 w-3.5" /></Button>
                   </div>
                 ))}
               </div>

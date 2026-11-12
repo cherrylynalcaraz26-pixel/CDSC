@@ -24,6 +24,8 @@ import {
   FileSignature, List, Boxes,
 } from 'lucide-react'
 import { PullOutLetterDialog } from '@/components/pull-outs/pull-out-letter'
+import { confirmRemoveLine } from '@/components/ui/confirm'
+import { deleteWithUndo } from '@/lib/delete-with-undo'
 
 type Status = 'pending' | 'scheduled' | 'picked_up' | 'received' | 'cancelled'
 type SourceType = 'client' | 'supplier' | 'other'
@@ -248,10 +250,11 @@ export default function PullOutsPage() {
   }
 
   async function remove(r: PullOut) {
-    if (!confirm(`Delete ${r.pull_out_number ?? 'this pull out'}?`)) return
-    const { error } = await supabase.from('pull_outs').delete().eq('id', r.id)
-    if (error) toast.error(getErrorMessage(error))
-    else { toast.success('Pull out deleted'); load() }
+    await deleteWithUndo(supabase, {
+      table: 'pull_outs', id: r.id, label: `pull out ${r.pull_out_number ?? ''}`.trim(),
+      children: [{ table: 'pull_out_items', fk: 'pull_out_id' }],
+      onChange: load,
+    })
   }
 
   function printSlip(r: PullOut) {
@@ -553,7 +556,7 @@ export default function PullOutsPage() {
                       <Input className="col-span-2" placeholder="Condition" value={l.condition}
                         onChange={e => setLines(p => p.map((x, j) => j === i ? { ...x, condition: e.target.value } : x))} />
                       <Button type="button" variant="ghost" size="icon" className="col-span-1 h-8 w-8 text-muted-foreground hover:text-destructive"
-                        disabled={lines.length === 1} onClick={() => setLines(p => p.filter((_, j) => j !== i))}>
+                        disabled={lines.length === 1} onClick={async () => { if (await confirmRemoveLine(l)) setLines(p => p.filter((_, j) => j !== i)) }}>
                         <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </div>

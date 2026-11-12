@@ -29,6 +29,7 @@ import { emptyName, joinName, nameFromRow, nameColumns, type PersonName } from '
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
+import { deleteWithUndo } from '@/lib/delete-with-undo'
 
 type Stage = 'new_lead' | 'contacted' | 'proposal_sent' | 'negotiation' | 'won' | 'lost'
 type Priority = 'low' | 'medium' | 'high' | 'urgent'
@@ -173,10 +174,9 @@ export default function CRMPage() {
 
   async function confirmDeleteLead() {
     if (!confirmLead) return
-    const { error } = await supabase.from('crm_leads').delete().eq('id', confirmLead.id)
-    if (error) toast.error('Failed to delete lead')
-    else { toast.success('Lead deleted'); fetchLeads() }
+    const lead = confirmLead
     setConfirmOpen(false); setConfirmLead(null)
+    await deleteWithUndo(supabase, { table: 'crm_leads', id: lead.id, label: `lead "${lead.company_name ?? 'lead'}"`, skipConfirm: true, onChange: fetchLeads })
   }
 
   async function markStage(lead: CRMLead, stage: Stage) {

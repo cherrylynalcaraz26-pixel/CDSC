@@ -20,6 +20,7 @@ import {
   computeAccountBalances, buildIncomeStatement, buildBalanceSheet, assertBalanced, postJournalEntry,
   lineDate, type COAAccount, type LedgerLine, type AccountBalance,
 } from '@/lib/ledger'
+import { confirmAction } from '@/components/ui/confirm'
 
 const fmt = (n: number) => `₱${n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 const signed = (n: number) => (n < 0 ? `(${fmt(-n)})` : fmt(n))
@@ -307,7 +308,7 @@ export function GeneralJournalPanel({ lines, coa, onChanged }: { lines: LedgerLi
   }
 
   async function voidEntry(entryId: string) {
-    if (!confirm('Void this journal entry? It will be removed from every report.')) return
+    if (!(await confirmAction({ title: 'Void this journal entry?', description: 'It will be removed from every report.', confirmLabel: 'Void entry' }))) return
     const { error } = await supabase.from('journal_entries').update({ status: 'voided' }).eq('id', entryId)
     if (error) toast.error(getErrorMessage(error))
     else { toast.success('Entry voided'); onChanged() }
