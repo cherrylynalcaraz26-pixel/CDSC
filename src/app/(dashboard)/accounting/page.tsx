@@ -16,6 +16,12 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Textarea } from '@/components/ui/textarea'
 import { getErrorMessage } from '@/lib/error-message'
+import {
+  fetchLedgerLines, lineDate, postJournalEntry, repostSource, voidSourceEntries, type PostingLine, type LedgerLine,
+} from '@/lib/ledger'
+import {
+  TrialBalanceReport, IncomeStatementReport, BalanceSheetReport, CashFlowReport, GeneralJournalPanel,
+} from '@/components/accounting/ledger-reports'
 import { logAudit } from '@/lib/audit-log'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
@@ -141,6 +147,18 @@ const VAT_RATE = 0.12
 // Splits a VAT-inclusive OR amount into its net (VATable Sales) and VAT components.
 // VATable Sales = Gross / 1.12, VAT = Gross - VATable Sales — never Gross * 0.12,
 // which would double-count the tax already folded into the gross amount.
+// Journal lines for an Official Receipt (cash basis): Dr Cash (net of 2307) + Dr CWT
+// receivable / Cr Sales (VAT-exclusive when vatable) + Cr Output VAT.
+function collectionPostingLines(gross: number, vatType: VATType, vatableSales: number, vatAmount: number, form2307: number, memo: string): PostingLine[] {
+  const lines: PostingLine[] = [
+    { account_code: '1100', account_name: 'Cash on Hand', memo, debit: gross - form2307 },
+    { account_code: '4100', account_name: 'Sales Revenue', memo, credit: vatType === 'vatable' ? vatableSales : gross },
+  ]
+  if (vatAmount > 0) lines.push({ account_code: '2200', account_name: 'Output VAT Payable', memo, credit: vatAmount })
+  if (form2307 > 0) lines.push({ account_code: '1120', account_name: 'Withholding Tax Receivable (2307)', memo, debit: form2307 })
+  return lines
+}
+
 function splitVat(grossAmount: number, vatType: VATType): { vatableSales: number; vatAmount: number } {
   if (vatType !== 'vatable' || grossAmount <= 0) return { vatableSales: 0, vatAmount: 0 }
   const vatableSales = Math.round((grossAmount / (1 + VAT_RATE)) * 100) / 100
@@ -921,6 +939,15 @@ function CollectionsTab() {
         await supabase.from('collection_csi_links').insert([...selectedCsis].map(si_number => ({ collection_id: editingId, si_number })))
       }
       await logAudit(supabase, { action: 'update', table: 'collections', recordId: editingId, newValues: payload })
+      // Keep the books in step with the edited receipt: void its old entry, post the new figures.
+      try {
+        const memo = `Collection: ${payload.or_number ?? ''} – ${clientName.trim()}`
+        await repostSource(supabase, {
+          entry_date: payload.collection_date, memo, entry_type: 'sales_receipt',
+          source_table: 'collections', source_id: editingId,
+          lines: collectionPostingLines(grossAmount, form.vat_type, vatableSales, vatAmount, payload.form_2307 ?? 0, memo),
+        })
+      } catch (err) { toast.error(getErrorMessage(err, 'Collection saved, but its journal entry could not be updated')) }
       toast.success('Collection updated'); setOpen(false); resetForm(); load()
       setSaving(false)
       return
@@ -932,22 +959,13 @@ function CollectionsTab() {
       await supabase.from('collection_csi_links').insert([...selectedCsis].map(si_number => ({ collection_id: (colData as any).id, si_number })))
     }
     const memo = `Collection: ${payload.or_number ?? ''} – ${clientName.trim()}`
-    const { data: jeData, error: jeErr } = await supabase.from('journal_entries').insert({
-      entry_date: payload.collection_date, memo, entry_type: 'sales_receipt',
-      source_table: 'collections', source_id: (colData as any).id, status: 'posted',
-    }).select().single()
-    if (!jeErr && jeData) {
-      const jeId = (jeData as any).id
-      const net = grossAmount - (payload.form_2307 ?? 0)
-      const salesRevenue = form.vat_type === 'vatable' ? vatableSales : grossAmount
-      const lines = [
-        { entry_id: jeId, account_code: '1100', account_name: 'Cash on Hand', memo, debit: net, credit: 0 },
-        { entry_id: jeId, account_code: '4100', account_name: 'Sales Revenue', memo, debit: 0, credit: salesRevenue },
-      ]
-      if (vatAmount > 0) lines.push({ entry_id: jeId, account_code: '2200', account_name: 'Output VAT Payable', memo, debit: 0, credit: vatAmount })
-      if (payload.form_2307) lines.push({ entry_id: jeId, account_code: '1120', account_name: 'Withholding Tax Receivable (2307)', memo, debit: payload.form_2307, credit: 0 })
-      await supabase.from('journal_lines').insert(lines)
-    }
+    try {
+      await postJournalEntry(supabase, {
+        entry_date: payload.collection_date, memo, entry_type: 'sales_receipt',
+        source_table: 'collections', source_id: (colData as { id: string }).id,
+        lines: collectionPostingLines(grossAmount, form.vat_type, vatableSales, vatAmount, payload.form_2307 ?? 0, memo),
+      })
+    } catch (err) { toast.error(getErrorMessage(err, 'Collection saved, but its journal entry could not be posted')) }
     toast.success('Collection recorded'); setOpen(false); resetForm(); load()
     setSaving(false)
   }
@@ -1000,6 +1018,7 @@ function CollectionsTab() {
     const { error } = await supabase.from('collections').update({ status: 'voided' }).eq('id', id)
     if (error) toast.error(getErrorMessage(error))
     else {
+      try { await voidSourceEntries(supabase, 'collections', id) } catch (err) { toast.error(getErrorMessage(err, 'Voided, but its journal entry is still posted')) }
       await logAudit(supabase, { action: 'void', table: 'collections', recordId: id, newValues: { status: 'voided' } })
       toast.success('Collection voided'); load()
     }
@@ -1484,7 +1503,7 @@ function CollectionsTab() {
       </Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent showCloseButton={false} className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto p-0">
+        <DialogContent size="landscape" showCloseButton={false} className="p-0">
           <div className="relative bg-gradient-to-r from-red-700 to-red-900 px-6 py-5">
             <DialogHeader>
               <DialogTitle className="text-white text-lg font-semibold">{editingId ? 'Edit Collection (OR)' : 'New Collection (OR)'}</DialogTitle>
@@ -2121,18 +2140,17 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
     if (disbErr) { toast.error(getErrorMessage(disbErr)); setSaving(false); return }
     await logAudit(supabase, { action: 'create', table: 'disbursements', recordId: (disbData as { id: string }).id, newValues: { ...form, status: 'posted' } })
     const memo = `${form.payee} – ${form.description || expAcc?.name || 'Disbursement'}`
-    const { data: jeData, error: jeErr } = await supabase.from('journal_entries').insert({
-      entry_date: form.disb_date, memo, entry_type: 'disbursement',
-      source_table: 'disbursements', source_id: (disbData as any).id, status: 'posted',
-    }).select().single()
-    if (!jeErr && jeData) {
-      const jeId = (jeData as any).id
-      await supabase.from('journal_lines').insert([
-        { entry_id: jeId, account_code: form.expense_account, account_name: expAcc?.name, memo, debit: Number(form.amount), credit: 0 },
-        { entry_id: jeId, account_code: '1100', account_name: 'Cash on Hand', memo, debit: 0, credit: Number(form.amount) },
-      ])
-      await supabase.from('disbursements').update({ journal_entry_id: jeId }).eq('id', (disbData as any).id)
-    }
+    try {
+      const jeId = await postJournalEntry(supabase, {
+        entry_date: form.disb_date, memo, entry_type: 'disbursement',
+        source_table: 'disbursements', source_id: (disbData as { id: string }).id,
+        lines: [
+          { account_code: form.expense_account, account_name: expAcc?.name, memo, debit: Number(form.amount) },
+          { account_code: '1100', account_name: 'Cash on Hand', memo, credit: Number(form.amount) },
+        ],
+      })
+      await supabase.from('disbursements').update({ journal_entry_id: jeId }).eq('id', (disbData as { id: string }).id)
+    } catch (err) { toast.error(getErrorMessage(err, 'Disbursement saved, but its journal entry could not be posted')) }
     const payeeName = form.payee.trim()
     if (!payees.some(p => p.name.toLowerCase() === payeeName.toLowerCase())) {
       await supabase.from('payees').insert({ name: payeeName })
@@ -2146,6 +2164,7 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
     const { error } = await supabase.from('disbursements').update({ status: 'voided' }).eq('id', id)
     if (error) toast.error(getErrorMessage(error))
     else {
+      try { await voidSourceEntries(supabase, 'disbursements', id) } catch (err) { toast.error(getErrorMessage(err, 'Voided, but its journal entry is still posted')) }
       await logAudit(supabase, { action: 'void', table: 'disbursements', recordId: id, newValues: { status: 'voided' } })
       toast.success('Disbursement voided'); load()
     }
@@ -2265,7 +2284,7 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
       </CardContent></Card>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent size="landscape">
           <DialogHeader><DialogTitle>New Disbursement</DialogTitle></DialogHeader>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
             <div className="space-y-1.5">
@@ -2473,195 +2492,6 @@ function GeneralLedgerTab({ lines }: { lines: JournalLine[] }) {
   )
 }
 
-// ── Trial Balance sub-tab ─────────────────────────────────────────────────────
-
-function TrialBalanceTab({ lines, coa }: { lines: JournalLine[]; coa: COA[] }) {
-  const accountMap: Record<string, { name: string; debit: number; credit: number; type: string }> = {}
-  for (const l of lines) {
-    if (!accountMap[l.account_code]) {
-      const def = coa.find(c => c.account_code === l.account_code)
-      accountMap[l.account_code] = { name: l.account_name ?? def?.account_name ?? l.account_code, debit: 0, credit: 0, type: def?.account_type ?? '' }
-    }
-    accountMap[l.account_code].debit  += l.debit
-    accountMap[l.account_code].credit += l.credit
-  }
-  const rows = Object.entries(accountMap).sort((a, b) => a[0].localeCompare(b[0]))
-  const totalDebit  = rows.reduce((s, [, v]) => s + v.debit, 0)
-  const totalCredit = rows.reduce((s, [, v]) => s + v.credit, 0)
-  const isBalanced  = Math.abs(totalDebit - totalCredit) < 0.01
-
-  function exportTB() {
-    exportCSV('Trial_Balance.csv', ['Account Code','Account Name','Type','Debit','Credit','Balance'],
-      rows.map(([code, v]) => [code, v.name, v.type, v.debit, v.credit, v.debit - v.credit]))
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div><p className="text-sm font-semibold">Trial Balance</p><p className="text-xs text-muted-foreground">Aggregate debit/credit balances per account</p></div>
-        <div className="flex items-center gap-3">
-          <span className={`text-xs px-2 py-1 rounded-full font-medium ${isBalanced ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
-            {isBalanced ? '✓ Balanced' : '✗ Out of Balance'}
-          </span>
-          <Button variant="outline" size="sm" onClick={exportTB}><Download className="h-3.5 w-3.5 mr-1.5" />Export</Button>
-        </div>
-      </div>
-      <Card><CardContent className="p-0">
-        <Table containerClassName="max-h-[500px] overflow-y-auto">
-          <TableHeader className="sticky top-0 z-10 bg-background"><TableRow>
-            <TableHead>Account Code</TableHead><TableHead>Account Name</TableHead><TableHead>Type</TableHead>
-            <TableHead className="text-right">Debit</TableHead><TableHead className="text-right">Credit</TableHead>
-          </TableRow></TableHeader>
-          <TableBody>
-            {rows.length === 0 ? (
-              <TableRow><TableCell colSpan={5} className="text-center py-8 text-muted-foreground">No entries yet.</TableCell></TableRow>
-            ) : rows.map(([code, v]) => (
-              <TableRow key={code}>
-                <TableCell className="font-mono text-xs font-semibold">{code}</TableCell>
-                <TableCell className="text-sm">{v.name}</TableCell>
-                <TableCell><span className="text-xs bg-muted px-2 py-0.5 rounded-full capitalize">{v.type}</span></TableCell>
-                <TableCell className="text-right text-sm">{v.debit > 0 ? fmt(v.debit) : ''}</TableCell>
-                <TableCell className="text-right text-sm">{v.credit > 0 ? fmt(v.credit) : ''}</TableCell>
-              </TableRow>
-            ))}
-            <TableRow className="font-bold bg-muted/50">
-              <TableCell colSpan={3} className="text-sm">TOTALS</TableCell>
-              <TableCell className="text-right">{fmt(totalDebit)}</TableCell>
-              <TableCell className="text-right">{fmt(totalCredit)}</TableCell>
-            </TableRow>
-          </TableBody>
-        </Table>
-      </CardContent></Card>
-    </div>
-  )
-}
-
-// ── Income Statement sub-tab ──────────────────────────────────────────────────
-
-function IncomeStatementTab({ lines, coa }: { lines: JournalLine[]; coa: COA[] }) {
-  const balances: Record<string, number> = {}
-  for (const l of lines) { balances[l.account_code] = (balances[l.account_code] ?? 0) + l.credit - l.debit }
-
-  const revenues = coa.filter(a => a.account_type === 'revenue' && !a.is_header)
-  const expenses = coa.filter(a => a.account_type === 'expense' && !a.is_header)
-  const totalRevenue = revenues.reduce((s, a) => s + (balances[a.account_code] ?? 0), 0)
-  const totalExpense = expenses.reduce((s, a) => s + Math.abs(balances[a.account_code] ?? 0), 0)
-  const netIncome = totalRevenue - totalExpense
-
-  function exportIS() {
-    const rows: (string | number)[][] = [
-      ['REVENUES','',''],
-      ...revenues.filter(a => (balances[a.account_code] ?? 0) !== 0).map(a => [a.account_code, a.account_name, balances[a.account_code] ?? 0]),
-      ['','Total Revenues', totalRevenue],['','',''],['EXPENSES','',''],
-      ...expenses.filter(a => (balances[a.account_code] ?? 0) !== 0).map(a => [a.account_code, a.account_name, Math.abs(balances[a.account_code] ?? 0)]),
-      ['','Total Expenses', totalExpense],['','',''],['','NET INCOME / (LOSS)', netIncome],
-    ]
-    exportCSV('Income_Statement.csv', ['Account Code','Account Name','Amount'], rows)
-  }
-
-  const Section = ({ title, accounts, total, color }: { title: string; accounts: COA[]; total: number; color: string }) => (
-    <div>
-      <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground pb-1 border-b mb-1">{title}</div>
-      {accounts.map(a => { const bal = Math.abs(balances[a.account_code] ?? 0); if (!bal) return null; return (
-        <div key={a.account_code} className="flex justify-between py-1 text-sm">
-          <span className="text-muted-foreground">{a.account_code} – {a.account_name}</span>
-          <span>{fmt(bal)}</span>
-        </div>
-      )})}
-      <div className={`flex justify-between py-1.5 font-semibold border-t mt-1 ${color}`}>
-        <span>Total {title}</span><span>{fmt(total)}</span>
-      </div>
-    </div>
-  )
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div><p className="text-sm font-semibold">Income Statement (P&L)</p><p className="text-xs text-muted-foreground">Revenues vs Expenses — basis for BIR ITR filing</p></div>
-        <Button variant="outline" size="sm" onClick={exportIS}><Download className="h-3.5 w-3.5 mr-1.5" />Export</Button>
-      </div>
-      <div className="grid grid-cols-3 gap-3 mb-2">
-        <Card><CardContent className="pt-4 pb-3"><div className="text-xl font-bold text-green-600">{fmt(totalRevenue)}</div><div className="text-xs text-muted-foreground">Total Revenue</div></CardContent></Card>
-        <Card><CardContent className="pt-4 pb-3"><div className="text-xl font-bold text-red-600">{fmt(totalExpense)}</div><div className="text-xs text-muted-foreground">Total Expenses</div></CardContent></Card>
-        <Card><CardContent className="pt-4 pb-3"><div className={`text-xl font-bold ${netIncome >= 0 ? 'text-blue-700' : 'text-red-600'}`}>{fmt(Math.abs(netIncome))}</div><div className="text-xs text-muted-foreground">{netIncome >= 0 ? 'Net Income' : 'Net Loss'}</div></CardContent></Card>
-      </div>
-      <Card><CardContent className="pt-5 space-y-5">
-        <Section title="Revenues" accounts={revenues} total={totalRevenue} color="text-green-700" />
-        <Section title="Expenses" accounts={expenses} total={totalExpense} color="text-red-600" />
-        <div className={`flex justify-between text-base font-bold border-t-2 pt-3 ${netIncome >= 0 ? 'text-blue-700' : 'text-red-600'}`}>
-          <span>{netIncome >= 0 ? 'NET INCOME' : 'NET LOSS'}</span>
-          <span>{fmt(Math.abs(netIncome))}</span>
-        </div>
-      </CardContent></Card>
-    </div>
-  )
-}
-
-// ── Balance Sheet sub-tab ─────────────────────────────────────────────────────
-
-function BalanceSheetTab({ lines, coa }: { lines: JournalLine[]; coa: COA[] }) {
-  const balances: Record<string, number> = {}
-  for (const l of lines) {
-    const acc = coa.find(a => a.account_code === l.account_code)
-    if (!acc) continue
-    const net = l.debit - l.credit
-    balances[l.account_code] = (balances[l.account_code] ?? 0) + (acc.normal_balance === 'debit' ? net : -net)
-  }
-  const assets      = coa.filter(a => a.account_type === 'asset'     && !a.is_header)
-  const liabilities = coa.filter(a => a.account_type === 'liability' && !a.is_header)
-  const equity      = coa.filter(a => a.account_type === 'equity'    && !a.is_header)
-  const revenues    = coa.filter(a => a.account_type === 'revenue'   && !a.is_header)
-  const expenses    = coa.filter(a => a.account_type === 'expense'   && !a.is_header)
-  const totalAssets      = assets.reduce((s, a) => s + (balances[a.account_code] ?? 0), 0)
-  const totalLiabilities = liabilities.reduce((s, a) => s + (balances[a.account_code] ?? 0), 0)
-  const totalEquity      = equity.reduce((s, a) => s + (balances[a.account_code] ?? 0), 0)
-  const netIncome        = revenues.reduce((s, a) => s + (balances[a.account_code] ?? 0), 0) - expenses.reduce((s, a) => s + (balances[a.account_code] ?? 0), 0)
-  const totalLiabEquity  = totalLiabilities + totalEquity + netIncome
-  const balanced         = Math.abs(totalAssets - totalLiabEquity) < 0.01
-
-  const Section = ({ title, accounts, extra, total, color }: { title: string; accounts: COA[]; extra?: { label: string; value: number }; total: number; color: string }) => (
-    <div>
-      <div className="text-xs font-bold uppercase tracking-wider text-muted-foreground pb-1 border-b mb-1">{title}</div>
-      {accounts.map(a => { const bal = balances[a.account_code] ?? 0; if (!bal) return null; return (
-        <div key={a.account_code} className="flex justify-between py-1 text-sm">
-          <span className="text-muted-foreground">{a.account_code} – {a.account_name}</span>
-          <span>{fmt(bal)}</span>
-        </div>
-      )})}
-      {extra && <div className="flex justify-between py-1 text-sm"><span className="text-muted-foreground">3300 – Current Year Net Income</span><span className={extra.value >= 0 ? 'text-green-700' : 'text-red-600'}>{fmt(extra.value)}</span></div>}
-      <div className={`flex justify-between py-1.5 font-semibold border-t mt-1 ${color}`}><span>Total {title}</span><span>{fmt(total)}</span></div>
-    </div>
-  )
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div><p className="text-sm font-semibold">Balance Sheet</p><p className="text-xs text-muted-foreground">Statement of Financial Position</p></div>
-        <span className={`text-xs px-2 py-1 rounded-full font-medium ${balanced ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
-          {balanced ? '✓ Balanced' : '✗ Check Entries'}
-        </span>
-      </div>
-      <div className="grid grid-cols-2 gap-4">
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm">Assets</CardTitle></CardHeader>
-          <CardContent className="pt-0"><Section title="Assets" accounts={assets} total={totalAssets} color="text-blue-700" /></CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm">Liabilities & Equity</CardTitle></CardHeader>
-          <CardContent className="pt-0 space-y-4">
-            <Section title="Liabilities" accounts={liabilities} total={totalLiabilities} color="text-orange-700" />
-            <Section title="Equity" accounts={equity} extra={{ label: 'Current Year Net Income', value: netIncome }} total={totalEquity + netIncome} color="text-purple-700" />
-            <div className="flex justify-between font-bold text-sm border-t-2 pt-2">
-              <span>Total Liabilities + Equity</span>
-              <span className={balanced ? 'text-blue-700' : 'text-red-600'}>{fmt(totalLiabEquity)}</span>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  )
-}
-
 // ── BIR/CAS sub-tab ───────────────────────────────────────────────────────────
 
 function BIRExportTab({ collections, disbursements }: { collections: Collection[]; disbursements: Disbursement[] }) {
@@ -2755,7 +2585,7 @@ function BookkeepingTab({ activeSub, onSubChange }: { activeSub: string; onSubCh
   const [collections, setCollections] = useState<Collection[]>([])
   const [disbursements, setDisbursements] = useState<Disbursement[]>([])
   const [coa, setCoa] = useState<COA[]>([])
-  const [jLines, setJLines] = useState<JournalLine[]>([])
+  const [jLines, setJLines] = useState<LedgerLine[]>([])
   const [csiRecords, setCsiRecords] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const df = useDateRangeFilter()
@@ -2764,7 +2594,7 @@ function BookkeepingTab({ activeSub, onSubChange }: { activeSub: string; onSubCh
   const filteredCollections = applyDateFilter(df, collections, c => (c as Collection).collection_date)
   const filteredDisbursements = applyDateFilter(df, disbursements, d => (d as Disbursement).disb_date)
   const filteredCsi = applyDateFilter(df, csiRecords, r => r.si_date)
-  const filteredJLines = applyDateFilter(df, jLines, l => (l as JournalLine).journal_entries?.entry_date)
+  const filteredJLines = applyDateFilter(df, jLines, l => lineDate(l as LedgerLine)) as LedgerLine[]
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -2772,13 +2602,13 @@ function BookkeepingTab({ activeSub, onSubChange }: { activeSub: string; onSubCh
       supabase.from('collections').select('id,or_number,collection_date,client_name,amount,form_2307,status').order('collection_date'),
       supabase.from('disbursements').select('*').order('disb_date', { ascending: false }),
       supabase.from('chart_of_accounts').select('account_code,account_name,account_type,normal_balance,is_header').eq('is_active', true).order('account_code'),
-      supabase.from('journal_lines').select('*, journal_entries(entry_date,entry_number,memo,entry_type)').order('created_at'),
+      fetchLedgerLines(supabase).then(data => ({ data })),
       fetchAllRows((from, to) => supabase.from('csi_records').select('id,si_number,si_date,client_name,item_name,unit,quantity,unit_price,amount').order('si_date').order('id').range(from, to)).then(data => ({ data })),
     ])
     setCollections((colData ?? []) as Collection[])
     setDisbursements((disbData ?? []) as Disbursement[])
     setCoa((coaData ?? []) as COA[])
-    setJLines((jlData ?? []) as unknown as JournalLine[])
+    setJLines(jlData ?? [])
     setCsiRecords(csiData ?? [])
     setLoading(false)
   }, [supabase])
@@ -2797,10 +2627,12 @@ function BookkeepingTab({ activeSub, onSubChange }: { activeSub: string; onSubCh
           <TabsContent value="crj"><SalesJournalTab collections={filteredCollections} csiRecords={filteredCsi} /></TabsContent>
           <TabsContent value="cdj"><DisbursementsTab filterFrom={filterFrom} filterTo={filterTo} /></TabsContent>
           <TabsContent value="coa"><ChartOfAccountsTab coa={coa} /></TabsContent>
-          <TabsContent value="gl"><GeneralLedgerTab lines={filteredJLines} /></TabsContent>
-          <TabsContent value="tb"><TrialBalanceTab lines={filteredJLines} coa={coa} /></TabsContent>
-          <TabsContent value="is"><IncomeStatementTab lines={filteredJLines} coa={coa} /></TabsContent>
-          <TabsContent value="bs"><BalanceSheetTab lines={filteredJLines} coa={coa} /></TabsContent>
+          <TabsContent value="gj"><GeneralJournalPanel lines={filteredJLines} coa={coa} onChanged={load} /></TabsContent>
+          <TabsContent value="gl"><GeneralLedgerTab lines={filteredJLines as unknown as JournalLine[]} /></TabsContent>
+          <TabsContent value="tb"><TrialBalanceReport lines={filteredJLines} coa={coa} from={filterFrom} to={filterTo} /></TabsContent>
+          <TabsContent value="is"><IncomeStatementReport lines={filteredJLines} coa={coa} from={filterFrom} to={filterTo} /></TabsContent>
+          <TabsContent value="bs"><BalanceSheetReport allLines={jLines} coa={coa} asOf={filterTo} /></TabsContent>
+          <TabsContent value="cf"><CashFlowReport lines={filteredJLines} allLines={jLines} coa={coa} from={filterFrom} to={filterTo} /></TabsContent>
           <TabsContent value="bir"><BIRExportTab collections={filteredCollections} disbursements={filteredDisbursements} /></TabsContent>
         </div>
       </Tabs>

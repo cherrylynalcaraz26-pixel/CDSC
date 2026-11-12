@@ -62,6 +62,7 @@ interface Settings {
   vat_registered: boolean
   default_vat_rate: number
   is_top_withholding_agent: boolean
+  has_employees: boolean
   ewt_default_rate: number
   fiscal_year_start: string
   industry: string
@@ -107,6 +108,7 @@ function defaultSettings(): Settings {
     vat_registered: true,
     default_vat_rate: 12,
     is_top_withholding_agent: false,
+    has_employees: false,
     ewt_default_rate: 2,
     fiscal_year_start: '01-01',
     industry: 'Industrial Supply & Distribution',
@@ -1750,6 +1752,19 @@ export default function SettingsPage() {
                   <p className="text-xs text-muted-foreground">
                     When Yes, new purchase orders default to each supplier&apos;s EWT type (Goods 1% / Services 2% / Rental 5%).
                     When No, they default to no EWT.
+                  </p>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Employees on Payroll</Label>
+                  <Select value={settings.has_employees ? "yes" : "no"} onValueChange={v => set("has_employees", v === "yes")}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="no">No — owner only / no compensation paid</SelectItem>
+                      <SelectItem value="yes">Yes — CDSC pays employees</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    When Yes, BIR Compliance tracks 1601-C (monthly), 1604-C and 2316 (annual).
                   </p>
                 </div>
               </div>

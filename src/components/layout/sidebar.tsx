@@ -11,7 +11,7 @@ import {
   FileBarChart, Settings, ChevronDown, ChevronRight, Building2,
   SlidersHorizontal, ArrowRightLeft, LogOut, X, Wrench,
   Receipt, PanelLeftClose, PanelLeftOpen, ClipboardList, BoxesIcon,
-  TrendingUp, MessageSquare, Globe,
+  TrendingUp, Globe, UserCog, PackageOpen, BookText, Landmark, FileCheck2, Wallet,
   BookOpen, Banknote, BarChart3, Scale, FileSpreadsheet,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
@@ -42,38 +42,47 @@ const navigation: NavItem[] = [
       { label: 'Inventory', href: '/inventory', icon: BoxesIcon },
       { label: 'DR Logs', href: '/dr-logs', icon: ClipboardList },
       { label: 'CSI Monitoring', href: '/csi-monitoring', icon: FileText },
+      { label: 'Pull Outs', href: '/pull-outs', icon: PackageOpen },
+    ],
+  },
+  // Accounting grouped the same way as the CHEM app: what you enter daily,
+  // what you review and file, and the financial statements.
+  {
+    label: 'Accounting · Daily Entry', icon: Calculator,
+    children: [
+      { label: 'Collections (OR)', href: '/accounting?tab=collections', icon: Receipt },
+      { label: 'Sales Journal', href: '/accounting?tab=bookkeeping&sub=crj', icon: BookOpen },
+      { label: 'Cash Disbursements', href: '/accounting?tab=bookkeeping&sub=cdj', icon: Banknote },
+      { label: 'General Journal', href: '/accounting?tab=bookkeeping&sub=gj', icon: BookText },
     ],
   },
   {
-    label: 'Accounting', icon: Calculator,
+    label: 'Accounting · Reports', icon: FileBarChart,
     children: [
       { label: 'Overview', href: '/accounting?tab=overview', icon: Calculator },
-      { label: 'Collections', href: '/accounting?tab=collections', icon: Receipt },
-      { label: 'BIR Compliance', href: '/accounting?tab=bir', icon: FileText },
+      { label: 'General Ledger', href: '/accounting?tab=bookkeeping&sub=gl', icon: BarChart3 },
+      { label: 'Trial Balance', href: '/accounting?tab=bookkeeping&sub=tb', icon: Scale },
+      { label: 'BIR Compliance', href: '/accounting?tab=bir', icon: Landmark },
+      { label: 'Chart of Accounts', href: '/accounting?tab=bookkeeping&sub=coa', icon: FileSpreadsheet },
     ],
   },
   {
-    label: 'Bookkeeping', icon: FileBarChart,
+    label: 'Accounting · Statements', icon: FileCheck2,
     children: [
-      { label: 'Sales Journal', href: '/accounting?tab=bookkeeping&sub=crj', icon: BookOpen },
-      { label: 'Disbursements', href: '/accounting?tab=bookkeeping&sub=cdj', icon: Banknote },
-      { label: 'Chart of Accounts', href: '/accounting?tab=bookkeeping&sub=coa', icon: FileSpreadsheet },
-      { label: 'General Ledger', href: '/accounting?tab=bookkeeping&sub=gl', icon: BarChart3 },
-      { label: 'Trial Balance', href: '/accounting?tab=bookkeeping&sub=tb', icon: Scale },
       { label: 'Income Statement', href: '/accounting?tab=bookkeeping&sub=is', icon: TrendingUp },
       { label: 'Balance Sheet', href: '/accounting?tab=bookkeeping&sub=bs', icon: FileSpreadsheet },
+      { label: 'Cash Flow Statement', href: '/accounting?tab=bookkeeping&sub=cf', icon: Wallet },
     ],
   },
-  { label: 'Messages', href: '/messages', icon: MessageSquare },
   {
     label: 'Setup', icon: Wrench,
     children: [
       { label: 'Configuration', href: '/setup', icon: SlidersHorizontal },
       { label: 'Clients', href: '/clients', icon: Users },
       { label: 'Reports', href: '/reports', icon: FileBarChart },
-      { label: 'Users', href: '/users', icon: Users },
     ],
   },
+  { label: 'User Management', href: '/users', icon: UserCog },
   { label: 'Company Profile', href: '/settings', icon: Settings },
 ]
 
