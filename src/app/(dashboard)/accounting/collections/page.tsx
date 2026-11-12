@@ -238,7 +238,7 @@ export default function CollectionsPage() {
 
       {/* New Collection Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-[95vw] max-w-5xl max-h-[85vh] overflow-y-auto">
+        <DialogContent size="landscape">
           <DialogHeader><DialogTitle>New Collection (OR)</DialogTitle></DialogHeader>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 py-2">
             <div className="space-y-1.5">

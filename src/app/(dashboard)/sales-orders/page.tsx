@@ -1903,7 +1903,7 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
 
       {/* Quick Create PO (from warehouse-short lines) — can bundle 2+ items into one PO */}
       <Dialog open={quickPOOpen} onOpenChange={setQuickPOOpen}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent size="landscape" className="sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>Create Purchase Order</DialogTitle>
           </DialogHeader>

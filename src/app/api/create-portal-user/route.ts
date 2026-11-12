@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 
 export async function POST(req: NextRequest) {
   try {
-    const { email, password, full_name, company, role } = await req.json()
+    const { email, password, full_name, company, role, first_name, middle_name, last_name } = await req.json()
     const portalRole = role === 'vendor' ? 'vendor' : 'client'
 
     if (!email || !password) {
@@ -40,6 +40,9 @@ export async function POST(req: NextRequest) {
         id: data.user.id,
         email: email.trim().toLowerCase(),
         full_name: full_name || null,
+        first_name: first_name || null,
+        middle_name: middle_name || null,
+        last_name: last_name || null,
         role: portalRole,
         company: company || null,
         status: 'active',

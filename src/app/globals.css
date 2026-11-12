@@ -81,14 +81,14 @@
 
 :root {
   --cdsc-navy: oklch(0.537 0.229 27.325);
-  --cdsc-navy-dark: oklch(0.44 0.2 27);
+  --cdsc-navy-dark: oklch(0.63 0.21 35);   /* hover — brighter red-orange, no dark red on the website */
   --cdsc-charcoal: oklch(0.2 0.008 250);
   --cdsc-ink: oklch(0.22 0.01 250);
   --cdsc-paper: oklch(0.98 0.003 250);
   --cdsc-tint: oklch(0.96 0.01 27);
   --cdsc-line: oklch(0.9 0.006 250);
   --cdsc-accent: oklch(0.537 0.229 27.325);
-  --cdsc-accent-dark: oklch(0.44 0.2 27);
+  --cdsc-accent-dark: oklch(0.63 0.21 35);
 }
 
 :root {

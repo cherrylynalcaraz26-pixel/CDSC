@@ -40,7 +40,6 @@ export const credentials = [
 
 export const nav = [
   { label: 'Home', href: '/' },
-  { label: 'About Us', href: '/about' },
   { label: 'Products', href: '/products' },
   { label: 'Industries We Serve', href: '/industries' },
   { label: 'Services', href: '/services' },

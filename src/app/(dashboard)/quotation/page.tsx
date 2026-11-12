@@ -805,44 +805,9 @@ export default function QuotationPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">Quotation</h2>
-          <p className="text-muted-foreground text-sm">Create and manage client quotations and requests</p>
-        </div>
-        {activeTab === 'quotations' && (
-          open ? (
-            <Button variant="outline" onClick={() => {
-              const hasData = clientId || quoteNumber || lines.some(l => l.item_name)
-              if (hasData) { setDiscardCallback(() => () => { setOpen(false); resetForm() }); setDiscardOpen(true); return }
-              setOpen(false); resetForm()
-            }}>
-              <X className="h-4 w-4 mr-2" />Cancel
-            </Button>
-          ) : (
-            <Button onClick={() => { resetForm(); setOpen(true) }} className="bg-red-600 hover:bg-red-700">
-              <Plus className="h-4 w-4 mr-2" />New Quotation
-            </Button>
-          )
-        )}
-      </div>
-
-      <Tabs value={activeTab} onValueChange={v => setActiveTab(v ?? 'quotations')}>
-        <TabsList>
-          <TabsTrigger value="quotations" className="flex items-center gap-1.5">
-            <FileText className="h-3.5 w-3.5" />Quotations
-          </TabsTrigger>
-          <TabsTrigger value="requests" className="flex items-center gap-1.5">
-            <ClipboardList className="h-3.5 w-3.5" />Requests for Quotation
-            {rfqPendingCount > 0 && (
-              <span className="ml-1 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{rfqPendingCount}</span>
-            )}
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="quotations" className="space-y-6 mt-4">
-
-      {!open && (
+      {/* Title and subtitle are shown in the top header bar (components/layout/header.tsx). */}
+      <Tabs value={activeTab} onValueChange={v => setActiveTab(v ?? 'quotations')} className="gap-5">
+      {activeTab === 'quotations' && !open && (
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="relative overflow-hidden border-none">
             <div className="absolute inset-0 bg-gradient-to-br from-red-50 to-transparent" />
@@ -894,6 +859,38 @@ export default function QuotationPage() {
           </Card>
         </div>
       )}
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <TabsList>
+            <TabsTrigger value="quotations" className="flex items-center gap-1.5">
+              <FileText className="h-3.5 w-3.5" />Quotations
+            </TabsTrigger>
+            <TabsTrigger value="requests" className="flex items-center gap-1.5">
+              <ClipboardList className="h-3.5 w-3.5" />Requests for Quotation
+              {rfqPendingCount > 0 && (
+                <span className="ml-1 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">{rfqPendingCount}</span>
+              )}
+            </TabsTrigger>
+          </TabsList>
+        {activeTab === 'quotations' && (
+          open ? (
+            <Button variant="outline" onClick={() => {
+              const hasData = clientId || quoteNumber || lines.some(l => l.item_name)
+              if (hasData) { setDiscardCallback(() => () => { setOpen(false); resetForm() }); setDiscardOpen(true); return }
+              setOpen(false); resetForm()
+            }}>
+              <X className="h-4 w-4 mr-2" />Cancel
+            </Button>
+          ) : (
+            <Button onClick={() => { resetForm(); setOpen(true) }} className="bg-red-600 hover:bg-red-700">
+              <Plus className="h-4 w-4 mr-2" />New Quotation
+            </Button>
+          )
+        )}
+        </div>
+
+        <TabsContent value="quotations" className="space-y-6">
+
 
       {open ? (
         <div className="space-y-6">
@@ -1563,7 +1560,7 @@ ${listEmailBody.replace(/\n/g, '<br/>')}
 
       {/* Add Item Modal */}
       <Dialog open={addItemOpen} onOpenChange={setAddItemOpen}>
-        <DialogContent className="w-[95vw] max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogContent size="landscape">
           <DialogHeader>
             <DialogTitle>Add Item</DialogTitle>
           </DialogHeader>

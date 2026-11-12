@@ -4,7 +4,7 @@ import nodemailer from 'nodemailer'
 
 export async function POST(req: NextRequest) {
   try {
-    const { email, full_name, role, department, company } = await req.json()
+    const { email, full_name, role, department, company, first_name, middle_name, last_name } = await req.json()
 
     if (!email) {
       return NextResponse.json({ error: 'Email is required.' }, { status: 400 })
@@ -41,6 +41,9 @@ export async function POST(req: NextRequest) {
         id: data.user.id,
         email: normalizedEmail,
         full_name: full_name || null,
+        first_name: first_name || null,
+        middle_name: middle_name || null,
+        last_name: last_name || null,
         role: role || 'employee',
         department: department || null,
         company: company || null,

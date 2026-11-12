@@ -23,6 +23,8 @@ import { UserPlus, MoreHorizontal, Search, Loader2, Users, KeyRound } from 'luci
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import { useSearchContext } from '@/context/search-context'
+import { NameFields } from '@/components/forms/person-address-fields'
+import { emptyName, joinName, nameFromRow, nameColumns, type PersonName } from '@/lib/person-address'
 
 const ROLES = [
   { value: 'super_admin',         label: 'Super-Admin',         color: 'bg-red-100 text-red-800' },
@@ -77,6 +79,9 @@ export default function UsersPage() {
   const [portalOpen, setPortalOpen] = useState(false)
   const [portalForm, setPortalForm] = useState({ email: '', full_name: '', company: '', password: '', confirmPassword: '', role: 'client' as 'client' | 'vendor' })
   const [portalCreating, setPortalCreating] = useState(false)
+  const [inviteName, setInviteName] = useState<PersonName>(emptyName())
+  const [portalName, setPortalName] = useState<PersonName>(emptyName())
+  const [editName, setEditName] = useState<PersonName>(emptyName())
   const [showPortalPw, setShowPortalPw] = useState(false)
   const [clientNames, setClientNames] = useState<string[]>([])
   const [supplierNames, setSupplierNames] = useState<string[]>([])
@@ -84,7 +89,7 @@ export default function UsersPage() {
   async function load() {
     setLoading(true)
     const [{ data, error }, { data: cliData }, { data: supData }] = await Promise.all([
-      supabase.from('profiles').select('id, full_name, email, role, department, company, status, created_at, employee_id, avatar_url').order('created_at', { ascending: false }),
+      supabase.from('profiles').select('*').order('created_at', { ascending: false }),
       supabase.from('clients').select('company_name').eq('status', 'active').order('company_name'),
       supabase.from('suppliers').select('company_name').eq('is_active', true).order('company_name'),
     ])
@@ -113,7 +118,8 @@ export default function UsersPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           email: inviteForm.email.trim().toLowerCase(),
-          full_name: inviteForm.full_name.trim() || null,
+          full_name: joinName(inviteName) || null,
+          ...nameColumns(inviteName),
           role: inviteForm.role,
           department: inviteForm.department || null,
           company: inviteForm.company || null,
@@ -137,6 +143,7 @@ export default function UsersPage() {
       }
       setInviteOpen(false)
       setInviteForm({ email: '', full_name: '', role: 'employee', department: '', company: '', employee_id: '' })
+      setInviteName(emptyName())
       load()
     } catch (err: any) {
       toast.error(getErrorMessage(err, 'Failed to invite user'))
@@ -157,7 +164,8 @@ export default function UsersPage() {
         body: JSON.stringify({
           email: portalForm.email.trim().toLowerCase(),
           password: portalForm.password,
-          full_name: portalForm.full_name.trim() || null,
+          full_name: joinName(portalName) || null,
+          ...nameColumns(portalName),
           company: portalForm.company || null,
           role: portalForm.role,
         }),
@@ -174,6 +182,7 @@ export default function UsersPage() {
       toast.success(`Portal account created for ${portalForm.email}`)
       setPortalOpen(false)
       setPortalForm({ email: '', full_name: '', company: '', password: '', confirmPassword: '', role: 'client' })
+      setPortalName(emptyName())
       load()
     } catch (err: any) {
       toast.error(getErrorMessage(err, 'Failed to create portal account'))
@@ -183,6 +192,7 @@ export default function UsersPage() {
 
   function openEdit(p: Profile) {
     setEditing(p)
+    setEditName(nameFromRow(p as unknown as Record<string, unknown>, '', 'full_name'))
     setEditForm({ full_name: p.full_name ?? '', role: p.role, department: p.department ?? '', company: p.company ?? '', employee_id: p.employee_id ?? '' })
     setEditOpen(true)
   }
@@ -190,7 +200,8 @@ export default function UsersPage() {
   async function saveEdit() {
     if (!editing) return
     const { error } = await supabase.from('profiles').update({
-      full_name: editForm.full_name || null,
+      full_name: joinName(editName) || null,
+      ...nameColumns(editName),
       role: editForm.role,
       department: editForm.department || null,
       company: editForm.company || null,
@@ -351,7 +362,7 @@ export default function UsersPage() {
 
       {/* Create Portal Account Dialog */}
       <Dialog open={portalOpen} onOpenChange={setPortalOpen}>
-        <DialogContent className="w-[95vw] max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogContent size="landscape">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <KeyRound className="h-5 w-5 text-blue-600" />Create Portal Account
@@ -380,11 +391,7 @@ export default function UsersPage() {
                 <Input type="email" placeholder={portalForm.role === 'vendor' ? 'vendor@company.com' : 'client@company.com'} value={portalForm.email}
                   onChange={e => setPortalForm(f => ({ ...f, email: e.target.value }))} />
               </div>
-              <div className="space-y-1.5">
-                <Label>Full Name</Label>
-                <Input placeholder={portalForm.role === 'vendor' ? 'Vendor contact person' : 'Client contact person'} value={portalForm.full_name}
-                  onChange={e => setPortalForm(f => ({ ...f, full_name: e.target.value }))} />
-              </div>
+              <NameFields className="sm:col-span-2" label="Full Name" value={portalName} onChange={setPortalName} />
               <div className="space-y-1.5">
                 <Label>Company</Label>
                 <Select value={portalForm.company || '_none'} onValueChange={v => setPortalForm(f => ({ ...f, company: v === '_none' ? '' : (v ?? '') }))}>
@@ -449,11 +456,7 @@ export default function UsersPage() {
               <Input type="email" placeholder="user@cdsc.com" value={inviteForm.email}
                 onChange={e => setInviteForm(f => ({ ...f, email: e.target.value }))} />
             </div>
-            <div className="space-y-1.5">
-              <Label>Full Name</Label>
-              <Input placeholder="Juan dela Cruz" value={inviteForm.full_name}
-                onChange={e => setInviteForm(f => ({ ...f, full_name: e.target.value }))} />
-            </div>
+            <NameFields className="sm:col-span-2" label="Full Name" value={inviteName} onChange={setInviteName} />
             <div className="space-y-1.5">
               <Label>Employee ID</Label>
               <Input placeholder="e.g. EMP-001" value={inviteForm.employee_id}
@@ -498,7 +501,7 @@ export default function UsersPage() {
 
       {/* Edit Dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="w-[95vw] max-w-2xl">
+        <DialogContent size="landscape">
           <DialogHeader>
             <DialogTitle>Edit User</DialogTitle>
           </DialogHeader>
@@ -514,10 +517,7 @@ export default function UsersPage() {
             </div>
           )}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-1">
-            <div className="space-y-1.5">
-              <Label>Full Name</Label>
-              <Input value={editForm.full_name} onChange={e => setEditForm(f => ({ ...f, full_name: e.target.value }))} />
-            </div>
+            <NameFields className="sm:col-span-2" label="Full Name" value={editName} onChange={setEditName} />
             <div className="space-y-1.5">
               <Label>Employee ID</Label>
               <Input placeholder="e.g. EMP-001" value={editForm.employee_id} onChange={e => setEditForm(f => ({ ...f, employee_id: e.target.value }))} />

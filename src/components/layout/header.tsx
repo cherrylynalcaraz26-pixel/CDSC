@@ -30,11 +30,12 @@ const SEARCH_ITEMS = [
   { label: 'Inventory',             href: '/inventory',               section: 'Warehouse' },
   { label: 'DR Logs',               href: '/dr-logs',                 section: 'Warehouse' },
   { label: 'CSI Monitoring',        href: '/csi-monitoring',          section: 'Warehouse' },
+  { label: 'Pull Outs',             href: '/pull-outs',               section: 'Warehouse' },
   { label: 'Accounting',            href: '/accounting',              section: 'Accounting' },
   { label: 'Reports',               href: '/reports',                 section: 'Setup' },
   { label: 'Configuration',         href: '/setup',                   section: 'Setup' },
   { label: 'Clients',               href: '/clients',                 section: 'Setup' },
-  { label: 'Users',                 href: '/users',                   section: 'Setup' },
+  { label: 'User Management',       href: '/users',                   section: 'Users' },
   { label: 'Settings',              href: '/settings',                section: 'Settings' },
 ]
 
@@ -42,8 +43,14 @@ const DATA_PAGES = [
   '/crm', '/purchase-orders', '/quotation', '/sales-orders',
   '/receiving', '/inventory', '/dr-logs', '/csi-monitoring',
   '/users', '/clients', '/accounting', '/dashboard', '/messages',
-  '/setup', '/assets',
+  '/setup', '/assets', '/pull-outs',
 ]
+
+// Pages whose title/subtitle live in this header bar instead of the page body.
+const PAGE_TITLES: Record<string, { title: string; subtitle: string }> = {
+  '/quotation': { title: 'Quotation', subtitle: 'Create and manage client quotations and requests' },
+  '/pull-outs': { title: 'Pull Outs', subtitle: 'Items CDSC needs to pick up from clients and suppliers' },
+}
 
 interface Notif { id: string; type: 'message' | 'order' | 'stock'; message: string; read: boolean; time: string; href: string }
 
@@ -65,6 +72,7 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
   const notifRef = useRef<HTMLDivElement>(null)
 
   const isDataPage = DATA_PAGES.some(p => pathname.startsWith(p))
+  const pageTitle = Object.entries(PAGE_TITLES).find(([p]) => pathname === p || pathname.startsWith(p + '/'))?.[1]
 
   async function markNotifRead(n: Notif) {
     if (n.type === 'message') {
@@ -150,13 +158,19 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
           <Button variant="ghost" size="icon" className="lg:hidden h-9 w-9" onClick={onMenuClick}>
             <Menu className="h-5 w-5" />
           </Button>
-          {sidebarCollapsed && (
+          {sidebarCollapsed && !pageTitle && (
             <div className="hidden lg:flex items-center gap-2">
               <div className="h-7 w-7 shrink-0 rounded-md overflow-hidden bg-white flex items-center justify-center">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={logoSrc} alt={companyName} className="h-full w-full object-contain p-0.5" />
               </div>
               <span className="text-sm font-semibold leading-tight">{companyName}</span>
+            </div>
+          )}
+          {pageTitle && (
+            <div className="min-w-0">
+              <h1 className="text-lg font-bold leading-tight truncate">{pageTitle.title}</h1>
+              <p className="hidden md:block text-xs text-muted-foreground truncate">{pageTitle.subtitle}</p>
             </div>
           )}
         </div>

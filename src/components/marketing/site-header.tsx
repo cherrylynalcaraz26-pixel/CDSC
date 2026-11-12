@@ -4,13 +4,17 @@ import { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
-import { Menu, X, Phone, Mail, ArrowRight } from 'lucide-react'
+import { Menu, X, Phone, Mail, ArrowRight, ShoppingCart } from 'lucide-react'
+import { useCart, cartCount, useCartHydrated } from '@/lib/cart-store'
 import { nav, company } from '@/lib/site-content'
 import { cn } from '@/lib/utils'
 
 export function SiteHeader() {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
+  const cartReady = useCartHydrated()
+  const cartItems = useCart(s => s.items)
+  const count = cartReady ? cartCount(cartItems) : 0
 
   return (
     <header id="site-header" className="sticky top-0 z-40 w-full print:hidden">
@@ -54,6 +58,18 @@ export function SiteHeader() {
           </nav>
 
           <div className="flex items-center gap-3">
+            <Link
+              href="/cart"
+              aria-label={count ? `Cart, ${count} items` : 'Cart'}
+              className="relative inline-flex items-center justify-center rounded-md p-2 text-cdsc-ink/70 transition-colors hover:bg-cdsc-paper hover:text-cdsc-accent"
+            >
+              <ShoppingCart className="h-5 w-5" />
+              {count > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-cdsc-accent px-1 text-[10px] font-bold text-white">
+                  {count > 99 ? '99+' : count}
+                </span>
+              )}
+            </Link>
             <Link
               href="/quote"
               className="hidden items-center gap-1.5 rounded-md bg-cdsc-navy px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-cdsc-navy-dark sm:inline-flex"

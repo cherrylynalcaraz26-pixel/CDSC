@@ -24,6 +24,8 @@ import {
 } from '@/components/ui/table'
 import { useTableSort } from '@/lib/use-table-sort'
 import { Textarea } from '@/components/ui/textarea'
+import { NameFields } from '@/components/forms/person-address-fields'
+import { emptyName, joinName, nameFromRow, nameColumns, type PersonName } from '@/lib/person-address'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
@@ -83,13 +85,6 @@ const PRIORITY_META: Record<Priority, { label: string; color: string; bg: string
 const PIPELINE_STAGES: Stage[] = ['new_lead', 'contacted', 'proposal_sent', 'negotiation', 'won', 'lost']
 const KANBAN_STAGES: Stage[] = ['new_lead', 'contacted', 'proposal_sent', 'negotiation']
 
-const KANBAN_COLORS: Record<string, string> = {
-  new_lead:      'border-t-blue-500',
-  contacted:     'border-t-amber-500',
-  proposal_sent: 'border-t-orange-500',
-  negotiation:   'border-t-purple-500',
-}
-
 const emptyForm: FormData = {
   company_name: '', contact_person: '', contact_email: '', contact_phone: '',
   product_interest: '', estimated_value: '', stage: 'new_lead', priority: 'medium',
@@ -121,10 +116,12 @@ export default function CRMPage() {
 
   useEffect(() => { fetchLeads() }, [])
 
-  function openNew() { setEditingLead(null); setForm(emptyForm); setDialogOpen(true) }
+  const [contactName, setContactName] = useState<PersonName>(emptyName())
+  function openNew() { setEditingLead(null); setForm(emptyForm); setContactName(emptyName()); setDialogOpen(true) }
 
   function openEdit(lead: CRMLead) {
     setEditingLead(lead)
+    setContactName(nameFromRow(lead as unknown as Record<string, unknown>, 'contact_', 'contact_person'))
     setForm({
       company_name: lead.company_name,
       contact_person: lead.contact_person ?? '',
@@ -147,7 +144,8 @@ export default function CRMPage() {
     setSaving(true)
     const payload = {
       company_name: form.company_name,
-      contact_person: form.contact_person || null,
+      contact_person: joinName(contactName) || null,
+      ...nameColumns(contactName, 'contact_'),
       contact_email: form.contact_email || null,
       contact_phone: form.contact_phone || null,
       product_interest: form.product_interest || null,
@@ -324,7 +322,7 @@ export default function CRMPage() {
                     : 'border-border hover:bg-muted/50'
                 }`}
               >
-                <span className={`w-2 h-2 rounded-full ${m.dot}`} />
+                <span className={`w-2.5 h-2.5 rounded-full ${m.dot}`} />
                 <span className={`text-xl font-bold ${stageFilter === s ? m.color : ''}`}>{stageCounts[s]}</span>
                 <span className="text-[10px] text-muted-foreground font-medium leading-tight text-center">{m.label}</span>
               </button>
@@ -490,17 +488,17 @@ export default function CRMPage() {
             const m = STAGE_META[stage]
             const stageLeads = filtered.filter(l => l.stage === stage)
             return (
-              <div key={stage} className="flex flex-col gap-2">
-                <div className={`flex items-center justify-between px-3 py-2 rounded-lg border-t-4 ${KANBAN_COLORS[stage]} bg-muted/30 border border-border`}>
+              <div key={stage} className="flex flex-col gap-3 rounded-2xl bg-muted/50 p-3">
+                <div className="flex items-center justify-between px-1">
                   <div className="flex items-center gap-2">
-                    <span className={`w-2 h-2 rounded-full ${m.dot}`} />
+                    <span className={`w-2.5 h-2.5 rounded-full ${m.dot}`} />
                     <span className="font-semibold text-sm">{m.label}</span>
                   </div>
                   <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${m.bg} ${m.color}`}>{stageLeads.length}</span>
                 </div>
                 <div className="flex flex-col gap-2 min-h-[120px]">
                   {stageLeads.length === 0 && (
-                    <div className="flex items-center justify-center h-20 rounded-lg border border-dashed text-xs text-muted-foreground">
+                    <div className="flex items-center justify-center h-20 rounded-xl bg-background/60 text-xs text-muted-foreground">
                       No leads
                     </div>
                   )}
@@ -509,7 +507,7 @@ export default function CRMPage() {
                     return (
                       <div
                         key={lead.id}
-                        className="bg-card rounded-lg border p-3 space-y-2 cursor-pointer hover:shadow-md hover:border-muted-foreground/30 transition-all group"
+                        className="bg-card rounded-xl p-3.5 space-y-2 shadow-sm shadow-black/5 cursor-pointer hover:shadow-lg hover:-translate-y-0.5 transition-all group"
                         onClick={() => openEdit(lead)}
                       >
                         <div className="flex items-start justify-between gap-2">
@@ -556,7 +554,7 @@ export default function CRMPage() {
                         </div>
 
                         {lead.follow_up_date && (
-                          <div className="flex items-center gap-1 text-[10px] text-muted-foreground border-t pt-1.5">
+                          <div className="flex items-center gap-1 text-[10px] text-muted-foreground rounded-md bg-muted/60 px-2 py-1 w-fit">
                             <Calendar className="w-3 h-3" />
                             Follow-up: {new Date(lead.follow_up_date + 'T00:00:00').toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}
                           </div>
@@ -573,7 +571,7 @@ export default function CRMPage() {
 
       {/* Add/Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="w-[95vw] max-w-5xl max-h-[90vh] overflow-y-auto">
+        <DialogContent size="landscape">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {editingLead ? <><Pencil className="w-4 h-4" /> Edit Lead</> : <><Plus className="w-4 h-4" /> New Lead</>}
@@ -584,10 +582,7 @@ export default function CRMPage() {
               <Label>Company Name <span className="text-red-500">*</span></Label>
               <Input value={form.company_name} onChange={e => setForm({ ...form, company_name: e.target.value })} placeholder="Company name" />
             </div>
-            <div className="space-y-1.5">
-              <Label>Contact Person</Label>
-              <Input value={form.contact_person} onChange={e => setForm({ ...form, contact_person: e.target.value })} placeholder="Full name" />
-            </div>
+            <NameFields className="sm:col-span-2" label="Contact Person" value={contactName} onChange={setContactName} />
             <div className="space-y-1.5">
               <Label>Email</Label>
               <Input type="email" value={form.contact_email} onChange={e => setForm({ ...form, contact_email: e.target.value })} placeholder="email@company.com" />

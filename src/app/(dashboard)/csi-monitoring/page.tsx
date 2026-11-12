@@ -2150,7 +2150,7 @@ export default function CSIMonitoringPage() {
 
       {/* Add Item Modal */}
       <Dialog open={addItemOpen} onOpenChange={setAddItemOpen}>
-        <DialogContent className="w-[95vw] max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogContent size="landscape">
           <DialogHeader>
             <DialogTitle>Add Item</DialogTitle>
           </DialogHeader>

@@ -1114,7 +1114,7 @@ export default function ReceivingPage() {
 
       {/* Create/Edit RR Dialog */}
       <Dialog open={rrOpen} onOpenChange={v => { setRrOpen(v); if (!v) resetRRForm() }}>
-        <DialogContent className="w-[95vw] max-w-4xl max-h-[85vh] overflow-y-auto">
+        <DialogContent size="landscape">
           <DialogHeader><DialogTitle>{editingRRId ? 'Edit Receiving Report' : 'New Receiving Report'}</DialogTitle></DialogHeader>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 py-2">
             <div className="space-y-1.5">
@@ -1241,7 +1241,7 @@ export default function ReceivingPage() {
 
       {/* Sales Delivery Dialog */}
       <Dialog open={salesdOpen} onOpenChange={v => { setSalesdOpen(v); if (!v) resetSalesdForm() }}>
-        <DialogContent className="w-[98vw] sm:!max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent size="landscape">
           <DialogHeader><DialogTitle className="flex items-center gap-2"><ShoppingBag className="h-4 w-4" />New Sales Delivery</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <div className="grid grid-cols-2 gap-4">

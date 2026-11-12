@@ -7,8 +7,9 @@ import { Sidebar, MobileSidebar } from '@/components/layout/sidebar'
 import { Header } from '@/components/layout/header'
 import { SearchProvider } from '@/context/search-context'
 import { CompanyProvider } from '@/context/company-context'
+import { FloatingMessages } from '@/components/messages/floating-messages'
 import {
-  LayoutDashboard, TrendingUp, ShoppingCart, Warehouse, Calculator, MessageSquare,
+  LayoutDashboard, TrendingUp, ShoppingCart, Warehouse, Calculator,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -32,10 +33,10 @@ const BOTTOM_NAV: { label: string; href: string; icon: React.ComponentType<{ cla
       { label: 'Inventory', href: '/inventory' },
       { label: 'DR Logs', href: '/dr-logs' },
       { label: 'CSI Monitoring', href: '/csi-monitoring' },
+      { label: 'Pull Outs', href: '/pull-outs' },
     ],
   },
   { label: 'Accounting', href: '/accounting', icon: Calculator },
-  { label: 'Messages', href: '/messages', icon: MessageSquare },
 ]
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -179,6 +180,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </main>
         </div>
       </div>
+
+      <FloatingMessages />
 
       {/* Mobile bottom nav */}
       <nav ref={navRef} className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-[#111111] border-t border-white/10 flex items-stretch">

@@ -2,6 +2,7 @@ import Link from 'next/link'
 import type { Metadata } from 'next'
 import { ArrowRight, Wrench, Zap, ShieldCheck, Cog, Building2, PackageSearch } from 'lucide-react'
 import { productCategories } from '@/lib/site-content'
+import { ProductCatalog } from '@/components/marketing/product-catalog'
 
 export const metadata: Metadata = {
   title: 'Products',
@@ -18,12 +19,15 @@ export default function ProductsPage() {
         <div className="mx-auto max-w-4xl px-6 py-20 text-center">
           <h1 className="text-3xl font-semibold text-cdsc-ink sm:text-4xl">Products</h1>
           <p className="mt-5 text-base leading-relaxed text-cdsc-ink/65">
-            Tell us what you need and we will help source it. Below are the categories we regularly supply.
+            Browse our catalog and add items to your cart, or tell us what you need and we will help source it.
           </p>
         </div>
       </section>
 
+      <ProductCatalog />
+
       <section className="mx-auto max-w-7xl px-6 py-20">
+        <h2 className="mb-6 text-2xl font-semibold text-cdsc-ink sm:text-3xl">What We Supply</h2>
         <div className="grid gap-6 sm:grid-cols-2">
           {productCategories.map((cat, i) => {
             const Icon = ICONS[i]

@@ -30,6 +30,11 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { format } from 'date-fns'
 import { uploadImageToDrive } from '@/lib/upload-image'
+import { NameFields, AddressFields } from '@/components/forms/person-address-fields'
+import {
+  emptyName, emptyAddress, joinName, joinAddress, nameFromRow, nameColumns, addressFromRow, addressColumns,
+  type PersonName, type Address,
+} from '@/lib/person-address'
 
 const INDUSTRIES = [
   'Construction', 'Manufacturing', 'Mining', 'Oil & Gas', 'Power & Energy',
@@ -134,6 +139,8 @@ export default function ClientsPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState<FormData>(blankForm())
+  const [contactName, setContactName] = useState<PersonName>(emptyName())
+  const [addr, setAddr] = useState<Address>(emptyAddress())
   const [deleteConfirm, setDeleteConfirm] = useState<Client | null>(null)
   const [inviteClient, setInviteClient] = useState<Client | null>(null)
   const [inviteEmail, setInviteEmail] = useState('')
@@ -173,6 +180,8 @@ export default function ClientsPage() {
   function openCreate() {
     setEditingId(null)
     setForm(blankForm())
+    setContactName(emptyName())
+    setAddr(emptyAddress())
     setDialogAvatarUrl(null)
     setDialogAvatarFile(null)
     setOpen(true)
@@ -182,6 +191,8 @@ export default function ClientsPage() {
     setEditingId(c.id)
     setDialogAvatarUrl(c.avatar_url ?? null)
     setDialogAvatarFile(null)
+    setContactName(nameFromRow(c as unknown as Record<string, unknown>, 'contact_', 'contact_person'))
+    setAddr(addressFromRow(c as unknown as Record<string, unknown>))
     setForm({
       client_code: c.client_code ?? c.client_number ?? '',
       company_name: c.company_name,
@@ -221,13 +232,14 @@ export default function ClientsPage() {
       const payload = {
         client_code: form.client_code.trim() || null,
         company_name: form.company_name.trim(),
-        contact_person: form.contact_person || null,
+        contact_person: joinName(contactName) || null,
+        ...nameColumns(contactName, 'contact_'),
         position: form.position || null,
         email: form.email || null,
         phone: form.phone || null,
         mobile: form.mobile || null,
-        address: form.address || null,
-        city: form.city || null,
+        address: joinAddress(addr, { includeCity: false }) || null,
+        ...addressColumns(addr),
         province: form.province || null,
         zip_code: form.zip_code || null,
         industry: form.industry || null,
@@ -593,7 +605,7 @@ export default function ClientsPage() {
 
       {/* Create / Edit Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent size="landscape">
           <DialogHeader>
             <DialogTitle>{editingId ? 'Edit Client' : 'New Client Account'}</DialogTitle>
           </DialogHeader>
@@ -704,10 +716,7 @@ export default function ClientsPage() {
             <div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Contact Person</p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="space-y-1.5">
-                  <Label>Full Name</Label>
-                  <Input value={form.contact_person} onChange={e => f('contact_person', e.target.value)} placeholder="Juan dela Cruz" />
-                </div>
+                <NameFields className="sm:col-span-3" value={contactName} onChange={setContactName} />
                 <div className="space-y-1.5">
                   <Label>Position / Title</Label>
                   <Input value={form.position} onChange={e => f('position', e.target.value)} placeholder="Purchasing Manager" />
@@ -731,14 +740,7 @@ export default function ClientsPage() {
             <div>
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Address</p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="sm:col-span-3 space-y-1.5">
-                  <Label>Street Address</Label>
-                  <Input value={form.address} onChange={e => f('address', e.target.value)} placeholder="Building, Street, Barangay" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>City / Municipality</Label>
-                  <Input value={form.city} onChange={e => f('city', e.target.value)} placeholder="Makati City" />
-                </div>
+                <AddressFields className="sm:col-span-3" label="" value={addr} onChange={setAddr} />
                 <div className="space-y-1.5">
                   <Label>Province</Label>
                   <Input value={form.province} onChange={e => f('province', e.target.value)} placeholder="Metro Manila" />
@@ -801,7 +803,7 @@ export default function ClientsPage() {
 
       {/* Invite to Portal Dialog */}
       <Dialog open={!!inviteClient} onOpenChange={o => { if (!o) { setInviteClient(null); setInviteResult(null) } }}>
-        <DialogContent className="sm:max-w-xl">
+        <DialogContent size="landscape" className="sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>
               {inviteResult ? 'Portal Account Created' : 'Create Portal Account'}

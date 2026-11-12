@@ -708,7 +708,7 @@ function VendorCatalogPageContent() {
 
       {/* Add / Edit Dialog */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent showCloseButton={false} className="w-[95vw] max-w-2xl p-0 overflow-hidden">
+        <DialogContent size="landscape" showCloseButton={false} className="sm:max-w-3xl p-0 overflow-hidden">
           <div className="relative bg-gradient-to-r from-red-700 to-red-900 px-6 py-5">
             <DialogHeader>
               <DialogTitle className="text-white text-lg font-semibold">{editingId ? 'Edit Catalog Item' : 'Add Catalog Item'}</DialogTitle>

@@ -28,6 +28,11 @@ import { format } from 'date-fns'
 import { uploadImageToDrive } from '@/lib/upload-image'
 import { useSearchContext } from '@/context/search-context'
 import { EWT_TYPES, EWT_TYPE_ORDER, ewtTypeFromRate, isEwtType, type EwtType } from '@/lib/po-tax'
+import { NameFields, AddressFields } from '@/components/forms/person-address-fields'
+import {
+  emptyName, emptyAddress, joinName, joinAddress, nameFromRow, nameColumns, addressFromRow, addressColumns,
+  type PersonName, type Address,
+} from '@/lib/person-address'
 
 /* ─── UOM ─────────────────────────────────────────────── */
 interface UOM { id: string; code: string; name: string; description: string | null; is_active: boolean }
@@ -130,7 +135,7 @@ function UOMTab({ configSelector }: { configSelector: React.ReactNode }) {
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent size="landscape" className="sm:max-w-3xl">
           <DialogHeader><DialogTitle>{editing ? 'Edit UOM' : 'Add UOM'}</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
             <div className="grid grid-cols-2 gap-3">
@@ -277,7 +282,7 @@ function BrandsTab({ configSelector }: { configSelector: React.ReactNode }) {
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent size="landscape" className="sm:max-w-3xl">
           <DialogHeader><DialogTitle>{editing ? 'Edit Brand' : 'Add Brand'}</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-1.5">
@@ -459,7 +464,7 @@ function AttributesTab({ configSelector }: { configSelector: React.ReactNode }) 
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent size="landscape" className="sm:max-w-3xl">
           <DialogHeader><DialogTitle>{editing ? 'Edit Attribute' : 'Add Attribute'}</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-1.5">
@@ -627,7 +632,7 @@ function CategoriesTab({ configSelector }: { configSelector: React.ReactNode }) 
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent size="landscape" className="sm:max-w-3xl">
           <DialogHeader><DialogTitle>{editing ? 'Edit Category' : 'Add Category'}</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
             <div className="grid grid-cols-2 gap-3">
@@ -698,6 +703,8 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
   const [open, setOpen] = useState(false)
   const [editing, setEditing] = useState<Supplier | null>(null)
   const [form, setForm] = useState(emptySupplierForm())
+  const [contactName, setContactName] = useState<PersonName>(emptyName())
+  const [addr, setAddr] = useState<Address>(emptyAddress())
   const [saving, setSaving] = useState(false)
   const [deleteId, setDeleteId] = useState<string | null>(null)
   const [logoFile, setLogoFile] = useState<File | null>(null)
@@ -770,12 +777,14 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
   )
 
   function openAdd() {
-    setEditing(null); setForm(emptySupplierForm())
+    setEditing(null); setForm(emptySupplierForm()); setContactName(emptyName()); setAddr(emptyAddress())
     setLogoFile(null); setLogoPreview(null)
     setOpen(true)
   }
   function openEdit(s: Supplier) {
     setEditing(s)
+    setContactName(nameFromRow(s as unknown as Record<string, unknown>, 'contact_', 'contact_person'))
+    setAddr(addressFromRow(s as unknown as Record<string, unknown>))
     setForm({
       company_name: s.company_name, contact_person: s.contact_person ?? '',
       mobile_number: s.mobile_number ?? '', email: s.email ?? '',
@@ -819,10 +828,12 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
 
     const payload = {
       company_name: form.company_name.trim(),
-      contact_person: form.contact_person || null,
+      contact_person: joinName(contactName) || null,
+      ...nameColumns(contactName, 'contact_'),
       mobile_number: form.mobile_number || null,
       email: form.email || null,
-      address: form.address || null,
+      address: joinAddress(addr) || null,
+      ...addressColumns(addr),
       tin: form.tin || null,
       vat_registered: form.vat_registered === 'true',
       vat_classification: form.vat_classification || null,
@@ -960,7 +971,7 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-[95vw] max-w-5xl max-h-[85vh] overflow-y-auto">
+        <DialogContent size="landscape">
           <DialogHeader>
             <DialogTitle>{editing ? 'Edit Supplier' : 'Add Supplier'}</DialogTitle>
           </DialogHeader>
@@ -1000,16 +1011,14 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
               <Label>Company Name <span className="text-destructive">*</span></Label>
               <Input value={form.company_name} onChange={e => setForm(p => ({ ...p, company_name: e.target.value }))} />
             </div>
-            <div className="space-y-1.5"><Label>Contact Person</Label>
-              <Input value={form.contact_person} onChange={e => setForm(p => ({ ...p, contact_person: e.target.value }))} /></div>
+            <NameFields className="sm:col-span-3" label="Contact Person" value={contactName} onChange={setContactName} />
             <div className="space-y-1.5"><Label>Mobile Number</Label>
               <Input value={form.mobile_number} onChange={e => setForm(p => ({ ...p, mobile_number: e.target.value }))} /></div>
             <div className="space-y-1.5"><Label>Email</Label>
               <Input type="email" value={form.email} onChange={e => setForm(p => ({ ...p, email: e.target.value }))} /></div>
             <div className="space-y-1.5"><Label>TIN</Label>
               <Input placeholder="000-000-000-000" value={form.tin} onChange={e => setForm(p => ({ ...p, tin: e.target.value }))} /></div>
-            <div className="sm:col-span-2 space-y-1.5"><Label>Address</Label>
-              <Input value={form.address} onChange={e => setForm(p => ({ ...p, address: e.target.value }))} /></div>
+            <AddressFields className="sm:col-span-3" value={addr} onChange={setAddr} />
             <div className="space-y-1.5">
               <Label>Category</Label>
               <Select value={form.supplier_category} onValueChange={sf('supplier_category')}>
@@ -1097,7 +1106,7 @@ function SuppliersTab({ configSelector }: { configSelector: React.ReactNode }) {
 
       {/* Invite to Vendor Portal Dialog */}
       <Dialog open={!!inviteSupplier} onOpenChange={o => { if (!o) { setInviteSupplier(null); setInviteResult(null) } }}>
-        <DialogContent className="sm:max-w-xl">
+        <DialogContent size="landscape" className="sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>
               {inviteResult ? 'Portal Account Created' : 'Create Vendor Portal Account'}
@@ -1713,7 +1722,7 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
       </div>
       )}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="w-[98vw] sm:!max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent size="landscape">
           <DialogHeader><DialogTitle>{editing ? 'Edit Item' : 'Add Item'}</DialogTitle></DialogHeader>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4 py-2">
             {/* LEFT column */}
@@ -2013,7 +2022,7 @@ function PayeesTab({ configSelector }: { configSelector: React.ReactNode }) {
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent size="landscape" className="sm:max-w-3xl">
           <DialogHeader><DialogTitle>{editing ? 'Edit Payee' : 'Add Payee'}</DialogTitle></DialogHeader>
           <div className="space-y-3 py-2">
             <div className="space-y-1.5">

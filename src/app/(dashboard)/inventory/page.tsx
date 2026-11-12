@@ -2385,7 +2385,7 @@ export default function InventoryPage() {
       </Dialog>
 
       <Dialog open={!!editRow} onOpenChange={o => { if (!o) setEditRow(null) }}>
-        <DialogContent className="sm:max-w-xl">
+        <DialogContent size="landscape" className="sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Pencil className="h-4 w-4 text-yellow-600" /> Edit Item
@@ -2689,7 +2689,7 @@ export default function InventoryPage() {
       </Dialog>
 
       <Dialog open={addOpen} onOpenChange={o => { if (!o) setAddOpen(false) }}>
-        <DialogContent showCloseButton={false} className="w-[95vw] max-w-2xl sm:max-w-2xl p-0 overflow-hidden">
+        <DialogContent size="landscape" showCloseButton={false} className="sm:max-w-3xl p-0 overflow-hidden">
           <div className="relative bg-gradient-to-r from-red-700 to-red-900 px-6 py-5">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-white text-lg font-semibold">

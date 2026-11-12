@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { toast } from 'sonner'
 import { Loader2, Send, CheckCircle2, Building2, Truck } from 'lucide-react'
 import { getErrorMessage } from '@/lib/error-message'
+import { joinName, nameColumns } from '@/lib/person-address'
 
 type ContactType = 'client' | 'supplier'
 
@@ -16,7 +17,9 @@ const CONTACT_TYPES: { value: ContactType; label: string; desc: string; icon: Re
 const EMPTY = {
   contact_type: '' as ContactType | '',
   company_name: '',
-  contact_person: '',
+  contact_first: '',
+  contact_middle: '',
+  contact_last: '',
   contact_email: '',
   contact_phone: '',
   product_interest: '',
@@ -36,14 +39,17 @@ export function InquiryForm() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
-    if (!form.company_name.trim() || !form.contact_person.trim()) return
+    if (!form.company_name.trim() || !form.contact_first.trim() || !form.contact_last.trim()) return
+    const contactName = { first: form.contact_first, middle: form.contact_middle, last: form.contact_last }
+    const contactPerson = joinName(contactName)
     setSending(true)
 
     const typeLabel = form.contact_type === 'client' ? 'Client' : form.contact_type === 'supplier' ? 'Supplier' : ''
 
     const { error: leadError } = await supabase.from('crm_leads').insert({
       company_name: form.company_name.trim(),
-      contact_person: form.contact_person.trim() || null,
+      contact_person: contactPerson || null,
+      ...nameColumns(contactName, 'contact_'),
       contact_email: form.contact_email.trim() || null,
       contact_phone: form.contact_phone.trim() || null,
       product_interest: form.product_interest.trim() || null,
@@ -61,7 +67,8 @@ export function InquiryForm() {
     if (form.contact_type === 'client') {
       const { error } = await supabase.from('clients').insert({
         company_name: form.company_name.trim(),
-        contact_person: form.contact_person.trim() || null,
+        contact_person: contactPerson || null,
+      ...nameColumns(contactName, 'contact_'),
         mobile_number: form.contact_phone.trim() || null,
         email: form.contact_email.trim() || null,
         product_interest: form.product_interest.trim() || null,
@@ -78,7 +85,8 @@ export function InquiryForm() {
       const { error } = await supabase.from('suppliers').insert({
         supplier_code: code,
         company_name: form.company_name.trim(),
-        contact_person: form.contact_person.trim() || null,
+        contact_person: contactPerson || null,
+      ...nameColumns(contactName, 'contact_'),
         mobile_number: form.contact_phone.trim() || null,
         email: form.contact_email.trim() || null,
         payment_terms: '30 days',
@@ -153,15 +161,20 @@ export function InquiryForm() {
             className={inputClass}
           />
         </Field>
-        <Field id={`${formId}-contact`} label="Contact Person" required>
-          <input
-            id={`${formId}-contact`}
-            value={form.contact_person}
-            onChange={e => set('contact_person', e.target.value)}
-            required
-            placeholder="Full name"
-            className={inputClass}
-          />
+      </div>
+
+      <div className="mt-5 grid gap-5 sm:grid-cols-3">
+        <Field id={`${formId}-first`} label="First Name" required>
+          <input id={`${formId}-first`} value={form.contact_first} onChange={e => set('contact_first', e.target.value)}
+            required placeholder="Juan" autoComplete="given-name" className={inputClass} />
+        </Field>
+        <Field id={`${formId}-middle`} label="Middle Name">
+          <input id={`${formId}-middle`} value={form.contact_middle} onChange={e => set('contact_middle', e.target.value)}
+            placeholder="Santos" autoComplete="additional-name" className={inputClass} />
+        </Field>
+        <Field id={`${formId}-last`} label="Last Name" required>
+          <input id={`${formId}-last`} value={form.contact_last} onChange={e => set('contact_last', e.target.value)}
+            required placeholder="dela Cruz" autoComplete="family-name" className={inputClass} />
         </Field>
       </div>
 
@@ -214,7 +227,7 @@ export function InquiryForm() {
 
       <button
         type="submit"
-        disabled={sending || !form.company_name.trim() || !form.contact_person.trim()}
+        disabled={sending || !form.company_name.trim() || !form.contact_first.trim() || !form.contact_last.trim()}
         className="mt-7 flex w-full items-center justify-center gap-2 rounded-md bg-cdsc-navy px-6 py-3.5 text-sm font-semibold text-white transition-colors hover:bg-cdsc-navy-dark disabled:cursor-not-allowed disabled:opacity-40"
       >
         {sending ? <><Loader2 className="h-4 w-4 animate-spin" /> Sending your inquiry…</> : <><Send className="h-4 w-4" /> Send Inquiry</>}

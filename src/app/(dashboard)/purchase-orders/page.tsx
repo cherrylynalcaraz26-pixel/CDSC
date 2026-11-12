@@ -2069,7 +2069,7 @@ export default function PurchaseOrdersPage() {
 
       {/* Add Item Modal */}
       <Dialog open={addItemOpen} onOpenChange={setAddItemOpen}>
-        <DialogContent className="w-[95vw] max-w-lg">
+        <DialogContent size="landscape" className="sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>Add Item</DialogTitle>
           </DialogHeader>

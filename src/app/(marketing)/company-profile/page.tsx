@@ -97,7 +97,7 @@ export default function CompanyProfilePage() {
   return (
     <div className="[print-color-adjust:exact] print:text-[11px]">
       {/* ═══════════ HERO ═══════════ */}
-      <section className="relative flex min-h-[calc(100vh-4rem)] items-center overflow-hidden bg-linear-to-br from-[#7a1000] via-cdsc-accent-dark to-cdsc-accent bg-[length:300%_300%] motion-safe:animate-gradient-shift print:min-h-0 print:break-after-page">
+      <section className="relative flex min-h-[calc(100vh-4rem)] items-center overflow-hidden bg-linear-to-br from-cdsc-accent via-red-500 to-orange-500 bg-[length:300%_300%] motion-safe:animate-gradient-shift print:min-h-0 print:break-after-page">
         <div
           aria-hidden
           className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.05)_1px,transparent_1px)] bg-[size:60px_60px]"
@@ -210,9 +210,7 @@ export default function CompanyProfilePage() {
                   ['Business Type', company.businessType],
                   ['Industry', company.industry],
                   ['VAT Status', company.vatRegistered ? 'VAT Registered' : 'Non-VAT'],
-                  ['Address', company.addressFull],
-                  ['Email', company.email],
-                  ['Phone', company.phone],
+                  ['Established', String(registration.established)],
                 ].map(([k, v], i, arr) => (
                   <div key={k} className={`flex justify-between gap-4 py-3 ${i < arr.length - 1 ? 'border-b border-cdsc-paper' : ''}`}>
                     <dt className="text-xs text-cdsc-ink/50">{k}</dt>
@@ -508,9 +506,6 @@ export default function CompanyProfilePage() {
                 </div>
               ))}
             </div>
-            <p className="mt-5 text-center text-xs text-cdsc-ink/55">
-              DTI Reg. No. {registration.dtiNo} &middot; TIN {registration.tin}
-            </p>
           </Reveal>
         </div>
       </section>
@@ -518,7 +513,7 @@ export default function CompanyProfilePage() {
       {/* ═══════════ CONTACT ═══════════ */}
       <section className="bg-white py-24">
         <Reveal className="mx-auto max-w-7xl px-6">
-          <div className="relative mb-12 overflow-hidden rounded-[28px] bg-linear-to-br from-[#7a1000] via-cdsc-accent to-cdsc-accent bg-[length:200%_200%] shadow-2xl motion-safe:animate-gradient-shift">
+          <div className="relative mb-12 overflow-hidden rounded-[28px] bg-linear-to-br from-cdsc-accent via-red-500 to-orange-500 bg-[length:200%_200%] shadow-2xl motion-safe:animate-gradient-shift">
             <div className="relative bg-[linear-gradient(rgba(255,255,255,.05)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,.05)_1px,transparent_1px)] bg-[size:40px_40px] px-6 py-10 sm:p-16">
               <div className="relative z-10 max-w-xl">
                 <span className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-3.5 py-1.5 text-[0.7rem] font-bold uppercase tracking-wider text-white/90">

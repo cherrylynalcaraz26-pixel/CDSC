@@ -346,7 +346,7 @@ export default function PurchaseRequestsPage() {
 
       {/* ── New PR Dialog ── */}
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+        <DialogContent size="landscape">
           <DialogHeader>
             <DialogTitle className="text-lg font-semibold">New Purchase Request</DialogTitle>
           </DialogHeader>
