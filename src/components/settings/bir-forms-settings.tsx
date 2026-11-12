@@ -108,7 +108,7 @@ export function BirFormsSettings() {
           It&apos;s shown beside the computed figures when you generate a form in BIR Compliance.
         </p>
         <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" className="h-4 w-4 accent-[#F84400]" checked={showAll} onChange={e => setShowAll(e.target.checked)} />
+          <input type="checkbox" className="h-4 w-4 accent-[#E8112D]" checked={showAll} onChange={e => setShowAll(e.target.checked)} />
           Show forms that don&apos;t apply to CDSC
         </label>
       </div>
@@ -117,7 +117,7 @@ export function BirFormsSettings() {
           <div key={f.form} className={`space-y-2 rounded-xl bg-card p-3 shadow-md shadow-black/5 ${f.applies ? '' : 'opacity-60'}`}>
             <div className="flex items-start justify-between gap-2">
               <div>
-                <div className="font-mono text-sm font-semibold text-[#F84400]">{f.form}</div>
+                <div className="font-mono text-sm font-semibold text-[#E8112D]">{f.form}</div>
                 <div className="text-xs text-muted-foreground">{f.title}</div>
               </div>
               <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">{f.applies ? f.frequency : 'N/A'}</span>
@@ -142,7 +142,7 @@ export function BirFormsSettings() {
             {linkFor === f.form ? (
               <div className="flex gap-1">
                 <Input className="h-8 text-xs" placeholder="https://drive.google.com/…" value={link} onChange={e => setLink(e.target.value)} />
-                <Button size="sm" className="h-8 bg-[#F84400] hover:bg-[#e03d00]" onClick={saveLink} disabled={busy !== null}>Save</Button>
+                <Button size="sm" className="h-8 bg-[#E8112D] hover:bg-[#D10F28]" onClick={saveLink} disabled={busy !== null}>Save</Button>
               </div>
             ) : (
               <button type="button" onClick={() => { setLinkFor(f.form); setLink('') }} className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">

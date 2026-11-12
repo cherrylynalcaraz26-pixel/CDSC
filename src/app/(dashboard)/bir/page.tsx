@@ -1066,10 +1066,7 @@ export default function BIRPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">BIR Compliance</h2>
-          <p className="text-muted-foreground text-sm">Deadlines, filings, VAT, income tax and withholding — in one place</p>
-        </div>
+        <div />
         <Button className="gap-2" onClick={runFilingReadyCheck}>
           <Zap className="h-4 w-4" /> BIR Filing Ready Check
         </Button>

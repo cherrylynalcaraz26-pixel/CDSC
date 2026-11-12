@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { requireRole } from '@/lib/supabase/api-auth'
 
 export async function POST(req: NextRequest) {
+  const auth = await requireRole('staff')
+  if (!auth.ok) return auth.response
   try {
     const { email, password, full_name, company, role, first_name, middle_name, last_name } = await req.json()
     const portalRole = role === 'vendor' ? 'vendor' : 'client'

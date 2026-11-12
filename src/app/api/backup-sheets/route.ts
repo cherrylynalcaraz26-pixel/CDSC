@@ -4,6 +4,7 @@ import { createClient as createServerClient } from '@/lib/supabase/server'
 import { google } from 'googleapis'
 import ExcelJS from 'exceljs'
 import { fetchAllRows } from '@/lib/supabase/fetch-all'
+import { requireRole } from '@/lib/supabase/api-auth'
 
 export const maxDuration = 60
 
@@ -135,6 +136,8 @@ function getDriveClient() {
 }
 
 export async function POST() {
+  const auth = await requireRole(['super_admin', 'admin', 'accounting_manager'])
+  if (!auth.ok) return auth.response
   try {
     const supabase = getSupabaseAdmin()
     if (!supabase) {
@@ -226,15 +229,22 @@ export async function POST() {
       })
       fileId = created.data.id
       webViewLink = created.data.webViewLink
-      if (fileId) {
-        await drive.permissions.create({
-          fileId,
-          requestBody: { role: 'reader', type: 'anyone' },
-        })
-      }
+      // The backup contains the whole database — it stays private to the Drive
+      // owner (it used to be shared "anyone with the link"). Share it from Drive
+      // with specific people if needed.
     }
 
     if (!fileId) throw new Error('Drive did not return a file id')
+
+    // Older backups were shared "anyone with the link" — revoke that.
+    try {
+      const perms = await drive.permissions.list({ fileId, fields: 'permissions(id,type)' })
+      for (const p of perms.data.permissions ?? []) {
+        if (p.type === 'anyone' && p.id) await drive.permissions.delete({ fileId, permissionId: p.id })
+      }
+    } catch (e) {
+      console.warn('[backup-sheets] could not revoke public link', e)
+    }
 
     const url = webViewLink ?? `https://docs.google.com/spreadsheets/d/${fileId}/edit`
     const syncedAt = new Date().toISOString()

@@ -29,7 +29,7 @@ import { AuditLog } from '@/components/admin/audit-log'
 
 const ROLES = [
   { value: 'super_admin',         label: 'Super-Admin',         color: 'bg-red-100 text-red-800' },
-  { value: 'admin',               label: 'Admin',               color: 'bg-orange-100 text-orange-800' },
+  { value: 'admin',               label: 'Admin',               color: 'bg-amber-100 text-amber-800' },
   { value: 'purchasing_officer',  label: 'Purchasing Officer',  color: 'bg-amber-100 text-amber-800' },
   { value: 'warehouse_manager',   label: 'Warehouse Manager',   color: 'bg-yellow-100 text-yellow-800' },
   { value: 'warehouse_staff',     label: 'Warehouse Staff',     color: 'bg-lime-100 text-lime-800' },
@@ -50,7 +50,7 @@ function initials(name: string | null) {
 }
 
 const AVATAR_COLORS = [
-  'bg-red-500', 'bg-orange-500', 'bg-amber-500', 'bg-green-600',
+  'bg-red-500', 'bg-rose-500', 'bg-amber-500', 'bg-green-600',
   'bg-teal-500', 'bg-blue-600', 'bg-violet-600', 'bg-pink-600',
 ]
 function avatarColor(id: string) {
@@ -261,21 +261,12 @@ export default function UsersPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-lg bg-[#F84400]/10 flex items-center justify-center">
-            <Users className="h-5 w-5 text-[#F84400]" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-semibold leading-none">User Management</h1>
-            <p className="text-muted-foreground text-sm mt-0.5">Staff logins, client &amp; vendor portal accounts, and the audit trail</p>
-          </div>
-        </div>
+      <div className="flex flex-wrap items-center justify-end gap-3">
         <div className="flex gap-2">
           <Button onClick={() => setPortalOpen(true)} variant="outline">
             <KeyRound className="h-4 w-4 mr-2" />Create Portal Account
           </Button>
-          <Button onClick={() => setInviteOpen(true)} className="bg-[#F84400] hover:bg-[#e03d00]">
+          <Button onClick={() => setInviteOpen(true)} className="bg-[#E8112D] hover:bg-[#D10F28]">
             <UserPlus className="h-4 w-4 mr-2" />Invite User
           </Button>
         </div>
@@ -285,7 +276,7 @@ export default function UsersPage() {
       <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
         {([
           { key: '',         label: 'Total Users', value: total,   color: '',                  view: null },
-          { key: 'admins',   label: 'Admins',      value: admins,  color: 'text-[#F84400]',    view: 'staff' },
+          { key: 'admins',   label: 'Admins',      value: admins,  color: 'text-[#E8112D]',    view: 'staff' },
           { key: 'staff',    label: 'Staff',       value: staff,   color: 'text-amber-600',    view: 'staff' },
           { key: 'client',   label: 'Clients',     value: clients, color: 'text-blue-600',     view: 'portal' },
           { key: 'vendor',   label: 'Vendors',     value: vendors, color: 'text-emerald-600',  view: 'portal' },
@@ -293,7 +284,7 @@ export default function UsersPage() {
         ] as const).map(c => (
           <button key={c.label} type="button" title={c.key ? `Show ${c.label.toLowerCase()} only` : 'Show everyone'}
             onClick={() => { setGroup(group === c.key ? '' : c.key); if (c.view) setView(c.view) }}
-            className={`rounded-xl bg-card p-4 text-left shadow-md shadow-black/5 transition hover:-translate-y-0.5 ${group === c.key && c.key ? 'ring-2 ring-[#F84400]' : ''}`}>
+            className={`rounded-xl bg-card p-4 text-left shadow-md shadow-black/5 transition hover:-translate-y-0.5 ${group === c.key && c.key ? 'ring-2 ring-[#E8112D]' : ''}`}>
             <div className={`text-2xl font-bold ${c.color}`}>{loading ? '—' : c.value}</div>
             <div className="text-xs text-muted-foreground">{c.label}</div>
           </button>
@@ -304,7 +295,7 @@ export default function UsersPage() {
       <div className="flex flex-wrap items-center gap-2">
         {([['staff', 'Staff Users'], ['portal', 'Portal Accounts'], ['audit', 'Audit Logs']] as const).map(([k, l]) => (
           <button key={k} type="button" onClick={() => setView(k)}
-            className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${view === k ? 'bg-[#F84400] text-white' : 'bg-muted text-muted-foreground hover:bg-muted/70'}`}>
+            className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${view === k ? 'bg-[#E8112D] text-white' : 'bg-muted text-muted-foreground hover:bg-muted/70'}`}>
             {l}
           </button>
         ))}

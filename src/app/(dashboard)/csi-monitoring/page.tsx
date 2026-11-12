@@ -182,7 +182,7 @@ function csiStatusBadge(status: string | null) {
     case 'cancelled': return { label: 'Cancelled', cls: 'bg-red-100 text-red-700' }
     case 'collected': return { label: 'Collected', cls: 'bg-green-100 text-green-800' }
     case 'for_collection': return { label: 'For Collection', cls: 'bg-amber-100 text-amber-800' }
-    case 'missing': return { label: 'Missing', cls: 'bg-orange-100 text-orange-800' }
+    case 'missing': return { label: 'Missing', cls: 'bg-amber-100 text-amber-800' }
     default: return { label: 'Active', cls: 'bg-gray-100 text-gray-600' }
   }
 }
@@ -1043,10 +1043,7 @@ export default function CSIMonitoringPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">CSI Monitoring</h1>
-          <p className="text-muted-foreground text-sm">Charge Sales Invoice records</p>
-        </div>
+        <div />
         {open && (
           <Button variant="outline" onClick={handleCancelClick}>
             <X className="h-4 w-4 mr-2" />Cancel

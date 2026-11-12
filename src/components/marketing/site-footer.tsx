@@ -64,10 +64,7 @@ export function SiteFooter() {
 
         <div className="mt-12 flex flex-col items-center justify-between gap-3 border-t border-cdsc-line pt-6 text-xs text-cdsc-ink/45 sm:flex-row">
           <span>&copy; {new Date().getFullYear()} {company.name}. All rights reserved.</span>
-          <span className="flex items-center gap-3">
-            Reliable supply. Practical solutions. Responsive service.
-            <Link href="/login" className="text-cdsc-ink/40 underline-offset-2 transition hover:text-cdsc-accent hover:underline">Staff Login</Link>
-          </span>
+          <span>Reliable supply. Practical solutions. Responsive service.</span>
         </div>
       </div>
     </footer>

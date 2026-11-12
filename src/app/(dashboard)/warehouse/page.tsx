@@ -27,12 +27,6 @@ const adjustments = [
 export default function WarehousePage() {
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">Warehouse Management</h2>
-          <p className="text-muted-foreground text-sm">Multi-warehouse inventory, transfers and adjustments</p>
-        </div>
-      </div>
 
       {/* Warehouse Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

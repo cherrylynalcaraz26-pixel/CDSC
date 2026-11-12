@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
+import { KpiCard } from '@/components/ui/kpi-card'
 import { toast } from 'sonner'
 import {
   Plus, Loader2, MoreHorizontal, Trophy, XCircle, LayoutGrid, List,
@@ -70,7 +71,7 @@ type FormData = {
 const STAGE_META: Record<Stage, { label: string; color: string; bg: string; border: string; dot: string }> = {
   new_lead:      { label: 'New Lead',      color: 'text-blue-700',   bg: 'bg-blue-50',   border: 'border-blue-200',  dot: 'bg-blue-500'   },
   contacted:     { label: 'Contacted',     color: 'text-amber-700',  bg: 'bg-amber-50',  border: 'border-amber-200', dot: 'bg-amber-500'  },
-  proposal_sent: { label: 'Proposal Sent', color: 'text-orange-700', bg: 'bg-orange-50', border: 'border-orange-200',dot: 'bg-orange-500' },
+  proposal_sent: { label: 'Proposal Sent', color: 'text-amber-700', bg: 'bg-amber-50', border: 'border-amber-200',dot: 'bg-amber-500' },
   negotiation:   { label: 'Negotiation',   color: 'text-purple-700', bg: 'bg-purple-50', border: 'border-purple-200',dot: 'bg-purple-500' },
   won:           { label: 'Won',           color: 'text-green-700',  bg: 'bg-green-50',  border: 'border-green-200', dot: 'bg-green-500'  },
   lost:          { label: 'Lost',          color: 'text-slate-600',  bg: 'bg-slate-100', border: 'border-slate-200', dot: 'bg-slate-400'  },
@@ -79,7 +80,7 @@ const STAGE_META: Record<Stage, { label: string; color: string; bg: string; bord
 const PRIORITY_META: Record<Priority, { label: string; color: string; bg: string }> = {
   low:    { label: 'Low',    color: 'text-slate-600',  bg: 'bg-slate-100'  },
   medium: { label: 'Medium', color: 'text-blue-700',   bg: 'bg-blue-50'    },
-  high:   { label: 'High',   color: 'text-orange-700', bg: 'bg-orange-50'  },
+  high:   { label: 'High',   color: 'text-amber-700', bg: 'bg-amber-50'  },
   urgent: { label: 'Urgent', color: 'text-red-700',    bg: 'bg-red-50'     },
 }
 
@@ -242,68 +243,13 @@ export default function CRMPage() {
   return (
     <div className="space-y-6">
 
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">CRM & Leads Pipeline</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">Track inquiries, leads, and sales pipeline</p>
-        </div>
-      </div>
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card className="relative overflow-hidden border-none">
-          <div className="absolute inset-0 bg-gradient-to-br from-red-50 to-transparent" />
-          <CardContent className="relative pt-4 pb-3 flex items-start justify-between gap-3">
-            <div>
-              <div className="text-2xl font-bold">{leads.length}</div>
-              <div className="text-xs text-muted-foreground mt-0.5">Total Leads</div>
-              <div className="text-[10px] text-muted-foreground">{stageCounts.new_lead} new</div>
-            </div>
-            <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center shadow-sm shadow-red-500/30">
-              <Users className="h-5 w-5 text-white" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="relative overflow-hidden border-none">
-          <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-transparent" />
-          <CardContent className="relative pt-4 pb-3 flex items-start justify-between gap-3">
-            <div>
-              <div className="text-2xl font-bold text-blue-600">{fmt(pipelineValue)}</div>
-              <div className="text-xs text-muted-foreground mt-0.5">Pipeline Value</div>
-              <div className="text-[10px] text-muted-foreground">{leads.filter(l => !['won','lost'].includes(l.stage)).length} active leads</div>
-            </div>
-            <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm shadow-blue-500/30">
-              <TrendingUp className="h-5 w-5 text-white" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="relative overflow-hidden border-none">
-          <div className="absolute inset-0 bg-gradient-to-br from-green-50 to-transparent" />
-          <CardContent className="relative pt-4 pb-3 flex items-start justify-between gap-3">
-            <div>
-              <div className="text-2xl font-bold text-green-600">{stageCounts.won}</div>
-              <div className="text-xs text-muted-foreground mt-0.5">Won</div>
-              <div className="text-[10px] text-muted-foreground">{fmt(totalValue)} closed</div>
-            </div>
-            <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-green-500 to-green-600 flex items-center justify-center shadow-sm shadow-green-500/30">
-              <Trophy className="h-5 w-5 text-white" />
-            </div>
-          </CardContent>
-        </Card>
-        <Card className="relative overflow-hidden border-none">
-          <div className="absolute inset-0 bg-gradient-to-br from-purple-50 to-transparent" />
-          <CardContent className="relative pt-4 pb-3 flex items-start justify-between gap-3">
-            <div>
-              <div className="text-2xl font-bold text-purple-600">{stageCounts.negotiation}</div>
-              <div className="text-xs text-muted-foreground mt-0.5">In Negotiation</div>
-              <div className="text-[10px] text-muted-foreground">{stageCounts.proposal_sent} proposals out</div>
-            </div>
-            <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center shadow-sm shadow-purple-500/30">
-              <Target className="h-5 w-5 text-white" />
-            </div>
-          </CardContent>
-        </Card>
+        <KpiCard label="Total Leads" value={leads.length} sub={`${stageCounts.new_lead} new`} icon={Users} tone="red" />
+        <KpiCard label="Pipeline Value" value={fmt(pipelineValue)} sub={`${leads.filter(l => !['won', 'lost'].includes(l.stage)).length} active leads`} icon={TrendingUp} tone="blue" />
+        <KpiCard label="Won" value={stageCounts.won} sub={`${fmt(totalValue)} closed`} icon={Trophy} tone="green" />
+        <KpiCard label="In Negotiation" value={stageCounts.negotiation} sub={`${stageCounts.proposal_sent} proposals out`} icon={Target} tone="violet" />
       </div>
 
       {/* Pipeline stage progress */}

@@ -17,6 +17,7 @@ import {
 } from '@/lib/person-address'
 import { getErrorMessage } from '@/lib/error-message'
 import { useSearchContext } from '@/context/search-context'
+import { KpiCard } from '@/components/ui/kpi-card'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import {
@@ -295,22 +296,13 @@ export default function PullOutsPage() {
       {/* Title is shown in the top header bar */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         {([
-          { key: 'pending', label: 'Pending', icon: PackageOpen, tone: 'from-slate-400 to-slate-500' },
-          { key: 'scheduled', label: 'Scheduled', icon: CalendarClock, tone: 'from-blue-500 to-blue-600' },
-          { key: 'picked_up', label: 'Picked Up / In Transit', icon: Truck, tone: 'from-amber-500 to-amber-600' },
-          { key: 'received', label: 'At Warehouse', icon: PackageCheck, tone: 'from-green-500 to-green-600' },
+          { key: 'pending', label: 'Pending', icon: PackageOpen, tone: 'slate' },
+          { key: 'scheduled', label: 'Scheduled', icon: CalendarClock, tone: 'blue' },
+          { key: 'picked_up', label: 'Picked Up / In Transit', icon: Truck, tone: 'amber' },
+          { key: 'received', label: 'At Warehouse', icon: PackageCheck, tone: 'green' },
         ] as const).map(c => (
-          <Card key={c.key} className="cursor-pointer" onClick={() => setStatusFilter(c.key)}>
-            <CardContent className="flex items-start justify-between gap-3 pt-5 pb-4">
-              <div>
-                <div className="text-2xl font-bold">{loading ? '—' : counts[c.key]}</div>
-                <div className="mt-0.5 text-sm text-muted-foreground">{c.label}</div>
-              </div>
-              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${c.tone}`}>
-                <c.icon className="h-5 w-5 text-white" />
-              </div>
-            </CardContent>
-          </Card>
+          <KpiCard key={c.key} label={c.label} value={loading ? '—' : counts[c.key]} icon={c.icon} tone={c.tone}
+            active={statusFilter === c.key} onClick={() => setStatusFilter(c.key)} />
         ))}
       </div>
 
@@ -321,7 +313,7 @@ export default function PullOutsPage() {
             <div className="flex rounded-lg bg-muted p-0.5">
               {([['pullouts', 'Pull Outs', List], ['items', 'Items', Boxes]] as const).map(([v, label, Icon]) => (
                 <button key={v} type="button" onClick={() => setView(v)}
-                  className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition ${view === v ? 'bg-white text-[#F84400] shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+                  className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition ${view === v ? 'bg-white text-[#E8112D] shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
                   <Icon className="h-3.5 w-3.5" />{label}
                 </button>
               ))}
@@ -375,7 +367,7 @@ export default function PullOutsPage() {
                   <TableCell className="text-xs">{x.unit ?? '—'}</TableCell>
                   <TableCell className="text-xs">{x.condition || '—'}</TableCell>
                   <TableCell className="text-right text-xs tabular-nums">{Number(x.quantity_received ?? 0) > 0 ? Number(x.quantity_received).toLocaleString('en-PH') : '—'}</TableCell>
-                  <TableCell className="font-mono text-xs font-semibold text-[#F84400]">{x.po.pull_out_number ?? '—'}</TableCell>
+                  <TableCell className="font-mono text-xs font-semibold text-[#E8112D]">{x.po.pull_out_number ?? '—'}</TableCell>
                   <TableCell className="text-xs">{x.po.location_name}</TableCell>
                   <TableCell className="whitespace-nowrap text-xs">{x.po.scheduled_date ? format(new Date(x.po.scheduled_date + 'T00:00:00'), 'MMM d, yyyy') : '—'}</TableCell>
                   <TableCell><span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS[x.po.status].cls}`}>{STATUS[x.po.status].label}</span></TableCell>
@@ -435,7 +427,7 @@ export default function PullOutsPage() {
                             Mark {STATUS[next].label}
                           </Button>
                         )}
-                        <Button size="icon" variant="ghost" className="h-8 w-8 text-[#F84400]" title="Authorization letter" onClick={() => setLetterFor(r)}><FileSignature className="h-4 w-4" /></Button>
+                        <Button size="icon" variant="ghost" className="h-8 w-8 text-[#E8112D]" title="Authorization letter" onClick={() => setLetterFor(r)}><FileSignature className="h-4 w-4" /></Button>
                         <Button size="icon" variant="ghost" className="h-8 w-8" title="Print slip" onClick={() => printSlip(r)}><Printer className="h-4 w-4" /></Button>
                         <Button size="icon" variant="ghost" className="h-8 w-8" title="Edit" onClick={() => openEdit(r)}><Pencil className="h-4 w-4" /></Button>
                         {r.status !== 'cancelled' && r.status !== 'received' && (

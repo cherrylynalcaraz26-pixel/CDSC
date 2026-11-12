@@ -61,7 +61,7 @@ function DialogContent({
         data-slot="dialog-content"
         data-size={size}
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-3xl bg-popover p-4 text-sm text-popover-foreground shadow-[0_32px_90px_-24px_rgba(15,23,42,0.45),0_0_0_1px_rgba(15,23,42,0.06)] duration-200 ease-out outline-none before:pointer-events-none before:absolute before:inset-x-10 before:top-0 before:h-[3px] before:rounded-b-full before:bg-linear-to-r before:from-[#F84400] before:via-rose-500 before:to-[#F84400] data-open:animate-in data-open:fade-in-0 data-open:zoom-in-[0.97] data-open:slide-in-from-bottom-3 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-[0.97]",
+          "fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-3xl bg-popover p-4 text-sm text-popover-foreground shadow-[0_32px_90px_-24px_rgba(15,23,42,0.45),0_0_0_1px_rgba(15,23,42,0.06)] duration-200 ease-out outline-none before:pointer-events-none before:absolute before:inset-x-10 before:top-0 before:h-[3px] before:rounded-b-full before:bg-linear-to-r before:from-[#E8112D] before:via-rose-500 before:to-[#E8112D] data-open:animate-in data-open:fade-in-0 data-open:zoom-in-[0.97] data-open:slide-in-from-bottom-3 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-[0.97]",
           size === "landscape"
             ? "w-[96vw] sm:max-w-[min(72rem,96vw)] max-h-[88vh] overflow-y-auto sm:p-6 sm:**:data-[slot=dialog-footer]:-mx-6 sm:**:data-[slot=dialog-footer]:-mb-6 sm:**:data-[slot=dialog-footer]:px-6"
             : !hasWidth && "sm:max-w-lg",

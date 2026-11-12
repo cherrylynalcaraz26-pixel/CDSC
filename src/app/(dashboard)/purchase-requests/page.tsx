@@ -29,7 +29,7 @@ const STATUS_CFG: Record<PRStatus, { label: string; cls: string }> = {
   draft:               { label: 'Draft',           cls: 'bg-gray-100 text-gray-600' },
   submitted:           { label: 'Submitted',        cls: 'bg-blue-100 text-blue-700' },
   dept_approved:       { label: 'Dept Approved',    cls: 'bg-yellow-100 text-yellow-700' },
-  admin_approved:      { label: 'Admin Approved',   cls: 'bg-orange-100 text-orange-700' },
+  admin_approved:      { label: 'Admin Approved',   cls: 'bg-amber-100 text-amber-700' },
   purchasing_approved: { label: 'Purch Approved',   cls: 'bg-purple-100 text-purple-700' },
   rejected:            { label: 'Rejected',         cls: 'bg-red-100 text-red-700' },
   converted_to_po:     { label: 'Converted to PO',  cls: 'bg-green-100 text-green-700' },
@@ -38,7 +38,7 @@ const STATUS_CFG: Record<PRStatus, { label: string; cls: string }> = {
 const PRIORITY_CLS: Record<string, string> = {
   low:    'bg-gray-100 text-gray-600',
   normal: 'bg-blue-100 text-blue-700',
-  high:   'bg-orange-100 text-orange-700',
+  high:   'bg-amber-100 text-amber-700',
   urgent: 'bg-red-100 text-red-700',
 }
 
@@ -183,10 +183,7 @@ export default function PurchaseRequestsPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">Purchase Requests</h2>
-          <p className="text-muted-foreground text-sm">Create and track purchase requests through the approval workflow</p>
-        </div>
+        <div />
         <Button onClick={() => { resetForm(); setOpen(true) }} className="bg-red-600 hover:bg-red-700">
           <Plus className="h-4 w-4 mr-2" />New Request
         </Button>
@@ -312,7 +309,7 @@ export default function PurchaseRequestsPage() {
                             </DropdownMenuItem>
                           </>)}
                           {pr.status === 'dept_approved' && (<>
-                            <DropdownMenuItem onClick={() => updateStatus(pr.id, 'admin_approved')} className="text-orange-600">
+                            <DropdownMenuItem onClick={() => updateStatus(pr.id, 'admin_approved')} className="text-amber-600">
                               <CheckCircle2 className="mr-2 h-4 w-4" />Admin Approve
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => updateStatus(pr.id, 'rejected')} className="text-destructive">

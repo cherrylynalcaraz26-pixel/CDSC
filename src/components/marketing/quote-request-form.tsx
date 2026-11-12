@@ -10,8 +10,6 @@
 import { useEffect, useId, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
-import { sendEmail } from '@/lib/send-email'
-import { company } from '@/lib/site-content'
 import { toast } from 'sonner'
 import { Loader2, Paperclip, Send, CheckCircle2, Plus, Trash2 } from 'lucide-react'
 import { getErrorMessage } from '@/lib/error-message'
@@ -44,6 +42,7 @@ export function QuoteRequestForm({ source = 'Website - Quotation Request' }: { s
   const [file, setFile] = useState<File | null>(null)
   const [sending, setSending] = useState(false)
   const [done, setDone] = useState<string | null>(null)
+  const [hp, setHp] = useState('') // honeypot — real visitors never see or fill this
 
   // Item suggestions from the live catalog (same items as the system).
   useEffect(() => {
@@ -106,9 +105,10 @@ export function QuoteRequestForm({ source = 'Website - Quotation Request' }: { s
 
     // Best-effort email to the CDSC inbox; the database record is the source of truth.
     try {
-      const attachments = file ? [{ base64: await fileToBase64(file), filename: file.name, contentType: file.type || 'application/octet-stream' }] : undefined
-      await sendEmail({
-        to: company.email,
+      const attachment = file ? { base64: await fileToBase64(file), filename: file.name, contentType: file.type || 'application/octet-stream' } : undefined
+      // Public, inbox-only, rate-limited endpoint (visitors aren't signed in).
+      await fetch('/api/public/quote-notify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+        website: hp,
         subject: `New Quotation Request${reference ? ` ${reference}` : ''} — ${form.company_name.trim()}`,
         body: [
           `Company: ${form.company_name.trim()}`,
@@ -121,8 +121,8 @@ export function QuoteRequestForm({ source = 'Website - Quotation Request' }: { s
           form.notes.trim() && `Notes: ${form.notes.trim()}`,
           `Source: ${source}`,
         ].filter(Boolean).join('\n'),
-        attachments,
-      })
+        attachment,
+      }) })
     } catch { /* email is a bonus channel */ }
 
     setSending(false)
@@ -156,7 +156,8 @@ export function QuoteRequestForm({ source = 'Website - Quotation Request' }: { s
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-7 rounded-3xl bg-white p-6 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.15)] sm:p-9">
+    <form onSubmit={handleSubmit} className="relative space-y-7 rounded-3xl bg-white p-6 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.15)] sm:p-9">
+      <input type="text" name="website" tabIndex={-1} autoComplete="off" value={hp} onChange={e => setHp(e.target.value)} aria-hidden className="absolute -left-[9999px] h-0 w-0 opacity-0" />
       <Section title="Your Details">
         <Field id={`${formId}-company`} label="Company / Business Name" required>
           <input id={`${formId}-company`} required value={form.company_name} onChange={set('company_name')} autoComplete="organization" className={inputClass} />

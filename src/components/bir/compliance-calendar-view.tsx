@@ -30,7 +30,7 @@ const STATE: Record<State, { chip: string; label: string; dot: string }> = {
   done:       { chip: 'bg-green-100 text-green-800',  label: 'Filed',    dot: 'bg-green-500' },
   overdue:    { chip: 'bg-red-100 text-red-800',      label: 'Overdue',  dot: 'bg-red-500' },
   'due-soon': { chip: 'bg-amber-100 text-amber-800',  label: 'Due soon', dot: 'bg-amber-500' },
-  upcoming:   { chip: 'bg-orange-50 text-orange-800', label: 'Upcoming', dot: 'bg-orange-300' },
+  upcoming:   { chip: 'bg-amber-50 text-amber-800', label: 'Upcoming', dot: 'bg-amber-300' },
 }
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -187,7 +187,7 @@ export function ComplianceCalendarView({
               <div key={i} className={`min-h-[96px] p-1.5 ${!iso ? 'bg-muted/30' : off ? 'bg-red-50/60' : weekend ? 'bg-muted/20' : ''} ${i % 7 ? 'shadow-[inset_1px_0_0_rgba(0,0,0,0.04)]' : ''} shadow-[inset_0_1px_0_rgba(0,0,0,0.04)]`}>
                 {iso && (
                   <>
-                    <div className={`mb-1 flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold ${iso === todayISO ? 'bg-[#F84400] text-white' : off ? 'text-red-600' : 'text-muted-foreground'}`}>
+                    <div className={`mb-1 flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-bold ${iso === todayISO ? 'bg-[#E8112D] text-white' : off ? 'text-red-600' : 'text-muted-foreground'}`}>
                       {Number(iso.slice(8))}
                     </div>
                     {hols.map(h => (
@@ -368,7 +368,7 @@ function FilingDialog({ deadline, onClose, onSaved }: { deadline: Resolved | nul
             </div>
             {d.state === 'done' && (
               <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" className="h-4 w-4 accent-[#F84400]" checked={amendment} onChange={e => setAmendment(e.target.checked)} />
+                <input type="checkbox" className="h-4 w-4 accent-[#E8112D]" checked={amendment} onChange={e => setAmendment(e.target.checked)} />
                 This is an amended return
               </label>
             )}
@@ -377,7 +377,7 @@ function FilingDialog({ deadline, onClose, onSaved }: { deadline: Resolved | nul
         <DialogFooter>
           {d.state === 'done' && !amendment && <Button variant="ghost" onClick={() => save('pending')} disabled={saving}>Mark not filed</Button>}
           <Button variant="outline" onClick={onClose}>Close</Button>
-          <Button onClick={() => save('filed')} disabled={saving || uploading} className="gap-1.5 bg-[#F84400] hover:bg-[#e03d00]">
+          <Button onClick={() => save('filed')} disabled={saving || uploading} className="gap-1.5 bg-[#E8112D] hover:bg-[#D10F28]">
             {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
             {d.state === 'done' ? (amendment ? 'Save Amendment' : 'Update Filing') : 'Mark Filed'}
           </Button>

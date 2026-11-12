@@ -1301,12 +1301,6 @@ export default function InventoryPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">Inventory</h1>
-          <p className="text-muted-foreground text-sm">Stock balance per client (DR delivered + WH Stock − CSI charged)</p>
-        </div>
-      </div>
 
       {/* KPI cards — specific to the active view */}
       {viewMode === 'by_client' && (
@@ -2038,7 +2032,7 @@ export default function InventoryPage() {
                 {[
                   { label: 'DR Delivered',   value: totalDr,      cls: 'text-blue-700' },
                   { label: 'Client WH Stock', value: totalOnHand, cls: 'text-green-700' },
-                  { label: 'CSI Issued',     value: totalCsi,     cls: 'text-orange-600' },
+                  { label: 'CSI Issued',     value: totalCsi,     cls: 'text-amber-600' },
                   { label: 'Net Balance',  value: totalBalance, cls: totalBalance >= 0 ? 'text-green-700' : 'text-red-600' },
                 ].map(c => (
                   <div key={c.label} className="border border-gray-200 rounded-lg px-4 py-3 bg-gray-50">

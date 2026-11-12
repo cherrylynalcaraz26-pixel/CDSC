@@ -9,7 +9,7 @@ import {
   LayoutDashboard, Users, Package, ShoppingCart, FileText,
   Truck, Warehouse, RotateCcw, UserCheck, Calculator,
   FileBarChart, Settings, ChevronDown, ChevronRight, Building2,
-  SlidersHorizontal, ArrowRightLeft, LogOut, X, Wrench,
+  ArrowRightLeft, LogOut, X, Wrench,
   Receipt, PanelLeftClose, PanelLeftOpen, ClipboardList, BoxesIcon,
   TrendingUp, Globe, UserCog, PackageOpen, BookText, Landmark, FileCheck2, Wallet,
   BookOpen, Banknote, BarChart3, Scale, FileSpreadsheet,
@@ -75,13 +75,13 @@ const navigation: NavItem[] = [
     ],
   },
   {
-    label: 'Setup', icon: Wrench,
+    label: 'Records', icon: Wrench,
     children: [
-      { label: 'Configuration', href: '/setup', icon: SlidersHorizontal },
       { label: 'Clients', href: '/clients', icon: Users },
       { label: 'Reports', href: '/reports', icon: FileBarChart },
     ],
   },
+  // Settings now also holds Master Data (the old Setup / Configuration page).
   { label: 'Settings', href: '/settings', icon: Settings },
 ]
 
@@ -125,7 +125,7 @@ function sumBadge(item: NavItem, badges: Record<string, number>): number {
 function BadgePill({ count, inverted = false }: { count: number; inverted?: boolean }) {
   if (!count) return null
   return (
-    <span className={cn("min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0", inverted ? "bg-white text-[#F84400]" : "bg-red-600 text-white")}>
+    <span className={cn("min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0", inverted ? "bg-white text-[#E8112D]" : "bg-red-600 text-white")}>
       {count > 99 ? '99+' : count}
     </span>
   )
@@ -154,7 +154,7 @@ function NavLink({
             title={badge ? `${item.label} (${badge} new)` : item.label}
             className={cn(
               'relative w-full flex items-center justify-center h-9 rounded-md transition-colors',
-              childActive ? 'bg-[#F84400]/15 text-[#FF7A3D]' : 'text-white/40 hover:text-white/80 hover:bg-white/10',
+              childActive ? 'bg-[#E8112D]/15 text-[#FF5C6E]' : 'text-white/40 hover:text-white/80 hover:bg-white/10',
             )}
           >
             <item.icon className="h-[16px] w-[16px] shrink-0" />
@@ -177,7 +177,7 @@ function NavLink({
                           onClick={onNavigate}
                           className={cn(
                             'flex items-center gap-2 px-3 py-1.5 text-[13px] transition-colors',
-                            gActive ? 'bg-[#F84400] text-white font-semibold' : 'text-white/60 hover:text-white hover:bg-white/10',
+                            gActive ? 'bg-linear-to-r from-[#E8112D] to-[#F43F5E] text-white font-semibold' : 'text-white/60 hover:text-white hover:bg-white/10',
                           )}
                         >
                           <grandchild.icon className="h-3.5 w-3.5 shrink-0" />
@@ -198,7 +198,7 @@ function NavLink({
                   onClick={onNavigate}
                   className={cn(
                     'flex items-center gap-2 px-3 py-1.5 text-[13px] transition-colors',
-                    cActive ? 'bg-[#F84400] text-white font-semibold' : 'text-white/60 hover:text-white hover:bg-white/10',
+                    cActive ? 'bg-linear-to-r from-[#E8112D] to-[#F43F5E] text-white font-semibold' : 'text-white/60 hover:text-white hover:bg-white/10',
                   )}
                 >
                   <child.icon className="h-3.5 w-3.5 shrink-0" />
@@ -248,7 +248,7 @@ function NavLink({
         className={cn(
           'relative flex items-center justify-center h-9 rounded-md transition-colors',
           active
-            ? 'bg-[#F84400] text-white font-semibold shadow-md shadow-orange-900/30'
+            ? 'bg-linear-to-r from-[#E8112D] to-[#F43F5E] text-white font-semibold shadow-md shadow-red-900/40'
             : 'text-white/40 hover:text-white/80 hover:bg-white/10',
         )}
       >
@@ -265,7 +265,7 @@ function NavLink({
       className={cn(
         'flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] font-medium transition-colors',
         active
-          ? 'bg-[#F84400] text-white font-semibold shadow-md shadow-orange-900/30'
+          ? 'bg-linear-to-r from-[#E8112D] to-[#F43F5E] text-white font-semibold shadow-md shadow-red-900/40'
           : 'text-white/50 hover:text-white/80 hover:bg-white/10',
       )}
     >
@@ -305,7 +305,7 @@ function SidebarContent({
         '/quotation': quotationRequests.count ?? 0,
         '/sales-orders': draftOrders.count ?? 0,
         '/crm': newLeads.count ?? 0,
-        '/setup': itemSuggestions.count ?? 0,
+        '/settings': itemSuggestions.count ?? 0,
         '/purchase-orders': pendingPOs.count ?? 0,
       })
     }

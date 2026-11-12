@@ -2,7 +2,7 @@
 
 // Dashboard — charts with minimal detail. Four headline numbers, then four charts:
 // Sales vs Purchases, Cash In vs Cash Out, Top Clients, Orders by Status.
-// Palette validated with the dataviz checker (orange #eb6834 / blue #2a78d6 pass
+// Palette validated with the dataviz checker (red #e5132a / blue #2a78d6 pass
 // lightness, chroma, CVD and contrast on the light surface). One y-axis per chart.
 
 import { useEffect, useMemo, useState } from 'react'
@@ -10,12 +10,14 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
 import { fetchAllRows } from '@/lib/supabase/fetch-all'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Loader2 } from 'lucide-react'
+import { Loader2, TrendingUp, Wallet, Banknote, ClipboardList } from 'lucide-react'
+import { KpiCard } from '@/components/ui/kpi-card'
+import { WelcomeBanner } from '@/components/layout/welcome-banner'
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, LabelList,
 } from 'recharts'
 
-const SERIES_1 = '#eb6834' // orange — sales / cash in / sales orders
+const SERIES_1 = '#e5132a' // brand red — sales / cash in / sales orders
 const SERIES_2 = '#2a78d6' // blue — purchases / cash out / purchase orders
 const GRID = '#ececea'
 const AXIS = '#6b6a66'
@@ -157,10 +159,10 @@ export default function DashboardPage() {
 
   const sum = (rows: Row[]) => rows.filter(r => (r.date ?? '').startsWith(thisMonth)).reduce((s, r) => s + r.amount, 0)
   const tiles = [
-    { label: 'Sales this month', value: peso(sum(salesRows)) },
-    { label: 'Collected this month', value: peso(sum(cashIn)) },
-    { label: 'Spent this month', value: peso(sum(cashOut)) },
-    { label: 'Open orders', value: String(orderStatus.reduce((s, r) => s + (r.stage === 'Completed' ? 0 : r['Sales Orders'] + r['Purchase Orders']), 0)) },
+    { label: 'Sales this month', value: peso(sum(salesRows)), icon: TrendingUp, tone: 'red' as const },
+    { label: 'Collected this month', value: peso(sum(cashIn)), icon: Wallet, tone: 'green' as const },
+    { label: 'Spent this month', value: peso(sum(cashOut)), icon: Banknote, tone: 'blue' as const },
+    { label: 'Open orders', icon: ClipboardList, tone: 'amber' as const, value: String(orderStatus.reduce((s, r) => s + (r.stage === 'Completed' ? 0 : r['Sales Orders'] + r['Purchase Orders']), 0)) },
   ]
 
   if (loading) {
@@ -169,20 +171,10 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold">Dashboard</h2>
-        <p className="text-sm text-muted-foreground">Last 12 months at a glance</p>
-      </div>
+      <WelcomeBanner />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        {tiles.map(t => (
-          <Card key={t.label}>
-            <CardContent className="pb-4 pt-5">
-              <div className="text-2xl font-bold tabular-nums">{t.value}</div>
-              <div className="mt-0.5 text-xs text-muted-foreground">{t.label}</div>
-            </CardContent>
-          </Card>
-        ))}
+        {tiles.map(t => <KpiCard key={t.label} label={t.label} value={t.value} icon={t.icon} tone={t.tone} />)}
       </div>
 
       <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">

@@ -259,7 +259,7 @@ export default function PortalRequests() {
                           <span className={cn('inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full font-medium border',
                             pendingDRs.length === 0
                               ? 'bg-green-50 text-green-700 border-green-200'
-                              : 'bg-orange-50 text-orange-700 border-orange-200')}>
+                              : 'bg-amber-50 text-amber-700 border-amber-200')}>
                             <Truck className="h-3 w-3" />
                             {deliveredDRs.length}/{orderDRs.length} delivered
                           </span>
@@ -307,16 +307,16 @@ export default function PortalRequests() {
                           const isDone = dr.status === 'received' || dr.status === 'delivered'
                           const isPartial = dr.status === 'partial'
                           return (
-                            <div key={dr.dr_number} className={cn('px-5 py-3 border-b border-gray-100 last:border-b-0', isDone ? 'bg-green-50/40' : isPartial ? 'bg-yellow-50/40' : 'bg-orange-50/40')}>
+                            <div key={dr.dr_number} className={cn('px-5 py-3 border-b border-gray-100 last:border-b-0', isDone ? 'bg-green-50/40' : isPartial ? 'bg-yellow-50/40' : 'bg-amber-50/40')}>
                               <div className="flex items-center gap-2 flex-wrap mb-2">
                                 {isDone
                                   ? <CheckCircle2 className="h-3.5 w-3.5 text-green-600 shrink-0" />
-                                  : <Truck className="h-3.5 w-3.5 text-orange-500 shrink-0" />
+                                  : <Truck className="h-3.5 w-3.5 text-amber-500 shrink-0" />
                                 }
                                 <span className="font-mono text-xs font-semibold text-red-600">{dr.dr_number}</span>
                                 <span className="text-xs text-gray-400">{dr.dr_date ? format(new Date(dr.dr_date), 'MMM d, yyyy') : '—'}</span>
                                 <span className={cn('text-xs px-2 py-0.5 rounded-full font-medium capitalize',
-                                  isDone ? 'bg-green-100 text-green-700' : isPartial ? 'bg-yellow-100 text-yellow-700' : 'bg-orange-100 text-orange-700')}>
+                                  isDone ? 'bg-green-100 text-green-700' : isPartial ? 'bg-yellow-100 text-yellow-700' : 'bg-amber-100 text-amber-700')}>
                                   {isDone ? 'Delivered' : isPartial ? 'Partial' : 'Pending'}
                                 </span>
                                 {isDone && dr.client_accepted_at && (

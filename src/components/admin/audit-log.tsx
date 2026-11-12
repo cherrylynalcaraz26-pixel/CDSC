@@ -98,7 +98,7 @@ export function AuditLog() {
         </div>
         {['all', 'create', 'update', 'void'].map(a => (
           <button key={a} type="button" onClick={() => setAction(a)}
-            className={`rounded-full px-3 py-1 text-xs font-medium capitalize ${action === a ? 'bg-[#F84400] text-white' : 'bg-muted text-muted-foreground hover:bg-muted/70'}`}>
+            className={`rounded-full px-3 py-1 text-xs font-medium capitalize ${action === a ? 'bg-[#E8112D] text-white' : 'bg-muted text-muted-foreground hover:bg-muted/70'}`}>
             {a === 'all' ? 'All actions' : a}
           </button>
         ))}

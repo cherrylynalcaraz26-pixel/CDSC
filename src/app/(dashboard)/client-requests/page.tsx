@@ -61,7 +61,7 @@ const STATUS_STYLE: Record<string, string> = {
 const PRIORITY_STYLE: Record<string, string> = {
   low:    'text-gray-500',
   normal: 'text-blue-600',
-  high:   'text-orange-500 font-semibold',
+  high:   'text-amber-500 font-semibold',
   urgent: 'text-red-600 font-bold',
 }
 
@@ -123,13 +123,7 @@ export default function ClientRequestsPage() {
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center gap-3">
-        <div className="h-9 w-9 rounded-lg bg-orange-500/10 flex items-center justify-center">
-          <FileText className="h-5 w-5 text-orange-500" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-semibold leading-none">Client Requests</h1>
-          <p className="text-muted-foreground text-sm mt-0.5">Purchase requests submitted by clients via the portal</p>
-        </div>
+        <div />
         {pending > 0 && (
           <span className="ml-2 bg-red-600 text-white text-xs font-bold px-2 py-0.5 rounded-full">{pending} new</span>
         )}

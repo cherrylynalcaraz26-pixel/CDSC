@@ -1,8 +1,10 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import type { Metadata } from 'next'
-import { ArrowRight, PackageSearch, Check } from 'lucide-react'
-import { productCategories } from '@/lib/site-content'
+import { ArrowRight, PackageSearch, Check, Stethoscope, Lock, Monitor, Package, Fan, Paintbrush, Armchair } from 'lucide-react'
+import { productCategories, extendedCatalog, furniture } from '@/lib/site-content'
+
+const EXT_ICONS = [Stethoscope, Lock, Monitor, Package, Fan, Paintbrush]
 import { ProductCatalog } from '@/components/marketing/product-catalog'
 
 export const metadata: Metadata = {
@@ -60,6 +62,38 @@ export default function ProductsPage() {
               </div>
             </div>
           ))}
+        </div>
+
+        <h3 className="mb-5 mt-16 text-center text-2xl font-black text-cdsc-ink">More Categories</h3>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {extendedCatalog.map((c, i) => {
+            const Icon = EXT_ICONS[i] ?? Package
+            return (
+              <div key={c.name} className="group flex gap-4 rounded-2xl bg-white p-5 shadow-[0_6px_24px_-12px_rgba(0,0,0,0.18)] transition hover:-translate-y-1 hover:shadow-xl">
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-cdsc-tint text-cdsc-accent transition group-hover:bg-cdsc-accent group-hover:text-white"><Icon className="h-5 w-5" /></span>
+                <div>
+                  <h4 className="text-sm font-bold text-cdsc-ink">{c.name}</h4>
+                  <p className="mt-1 text-xs leading-relaxed text-cdsc-ink/60">{c.items.join(' · ')}</p>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+
+        <div id="furniture" className="mt-16 grid scroll-mt-28 items-center gap-10 overflow-hidden rounded-3xl bg-cdsc-paper lg:grid-cols-2">
+          <div className="relative h-72 lg:h-full lg:min-h-[380px]">
+            <Image src="/images/site/office-team.jpg" alt="Office furniture and workspace" fill sizes="(min-width:1024px) 50vw, 100vw" className="object-cover" />
+          </div>
+          <div className="p-8 lg:pr-12">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-3.5 py-1.5 text-[0.7rem] font-bold uppercase tracking-wider text-cdsc-accent"><Armchair className="h-3.5 w-3.5" /> Furniture &amp; Fixtures</span>
+            <h3 className="mt-4 text-3xl font-black text-cdsc-ink">Office Furniture &amp; Workspace Solutions</h3>
+            <p className="mt-3 text-sm leading-relaxed text-cdsc-ink/65">{furniture.description}</p>
+            <ul className="mt-5 grid gap-2 sm:grid-cols-2">
+              {furniture.items.map(item => (
+                <li key={item} className="flex items-start gap-2 text-sm text-cdsc-ink/75"><Check className="mt-0.5 h-4 w-4 shrink-0 text-cdsc-accent" strokeWidth={3} />{item}</li>
+              ))}
+            </ul>
+          </div>
         </div>
 
         <div className="mt-8 flex flex-col items-start justify-between gap-6 rounded-3xl bg-cdsc-tint p-8 sm:flex-row sm:items-center sm:p-10">

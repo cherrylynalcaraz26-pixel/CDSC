@@ -1012,10 +1012,7 @@ export default function PurchaseOrdersPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">Purchase Orders</h2>
-          <p className="text-muted-foreground text-sm">Manage supplier purchase orders, track deliveries and payments</p>
-        </div>
+        <div />
         {open ? (
           <Button variant="outline" onClick={handleCancelClick}>
             <X className="h-4 w-4 mr-2" />Cancel
@@ -1114,7 +1111,7 @@ export default function PurchaseOrdersPage() {
                 {[
                   { label: 'PO Created',  cls: 'text-blue-700 bg-blue-50 ring-1 ring-blue-200' },
                   { label: 'Receiving',   cls: 'text-yellow-700 bg-amber-50 ring-1 ring-amber-200' },
-                  { label: 'DR Logged',   cls: 'text-orange-700 bg-orange-50 ring-1 ring-orange-200' },
+                  { label: 'DR Logged',   cls: 'text-amber-700 bg-amber-50 ring-1 ring-amber-200' },
                   { label: 'CSI Issued',  cls: 'text-purple-700 bg-purple-50 ring-1 ring-purple-200' },
                   { label: 'Collected',   cls: 'text-green-700 bg-green-50 ring-1 ring-green-200' },
                 ].map(s => (
@@ -1600,7 +1597,7 @@ export default function PurchaseOrdersPage() {
                     {/* Totals */}
                     <div className="flex justify-end">
                       <div className="w-52 space-y-0.5 text-[10px]">
-                        {discountRate > 0 && <div className="flex justify-between"><span className="text-gray-500">Discount ({discountRate}%)</span><span className="text-orange-600">−₱{discountAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
+                        {discountRate > 0 && <div className="flex justify-between"><span className="text-gray-500">Discount ({discountRate}%)</span><span className="text-amber-600">−₱{discountAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
                         <div className="flex justify-between"><span className="text-gray-500">Total Amount (gross)</span><span>₱{grossAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>
                         {vatAmount > 0 && <div className="flex justify-between"><span className="text-gray-500">VAT portion (included)</span><span className="text-blue-600">₱{vatAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
                         {ewtType !== 'NONE' && <div className="flex justify-between"><span className="text-gray-500">Less: {taxLabel}</span><span className="text-red-700">−₱{taxAmount.toLocaleString('en-PH', { minimumFractionDigits: 2 })}</span></div>}
@@ -1702,7 +1699,7 @@ export default function PurchaseOrdersPage() {
                               <div className="mt-1 flex flex-wrap gap-1">
                                 {statusCfg && <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${statusCfg.cls}`}>{statusCfg.label}</span>}
                                 {stockQty !== null && <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${stockQty > 0 ? 'bg-slate-100 text-slate-600' : 'bg-red-50 text-red-600'}`}>{stockQty > 0 ? `${stockQty.toLocaleString()} in stock` : 'Out of stock'}</span>}
-                                {needsToBuy && <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-orange-50 text-orange-700 border border-orange-200">⚠ Need to buy from Supplier</span>}
+                                {needsToBuy && <span className="text-[10px] px-1.5 py-0.5 rounded font-medium bg-amber-50 text-amber-700 border border-amber-200">⚠ Need to buy from Supplier</span>}
                               </div>
                             )}
                           </TableCell>
@@ -1750,7 +1747,7 @@ export default function PurchaseOrdersPage() {
             <CardContent className="pt-5 space-y-4">
               <div className="rounded-lg bg-muted/30 p-4 space-y-1 text-sm max-w-sm ml-auto">
                 {discountRate > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Line items subtotal</span><span>{fmt(subtotal)}</span></div>}
-                {discountRate > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Discount ({discountRate}%)</span><span className="text-orange-600">− {fmt(discountAmount)}</span></div>}
+                {discountRate > 0 && <div className="flex justify-between"><span className="text-muted-foreground">Discount ({discountRate}%)</span><span className="text-amber-600">− {fmt(discountAmount)}</span></div>}
                 <div className="flex justify-between"><span className="text-muted-foreground">Total amount (gross)</span><span>{fmt(calc.gross)}</span></div>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Less: VAT portion <span className="text-[11px]">(info only, not deducted)</span></span>

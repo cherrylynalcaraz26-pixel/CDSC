@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
-import { Menu, X, Phone, Mail, ArrowRight, ShoppingCart } from 'lucide-react'
+import { Menu, X, Phone, Mail, ArrowRight, ShoppingCart, Handshake } from 'lucide-react'
 import { useCart, cartCount, useCartHydrated } from '@/lib/cart-store'
 import { nav, company } from '@/lib/site-content'
 import { cn } from '@/lib/utils'
@@ -78,6 +78,12 @@ export function SiteHeader() {
               )}
             </Link>
             <Link
+              href="/inquiry"
+              className="hidden items-center gap-1.5 rounded-xl border-2 border-cdsc-accent/20 px-4 py-2 text-sm font-bold text-cdsc-accent transition hover:-translate-y-0.5 hover:border-cdsc-accent hover:bg-cdsc-tint xl:inline-flex"
+            >
+              <Handshake className="h-4 w-4" /> Partner With Us
+            </Link>
+            <Link
               href="/quote"
               className="hidden items-center gap-1.5 rounded-xl bg-linear-to-r from-cdsc-accent to-rose-500 px-4 py-2.5 text-sm font-bold text-white shadow-md shadow-cdsc-accent/25 transition hover:-translate-y-0.5 hover:shadow-lg sm:inline-flex"
             >
@@ -119,6 +125,13 @@ export function SiteHeader() {
               <a href={company.emailHref} className="flex items-center gap-2 px-3 py-1.5 text-sm text-cdsc-ink/70">
                 <Mail className="h-4 w-4" /> {company.email}
               </a>
+              <Link
+                href="/inquiry"
+                onClick={() => setOpen(false)}
+                className="mt-1 inline-flex items-center justify-center gap-1.5 rounded-xl border-2 border-cdsc-accent/25 px-4 py-2 text-sm font-bold text-cdsc-accent"
+              >
+                <Handshake className="h-4 w-4" /> Partner With Us
+              </Link>
               <Link
                 href="/quote"
                 onClick={() => setOpen(false)}

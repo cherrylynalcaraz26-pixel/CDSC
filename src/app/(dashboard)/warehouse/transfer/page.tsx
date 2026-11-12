@@ -111,10 +111,7 @@ export default function StockTransferPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Stock Transfer</h1>
-          <p className="text-muted-foreground text-sm">Transfer inventory between warehouses</p>
-        </div>
+        <div />
         <Button onClick={() => setOpen(true)} className="bg-red-600 hover:bg-red-700">
           <Plus className="h-4 w-4 mr-2" /> New Transfer
         </Button>

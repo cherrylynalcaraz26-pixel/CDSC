@@ -89,7 +89,7 @@ function partyTypeOf(msg: ClientMessage): PartyType {
 }
 
 const AVATAR_COLORS = [
-  'bg-red-500', 'bg-orange-500', 'bg-amber-500', 'bg-green-600',
+  'bg-red-500', 'bg-rose-500', 'bg-amber-500', 'bg-green-600',
   'bg-teal-500', 'bg-blue-600', 'bg-violet-600', 'bg-pink-600',
 ]
 function avatarColor(seed: string) {
@@ -444,7 +444,7 @@ export function MessagesView({ embedded = false }: { embedded?: boolean } = {}) 
         onClick={openNewConversation}
         title="New conversation"
         aria-label="New conversation"
-        className={`${embedded ? 'fixed bottom-40 right-7 lg:bottom-28 lg:right-10' : 'fixed bottom-24 right-5 lg:bottom-8 lg:right-8'} z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#F84400] text-white shadow-lg shadow-orange-900/30 transition-transform hover:scale-105`}
+        className={`${embedded ? 'fixed bottom-40 right-7 lg:bottom-28 lg:right-10' : 'fixed bottom-24 right-5 lg:bottom-8 lg:right-8'} z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[#E8112D] text-white shadow-lg shadow-red-900/30 transition-transform hover:scale-105`}
       >
         <Plus className="h-6 w-6" />
       </button>
@@ -588,7 +588,7 @@ export function MessagesView({ embedded = false }: { embedded?: boolean } = {}) 
                       <FilePicker files={replyFiles} onChange={setReplyFiles} label="Photos / files" />
                       <EmojiButton onPick={e => setReplyText(t => t + e)} />
                     </div>
-                    <Button onClick={sendReply} disabled={(!replyText.trim() && replyFiles.length === 0) || replying} className="gap-2 bg-[#F84400] hover:bg-[#e03d00]">
+                    <Button onClick={sendReply} disabled={(!replyText.trim() && replyFiles.length === 0) || replying} className="gap-2 bg-[#E8112D] hover:bg-[#D10F28]">
                       <Send className="h-4 w-4" />
                       {replying ? 'Sending…' : 'Send'}
                     </Button>

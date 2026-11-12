@@ -111,7 +111,7 @@ export function IncomeTaxEstimate({ isCorporate }: { isCorporate: boolean }) {
       </div>
 
       {annual && (
-        <div className="rounded-xl bg-[#F84400]/10 px-4 py-3 text-sm">
+        <div className="rounded-xl bg-[#E8112D]/10 px-4 py-3 text-sm">
           Based on the books so far, <b>{better === 'osd' ? 'the Optional Standard Deduction (OSD)' : 'itemized deductions'}</b> gives the lower tax for {year}
           {' '}({peso(Math.min(annual.taxOsd, annual.taxItemized))} vs {peso(Math.max(annual.taxOsd, annual.taxItemized))}). The method is chosen on the first quarterly return and applies all year.
         </div>

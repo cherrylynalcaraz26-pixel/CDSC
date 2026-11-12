@@ -169,7 +169,7 @@ export function BalanceSheetReport({ allLines, coa, asOf }: { allLines: LedgerLi
         <Card>
           <CardHeader className="pb-2"><CardTitle className="text-sm">Liabilities &amp; Owner&apos;s Equity</CardTitle></CardHeader>
           <CardContent className="space-y-4 pt-0">
-            <StatementSection title="Liabilities" accounts={bs.liabilities} total={bs.totalLiabilities} tone="text-orange-700" />
+            <StatementSection title="Liabilities" accounts={bs.liabilities} total={bs.totalLiabilities} tone="text-amber-700" />
             <div>
               <StatementSection title="Owner's Equity" accounts={bs.equity} total={bs.totalEquity} tone="text-purple-700" />
               <div className="flex justify-between px-2 py-1.5 text-sm">

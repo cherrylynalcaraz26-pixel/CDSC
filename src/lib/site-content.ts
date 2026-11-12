@@ -40,10 +40,10 @@ export const credentials = [
 
 export const nav = [
   { label: 'Home', href: '/' },
+  { label: 'About Us', href: '/about' },
   { label: 'Products', href: '/products' },
-  { label: 'Industries We Serve', href: '/industries' },
+  { label: 'Industries', href: '/industries' },
   { label: 'Services', href: '/services' },
-  { label: 'Company Profile', href: '/company-profile' },
   { label: 'Contact', href: '/contact' },
 ]
 
@@ -223,7 +223,7 @@ export const coreValues: CoreValue[] = [
 
 // ── Company Profile page extras ─────────────────────────────────────────
 // Merged in from the former standalone CDSC landing page (index.html) so the
-// company profile at /company-profile carries the full story in one place.
+// About Us page (/about) carries the full story in one place.
 
 export const profileHero = {
   headline: ['Every Supply Need.', 'One Reliable', 'Source.'],

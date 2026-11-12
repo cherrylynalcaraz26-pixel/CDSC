@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { google } from 'googleapis'
+import { requireRole } from '@/lib/supabase/api-auth'
 
 // Allow reasonably large images (logos, item photos)
 export const maxDuration = 30
@@ -41,11 +42,25 @@ async function findOrCreateSubfolder(drive: ReturnType<typeof google.drive>, par
 
 // Every image in the app (item pictures, client logos) is uploaded here and stored in a
 // shared Google Drive folder via the OAuth2 client above, rather than Supabase storage.
+const ALLOWED_TYPES = /^(image\/(png|jpe?g|gif|webp|heic|heif|bmp)|application\/pdf|text\/(plain|csv)|application\/(msword|vnd\.openxmlformats-officedocument\.[\w.]+|vnd\.ms-excel|vnd\.ms-powerpoint|zip|x-zip-compressed)|video\/(mp4|quicktime|webm))$/i
+const MAX_BYTES = 25 * 1024 * 1024
+
 export async function POST(req: NextRequest) {
+  const auth = await requireRole('any')
+  if (!auth.ok) return auth.response
   try {
     const { fileBase64, fileName, mimeType, folder } = await req.json()
     if (!fileBase64 || !fileName || !mimeType) {
       return NextResponse.json({ error: 'Missing required fields: fileBase64, fileName, mimeType' }, { status: 400 })
+    }
+    if (!ALLOWED_TYPES.test(String(mimeType))) {
+      return NextResponse.json({ error: 'This file type is not allowed. Upload an image, PDF, Office document, CSV or ZIP.' }, { status: 415 })
+    }
+    if (String(fileBase64).length * 0.75 > MAX_BYTES) {
+      return NextResponse.json({ error: 'File is too large (max 25 MB).' }, { status: 413 })
+    }
+    if (folder && !/^[\w .&()-]{1,60}$/.test(String(folder))) {
+      return NextResponse.json({ error: 'Invalid folder name.' }, { status: 400 })
     }
 
     const client = getDriveClient()

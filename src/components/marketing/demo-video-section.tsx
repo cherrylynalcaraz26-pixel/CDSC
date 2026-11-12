@@ -1,29 +1,56 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
-import { PlayCircle, ShoppingCart, FileText, Truck, ArrowRight } from 'lucide-react'
+import { PlayCircle, ShoppingCart, FileText, Truck, ArrowRight, Volume2, VolumeX } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { DEMO_VIDEO_URL, DEMO_VIDEO_TITLE, toEmbed } from '@/components/live-video-button'
 import { Reveal } from '@/components/marketing/profile-motion'
 
-// "See How Ordering Works" — the CDSC demo video, shown right on the website.
-// Uses the Demo Video URL from Settings → Website when set, otherwise the default
-// CDSC Client Portal demo. The player is visible immediately (no autoplay).
+// The CDSC Client Portal demo, hosted with the website so it can play by itself.
+// Browsers only allow autoplay when muted — "Tap for sound" turns audio on.
+const LOCAL_DEMO = '/videos/cdsc-demo.mp4'
+
+// "See How Ordering Works" — plays automatically when scrolled into view.
+// Uses the Demo Video URL from Settings → Website when it's set to something
+// other than the default demo (YouTube/Vimeo autoplay muted; a direct video
+// file plays like the built-in one).
 export function DemoVideoSection() {
-  const [url, setUrl] = useState(DEMO_VIDEO_URL)
+  const [url, setUrl] = useState<string | null>(null)
+  const [muted, setMuted] = useState(true)
+  const video = useRef<HTMLVideoElement>(null)
 
   useEffect(() => {
     createClient().from('system_settings').select('live_video_url').single().then(({ data }) => {
       const v = (data?.live_video_url ?? '').trim()
-      if (v) setUrl(v)
+      if (v && v !== DEMO_VIDEO_URL) setUrl(v)
     })
   }, [])
 
-  const embed = toEmbed(url)
-  // toEmbed asks for autoplay (it's built for the click-to-open modal); here the
-  // player sits on the page, so let the visitor press play.
-  const src = embed.src.replace(/([?&])autoplay=(1|true)/, '$1autoplay=0')
+  const embed = url ? toEmbed(url) : { kind: 'video' as const, src: LOCAL_DEMO }
+  const src = embed.kind === 'iframe'
+    ? embed.src.replace(/([?&])autoplay=(1|true)/, '$1autoplay=1') + (embed.src.includes('?') ? '&' : '?') + 'mute=1&muted=1&loop=1&playsinline=1'
+    : embed.src
+
+  // Play while at least 40% visible; pause when scrolled away.
+  useEffect(() => {
+    const el = video.current
+    if (!el) return
+    const obs = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting) el.play().catch(() => { /* autoplay blocked: controls still shown */ })
+      else el.pause()
+    }, { threshold: 0.4 })
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [src])
+
+  function toggleSound() {
+    const el = video.current
+    if (!el) return
+    el.muted = !el.muted
+    setMuted(el.muted)
+    if (!el.muted) el.play().catch(() => {})
+  }
 
   return (
     <section id="demo" className="relative scroll-mt-24 overflow-hidden bg-linear-to-b from-cdsc-tint to-white py-24 text-cdsc-ink">
@@ -79,16 +106,37 @@ export function DemoVideoSection() {
                 <PlayCircle className="h-3.5 w-3.5 text-cdsc-accent" /> {DEMO_VIDEO_TITLE}
               </span>
             </div>
-            <div className="relative w-full" style={{ paddingTop: '56.25%' }}>
+            <div className="relative w-full bg-black" style={{ paddingTop: '56.25%' }} onContextMenu={e => e.preventDefault()}>
               {embed.kind === 'video' ? (
-                <video src={src} controls preload="metadata" playsInline className="absolute inset-0 h-full w-full bg-black" />
+                <>
+                  <video
+                    ref={video}
+                    src={src}
+                    muted
+                    loop
+                    playsInline
+                    autoPlay
+                    preload="auto"
+                    controls
+                    controlsList="nodownload noplaybackrate noremoteplayback"
+                    disablePictureInPicture
+                    disableRemotePlayback
+                    className="absolute inset-0 h-full w-full"
+                  />
+                  <button
+                    type="button"
+                    onClick={toggleSound}
+                    className="absolute right-3 top-3 inline-flex items-center gap-1.5 rounded-full bg-black/60 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur transition hover:bg-black/75"
+                  >
+                    {muted ? <><VolumeX className="h-3.5 w-3.5" /> Tap for sound</> : <><Volume2 className="h-3.5 w-3.5" /> Sound on</>}
+                  </button>
+                </>
               ) : (
                 <iframe
                   src={src}
                   title={DEMO_VIDEO_TITLE}
-                  loading="lazy"
-                  className="absolute inset-0 h-full w-full border-0 bg-black"
-                  allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+                  className="absolute inset-0 h-full w-full border-0"
+                  allow="autoplay; encrypted-media; fullscreen"
                   allowFullScreen
                 />
               )}

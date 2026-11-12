@@ -893,10 +893,7 @@ export default function DRLogsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">DR Logs</h1>
-          <p className="text-muted-foreground text-sm">Delivery Receipt log — track all incoming supplier DRs</p>
-        </div>
+        <div />
         {open && (
           <Button variant="outline" onClick={handleCancelClick}>
             <X className="h-4 w-4 mr-2" />Cancel

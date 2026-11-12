@@ -115,7 +115,7 @@ function blankForm(): FormData {
 }
 
 const AVATAR_COLORS = [
-  'bg-red-500', 'bg-orange-500', 'bg-amber-500', 'bg-green-600',
+  'bg-red-500', 'bg-rose-500', 'bg-amber-500', 'bg-green-600',
   'bg-teal-500', 'bg-blue-600', 'bg-violet-600', 'bg-pink-600',
 ]
 function avatarColor(id: string) {
@@ -357,16 +357,7 @@ export default function ClientsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-lg bg-blue-600/10 flex items-center justify-center">
-            <Users className="h-5 w-5 text-blue-600" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-semibold leading-none">Clients</h1>
-            <p className="text-muted-foreground text-sm mt-0.5">Manage client accounts and contacts</p>
-          </div>
-        </div>
+      <div className="flex items-center justify-end gap-4">
         <Button onClick={openCreate} className="bg-red-600 hover:bg-red-700">
           <Plus className="h-4 w-4 mr-2" /> New Client
         </Button>

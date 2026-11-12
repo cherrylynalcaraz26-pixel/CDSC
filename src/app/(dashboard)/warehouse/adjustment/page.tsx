@@ -101,10 +101,7 @@ export default function StockAdjustmentPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Stock Adjustment</h1>
-          <p className="text-muted-foreground text-sm">Adjust inventory quantities to match physical count</p>
-        </div>
+        <div />
         <Button onClick={() => setOpen(true)} className="bg-red-600 hover:bg-red-700">
           <Plus className="h-4 w-4 mr-2" /> New Adjustment
         </Button>

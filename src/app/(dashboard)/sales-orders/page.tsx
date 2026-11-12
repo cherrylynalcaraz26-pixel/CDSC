@@ -877,10 +877,7 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">Sales Orders</h2>
-          <p className="text-muted-foreground text-sm">Create and manage client sales orders</p>
-        </div>
+        <div />
         {open && (
           <Button variant="outline" onClick={handleCancelClick}>
             <X className="h-4 w-4 mr-2" />Cancel
@@ -1387,7 +1384,7 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
                   { label: 'SO Created',  color: 'text-blue-600 bg-blue-50' },
                   { label: 'Confirmed',   color: 'text-indigo-600 bg-indigo-50' },
                   { label: 'Processing',  color: 'text-yellow-600 bg-yellow-50' },
-                  { label: 'Shipped',     color: 'text-orange-600 bg-orange-50' },
+                  { label: 'Shipped',     color: 'text-amber-600 bg-amber-50' },
                   { label: 'Collected',   color: 'text-green-600 bg-green-50' },
                 ].map(s => (
                   <div key={s.label} className={`py-2 ${s.color}`}>{s.label}</div>
@@ -1487,7 +1484,7 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
                         const incomplete = dm.pending + dm.partial
                         if (incomplete === 0) return <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700">{dm.total} DR{dm.total !== 1 ? 's' : ''} — Done</span>
                         return (
-                          <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-orange-100 text-orange-700">
+                          <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700">
                             {incomplete} Pending{dm.partial > 0 ? ` / ${dm.partial} Partial` : ''}
                           </span>
                         )
@@ -1559,7 +1556,7 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
                             </DropdownMenuItem>
                           )}
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => togglePortalVisibility(so)} className={so.show_in_portal ? 'text-orange-600' : 'text-green-600'}>
+                          <DropdownMenuItem onClick={() => togglePortalVisibility(so)} className={so.show_in_portal ? 'text-amber-600' : 'text-green-600'}>
                             {so.show_in_portal
                               ? <><EyeOff className="mr-2 h-4 w-4" />Do not Show in Client Portal</>
                               : <><Globe className="mr-2 h-4 w-4" />Show in Client Portal</>
@@ -1639,14 +1636,14 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
               const pending = viewSODeliveries.filter(d => d.status !== 'delivered' && d.status !== 'received')
               if (pending.length === 0) return null
               return (
-                <div className="border border-orange-200 rounded-lg overflow-hidden bg-orange-50">
-                  <div className="bg-orange-100 px-4 py-2 flex items-center gap-2">
-                    <span className="text-xs font-semibold uppercase tracking-wider text-orange-700">⚠ Pending / Incomplete Deliveries</span>
-                    <span className="ml-auto text-xs text-orange-600">{pending.length} DR{pending.length !== 1 ? 's' : ''}</span>
+                <div className="border border-amber-200 rounded-lg overflow-hidden bg-amber-50">
+                  <div className="bg-amber-100 px-4 py-2 flex items-center gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-amber-700">⚠ Pending / Incomplete Deliveries</span>
+                    <span className="ml-auto text-xs text-amber-600">{pending.length} DR{pending.length !== 1 ? 's' : ''}</span>
                   </div>
-                  <div className="divide-y divide-orange-100 text-xs">
+                  <div className="divide-y divide-amber-100 text-xs">
                     {pending.map(d => {
-                      const statusCls = d.status === 'partial' ? 'bg-yellow-100 text-yellow-700' : 'bg-orange-100 text-orange-700'
+                      const statusCls = d.status === 'partial' ? 'bg-yellow-100 text-yellow-700' : 'bg-amber-100 text-amber-700'
                       return (
                         <div key={d.dr_number} className="px-4 py-2.5 space-y-1.5">
                           <div className="flex items-center gap-3">
@@ -1681,7 +1678,7 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
                 <div className="divide-y text-xs">
                   {viewSODeliveries.map(d => {
                     const isDone = d.status === 'delivered' || d.status === 'received'
-                    const statusCls = isDone ? 'bg-green-100 text-green-700' : d.status === 'partial' ? 'bg-yellow-100 text-yellow-700' : 'bg-orange-100 text-orange-700'
+                    const statusCls = isDone ? 'bg-green-100 text-green-700' : d.status === 'partial' ? 'bg-yellow-100 text-yellow-700' : 'bg-amber-100 text-amber-700'
                     const statusLabel = d.status === 'received' ? 'Delivered' : d.status === 'partial' ? 'Partial' : d.status === 'pending' ? 'Pending' : d.status
                     return (
                       <div key={d.dr_number} className="px-4 py-2.5 space-y-1.5">
@@ -1690,7 +1687,7 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
                           <span className="text-muted-foreground text-xs">{d.dr_date ? new Date(d.dr_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</span>
                           <span className={`px-2 py-0.5 rounded-full font-medium text-xs capitalize ${statusCls}`}>{statusLabel}</span>
                           {isDone && !d.client_accepted_at && (
-                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-700 border border-orange-200">Awaiting Client Acceptance</span>
+                            <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 border border-amber-200">Awaiting Client Acceptance</span>
                           )}
                           {isDone && d.client_accepted_at && (
                             <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 border border-green-200">
@@ -1727,7 +1724,7 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
                         <SelectItem key={dr.dr_number} value={dr.dr_number ?? ''} className="text-xs">
                           <span className="font-mono text-red-600">{dr.dr_number}</span>
                           <span className="ml-2 text-muted-foreground">{dr.dr_date ? new Date(dr.dr_date).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' }) : ''}</span>
-                          <span className={`ml-2 px-1.5 py-0.5 rounded-full text-[10px] font-medium capitalize ${dr.status === 'received' ? 'bg-green-100 text-green-700' : dr.status === 'partial' ? 'bg-yellow-100 text-yellow-700' : 'bg-orange-100 text-orange-700'}`}>{dr.status}</span>
+                          <span className={`ml-2 px-1.5 py-0.5 rounded-full text-[10px] font-medium capitalize ${dr.status === 'received' ? 'bg-green-100 text-green-700' : dr.status === 'partial' ? 'bg-yellow-100 text-yellow-700' : 'bg-amber-100 text-amber-700'}`}>{dr.status}</span>
                         </SelectItem>
                       ))}
                     </SelectContent>

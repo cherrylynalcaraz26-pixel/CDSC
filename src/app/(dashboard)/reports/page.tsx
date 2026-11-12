@@ -268,10 +268,7 @@ export default function ReportsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">Reports Center</h2>
-          <p className="text-muted-foreground text-sm">Generate and export system reports as CSV</p>
-        </div>
+        <div />
         <div className="flex items-center gap-3">
           <Button onClick={downloadAll} disabled={generating === 'all'} variant="outline" className="gap-2">
             {generating === 'all' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
@@ -298,7 +295,7 @@ export default function ReportsPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
           {[
             { label: 'Items', value: stats.items, icon: Package, color: 'text-blue-600' },
-            { label: 'Suppliers', value: stats.suppliers, icon: Truck, color: 'text-orange-600' },
+            { label: 'Suppliers', value: stats.suppliers, icon: Truck, color: 'text-amber-600' },
             { label: 'Clients', value: stats.clients, icon: Users, color: 'text-purple-600' },
             { label: 'PRs', value: stats.prs, icon: FileText, color: 'text-yellow-600' },
             { label: 'POs', value: stats.pos, icon: ShoppingCart, color: 'text-green-600' },

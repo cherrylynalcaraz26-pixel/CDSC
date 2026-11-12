@@ -30,10 +30,7 @@ export default function EmployeeRequestsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">My Requests</h2>
-          <p className="text-muted-foreground text-sm">Request office supplies, IT equipment, uniforms and consumables</p>
-        </div>
+        <div />
         <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4 mr-2" />New Request</Button>
       </div>
 

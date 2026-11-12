@@ -391,7 +391,7 @@ function PortalStockPageContent() {
 
   const txTypeStyle: Record<string, string> = {
     received: 'bg-green-100 text-green-700',
-    issued:   'bg-orange-100 text-orange-700',
+    issued:   'bg-amber-100 text-amber-700',
     adjusted: 'bg-blue-100 text-blue-700',
   }
 
@@ -473,7 +473,7 @@ function PortalStockPageContent() {
           </button>
           <button
             onClick={() => openModal('issue')}
-            className="inline-flex items-center gap-1.5 bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
+            className="inline-flex items-center gap-1.5 bg-rose-500 hover:bg-rose-600 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
             <ArrowUpCircle className="h-4 w-4" /> Issue Item
           </button>
         </div>
@@ -966,7 +966,7 @@ function PortalStockPageContent() {
               </button>
               <button onClick={() => { openModal('issue', s); setOpenActionId(null); setActionDropdownPos(null) }}
                 className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-700 hover:bg-gray-50">
-                <ArrowUpCircle className="h-3.5 w-3.5 text-orange-500" /> Issue Item
+                <ArrowUpCircle className="h-3.5 w-3.5 text-amber-500" /> Issue Item
               </button>
               <button onClick={() => { openModal('adjust', s); setOpenActionId(null); setActionDropdownPos(null) }}
                 className="w-full flex items-center gap-2.5 px-3 py-2 text-gray-700 hover:bg-gray-50">
@@ -1290,7 +1290,7 @@ function PortalStockPageContent() {
                 className={cn(
                   'inline-flex items-center gap-2 text-white text-sm font-semibold px-5 py-2 rounded-lg transition-colors disabled:opacity-60',
                   modal === 'receive' ? 'bg-green-600 hover:bg-green-700' :
-                  modal === 'issue' ? 'bg-orange-500 hover:bg-orange-600' :
+                  modal === 'issue' ? 'bg-rose-500 hover:bg-rose-600' :
                   'bg-blue-600 hover:bg-blue-700'
                 )}>
                 {submitting && <Loader2 className="h-4 w-4 animate-spin" />}
@@ -1438,7 +1438,7 @@ function PortalStockPageContent() {
               </button>
             </div>
             <div className="px-6 py-4 space-y-3">
-              <div className="bg-orange-50 border border-orange-100 rounded-xl p-4 space-y-2.5">
+              <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 space-y-2.5">
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-500">Date</span>
                   <span className="font-medium text-gray-800">{format(new Date(issuedSlip.date), 'MMM d, yyyy — h:mm a')}</span>
@@ -1449,7 +1449,7 @@ function PortalStockPageContent() {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-500">Quantity</span>
-                  <span className="font-bold text-orange-700">{issuedSlip.quantity} {issuedSlip.unit ?? 'pcs'}</span>
+                  <span className="font-bold text-amber-700">{issuedSlip.quantity} {issuedSlip.unit ?? 'pcs'}</span>
                 </div>
                 {issuedSlip.issued_to && (
                   <div className="flex justify-between text-sm">
@@ -1489,7 +1489,7 @@ function PortalStockPageContent() {
                         <div className="flex items-center gap-2">
                           <span className={`px-1.5 py-0.5 rounded-full font-medium capitalize ${
                             t.transaction_type === 'received' ? 'bg-green-100 text-green-700' :
-                            t.transaction_type === 'issued' ? 'bg-orange-100 text-orange-700' :
+                            t.transaction_type === 'issued' ? 'bg-amber-100 text-amber-700' :
                             'bg-blue-100 text-blue-700'
                           }`}>{t.transaction_type}</span>
                           {t.issued_to && <span className="text-gray-500 truncate max-w-[80px]">{t.issued_to}</span>}

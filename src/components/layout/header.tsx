@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { Bell, Search, Menu, LogOut, Package, MessageSquare, ShoppingCart, MapPin, Phone, Mail, Globe } from 'lucide-react'
+import { BellRing, BellOff, Bell, Search, Menu, LogOut, Package, MessageSquare, ShoppingCart, MapPin, Phone, Mail, Globe } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -10,7 +10,10 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { createClient } from '@/lib/supabase/client'
-import { useRouter, usePathname } from 'next/navigation'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
+import { getPageTitle } from '@/lib/page-titles'
+import { notifyNew, deviceNotifySupported, deviceNotifyEnabled, enableDeviceNotify, disableDeviceNotify } from '@/lib/device-notify'
+import { toast } from 'sonner'
 import { useSearchContext } from '@/context/search-context'
 import { useCompany } from '@/context/company-context'
 import { cn } from '@/lib/utils'
@@ -33,7 +36,11 @@ const SEARCH_ITEMS = [
   { label: 'Pull Outs',             href: '/pull-outs',               section: 'Warehouse' },
   { label: 'Accounting',            href: '/accounting',              section: 'Accounting' },
   { label: 'Reports',               href: '/reports',                 section: 'Setup' },
-  { label: 'Configuration',         href: '/setup',                   section: 'Setup' },
+  { label: 'Suppliers',             href: '/settings?tab=suppliers',  section: 'Master Data' },
+  { label: 'Item List',             href: '/settings?tab=items',      section: 'Master Data' },
+  { label: 'Categories',            href: '/settings?tab=categories', section: 'Master Data' },
+  { label: 'Units of Measure',      href: '/settings?tab=uom',        section: 'Master Data' },
+  { label: 'Company Profile Deck',  href: '/settings?tab=deck',       section: 'Settings' },
   { label: 'Clients',               href: '/clients',                 section: 'Setup' },
   { label: 'User Management',       href: '/users',                   section: 'Users' },
   { label: 'Settings',              href: '/settings',                section: 'Settings' },
@@ -46,17 +53,13 @@ const DATA_PAGES = [
   '/setup', '/assets', '/pull-outs',
 ]
 
-// Pages whose title/subtitle live in this header bar instead of the page body.
-const PAGE_TITLES: Record<string, { title: string; subtitle: string }> = {
-  '/quotation': { title: 'Quotation', subtitle: 'Create and manage client quotations and requests' },
-  '/pull-outs': { title: 'Pull Outs', subtitle: 'Items CDSC needs to pick up from clients and suppliers' },
-}
 
-interface Notif { id: string; type: 'message' | 'order' | 'stock'; message: string; read: boolean; time: string; href: string }
+interface Notif { id: string; type: 'message' | 'order' | 'stock' | 'request' | 'lead'; title: string; message: string; read: boolean; time: string; href: string }
 
 export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
   const router = useRouter()
   const pathname = usePathname()
+  const searchParams = useSearchParams()
   const supabase = createClient()
   const { query, setQuery } = useSearchContext()
   const { company } = useCompany()
@@ -70,9 +73,20 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
   const [notifs, setNotifs] = useState<Notif[]>([])
   const [notifOpen, setNotifOpen] = useState(false)
   const notifRef = useRef<HTMLDivElement>(null)
+  const [deviceOn, setDeviceOn] = useState(false)
+  useEffect(() => { setDeviceOn(deviceNotifyEnabled()) }, [])
+
+  async function toggleDevice() {
+    if (deviceOn) { disableDeviceNotify(); setDeviceOn(false); toast('Device notifications turned off'); return }
+    const p = await enableDeviceNotify()
+    if (p === 'granted') { setDeviceOn(true) }
+    else if (p === 'denied') toast.error('Notifications are blocked for this site. Allow them in your browser\'s site settings, then try again.')
+    else if (p === 'unsupported') toast.error('This browser does not support device notifications.')
+  }
 
   const isDataPage = DATA_PAGES.some(p => pathname.startsWith(p))
-  const pageTitle = Object.entries(PAGE_TITLES).find(([p]) => pathname === p || pathname.startsWith(p + '/'))?.[1]
+  // Every page's title + description lives here (lib/page-titles.ts).
+  const pageTitle = getPageTitle(pathname, searchParams)
 
   async function markNotifRead(n: Notif) {
     if (n.type === 'message') {
@@ -98,18 +112,31 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
 
   useEffect(() => {
     async function loadNotifs() {
-      const [{ data: msgs }, { data: orders }] = await Promise.all([
+      const [{ data: msgs }, { data: orders }, { data: reqs }, { data: leads }] = await Promise.all([
         supabase.from('client_messages').select('id,client_name,supplier_name,message,sent_at').eq('status', 'unread').order('sent_at', { ascending: false }).limit(20),
-        supabase.from('sales_orders').select('id,so_number,client_name,created_at').eq('status', 'draft').like('so_number', 'SO-P-%').order('created_at', { ascending: false }).limit(20),
+        supabase.from('sales_orders').select('id,so_number,client_name,created_at,remarks').eq('status', 'draft').order('created_at', { ascending: false }).limit(20),
+        supabase.from('quotation_requests').select('id,request_number,client_name,subject,created_at').eq('status', 'pending').order('created_at', { ascending: false }).limit(20),
+        supabase.from('crm_leads').select('id,company_name,source,product_interest,created_at').eq('stage', 'new_lead').order('created_at', { ascending: false }).limit(20),
       ])
       const built: Notif[] = []
       for (const m of (msgs ?? [])) {
-        built.push({ id: `msg-${m.id}`, type: 'message', message: `New message from ${m.client_name || m.supplier_name || 'client'}: "${(m.message ?? '').slice(0, 60)}${(m.message?.length ?? 0) > 60 ? '…' : ''}"`, read: false, time: m.sent_at, href: '/messages' })
+        built.push({ id: `msg-${m.id}`, type: 'message', title: `Message from ${m.client_name || m.supplier_name || 'client'}`, message: `New message from ${m.client_name || m.supplier_name || 'client'}: "${(m.message ?? '').slice(0, 60)}${(m.message?.length ?? 0) > 60 ? '…' : ''}"`, read: false, time: m.sent_at, href: '/messages' })
       }
       for (const so of (orders ?? [])) {
-        built.push({ id: `so-${so.id}`, type: 'order', message: `Portal order ${so.so_number} from ${so.client_name || 'client'} needs review`, read: false, time: so.created_at, href: '/sales-orders' })
+        // Portal (SO-P-…) and website-cart orders arrive as drafts for review.
+        const web = /^Website order/.test(so.remarks ?? '')
+        if (!web && !/^SO-P-/.test(so.so_number ?? '')) continue
+        built.push({ id: `so-${so.id}`, type: 'order', title: web ? 'New website order' : 'New portal order', message: `${so.so_number ?? 'Order'} from ${so.client_name || 'client'} needs review`, read: false, time: so.created_at, href: '/sales-orders' })
       }
+      for (const r of (reqs ?? [])) {
+        built.push({ id: `rfq-${r.id}`, type: 'request', title: 'New quotation request', message: `${r.request_number} · ${r.client_name}: ${r.subject}`, read: false, time: r.created_at, href: '/quotation' })
+      }
+      for (const l of (leads ?? [])) {
+        built.push({ id: `lead-${l.id}`, type: 'lead', title: `New lead · ${l.source || 'CRM'}`, message: `${l.company_name}${l.product_interest ? ` — ${l.product_interest}` : ''}`, read: false, time: l.created_at, href: '/crm' })
+      }
+      built.sort((a, b) => (b.time ?? '').localeCompare(a.time ?? ''))
       setNotifs(built)
+      notifyNew(built.map(n => ({ id: n.id, title: n.title, body: n.message, href: n.href })), href => router.push(href))
     }
     async function loadUser() {
       const { data: { user } } = await supabase.auth.getUser()
@@ -168,9 +195,12 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
             </div>
           )}
           {pageTitle && (
-            <div className="min-w-0">
-              <h1 className="text-lg font-bold leading-tight truncate">{pageTitle.title}</h1>
-              <p className="hidden md:block text-xs text-muted-foreground truncate">{pageTitle.subtitle}</p>
+            <div className="flex min-w-0 items-center gap-3">
+              <span aria-hidden className="hidden h-9 w-1.5 shrink-0 rounded-full bg-linear-to-b from-[#E8112D] to-[#F43F5E] sm:block" />
+              <div className="min-w-0">
+                <h1 className="truncate text-lg font-bold leading-tight tracking-tight">{pageTitle.title}</h1>
+                <p className="hidden truncate text-xs text-muted-foreground md:block">{pageTitle.subtitle}</p>
+              </div>
             </div>
           )}
         </div>
@@ -224,6 +254,19 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
 
             {notifOpen && (
               <div className="absolute right-0 top-full mt-2 w-80 bg-popover border rounded-xl shadow-lg z-50 max-h-96 overflow-hidden flex flex-col">
+                {deviceNotifySupported() && (
+                  <button
+                    type="button"
+                    onClick={toggleDevice}
+                    className={cn('flex w-full items-center gap-2.5 border-b px-4 py-2.5 text-left text-xs transition-colors', deviceOn ? 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100' : 'bg-rose-50 text-rose-800 hover:bg-rose-100')}
+                  >
+                    {deviceOn ? <BellRing className="h-4 w-4 shrink-0" /> : <BellOff className="h-4 w-4 shrink-0" />}
+                    <span className="flex-1">
+                      <span className="block font-semibold">{deviceOn ? 'Device notifications on' : 'Turn on device notifications'}</span>
+                      <span className="block opacity-75">{deviceOn ? 'Alerts pop up on this device. Click to turn off.' : 'Get alerts on this computer or phone for new messages, orders and requests.'}</span>
+                    </span>
+                  </button>
+                )}
                 <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
                   <span className="text-sm font-semibold">Notifications</span>
                   {unreadCount > 0 && (
@@ -250,9 +293,10 @@ export function Header({ onMenuClick, sidebarCollapsed }: HeaderProps) {
                       )}
                     >
                       <div className="flex items-start gap-2">
-                        <span className={cn('mt-0.5 shrink-0 h-1.5 w-1.5 rounded-full mt-1.5', n.read ? 'bg-transparent' : n.type === 'message' ? 'bg-blue-500' : n.type === 'order' ? 'bg-red-500' : 'bg-amber-500')} />
+                        <span className={cn('mt-0.5 shrink-0 h-1.5 w-1.5 rounded-full mt-1.5', n.read ? 'bg-transparent' : n.type === 'message' ? 'bg-blue-500' : n.type === 'order' ? 'bg-red-500' : n.type === 'request' ? 'bg-rose-500' : n.type === 'lead' ? 'bg-emerald-500' : 'bg-amber-500')} />
                         <div>
-                          <p className="font-medium text-foreground leading-snug">{n.message}</p>
+                          <p className="font-semibold text-foreground leading-snug">{n.title}</p>
+                          <p className="text-muted-foreground leading-snug">{n.message}</p>
                           {n.time && (
                             <p className="text-muted-foreground mt-0.5">
                               {new Date(n.time).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}

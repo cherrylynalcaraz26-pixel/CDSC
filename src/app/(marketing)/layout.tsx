@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { SiteHeader } from '@/components/marketing/site-header'
 import { SiteFooter } from '@/components/marketing/site-footer'
+import { NoDownload } from '@/components/marketing/no-download'
 
 export const metadata: Metadata = {
   title: {
@@ -13,7 +14,8 @@ export const metadata: Metadata = {
 
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen flex-col bg-white text-cdsc-ink">
+    <div className="flex min-h-screen flex-col bg-white text-cdsc-ink [&_img]:select-none [&_img]:[-webkit-user-drag:none]">
+      <NoDownload />
       <SiteHeader />
       <main className="flex-1">{children}</main>
       <SiteFooter />

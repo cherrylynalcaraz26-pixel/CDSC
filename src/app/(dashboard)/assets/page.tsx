@@ -183,10 +183,7 @@ export default function AssetsPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold">Asset Accountability</h2>
-          <p className="text-muted-foreground text-sm">Track fixed assets, assignments, transfers and disposals</p>
-        </div>
+        <div />
         <Button onClick={() => { setForm(emptyForm()); setIssueOpen(true) }} className="bg-red-600 hover:bg-red-700">
           <Plus className="h-4 w-4 mr-2" />Issue Asset
         </Button>

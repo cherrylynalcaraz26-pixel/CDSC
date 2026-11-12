@@ -1,10 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import nodemailer from 'nodemailer'
+import { requireRole, ADMIN_ROLES, STAFF_ROLES } from '@/lib/supabase/api-auth'
 
 export async function POST(req: NextRequest) {
+  const auth = await requireRole(ADMIN_ROLES)
+  if (!auth.ok) return auth.response
   try {
     const { email, full_name, role, department, company, first_name, middle_name, last_name } = await req.json()
+    if (role && !(STAFF_ROLES as readonly string[]).includes(role)) {
+      return NextResponse.json({ error: 'Invalid role.' }, { status: 400 })
+    }
+    if (role === 'super_admin' && auth.role !== 'super_admin') {
+      return NextResponse.json({ error: 'Only a Super-Admin can create another Super-Admin.' }, { status: 403 })
+    }
 
     if (!email) {
       return NextResponse.json({ error: 'Email is required.' }, { status: 400 })

@@ -92,8 +92,9 @@ export function InquiryForm() {
         payment_terms: '30 days',
         lead_time_days: 0,
         vat_registered: false,
-        status: 'active',
-        is_active: true,
+        // Website applications wait for staff review (Settings → Suppliers) before going live.
+        status: 'inactive',
+        is_active: false,
       })
       if (error) toast.error(getErrorMessage(error))
     }

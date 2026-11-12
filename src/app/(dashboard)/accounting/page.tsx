@@ -32,6 +32,7 @@ import {
   MoreHorizontal, Printer, Eye, CheckCircle2, AlertTriangle,
   ChevronDown, ChevronRight, SlidersHorizontal, Pencil, Link2, X,
 } from 'lucide-react'
+import { useAccountRoles, splitPoPayment } from '@/lib/accounting-accounts'
 import { toast } from 'sonner'
 import { format } from 'date-fns'
 import BIRPage from '../bir/page'
@@ -149,7 +150,21 @@ const VAT_RATE = 0.12
 // which would double-count the tax already folded into the gross amount.
 // Journal lines for an Official Receipt (cash basis): Dr Cash (net of 2307) + Dr CWT
 // receivable / Cr Sales (VAT-exclusive when vatable) + Cr Output VAT.
-function collectionPostingLines(gross: number, vatType: VATType, vatableSales: number, vatAmount: number, form2307: number, memo: string): PostingLine[] {
+function collectionPostingLines(
+  gross: number, vatType: VATType, vatableSales: number, vatAmount: number, form2307: number, memo: string,
+  // When the receipt pays linked Charge Sales Invoices, the sale and its Output VAT
+  // were already booked by the Sales Journal (Dr A/R) — so the receipt only
+  // settles Accounts Receivable. Without linked invoices it's a cash sale.
+  ar?: { code: string; name: string } | null,
+): PostingLine[] {
+  if (ar) {
+    const lines: PostingLine[] = [
+      { account_code: '1100', account_name: 'Cash on Hand', memo, debit: gross - form2307 },
+      { account_code: ar.code, account_name: ar.name, memo, credit: gross },
+    ]
+    if (form2307 > 0) lines.push({ account_code: '1120', account_name: 'Withholding Tax Receivable (2307)', memo, debit: form2307 })
+    return lines
+  }
   const lines: PostingLine[] = [
     { account_code: '1100', account_name: 'Cash on Hand', memo, debit: gross - form2307 },
     { account_code: '4100', account_name: 'Sales Revenue', memo, credit: vatType === 'vatable' ? vatableSales : gross },
@@ -177,7 +192,7 @@ const STATUS_CLS: Record<string, string> = {
   voided:    'bg-red-100 text-red-700',
   pending:   'bg-yellow-100 text-yellow-700',
   cancelled: 'bg-gray-100 text-gray-600',
-  missing:   'bg-orange-100 text-orange-700',
+  missing:   'bg-amber-100 text-amber-700',
 }
 
 // Highest existing numeric OR number and its zero-padded width (defaults to
@@ -575,6 +590,7 @@ function OrBlankPreview({ calib, data }: { calib: OrBlankCalib; data: OrBlankPre
 
 function CollectionsTab() {
   const supabase = createClient()
+  const roles = useAccountRoles(supabase)
   const searchParams = useSearchParams()
   const [records, setRecords] = useState<Collection[]>([])
   const [clients, setClients] = useState<{ id: string; company_name: string; tin: string | null; address: string | null; city: string | null; province: string | null; industry: string | null }[]>([])
@@ -945,7 +961,7 @@ function CollectionsTab() {
         await repostSource(supabase, {
           entry_date: payload.collection_date, memo, entry_type: 'sales_receipt',
           source_table: 'collections', source_id: editingId,
-          lines: collectionPostingLines(grossAmount, form.vat_type, vatableSales, vatAmount, payload.form_2307 ?? 0, memo),
+          lines: collectionPostingLines(grossAmount, form.vat_type, vatableSales, vatAmount, payload.form_2307 ?? 0, memo, roles.ready && selectedCsis.size > 0 ? roles.ar : null),
         })
       } catch (err) { toast.error(getErrorMessage(err, 'Collection saved, but its journal entry could not be updated')) }
       toast.success('Collection updated'); setOpen(false); resetForm(); load()
@@ -963,7 +979,7 @@ function CollectionsTab() {
       await postJournalEntry(supabase, {
         entry_date: payload.collection_date, memo, entry_type: 'sales_receipt',
         source_table: 'collections', source_id: (colData as { id: string }).id,
-        lines: collectionPostingLines(grossAmount, form.vat_type, vatableSales, vatAmount, payload.form_2307 ?? 0, memo),
+        lines: collectionPostingLines(grossAmount, form.vat_type, vatableSales, vatAmount, payload.form_2307 ?? 0, memo, roles.ready && selectedCsis.size > 0 ? roles.ar : null),
       })
     } catch (err) { toast.error(getErrorMessage(err, 'Collection saved, but its journal entry could not be posted')) }
     toast.success('Collection recorded'); setOpen(false); resetForm(); load()
@@ -1010,7 +1026,19 @@ function CollectionsTab() {
       [...linkCsiSelected].map(si_number => ({ collection_id: linkCsiFor.id, si_number }))
     )
     if (error) toast.error(getErrorMessage(error))
-    else { toast.success(`${linkCsiSelected.size} CSI invoice${linkCsiSelected.size !== 1 ? 's' : ''} linked`); setLinkCsiFor(null); load() }
+    else {
+      const c = linkCsiFor
+      if (roles.ready && c.status === 'posted' && (c.amount ?? 0) > 0) {
+        const memo = `Collection: ${c.or_number ?? ''} – ${c.client_name ?? ''}`
+        try {
+          await repostSource(supabase, {
+            entry_date: c.collection_date ?? new Date().toISOString().split('T')[0], memo, entry_type: 'sales_receipt', source_table: 'collections', source_id: c.id,
+            lines: collectionPostingLines(c.amount ?? 0, 'vatable', 0, 0, c.form_2307 ?? 0, memo, roles.ar),
+          })
+        } catch (err) { toast.error(getErrorMessage(err, 'Invoices linked, but the journal entry could not be updated')) }
+      }
+      toast.success(`${linkCsiSelected.size} CSI invoice${linkCsiSelected.size !== 1 ? 's' : ''} linked`); setLinkCsiFor(null); load()
+    }
     setLinkingCsi(false)
   }
 
@@ -1984,7 +2012,7 @@ function SalesJournalTab({ collections, csiRecords }: { collections: Collection[
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-semibold">Sales Journal — CSI</p>
-          <p className="text-xs text-muted-foreground">Charge Sales Invoices grouped by SI number (use date range filter above)</p>
+          <p className="text-xs text-muted-foreground">Sales billed on Charge Sales Invoices — each SI is posted Dr Accounts Receivable / Cr Sales &amp; Output VAT. Payments are recorded in Collections (OR), which settle the receivable.</p>
         </div>
         <Button variant="outline" size="sm" onClick={exportSJ}><Download className="h-3.5 w-3.5 mr-1.5" />Export CSV</Button>
       </div>
@@ -2012,7 +2040,7 @@ function SalesJournalTab({ collections, csiRecords }: { collections: Collection[
                 <TableCell className="text-sm">{v.client}</TableCell>
                 <TableCell className="text-right text-xs text-muted-foreground">{v.items.length}</TableCell>
                 <TableCell className="text-right font-semibold">{fmt(v.total)}</TableCell>
-                <TableCell className="text-xs text-muted-foreground">4100 – Sales Revenue</TableCell>
+                <TableCell className="text-xs text-muted-foreground">Dr A/R · Cr Sales &amp; Output VAT</TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -2060,6 +2088,14 @@ function SalesJournalTab({ collections, csiRecords }: { collections: Collection[
 
 function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filterTo?: string }) {
   const supabase = createClient()
+  const roles = useAccountRoles(supabase)
+  // Expense accounts plus the two BIR remittances, which pay down liabilities
+  // (they are not expenses): EWT withheld from suppliers, and VAT due.
+  const accountOptions = [
+    ...EXPENSE_ACCOUNTS,
+    ...(roles.ready ? [{ code: roles.ewt_payable.code, name: `Remit EWT withheld (${roles.ewt_payable.name})` }] : []),
+    { code: '2200', name: 'VAT payment (Output VAT Payable)' },
+  ]
   const [disbs, setDisbs] = useState<Disbursement[]>([])
   const [payees, setPayees] = useState<{ id: string; name: string }[]>([])
   const [pendingPOs, setPendingPOs] = useState<{ po_number: string; po_date: string; supplier: string; net_payable: number }[]>([])
@@ -2124,12 +2160,32 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
     toast.success('Payee added')
   }
 
+  // A payment for a PO splits into: VAT-exclusive purchase + Input VAT, less the
+  // EWT withheld (owed to BIR) = cash paid. Other payments: expense / cash.
+  async function disbursementLines(amount: number, account: string, accountName: string | undefined, poNumber: string, memo: string): Promise<PostingLine[]> {
+    const simple: PostingLine[] = [
+      { account_code: account, account_name: accountName, memo, debit: amount },
+      { account_code: '1100', account_name: 'Cash on Hand', memo, credit: amount },
+    ]
+    if (!roles.ready || !poNumber) return simple
+    const { data: po } = await supabase.from('purchase_orders').select('net_payable, vat_amount, ewt_amount').eq('po_number', poNumber).maybeSingle()
+    if (!po || !(Number(po.net_payable) > 0) || !(Number(po.vat_amount) > 0 || Number(po.ewt_amount) > 0)) return simple
+    const { base, vat, ewt } = splitPoPayment(amount, { net_payable: Number(po.net_payable), vat_amount: Number(po.vat_amount), ewt_amount: Number(po.ewt_amount) })
+    const lines: PostingLine[] = [
+      { account_code: account, account_name: accountName, memo, debit: base },
+      { account_code: '1100', account_name: 'Cash on Hand', memo, credit: amount },
+    ]
+    if (vat > 0) lines.push({ account_code: roles.input_vat.code, account_name: roles.input_vat.name, memo, debit: vat })
+    if (ewt > 0) lines.push({ account_code: roles.ewt_payable.code, account_name: roles.ewt_payable.name, memo, credit: ewt })
+    return lines
+  }
+
   async function save() {
     if (!form.payee.trim()) { toast.error('Payee is required'); return }
     if (!form.amount || Number(form.amount) <= 0) { toast.error('Enter a valid amount'); return }
     if (!form.disb_date) { toast.error('Date is required'); return }
     setSaving(true)
-    const expAcc = EXPENSE_ACCOUNTS.find(a => a.code === form.expense_account)
+    const expAcc = accountOptions.find(a => a.code === form.expense_account)
     const { data: disbData, error: disbErr } = await supabase.from('disbursements').insert({
       disb_date: form.disb_date, payee: form.payee.trim(),
       description: form.description.trim() || null, amount: Number(form.amount),
@@ -2144,10 +2200,7 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
       const jeId = await postJournalEntry(supabase, {
         entry_date: form.disb_date, memo, entry_type: 'disbursement',
         source_table: 'disbursements', source_id: (disbData as { id: string }).id,
-        lines: [
-          { account_code: form.expense_account, account_name: expAcc?.name, memo, debit: Number(form.amount) },
-          { account_code: '1100', account_name: 'Cash on Hand', memo, credit: Number(form.amount) },
-        ],
+        lines: await disbursementLines(Number(form.amount), form.expense_account, expAcc?.name, form.po_number, memo),
       })
       await supabase.from('disbursements').update({ journal_entry_id: jeId }).eq('id', (disbData as { id: string }).id)
     } catch (err) { toast.error(getErrorMessage(err, 'Disbursement saved, but its journal entry could not be posted')) }
@@ -2183,7 +2236,7 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
       ['Date','CDJ Number','Payee','Description','Expense Account','Amount','Payment Mode','Check Number'],
       filteredDisbs.filter(d => d.status === 'posted').map(d => [
         d.disb_date, d.disb_number, d.payee, d.description ?? '',
-        EXPENSE_ACCOUNTS.find(a => a.code === d.expense_account)?.name ?? d.expense_account,
+        accountOptions.find(a => a.code === d.expense_account)?.name ?? d.expense_account,
         d.amount, d.payment_mode, d.check_number ?? '',
       ])
     )
@@ -2255,7 +2308,7 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
                 <TableCell className="font-mono text-xs text-muted-foreground">{d.disb_number}</TableCell>
                 <TableCell className="font-medium text-sm">{d.payee}</TableCell>
                 <TableCell className="text-sm text-muted-foreground">{d.description ?? '—'}</TableCell>
-                <TableCell className="text-xs">{EXPENSE_ACCOUNTS.find(a => a.code === d.expense_account)?.name ?? d.expense_account}</TableCell>
+                <TableCell className="text-xs">{accountOptions.find(a => a.code === d.expense_account)?.name ?? d.expense_account}</TableCell>
                 <TableCell><span className="text-xs bg-muted px-2 py-0.5 rounded-full">{cap(d.payment_mode.replace('_',' '))}</span></TableCell>
                 <TableCell className="text-right font-semibold">{fmt(d.amount)}</TableCell>
                 <TableCell>
@@ -2339,7 +2392,7 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
               <Label>Expense Account</Label>
               <Select value={form.expense_account} onValueChange={v => setForm(p => ({ ...p, expense_account: v ?? '5950' }))}>
                 <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
-                <SelectContent>{EXPENSE_ACCOUNTS.map(a => <SelectItem key={a.code} value={a.code}>{a.code} – {a.name}</SelectItem>)}</SelectContent>
+                <SelectContent>{accountOptions.map(a => <SelectItem key={a.code} value={a.code}>{a.code} – {a.name}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div className="space-y-1.5">
@@ -2373,7 +2426,7 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
 
 const ACCOUNT_TYPE_CLS: Record<string, string> = {
   asset: 'bg-blue-100 text-blue-700',
-  liability: 'bg-orange-100 text-orange-700',
+  liability: 'bg-amber-100 text-amber-700',
   equity: 'bg-purple-100 text-purple-700',
   revenue: 'bg-green-100 text-green-700',
   expense: 'bg-red-100 text-red-700',
@@ -2544,7 +2597,7 @@ function BIRExportTab({ collections, disbursements }: { collections: Collection[
       </div>
       <div className="grid grid-cols-3 gap-3">
         <Card><CardContent className="pt-4 pb-3"><div className="text-lg font-bold text-green-600">{fmt(totalSales)}</div><div className="text-xs text-muted-foreground">Gross Sales (CRJ)</div><div className="text-xs text-muted-foreground">{posted.length} transactions</div></CardContent></Card>
-        <Card><CardContent className="pt-4 pb-3"><div className="text-lg font-bold text-orange-600">{fmt(totalWHT)}</div><div className="text-xs text-muted-foreground">Form 2307 (WHT)</div><div className="text-xs text-muted-foreground">{posted.filter(c => (c.form_2307 ?? 0) > 0).length} certificates</div></CardContent></Card>
+        <Card><CardContent className="pt-4 pb-3"><div className="text-lg font-bold text-amber-600">{fmt(totalWHT)}</div><div className="text-xs text-muted-foreground">Form 2307 (WHT)</div><div className="text-xs text-muted-foreground">{posted.filter(c => (c.form_2307 ?? 0) > 0).length} certificates</div></CardContent></Card>
         <Card><CardContent className="pt-4 pb-3"><div className="text-lg font-bold text-red-600">{fmt(totalDisb)}</div><div className="text-xs text-muted-foreground">Total Disbursements</div><div className="text-xs text-muted-foreground">{postedDisbs.length} transactions</div></CardContent></Card>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2557,7 +2610,7 @@ function BIRExportTab({ collections, disbursements }: { collections: Collection[
           <CardContent><p className="text-xs text-muted-foreground mb-3">BIR-required book for all cash outflows, expenses, and payments.</p><Button className="w-full" variant="outline" onClick={exportCDJ}><Download className="h-4 w-4 mr-2" />Export CDJ (CSV)</Button></CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><FileSpreadsheet className="h-4 w-4 text-orange-600" />Form 2307 Summary</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm flex items-center gap-2"><FileSpreadsheet className="h-4 w-4 text-amber-600" />Form 2307 Summary</CardTitle></CardHeader>
           <CardContent><p className="text-xs text-muted-foreground mb-3">Summary of all Certificates of Creditable Tax Withheld (Form 2307).</p><Button className="w-full" variant="outline" onClick={exportSummary2307}><Download className="h-4 w-4 mr-2" />Export Form 2307 Summary</Button></CardContent>
         </Card>
         <Card>
@@ -2569,7 +2622,7 @@ function BIRExportTab({ collections, disbursements }: { collections: Collection[
               <p>✓ Form 2307 captured per collection entry</p>
               <p>✓ Double-entry General Ledger maintained</p>
               <p>✓ Trial Balance verifies books are in balance</p>
-              <p className="text-orange-600">⚠ Always verify with your accredited CAS provider before submission</p>
+              <p className="text-amber-600">⚠ Always verify with your accredited CAS provider before submission</p>
             </div>
           </CardContent>
         </Card>
@@ -2672,11 +2725,6 @@ function AccountingPageContent() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold">Accounting</h1>
-        <p className="text-muted-foreground text-sm">Financial management and BIR compliance</p>
-      </div>
-
       <Tabs value={activeTab} onValueChange={v => setTab(v ?? 'overview')}>
         <div>
           <TabsContent value="overview"><OverviewTab /></TabsContent>

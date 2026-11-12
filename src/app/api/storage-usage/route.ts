@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { google } from 'googleapis'
+import { requireRole } from '@/lib/supabase/api-auth'
 
 interface SupabaseUsage {
   dbSizeBytes: number
@@ -56,6 +57,8 @@ async function getDriveUsage(): Promise<DriveUsage | null> {
 }
 
 export async function GET() {
+  const auth = await requireRole('staff')
+  if (!auth.ok) return auth.response
   const [supabase, drive] = await Promise.all([
     getSupabaseUsage().catch(() => null),
     getDriveUsage().catch(() => null),

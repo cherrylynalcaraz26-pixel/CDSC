@@ -82,7 +82,7 @@ export function letterHtml(r: LetterPullOut, d: Draft, co: Company) {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Authorization Letter ${esc(r.pull_out_number ?? '')}</title><style>
     @page{size:A4;margin:18mm 18mm 16mm}
     *{box-sizing:border-box}body{font-family:Arial,Helvetica,sans-serif;font-size:12px;line-height:1.55;color:#111;margin:0}
-    .head{display:flex;align-items:center;gap:14px;padding-bottom:10px;border-bottom:3px solid #F84400}
+    .head{display:flex;align-items:center;gap:14px;padding-bottom:10px;border-bottom:3px solid #E8112D}
     .head img{height:54px;max-width:120px;object-fit:contain}
     .head .n{font-size:17px;font-weight:800;letter-spacing:.2px}.head .s{font-size:10.5px;color:#555}
     h1{text-align:center;font-size:15px;letter-spacing:2px;margin:22px 0 4px}
@@ -90,7 +90,7 @@ export function letterHtml(r: LetterPullOut, d: Draft, co: Company) {
     .to b{display:block}.subj{margin:14px 0}
     p{margin:0 0 10px;text-align:justify}
     table{width:100%;border-collapse:collapse;margin:8px 0 6px}
-    th{background:#F84400;color:#fff;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;padding:6px 8px;text-align:left}
+    th{background:#E8112D;color:#fff;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;padding:6px 8px;text-align:left}
     td{padding:6px 8px;border-bottom:1px solid #e5e7eb;vertical-align:top}.c{text-align:center}.muted{color:#888}
     tfoot td{font-weight:700;border-bottom:0;border-top:2px solid #111}
     .sig{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:34px}
@@ -182,7 +182,7 @@ export function PullOutLetterDialog({ pullOut, onClose }: { pullOut: LetterPullO
       <DialogContent size="landscape">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <FileSignature className="h-5 w-5 text-[#F84400]" />Authorization Letter — {pullOut.pull_out_number ?? 'Pull Out'}
+            <FileSignature className="h-5 w-5 text-[#E8112D]" />Authorization Letter — {pullOut.pull_out_number ?? 'Pull Out'}
           </DialogTitle>
         </DialogHeader>
 
@@ -212,7 +212,7 @@ export function PullOutLetterDialog({ pullOut, onClose }: { pullOut: LetterPullO
             <Label>Items in the Letter</Label>
             <div className="overflow-hidden rounded-xl bg-muted/40">
               <table className="w-full text-sm">
-                <thead className="bg-[#F84400] text-xs text-white">
+                <thead className="bg-[#E8112D] text-xs text-white">
                   <tr><th className="px-3 py-2 text-left">#</th><th className="px-3 py-2 text-left">Item</th><th className="px-3 py-2 text-right">Qty</th><th className="px-3 py-2 text-left">Unit</th><th className="px-3 py-2 text-left">Condition</th></tr>
                 </thead>
                 <tbody>
@@ -239,7 +239,7 @@ export function PullOutLetterDialog({ pullOut, onClose }: { pullOut: LetterPullO
 
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Close</Button>
-          <Button onClick={print} disabled={printing} className="bg-[#F84400] hover:bg-[#e03d00]">
+          <Button onClick={print} disabled={printing} className="bg-[#E8112D] hover:bg-[#D10F28]">
             <Printer className="mr-2 h-4 w-4" />Print Letter
           </Button>
         </DialogFooter>

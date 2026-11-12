@@ -1,6 +1,9 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { MasterData, MASTER_TABS, type MasterTab } from '@/components/setup/master-data'
+import { CompanyDeck } from '@/components/settings/company-deck'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -20,6 +23,7 @@ import {
   FileText, Database, User, Globe, Phone, Mail, MapPin,
   CheckCircle2, Eye, EyeOff, Loader2, Plus, Trash2, X, Send,
   ChevronDown, ChevronUp, Download, Cloud, ExternalLink, RefreshCw, FileCheck2,
+  Presentation, Truck, Package, FolderTree, Ruler, Tag, SlidersHorizontal, Wallet,
 } from 'lucide-react'
 import { sendEmail, htmlToPdfBase64 } from '@/lib/send-email'
 import { uploadImageToDrive } from '@/lib/upload-image'
@@ -150,17 +154,27 @@ function defaultSettings(): Settings {
   }
 }
 
-type TabId = 'profile' | 'bir_forms' | 'database' | 'backup' | 'security' | 'website'
+type CompanyTab = 'profile' | 'deck' | 'bir_forms' | 'database' | 'backup' | 'security' | 'website'
+type TabId = CompanyTab | MasterTab
+const isMasterTab = (t: string): t is MasterTab => MASTER_TABS.some(m => m.key === t)
 
 // Settings sections, laid out like the CHEM app: a list on the left with a one-line
 // description each, Company Profile first and the rest alphabetical.
-const TABS: { id: TabId; label: string; icon: React.ReactNode; desc: string }[] = [
-  { id: 'profile',   label: 'Company & Business Profile', icon: <Building2 className="h-4 w-4" />, desc: 'Business details, tax profile (VAT, withholding, employees), mission and proposal defaults.' },
-  { id: 'bir_forms', label: 'BIR Forms',          icon: <FileCheck2 className="h-4 w-4" />, desc: 'Reference images of each BIR return CDSC files, shown when generating forms.' },
-  { id: 'backup',    label: 'Data Backup',        icon: <Cloud className="h-4 w-4" />,      desc: 'Mirror your data to Google Sheets or download a backup.' },
-  { id: 'database',  label: 'Proposal Database',  icon: <Database className="h-4 w-4" />,   desc: 'Saved client proposals and their templates.' },
-  { id: 'security',  label: 'Security',           icon: <Shield className="h-4 w-4" />,     desc: 'Password, sessions and sign-out of all devices.' },
-  { id: 'website',   label: 'Website',            icon: <Globe className="h-4 w-4" />,      desc: 'Demo video shown on the public website and client portal.' },
+const TABS: { id: TabId; label: string; icon: React.ReactNode; desc: string; group: 'company' | 'master' }[] = [
+  { id: 'profile',   label: 'Company & Business Profile', icon: <Building2 className="h-4 w-4" />, desc: 'Business details, tax profile (VAT, withholding, employees), mission and proposal defaults.', group: 'company' },
+  { id: 'deck',      label: 'Company Profile Deck', icon: <Presentation className="h-4 w-4" />, desc: 'Slides to present to clients, and a PDF to send them.', group: 'company' },
+  { id: 'bir_forms', label: 'BIR Forms',          icon: <FileCheck2 className="h-4 w-4" />, desc: 'Reference images of each BIR return CDSC files, shown when generating forms.', group: 'company' },
+  { id: 'backup',    label: 'Data Backup',        icon: <Cloud className="h-4 w-4" />,      desc: 'Mirror your data to Google Sheets or download a backup.', group: 'company' },
+  { id: 'database',  label: 'Proposal Database',  icon: <Database className="h-4 w-4" />,   desc: 'Saved client proposals and their templates.', group: 'company' },
+  { id: 'security',  label: 'Security',           icon: <Shield className="h-4 w-4" />,     desc: 'Password, sessions and sign-out of all devices.', group: 'company' },
+  { id: 'website',   label: 'Website',            icon: <Globe className="h-4 w-4" />,      desc: 'Demo video shown on the public website and client portal.', group: 'company' },
+  { id: 'suppliers',  label: 'Suppliers',        icon: <Truck className="h-4 w-4" />,       desc: 'Supplier records, contacts, terms and default EWT.', group: 'master' },
+  { id: 'items',      label: 'Item List',        icon: <Package className="h-4 w-4" />,     desc: 'Item master — codes, prices, photos and stock settings.', group: 'master' },
+  { id: 'categories', label: 'Categories',       icon: <FolderTree className="h-4 w-4" />,  desc: 'Item categories.', group: 'master' },
+  { id: 'uom',        label: 'Units of Measure', icon: <Ruler className="h-4 w-4" />,       desc: 'Units used on items, quotations and orders.', group: 'master' },
+  { id: 'brands',     label: 'Brands',           icon: <Tag className="h-4 w-4" />,         desc: 'Brand list for items.', group: 'master' },
+  { id: 'attributes', label: 'Attributes',       icon: <SlidersHorizontal className="h-4 w-4" />, desc: 'Item attributes such as size or color.', group: 'master' },
+  { id: 'payees',     label: 'Payees',           icon: <Wallet className="h-4 w-4" />,      desc: 'Payees for cash disbursements.', group: 'master' },
 ]
 
 // ── Collapsible form section ──────────────────────────────────────────────────
@@ -1318,11 +1332,28 @@ function BackupTab() {
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function SettingsPage() {
+  return (
+    <Suspense fallback={null}>
+      <SettingsPageContent />
+    </Suspense>
+  )
+}
+
+function SettingsPageContent() {
+  const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createClient()
   const { reload: reloadCompany } = useCompany()
   const fileRef = useRef<HTMLInputElement>(null)
   const registrationDocFileRef = useRef<HTMLInputElement>(null)
-  const [tab, setTab] = useState<TabId>('profile')
+  const [tab, setTabState] = useState<TabId>(() => {
+    const t = searchParams.get('tab') ?? ''
+    return (TABS.some(x => x.id === t) ? t : 'profile') as TabId
+  })
+  function setTab(t: TabId) {
+    setTabState(t)
+    router.replace(`/settings?tab=${t}`, { scroll: false })
+  }
   const [settings, setSettings] = useState<Settings>(defaultSettings())
   const [original, setOriginal] = useState<Settings>(defaultSettings())
   const [saving, setSaving] = useState(false)
@@ -1449,32 +1480,35 @@ export default function SettingsPage() {
 
   return (
     <div className="space-y-0">
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <h1 className="text-2xl font-semibold">Company Profile &amp; Settings</h1>
-          <p className="text-muted-foreground text-sm">Business information, BIR details and preferences</p>
-        </div>
-      </div>
 
       <div className="grid gap-6 lg:grid-cols-[260px_minmax(0,1fr)]">
       <nav className="space-y-1 lg:sticky lg:top-20 lg:self-start" aria-label="Settings sections">
-        {TABS.map(t => (
+        {([['company', 'Company'], ['master', 'Master Data']] as const).map(([g, gLabel]) => (
+          <div key={g} className="space-y-1 pb-3">
+            <p className="px-3 pb-1 pt-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground/70">{gLabel}</p>
+            {TABS.filter(t => t.group === g).map(t => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
             className={`w-full rounded-xl px-3 py-2.5 text-left transition-colors ${
-              tab === t.id ? 'bg-[#F84400] text-white shadow-md shadow-orange-900/20' : 'hover:bg-muted'
+              tab === t.id ? 'bg-[#E8112D] text-white shadow-md shadow-red-900/20' : 'hover:bg-muted'
             }`}
           >
             <span className="flex items-center gap-2 text-sm font-semibold">{t.icon}{t.label}</span>
             <span className={`mt-0.5 block text-xs leading-snug ${tab === t.id ? 'text-white/85' : 'text-muted-foreground'}`}>{t.desc}</span>
           </button>
         ))}
+          </div>
+        ))}
       </nav>
       <div className="min-w-0">
       <h2 className="mb-4 text-lg font-semibold">{TABS.find(t => t.id === tab)?.label}</h2>
 
       {tab === 'bir_forms' && <BirFormsSettings />}
+
+      {tab === 'deck' && <CompanyDeck />}
+
+      {isMasterTab(tab) && <MasterData tab={tab} />}
 
       {tab === 'website' && (
         <Card><CardContent className="space-y-4 pt-5">
@@ -1487,7 +1521,7 @@ export default function SettingsPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            <Button onClick={save} disabled={saving} className="bg-[#F84400] hover:bg-[#e03d00] text-white">{saving ? 'Saving…' : 'Save'}</Button>
+            <Button onClick={save} disabled={saving} className="bg-[#E8112D] hover:bg-[#D10F28] text-white">{saving ? 'Saving…' : 'Save'}</Button>
             <a href="/#demo" target="_blank" rel="noopener noreferrer" className="text-sm text-muted-foreground underline">Preview on the website</a>
           </div>
         </CardContent></Card>
@@ -1510,7 +1544,7 @@ export default function SettingsPage() {
                 <Button variant="outline" size="sm" onClick={reset} className="gap-1.5">
                   <RotateCcw className="h-3.5 w-3.5" />Reset
                 </Button>
-                <Button size="sm" onClick={save} disabled={saving} className="bg-amber-500 hover:bg-amber-600 text-white gap-1.5">
+                <Button size="sm" onClick={save} disabled={saving} className="bg-[#E8112D] hover:bg-[#D10F28] text-white gap-1.5">
                   {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                   Save All
                 </Button>

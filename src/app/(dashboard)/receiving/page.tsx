@@ -624,11 +624,6 @@ export default function ReceivingPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold">Receiving</h2>
-        <p className="text-muted-foreground text-sm">Manage incoming deliveries, stock, and returns</p>
-      </div>
-
       <Tabs defaultValue="receiving">
         <TabsList>
           <TabsTrigger value="receiving" className="flex items-center gap-1.5"><Package className="h-3.5 w-3.5" />Receiving Reports</TabsTrigger>
@@ -659,13 +654,13 @@ export default function ReceivingPage() {
                     return (
                       <div
                         key={po.id}
-                        className={`flex items-center justify-between p-3 border rounded-lg ${needsReceivingDespiteCompleted ? 'bg-orange-50/50 border-orange-200' : 'bg-yellow-50/50 border-yellow-200'}`}
+                        className={`flex items-center justify-between p-3 border rounded-lg ${needsReceivingDespiteCompleted ? 'bg-amber-50/50 border-amber-200' : 'bg-yellow-50/50 border-yellow-200'}`}
                       >
                         <div>
                           <div className="flex items-center gap-2">
                             <div className="font-mono text-sm font-semibold text-primary">{po.po_number}</div>
                             {needsReceivingDespiteCompleted && (
-                              <Badge variant="outline" className="text-[10px] text-orange-700 border-orange-300">Completed — not yet received</Badge>
+                              <Badge variant="outline" className="text-[10px] text-amber-700 border-amber-300">Completed — not yet received</Badge>
                             )}
                           </div>
                           <div className="text-sm">{(po.supplier as any)?.company_name ?? '—'}</div>
@@ -907,7 +902,7 @@ export default function ReceivingPage() {
                       {salesdDateFrom || salesdDateTo ? 'No sales deliveries in this date range.' : 'No sales deliveries yet. Create a DR Log to populate this list.'}
                     </TableCell></TableRow>
                   ) : sortedSalesDeliveries.map(d => {
-                    const statusCls = d.status === 'delivered' ? 'bg-green-100 text-green-700' : d.status === 'partial' ? 'bg-yellow-100 text-yellow-700' : 'bg-orange-100 text-orange-700'
+                    const statusCls = d.status === 'delivered' ? 'bg-green-100 text-green-700' : d.status === 'partial' ? 'bg-yellow-100 text-yellow-700' : 'bg-amber-100 text-amber-700'
                     return (
                       <TableRow key={d.id} className="cursor-pointer hover:bg-muted/40" onClick={() => openSalesDetail(d)}>
                         <TableCell className="font-mono text-xs font-semibold text-red-600">{d.dr_number ?? '—'}</TableCell>

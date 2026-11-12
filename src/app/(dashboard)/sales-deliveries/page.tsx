@@ -135,11 +135,6 @@ export default function SalesDeliveriesPage() {
 
   return (
     <div className="p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Truck className="w-6 h-6" /> Sales Deliveries
-        </h1>
-      </div>
 
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
