@@ -221,3 +221,90 @@ export const coreValues: CoreValue[] = [
   { title: 'Practicality', description: 'We focus on solutions that work in the real world.' },
   { title: 'Partnership', description: 'We build relationships that create value beyond a single transaction.' },
 ]
+
+// ── Company Profile page extras ─────────────────────────────────────────
+// Merged in from the former standalone CDSC landing page (index.html) so the
+// company profile at /company-profile carries the full story in one place.
+
+export const profileHero = {
+  headline: ['Every Supply Need.', 'One Reliable', 'Source.'],
+  description:
+    'CDSC Industrial Supply delivers quality industrial, office, and safety products to corporations, factories, schools, hospitals, and government agencies across CALABARZON and beyond.',
+  badge: 'DTI Registered · Serving B2B & B2C Clients',
+}
+
+export type HeroStat = { value: number; suffix: string; label: string; animate: boolean }
+
+export const heroStats: HeroStat[] = [
+  { value: 500, suffix: '+', label: 'Products', animate: true },
+  { value: 20, suffix: '+', label: 'Sectors', animate: true },
+  { value: 2020, suffix: '', label: 'Est. Year', animate: false },
+  { value: 100, suffix: '%', label: 'Compliant', animate: true },
+]
+
+export const registration = {
+  proprietor: 'Jidel L. Catapang',
+  proprietorTitle: 'Proprietor, CDSC Industrial Supply',
+  dtiNo: '8294454',
+  tin: '409 704 016 000',
+  established: 2020,
+  clientTypes: 'B2B & B2C',
+  businessHours: ['Mon–Sat', '8:00 AM – 5:00 PM'],
+}
+
+// Markets not already covered by `industries` above.
+export const additionalMarkets: Industry[] = [
+  { name: 'Schools and Universities', description: 'Office, janitorial, and facility supplies for campuses and classrooms.' },
+  { name: 'Hospitals and Clinics', description: 'Medical consumables, PPE, and hospital essentials.' },
+  { name: 'Laboratories', description: 'Safety equipment and consumables for lab environments.' },
+  { name: 'Retail Establishments', description: 'Packaging, cleaning, and store operation supplies.' },
+  { name: 'Property Management', description: 'Maintenance, security, and upkeep supplies for buildings.' },
+]
+
+// Catalog lines not already covered by `productCategories` above.
+export const extendedCatalog: ProductCategory[] = [
+  { name: 'Medical Supplies', description: '', items: ['Gloves and surgical masks', 'Medical consumables', 'Hospital essentials'] },
+  { name: 'Security and Access', description: '', items: ['CCTV systems', 'Door locks and handles', 'Key duplicating'] },
+  { name: 'IT and Electronics', description: '', items: ['Computer peripherals', 'Cables and adapters', 'Network equipment'] },
+  { name: 'Packaging and Logistics', description: '', items: ['Boxes and cartons', 'Packing tape and bubble wrap', 'Labels and markers'] },
+  { name: 'Industrial Equipment', description: '', items: ['Air compressors', 'Industrial fans', 'Pumps and valves'] },
+  { name: 'Painting and Finishing', description: '', items: ['Paint and primers', 'Brushes and rollers', 'Surface prep materials'] },
+]
+
+export const furniture = {
+  tiles: ['Office Chairs', 'Workstations', 'Filing Cabinets', 'Executive Desks'],
+  description:
+    'Beyond supplies, CDSC carries quality office furniture for businesses building or renovating their workspaces. From ergonomic chairs and executive desks to conference tables and storage solutions — sourced at the right price point.',
+  items: [
+    'Ergonomic Office Chairs & Task Seating',
+    'Executive & Staff Workstations',
+    'Conference & Meeting Tables',
+    'Filing Cabinets & Storage Units',
+    'Lockers & Steel Wardrobes',
+  ],
+}
+
+export type StockBar = { label: string; percent: number }
+
+export const inventorySystem = {
+  description:
+    "We don't just deliver supplies — we give you tools to manage them. Our integrated system handles inventory monitoring, stock movement, and monthly reconciliation so you can focus on running your business, not counting boxes.",
+  stockIn: [
+    { label: 'Office Supplies', percent: 85 },
+    { label: 'Safety Equipment', percent: 70 },
+    { label: 'Janitorial Items', percent: 92 },
+  ] as StockBar[],
+  stockOut: [
+    { label: 'Tools & Hardware', percent: 60 },
+    { label: 'IT Equipment', percent: 45 },
+    { label: 'Cleaning Supplies', percent: 78 },
+  ] as StockBar[],
+  features: [
+    { title: 'Transaction Dashboard', description: 'Real-time visibility into every order — status, delivery tracking, and invoice records in one clean view.' },
+    { title: 'Live Inventory Monitoring', description: "Always know what's in stock. The system flags low-inventory items automatically before they become a problem." },
+    { title: 'Stock IN Recording', description: 'Every incoming delivery logged with timestamp, quantity, and supplier details — auditable, zero manual errors.' },
+    { title: 'Stock OUT Tracking', description: 'Each release recorded against your order. See exactly what went out, when, and to whom.' },
+    { title: 'Monthly Reconciliation', description: 'End-of-month inventory reports generated automatically. No manual tallying — clean numbers, ready for review.' },
+    { title: 'Order Scheduling', description: 'Plan recurring orders in advance. Keep your supply chain predictable and your team ahead of stock-outs.' },
+  ],
+}

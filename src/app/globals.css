@@ -63,6 +63,20 @@
   --color-cdsc-line: var(--cdsc-line);
   --color-cdsc-accent: var(--cdsc-accent);
   --color-cdsc-accent-dark: var(--cdsc-accent-dark);
+
+  /* Company profile hero motion */
+  --animate-gradient-shift: gradient-shift 8s ease infinite;
+  --animate-float: float 7s ease-in-out infinite;
+  --animate-float-slow: float 10s ease-in-out infinite 2s;
+
+  @keyframes gradient-shift {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-18px); }
+  }
 }
 
 :root {
