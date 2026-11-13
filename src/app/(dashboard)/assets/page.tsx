@@ -203,7 +203,7 @@ export default function AssetsPage() {
           <div className="text-sm text-muted-foreground">Available (Unassigned)</div>
         </CardContent></Card>
         <Card><CardContent className="pt-5 pb-4">
-          <div className="text-2xl font-bold">₱{loading ? '—' : (counts.totalCost / 1000).toFixed(0) + 'K'}</div>
+          <div className="text-2xl font-bold">₱{loading ? '—' : Math.round(counts.totalCost).toLocaleString('en-PH')}</div>
           <div className="text-sm text-muted-foreground">Total Asset Value</div>
         </CardContent></Card>
       </div>

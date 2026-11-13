@@ -24,12 +24,8 @@ const GRID = '#ececea'
 const AXIS = '#6b6a66'
 
 const peso = (n: number) => `₱${n.toLocaleString('en-PH', { maximumFractionDigits: 0 })}`
-const pesoShort = (n: number) => {
-  const a = Math.abs(n)
-  if (a >= 1_000_000) return `₱${(n / 1_000_000).toFixed(a >= 10_000_000 ? 0 : 1)}M`
-  if (a >= 1_000) return `₱${(n / 1_000).toFixed(a >= 100_000 ? 0 : 1)}K`
-  return `₱${Math.round(n)}`
-}
+// Full amounts everywhere — no K / M abbreviations.
+const pesoShort = (n: number) => `₱${Math.round(n).toLocaleString('en-PH')}`
 
 interface Row { date: string | null; amount: number }
 
@@ -186,7 +182,7 @@ export default function DashboardPage() {
             <LineChart data={salesVsPurchases} margin={{ top: 8, right: 12, bottom: 0, left: 0 }}>
               <CartesianGrid stroke={GRID} vertical={false} />
               <XAxis dataKey="month" {...axisProps} />
-              <YAxis {...axisProps} width={56} tickFormatter={pesoShort} />
+              <YAxis {...axisProps} width={96} tickFormatter={pesoShort} />
               <Tooltip content={<ChartTooltip />} cursor={{ stroke: AXIS, strokeDasharray: '3 3' }} />
               <Legend verticalAlign="top" align="right" iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, paddingBottom: 4 }} />
               <Line type="monotone" dataKey="Sales" stroke={SERIES_1} strokeWidth={2} dot={false} activeDot={{ r: 5, strokeWidth: 2, stroke: '#fff' }} />
@@ -200,7 +196,7 @@ export default function DashboardPage() {
             <BarChart data={cashFlow} margin={{ top: 8, right: 12, bottom: 0, left: 0 }} barGap={2} barCategoryGap="28%">
               <CartesianGrid stroke={GRID} vertical={false} />
               <XAxis dataKey="month" {...axisProps} />
-              <YAxis {...axisProps} width={56} tickFormatter={pesoShort} />
+              <YAxis {...axisProps} width={96} tickFormatter={pesoShort} />
               <Tooltip content={<ChartTooltip />} cursor={{ fill: 'rgba(0,0,0,0.04)' }} />
               <Legend verticalAlign="top" align="right" iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 12, paddingBottom: 4 }} />
               <Bar dataKey="Cash In" fill={SERIES_1} radius={[4, 4, 0, 0]} />

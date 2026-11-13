@@ -8,7 +8,7 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   BellRing, BellOff, Bell, Search, Menu, LogOut, Plus, ChevronRight, ChevronDown,
-  Settings, UserCog, Globe, Receipt, ShoppingCart, FileText, TrendingUp, CornerDownLeft,
+  Settings, UserCog, Globe, Receipt, ShoppingCart, FileText, TrendingUp, CornerDownLeft, CalendarDays, LayoutGrid,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -18,7 +18,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { getPageTitle } from '@/lib/page-titles'
-import { getNavGroupLabel } from '@/components/layout/sidebar'
+import { getNavGroupLabel, getNavMatch } from '@/components/layout/sidebar'
 import { notifyNew, deviceNotifySupported, deviceNotifyEnabled, enableDeviceNotify, disableDeviceNotify } from '@/lib/device-notify'
 import { NEW_EVENT } from '@/lib/use-open-on-new'
 import { toast } from 'sonner'
@@ -52,7 +52,8 @@ const SEARCH_ITEMS = [
   { label: 'Income Statement',      href: '/accounting?tab=bookkeeping&sub=is', section: 'Accounting' },
   { label: 'Balance Sheet',         href: '/accounting?tab=bookkeeping&sub=bs', section: 'Accounting' },
   { label: 'BIR Compliance',        href: '/accounting?tab=bir',      section: 'Accounting' },
-  { label: 'Clients',               href: '/clients',                 section: '201 File' },
+  { label: '201 File · Clients',    href: '/201-file',                section: '201 File' },
+  { label: '201 File · Employees',  href: '/201-file?tab=employees',  section: '201 File' },
   { label: 'Reports',               href: '/settings?tab=reports',    section: 'Settings' },
   { label: 'Website Content',       href: '/settings?tab=website',    section: 'Settings' },
   { label: 'PDF Document Header',   href: '/settings?tab=letterhead', section: 'Settings' },
@@ -77,7 +78,7 @@ const QUICK_NEW = [
 const DATA_PAGES = [
   '/crm', '/purchase-orders', '/quotation', '/sales-orders',
   '/receiving', '/inventory', '/dr-logs', '/csi-monitoring',
-  '/users', '/clients', '/accounting', '/dashboard', '/messages',
+  '/users', '/clients', '/201-file', '/accounting', '/dashboard', '/messages',
   '/setup', '/assets', '/pull-outs',
 ]
 
@@ -133,6 +134,7 @@ export function Header({ onMenuClick }: HeaderProps) {
   const isDataPage = DATA_PAGES.some(p => pathname.startsWith(p))
   const pageTitle = getPageTitle(pathname, searchParams)
   const group = getNavGroupLabel(pathname, searchParams)
+  const navMatch = getNavMatch(pathname, searchParams)
 
   async function markNotifRead(n: Notif) {
     if (n.type === 'message') {
@@ -246,52 +248,44 @@ export function Header({ onMenuClick }: HeaderProps) {
 
   const unreadCount = notifs.filter(n => !n.read).length
   const companyName = company.company_name || 'CDSC Industrial Supply'
-  const logoSrc = company.logo_url || '/cdsc-logo.jpg'
   const roleLabel = ROLE_LABEL[userRole] ?? (userRole ? userRole.replace(/_/g, ' ') : 'Staff')
 
+  const today = new Date().toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+  const PageIcon = navMatch?.icon ?? LayoutGrid
+
+  // Floating header: an inset rounded bar that sits over the page background.
   return (
-    <header className={cn(
-      'sticky top-0 z-30 border-b bg-background/90 backdrop-blur-md supports-backdrop-filter:bg-background/75 transition-shadow',
-      scrolled && 'shadow-[0_6px_20px_-14px_rgba(15,23,42,0.45)]',
-    )}>
-      <div aria-hidden className="h-0.5 w-full bg-linear-to-r from-[#E8112D] via-[#F43F5E] to-transparent" />
-      <div className="relative flex h-16 items-center gap-3 px-4 md:px-6">
-        {/* ── Left: menu + breadcrumb + title ── */}
-        <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0 lg:hidden" onClick={onMenuClick} aria-label="Open menu">
+    <header className="sticky top-0 z-30 bg-muted/30 px-3 pt-3 backdrop-blur-sm md:px-6">
+      <div className={cn(
+        'relative flex h-16 items-center gap-3 rounded-2xl border border-black/5 bg-card px-3 transition-shadow dark:border-white/10 md:px-4',
+        scrolled ? 'shadow-[0_12px_32px_-16px_rgba(15,23,42,0.45)]' : 'shadow-[0_4px_16px_-12px_rgba(15,23,42,0.35)]',
+      )}>
+        {/* ── Left: menu + page identity ── */}
+        <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0 rounded-xl lg:hidden" onClick={onMenuClick} aria-label="Open menu">
           <Menu className="h-5 w-5" />
         </Button>
 
-        <div className="min-w-0 flex-1 md:flex-none md:max-w-[38%] xl:max-w-[44%]">
-          {pageTitle ? (
-            <>
-              <nav aria-label="Breadcrumb" className="hidden items-center gap-1 text-[11px] font-medium text-muted-foreground sm:flex">
-                <button type="button" onClick={() => router.push('/dashboard')} className="hover:text-foreground">{companyName}</button>
-                {group && (<><ChevronRight className="h-3 w-3 opacity-50" /><span className="truncate">{group}</span></>)}
-              </nav>
-              <h1 className="truncate text-base font-bold leading-tight tracking-tight sm:text-lg" title={pageTitle.subtitle}>{pageTitle.title}</h1>
-              <p className="hidden truncate text-xs text-muted-foreground xl:block">{pageTitle.subtitle}</p>
-            </>
-          ) : (
-            <div className="flex items-center gap-2">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={logoSrc} alt="" className="h-8 w-8 rounded-md bg-white object-contain p-0.5" />
-              <span className="truncate text-sm font-semibold">{companyName}</span>
-            </div>
-          )}
+        <div className="flex min-w-0 flex-1 items-center gap-3 md:flex-none md:max-w-[40%]">
+          <span aria-hidden className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-linear-to-br from-[#E8112D] to-[#F43F5E] text-white shadow-md shadow-red-500/30 sm:flex">
+            <PageIcon className="h-5 w-5" />
+          </span>
+          <div className="min-w-0">
+            <p className="hidden truncate text-[10px] font-bold uppercase tracking-[0.12em] text-[#E8112D] sm:block">{group ?? companyName}</p>
+            <h1 className="truncate text-base font-extrabold leading-tight tracking-tight" title={pageTitle?.subtitle}>{pageTitle?.title ?? companyName}</h1>
+          </div>
         </div>
 
-        {/* ── Middle: search ── */}
-        {/* On phones the search opens as an overlay over the header row. */}
+        {/* ── Middle: search (overlay on phones) ── */}
         <div ref={searchRef} className={cn(
           'flex-1 justify-center',
-          mobileSearch ? 'absolute inset-x-0 bottom-0 z-40 flex h-16 items-center gap-2 bg-background px-4 md:static md:h-auto md:px-0' : 'hidden md:flex',
+          mobileSearch ? 'absolute inset-0 z-40 flex items-center gap-2 rounded-2xl bg-card px-3 md:static md:px-0' : 'hidden md:flex',
         )}>
           <div className="relative w-full max-w-md">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <input
               ref={inputRef}
               placeholder={isDataPage ? 'Search this page or jump to…' : 'Search pages…'}
-              className="h-10 w-full rounded-xl border border-transparent bg-muted/60 pl-9 pr-16 text-sm outline-none transition placeholder:text-muted-foreground/80 hover:bg-muted focus:border-[#E8112D]/40 focus:bg-background focus:shadow-[0_0_0_4px_rgba(232,17,45,0.08)]"
+              className="h-10 w-full rounded-full border border-transparent bg-muted/70 pl-10 pr-16 text-sm outline-none transition placeholder:text-muted-foreground/80 hover:bg-muted focus:border-[#E8112D]/40 focus:bg-background focus:shadow-[0_0_0_4px_rgba(232,17,45,0.08)]"
               autoComplete="off"
               value={query}
               onChange={e => { setQuery(e.target.value); setShowResults(true); setActiveIdx(0) }}
@@ -303,18 +297,15 @@ export function Header({ onMenuClick }: HeaderProps) {
                 if (e.key === 'Enter' && navResults[activeIdx]) navigateTo(navResults[activeIdx].href)
               }}
             />
-            <kbd className="pointer-events-none absolute right-2.5 top-1/2 hidden -translate-y-1/2 rounded-md border bg-background px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground lg:block">Ctrl K</kbd>
+            <kbd className="pointer-events-none absolute right-3 top-1/2 hidden -translate-y-1/2 rounded-md border bg-background px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground lg:block">Ctrl K</kbd>
             {showResults && navResults.length > 0 && (
-              <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-xl border bg-popover shadow-xl">
-                <p className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Go to page</p>
+              <div className="absolute left-0 right-0 top-full z-50 mt-2 overflow-hidden rounded-2xl border bg-popover shadow-xl">
+                <p className="px-4 pb-1 pt-2.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Go to page</p>
                 {navResults.map((item, i) => (
                   <button key={item.href} onMouseDown={() => navigateTo(item.href)} onMouseEnter={() => setActiveIdx(i)}
-                    className={cn('flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm', i === activeIdx ? 'bg-muted' : 'hover:bg-muted/60')}>
+                    className={cn('flex w-full items-center justify-between gap-3 px-4 py-2 text-left text-sm', i === activeIdx ? 'bg-muted' : 'hover:bg-muted/60')}>
                     <span className="font-medium">{item.label}</span>
-                    <span className="flex items-center gap-2 text-xs text-muted-foreground">
-                      {item.section}
-                      {i === activeIdx && <CornerDownLeft className="h-3 w-3" />}
-                    </span>
+                    <span className="flex items-center gap-2 text-xs text-muted-foreground">{item.section}{i === activeIdx && <CornerDownLeft className="h-3 w-3" />}</span>
                   </button>
                 ))}
               </div>
@@ -325,43 +316,42 @@ export function Header({ onMenuClick }: HeaderProps) {
           )}
         </div>
 
-        {/* ── Right: actions ── */}
-        <div className="ml-auto flex shrink-0 items-center gap-1.5 md:ml-0">
-          <Button variant="ghost" size="icon" className="h-9 w-9 md:hidden" aria-label="Search"
+        {/* ── Right ── */}
+        <div className="ml-auto flex shrink-0 items-center gap-2 md:ml-0">
+          <span suppressHydrationWarning className="hidden items-center gap-1.5 rounded-full bg-muted/70 px-3 py-1.5 text-xs font-medium text-muted-foreground 2xl:flex">
+            <CalendarDays className="h-3.5 w-3.5" />{today}
+          </span>
+
+          <Button variant="ghost" size="icon" className="h-9 w-9 rounded-xl md:hidden" aria-label="Search"
             onClick={() => { setMobileSearch(true); setTimeout(() => inputRef.current?.focus(), 0) }}>
             <Search className="h-5 w-5" />
           </Button>
 
           <DropdownMenu>
-            <DropdownMenuTrigger className="hidden h-9 items-center gap-1.5 rounded-xl bg-linear-to-r from-[#E8112D] to-[#F43F5E] px-3.5 text-sm font-semibold text-white shadow-md shadow-red-500/25 outline-none transition hover:brightness-110 sm:inline-flex">
-              <Plus className="h-4 w-4" /> New <ChevronDown className="h-3.5 w-3.5 opacity-80" />
+            <DropdownMenuTrigger className="hidden h-9 items-center gap-1.5 rounded-full bg-linear-to-r from-[#E8112D] to-[#F43F5E] pl-3 pr-2.5 text-sm font-semibold text-white shadow-md shadow-red-500/25 outline-none transition hover:brightness-110 sm:inline-flex">
+              <Plus className="h-4 w-4" />New<ChevronDown className="h-3.5 w-3.5 opacity-80" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-52">
               {QUICK_NEW.map(n => (
-                <DropdownMenuItem key={n.href} onClick={() => quickNew(n.href)}>
-                  <n.icon className="mr-2 h-4 w-4" />New {n.label}
-                </DropdownMenuItem>
+                <DropdownMenuItem key={n.href} onClick={() => quickNew(n.href)}><n.icon className="mr-2 h-4 w-4" />New {n.label}</DropdownMenuItem>
               ))}
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => router.push('/accounting?tab=collections')}>
-                <Receipt className="mr-2 h-4 w-4" />Record a Collection
-              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push('/accounting?tab=collections')}><Receipt className="mr-2 h-4 w-4" />Record a Collection</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 
           {/* Notifications */}
           <div className="relative" ref={notifRef}>
-            <Button variant="ghost" size="icon" className="relative h-9 w-9 rounded-xl" onClick={() => setNotifOpen(v => !v)} aria-label="Notifications">
-              <Bell className="h-5 w-5" />
+            <Button variant="ghost" size="icon" className="relative h-9 w-9 rounded-full bg-muted/70 hover:bg-muted" onClick={() => setNotifOpen(v => !v)} aria-label="Notifications">
+              <Bell className="h-4.5 w-4.5" />
               {unreadCount > 0 && (
-                <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-0.5 text-[10px] font-bold leading-none text-white ring-2 ring-background">
+                <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-0.5 text-[10px] font-bold leading-none text-white ring-2 ring-card">
                   {unreadCount > 9 ? '9+' : unreadCount}
                 </span>
               )}
             </Button>
-
             {notifOpen && (
-              <div className="absolute right-0 top-full z-50 mt-2 flex max-h-112 w-88 max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border bg-popover shadow-xl">
+              <div className="absolute right-0 top-full z-50 mt-3 flex max-h-112 w-88 max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border bg-popover shadow-xl">
                 <div className="flex shrink-0 items-center justify-between border-b px-4 py-3">
                   <span className="text-sm font-semibold">Notifications{unreadCount > 0 && <span className="ml-1.5 rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700">{unreadCount}</span>}</span>
                   {unreadCount > 0 && <button onClick={() => markAllNotifsRead()} className="text-xs font-medium text-red-600 hover:underline">Mark all read</button>}
@@ -370,32 +360,22 @@ export function Header({ onMenuClick }: HeaderProps) {
                   {notifs.length === 0 ? (
                     <div className="px-4 py-10 text-center text-sm text-muted-foreground">You&apos;re all caught up</div>
                   ) : notifs.map(n => (
-                    <button
-                      key={n.id}
-                      onClick={() => { markNotifRead(n); setNotifOpen(false); router.push(n.href) }}
-                      className={cn('w-full border-b px-4 py-3 text-left text-xs transition-colors last:border-0 hover:bg-muted/50', !n.read && 'bg-blue-50/50 dark:bg-blue-950/20')}
-                    >
+                    <button key={n.id} onClick={() => { markNotifRead(n); setNotifOpen(false); router.push(n.href) }}
+                      className={cn('w-full border-b px-4 py-3 text-left text-xs transition-colors last:border-0 hover:bg-muted/50', !n.read && 'bg-blue-50/50 dark:bg-blue-950/20')}>
                       <div className="flex items-start gap-2.5">
                         <span className={cn('mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full', n.read ? 'bg-transparent' : NOTIF_DOT[n.type])} />
                         <div className="min-w-0">
                           <p className="font-semibold leading-snug text-foreground">{n.title}</p>
                           <p className="leading-snug text-muted-foreground">{n.message}</p>
-                          {n.time && (
-                            <p className="mt-0.5 text-muted-foreground/80">
-                              {new Date(n.time).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                            </p>
-                          )}
+                          {n.time && <p className="mt-0.5 text-muted-foreground/80">{new Date(n.time).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</p>}
                         </div>
                       </div>
                     </button>
                   ))}
                 </div>
                 {deviceNotifySupported() && (
-                  <button
-                    type="button"
-                    onClick={toggleDevice}
-                    className={cn('flex w-full shrink-0 items-center gap-2.5 border-t px-4 py-2.5 text-left text-xs transition-colors', deviceOn ? 'text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400' : 'text-muted-foreground hover:bg-muted/60')}
-                  >
+                  <button type="button" onClick={toggleDevice}
+                    className={cn('flex w-full shrink-0 items-center gap-2.5 border-t px-4 py-2.5 text-left text-xs transition-colors', deviceOn ? 'text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400' : 'text-muted-foreground hover:bg-muted/60')}>
                     {deviceOn ? <BellRing className="h-4 w-4 shrink-0" /> : <BellOff className="h-4 w-4 shrink-0" />}
                     <span className="flex-1">{deviceOn ? 'Device alerts are on — click to turn off' : 'Turn on alerts on this device'}</span>
                   </button>
@@ -404,26 +384,23 @@ export function Header({ onMenuClick }: HeaderProps) {
             )}
           </div>
 
-          <span aria-hidden className="mx-1 hidden h-7 w-px bg-border sm:block" />
-
           {/* Account */}
           <DropdownMenu>
-            <DropdownMenuTrigger className="flex items-center gap-2 rounded-xl p-1 pr-1.5 outline-none transition hover:bg-muted sm:pr-2.5" aria-label="Account menu">
+            <DropdownMenuTrigger className="flex items-center gap-2 rounded-full border border-black/5 bg-muted/40 p-0.5 pr-0.5 outline-none transition hover:bg-muted dark:border-white/10 lg:pr-3" aria-label="Account menu">
               <Avatar className="h-8 w-8">
                 {userAvatarUrl && <AvatarImage src={userAvatarUrl} alt={userName} />}
-                <AvatarFallback className="bg-linear-to-br from-[#E8112D] to-[#F43F5E] text-xs font-bold text-white">{initials(userName)}</AvatarFallback>
+                <AvatarFallback className="bg-[#111111] text-xs font-bold text-white">{initials(userName)}</AvatarFallback>
               </Avatar>
               <span className="hidden min-w-0 text-left leading-tight lg:block">
-                <span className="block max-w-36 truncate text-sm font-semibold">{userName}</span>
+                <span className="block max-w-36 truncate text-[13px] font-semibold">{userName}</span>
                 <span className="block max-w-36 truncate text-[11px] capitalize text-muted-foreground">{roleLabel}</span>
               </span>
-              <ChevronDown className="hidden h-3.5 w-3.5 text-muted-foreground lg:block" />
             </DropdownMenuTrigger>
             <DropdownMenuContent className="w-64" align="end">
               <div className="flex items-center gap-3 border-b px-3 py-3">
                 <Avatar className="h-10 w-10">
                   {userAvatarUrl && <AvatarImage src={userAvatarUrl} alt={userName} />}
-                  <AvatarFallback className="bg-linear-to-br from-[#E8112D] to-[#F43F5E] text-sm font-bold text-white">{initials(userName)}</AvatarFallback>
+                  <AvatarFallback className="bg-[#111111] text-sm font-bold text-white">{initials(userName)}</AvatarFallback>
                 </Avatar>
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold">{userName}</p>

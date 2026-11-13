@@ -47,7 +47,7 @@ export default function WarehousePage() {
                   <div className="text-xs text-muted-foreground">Item Types</div>
                 </div>
                 <div className="bg-muted/50 rounded p-2">
-                  <div className="text-lg font-bold">₱{(wh.total_value / 1000).toFixed(0)}K</div>
+                  <div className="text-lg font-bold">₱{Math.round(wh.total_value).toLocaleString('en-PH')}</div>
                   <div className="text-xs text-muted-foreground">Stock Value</div>
                 </div>
               </div>

@@ -26,6 +26,7 @@ const PAGES: Record<string, PageTitle> = {
   '/bir': { title: 'BIR Compliance', subtitle: 'Deadlines, filings, VAT, income tax and withholding' },
   '/assets': { title: 'Asset Accountability', subtitle: 'Fixed assets, assignments, transfers and disposals' },
   '/client-requests': { title: 'Client Requests', subtitle: 'Purchase requests submitted by clients via the portal' },
+  '/201-file': { title: '201 File', subtitle: 'Client records and CDSC employee files' },
   '/clients': { title: 'Clients · 201 File', subtitle: 'Client records, contacts and documents' },
   '/employee-requests': { title: 'My Requests', subtitle: 'Office supplies, IT equipment, uniforms and consumables' },
   '/items/categories': { title: 'Categories', subtitle: 'Item categories' },

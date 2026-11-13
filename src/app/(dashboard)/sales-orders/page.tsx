@@ -75,7 +75,7 @@ export default function SalesOrdersPage() {
   const [quickPOSupplierId, setQuickPOSupplierId] = useState('')
   const [quickPONotes, setQuickPONotes] = useState('')
   const [quickPOSaving, setQuickPOSaving] = useState(false)
-  const letterhead = useLetterhead()
+  const letterhead = useLetterhead('so')
   const [companyInfo, setCompanyInfo] = useState<SystemSettings | null>(null)
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
@@ -969,7 +969,7 @@ ${emailBodySO.replace(/\n/g, '<br/>')}
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                     <XAxis dataKey="month" tick={{ fontSize: 11 }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `₱${(v / 1000).toFixed(0)}k`} />
+                    <YAxis tick={{ fontSize: 11 }} axisLine={false} tickLine={false} width={96} tickFormatter={v => `₱${Math.round(v).toLocaleString('en-PH')}`} />
                     <Tooltip
                       cursor={{ fill: 'rgba(220,38,38,0.06)' }}
                       contentStyle={{ borderRadius: 12, border: '1px solid #e5e7eb', boxShadow: '0 4px 12px rgba(0,0,0,0.08)', fontSize: 12 }}

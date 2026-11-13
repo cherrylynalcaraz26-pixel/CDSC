@@ -9,7 +9,12 @@
 // Empty fields fall back to the Company & Business Profile, so a fresh install
 // prints the same header as before.
 //
-// Stored as JSON in system_settings.pdf_header (migration 043).
+// Several headers can be saved (e.g. "Main", "Government bids", "Plain"); each
+// document type uses the one assigned to it, or the default.
+//
+// Stored as JSON in system_settings.pdf_header (migration 043):
+//   { headers: [{ id, name, ...Letterhead }], default_id, assign: { po, quotation, so } }
+// An older single-header value is read as one header named "Main header".
 
 'use client'
 
@@ -138,15 +143,61 @@ export async function letterheadForPdf(lh: Letterhead, co: LetterheadCompany | n
   }
 }
 
-/** Loads the saved letterhead (defaults if the column/row isn't there yet). */
-export async function loadLetterhead(): Promise<Letterhead> {
-  const { data, error } = await createClient().from('system_settings').select('pdf_header').single()
-  if (error) return DEFAULT_LETTERHEAD
-  return normalizeLetterhead((data as { pdf_header?: unknown } | null)?.pdf_header)
+// ── Several saved headers ─────────────────────────────────────────────────
+
+export type LetterheadDoc = 'po' | 'quotation' | 'so'
+export const LETTERHEAD_DOCS: { id: LetterheadDoc; label: string }[] = [
+  { id: 'po', label: 'Purchase Orders' },
+  { id: 'quotation', label: 'Quotations' },
+  { id: 'so', label: 'Sales Orders' },
+]
+
+export interface NamedLetterhead extends Letterhead { id: string; name: string }
+export interface LetterheadSet {
+  headers: NamedLetterhead[]
+  default_id: string
+  assign: Partial<Record<LetterheadDoc, string>>   // missing → default
 }
 
-export function useLetterhead(): Letterhead {
+export const newHeaderId = () => Math.random().toString(36).slice(2, 10)
+
+export function normalizeLetterheadSet(raw: unknown): LetterheadSet {
+  const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
+  if (Array.isArray(r.headers) && r.headers.length) {
+    const headers = (r.headers as Record<string, unknown>[]).map((h, i) => ({
+      ...normalizeLetterhead(h),
+      id: typeof h.id === 'string' && h.id ? h.id : newHeaderId(),
+      name: typeof h.name === 'string' && h.name.trim() ? h.name : `Header ${i + 1}`,
+    }))
+    const ids = new Set(headers.map(h => h.id))
+    const default_id = typeof r.default_id === 'string' && ids.has(r.default_id) ? r.default_id : headers[0].id
+    const assign: LetterheadSet['assign'] = {}
+    const a = (r.assign && typeof r.assign === 'object' ? r.assign : {}) as Record<string, unknown>
+    for (const d of LETTERHEAD_DOCS) if (typeof a[d.id] === 'string' && ids.has(a[d.id] as string)) assign[d.id] = a[d.id] as string
+    return { headers, default_id, assign }
+  }
+  // Legacy single header (or nothing saved yet).
+  const one: NamedLetterhead = { ...normalizeLetterhead(raw), id: 'main', name: 'Main header' }
+  return { headers: [one], default_id: one.id, assign: {} }
+}
+
+export function pickLetterhead(set: LetterheadSet, doc?: LetterheadDoc): Letterhead {
+  const id = (doc && set.assign[doc]) || set.default_id
+  return set.headers.find(h => h.id === id) ?? set.headers[0] ?? DEFAULT_LETTERHEAD
+}
+
+export async function loadLetterheadSet(): Promise<LetterheadSet> {
+  const { data, error } = await createClient().from('system_settings').select('pdf_header').single()
+  return normalizeLetterheadSet(error ? null : (data as { pdf_header?: unknown } | null)?.pdf_header)
+}
+
+/** The header a document type uses (defaults if the column/row isn't there yet). */
+export async function loadLetterhead(doc?: LetterheadDoc): Promise<Letterhead> {
+  return pickLetterhead(await loadLetterheadSet(), doc)
+}
+
+export function useLetterhead(doc?: LetterheadDoc): Letterhead {
   const [lh, setLh] = useState<Letterhead>(DEFAULT_LETTERHEAD)
-  useEffect(() => { let on = true; loadLetterhead().then(v => { if (on) setLh(v) }); return () => { on = false } }, [])
+  useEffect(() => { let on = true; loadLetterhead(doc).then(v => { if (on) setLh(v) }); return () => { on = false } }, [doc])
   return lh
 }

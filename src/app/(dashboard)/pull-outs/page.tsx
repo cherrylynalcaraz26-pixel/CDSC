@@ -22,9 +22,10 @@ import { toast } from 'sonner'
 import { format } from 'date-fns'
 import {
   Plus, Trash2, Loader2, PackageOpen, CalendarClock, Truck, PackageCheck, MapPin, Phone, Pencil, Printer,
-  FileSignature, List, Boxes,
+  FileSignature, List, Boxes, Scale,
 } from 'lucide-react'
 import { PullOutLetterDialog } from '@/components/pull-outs/pull-out-letter'
+import { DeliveredVsCsi, type ClientBalance } from '@/components/pull-outs/delivered-vs-csi'
 import { confirmRemoveLine } from '@/components/ui/confirm'
 import { deleteWithUndo } from '@/lib/delete-with-undo'
 
@@ -105,7 +106,8 @@ export default function PullOutsPage() {
   const [addr, setAddr] = useState<Address>(emptyAddress())
   const [lines, setLines] = useState<Line[]>([emptyLine()])
   const [letterFor, setLetterFor] = useState<PullOut | null>(null)
-  const [view, setView] = useState<'pullouts' | 'items'>('pullouts')
+  const [view, setView] = useState<'pullouts' | 'items' | 'balance'>('pullouts')
+  const [balanceKey, setBalanceKey] = useState(0)
   const [catalog, setCatalog] = useState<{ item_name: string; unit_of_measure: string | null }[]>([])
 
   // `loading` starts true; later reloads (after save/status change) refresh in place.
@@ -124,7 +126,7 @@ export default function PullOutsPage() {
       setLoading(false)
     })
   }
-  const load = () => { fetchAll() }
+  const load = () => { fetchAll(); setBalanceKey(k => k + 1) }
 
   useEffect(() => { fetchAll() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -258,6 +260,59 @@ export default function PullOutsPage() {
     })
   }
 
+  // ── From "Delivered vs CSI" ──
+  const balanceRemarks = (c: ClientBalance) => {
+    const drs = [...new Set(c.toPull.flatMap(i => i.drs))]
+    return `Delivered but not charged on a CSI${drs.length ? ` — DR ${drs.join(', ')}` : ''}`
+  }
+  const clientByName = (name: string) => clients.find(x => x.company_name.trim().toLowerCase() === name.trim().toLowerCase())
+
+  // Opens the New Pull Out form already filled in for this client.
+  function openFromBalance(c: ClientBalance) {
+    const cl = clientByName(c.client)
+    setEditingId(null)
+    setForm({
+      ...blank,
+      source_type: 'client',
+      party_id: cl?.id ?? '',
+      location_name: cl?.company_name ?? c.client,
+      contact_number: String(cl?.mobile ?? cl?.mobile_number ?? cl?.phone ?? ''),
+      reason: 'other',
+      remarks: balanceRemarks(c),
+    })
+    setContact(cl ? nameFromRow(cl, 'contact_', 'contact_person') : emptyName())
+    setAddr(cl ? addressFromRow(cl) : emptyAddress())
+    setLines(c.toPull.map(i => ({ item_name: i.item_name, quantity: String(i.balance), unit: i.unit, condition: '' })))
+    setOpen(true)
+  }
+
+  // One pending pull out per client, created straight away.
+  async function createAllFromBalance(list: ClientBalance[]) {
+    const { data: { user } } = await supabase.auth.getUser()
+    let made = 0
+    for (const c of list) {
+      const cl = clientByName(c.client)
+      const contactName = cl ? nameFromRow(cl, 'contact_', 'contact_person') : emptyName()
+      const address = cl ? addressFromRow(cl) : emptyAddress()
+      const { data, error } = await supabase.from('pull_outs').insert({
+        source_type: 'client', client_id: cl?.id ?? null, supplier_id: null,
+        location_name: cl?.company_name ?? c.client,
+        ...addressColumns(address), pickup_address: joinAddress(address) || null,
+        ...nameColumns(contactName, 'contact_'), contact_person: joinName(contactName) || null,
+        contact_number: String(cl?.mobile ?? cl?.mobile_number ?? cl?.phone ?? '') || null,
+        reason: 'other', remarks: balanceRemarks(c), status: 'pending', created_by: user?.id ?? null,
+      }).select('id').single()
+      if (error) { toast.error(`${c.client}: ${getErrorMessage(error)}`); continue }
+      const { error: itemErr } = await supabase.from('pull_out_items').insert(c.toPull.map(i => ({
+        pull_out_id: data.id, item_name: i.item_name, quantity: i.balance, unit: i.unit || null, condition: null,
+      })))
+      if (itemErr) toast.error(`${c.client}: ${getErrorMessage(itemErr)}`)
+      else made++
+    }
+    if (made) toast.success(`Created ${made} pull out${made === 1 ? '' : 's'}`)
+    load()
+  }
+
   function printSlip(r: PullOut) {
     const win = window.open('', '_blank', 'width=800,height=700')
     if (!win) return
@@ -309,9 +364,9 @@ export default function PullOutsPage() {
       <Card className="overflow-visible">
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 pb-3">
           <div className="flex items-center gap-3">
-            <CardTitle className="text-base">{view === 'pullouts' ? 'Pull Out List' : 'List of Items'}</CardTitle>
+            <CardTitle className="text-base">{view === 'pullouts' ? 'Pull Out List' : view === 'items' ? 'List of Items' : 'Delivered vs CSI — by client'}</CardTitle>
             <div className="flex rounded-lg bg-muted p-0.5">
-              {([['pullouts', 'Pull Outs', List], ['items', 'Items', Boxes]] as const).map(([v, label, Icon]) => (
+              {([['pullouts', 'Pull Outs', List], ['items', 'Items', Boxes], ['balance', 'Delivered vs CSI', Scale]] as const).map(([v, label, Icon]) => (
                 <button key={v} type="button" onClick={() => setView(v)}
                   className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition ${view === v ? 'bg-white text-[#E8112D] shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
                   <Icon className="h-3.5 w-3.5" />{label}
@@ -320,7 +375,7 @@ export default function PullOutsPage() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <Select value={statusFilter} onValueChange={v => setStatusFilter((v ?? 'open') as typeof statusFilter)}>
+            {view !== 'balance' && <Select value={statusFilter} onValueChange={v => setStatusFilter((v ?? 'open') as typeof statusFilter)}>
               <SelectTrigger className="h-9 w-[170px]">
                 <span className="text-sm">
                   {statusFilter === 'open' ? 'Open (not yet received)' : statusFilter === 'all' ? 'All' : STATUS[statusFilter].label}
@@ -331,14 +386,16 @@ export default function PullOutsPage() {
                 <SelectItem value="all">All</SelectItem>
                 {(Object.keys(STATUS) as Status[]).map(s => <SelectItem key={s} value={s}>{STATUS[s].label}</SelectItem>)}
               </SelectContent>
-            </Select>
+            </Select>}
             <Button onClick={openNew} className="bg-red-600 hover:bg-red-700">
               <Plus className="mr-2 h-4 w-4" />New Pull Out
             </Button>
           </div>
         </CardHeader>
         <CardContent className="overflow-x-auto p-0">
-          {view === 'items' ? (
+          {view === 'balance' ? (
+            <DeliveredVsCsi reloadKey={balanceKey} onCreate={openFromBalance} onCreateAll={createAllFromBalance} />
+          ) : view === 'items' ? (
           <Table>
             <TableHeader>
               <TableRow>

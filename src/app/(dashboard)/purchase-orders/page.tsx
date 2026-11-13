@@ -116,7 +116,7 @@ export default function PurchaseOrdersPage() {
   const [saving, setSaving] = useState(false)
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false)
   const [activeTab, setActiveTab] = useState<'form' | 'preview'>('form')
-  const letterhead = useLetterhead()
+  const letterhead = useLetterhead('po')
   const [poStatusFilter, setPoStatusFilter] = useState<string>('all')
   const [companyInfo, setCompanyInfo] = useState<{
     company_name: string; address: string; phone: string; email: string; tin: string; logo_url?: string

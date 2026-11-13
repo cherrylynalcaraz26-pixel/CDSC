@@ -1,5 +1,7 @@
 'use client'
 
+import { Segmented } from '@/components/ui/filter-bar'
+
 import { useState, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { MasterData, MASTER_TABS, type MasterTab } from '@/components/setup/master-data'
@@ -181,6 +183,16 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode; desc: string; gro
   { id: 'attributes', label: 'Attributes',       icon: <SlidersHorizontal className="h-4 w-4" />, desc: 'Item attributes such as size or color.', group: 'master' },
   { id: 'payees',     label: 'Payees',           icon: <Wallet className="h-4 w-4" />,      desc: 'Payees for cash disbursements.', group: 'master' },
 ]
+
+// ── Profile card (one titled group of fields) ──────────────────────────────
+function ProfileCard({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-4 rounded-xl border bg-card p-5">
+      <p className="text-xs font-bold uppercase tracking-wider text-[#E8112D]">{title}</p>
+      {children}
+    </section>
+  )
+}
 
 // ── Collapsible form section ──────────────────────────────────────────────────
 
@@ -1359,6 +1371,7 @@ function SettingsPageContent() {
     setTabState(t)
     router.replace(`/settings?tab=${t}`, { scroll: false })
   }
+  const [profileSection, setProfileSection] = useState<'identity' | 'registration' | 'contact' | 'business' | 'proposal'>('identity')
   const [settings, setSettings] = useState<Settings>(defaultSettings())
   const [original, setOriginal] = useState<Settings>(defaultSettings())
   const [saving, setSaving] = useState(false)
@@ -1495,12 +1508,11 @@ function SettingsPageContent() {
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
-            className={`w-full rounded-xl px-3 py-2.5 text-left transition-colors ${
+            className={`w-full rounded-lg px-3 py-2 text-left transition-colors ${
               tab === t.id ? 'bg-[#E8112D] text-white shadow-md shadow-red-900/20' : 'hover:bg-muted'
             }`}
           >
             <span className="flex items-center gap-2 text-sm font-semibold">{t.icon}{t.label}</span>
-            <span className={`mt-0.5 block text-xs leading-snug ${tab === t.id ? 'text-white/85' : 'text-muted-foreground'}`}>{t.desc}</span>
           </button>
         ))}
           </div>
@@ -1530,22 +1542,28 @@ function SettingsPageContent() {
       )}
 
       {tab === 'profile' && (
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_380px] gap-8">
-          <div className="space-y-0">
-            <div className="flex items-center justify-between mb-6 pb-4 border-b">
-              <h2 className="font-bold text-base uppercase tracking-wider text-slate-700">Company Identity</h2>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={reset} className="gap-1.5">
-                  <RotateCcw className="h-3.5 w-3.5" />Reset
-                </Button>
-                <Button size="sm" onClick={save} disabled={saving} className="bg-[#E8112D] hover:bg-[#D10F28] text-white gap-1.5">
-                  {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-                  Save All
-                </Button>
-              </div>
+        <div className="space-y-5">
+          {/* Sections + save */}
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border bg-card p-2.5">
+            <Segmented value={profileSection} onChange={setProfileSection} options={[
+              { value: 'identity', label: 'Identity', icon: Building2 },
+              { value: 'registration', label: 'Registration & Tax', icon: FileCheck2 },
+              { value: 'contact', label: 'Contact & Location', icon: MapPin },
+              { value: 'business', label: 'Business Profile', icon: Presentation },
+              { value: 'proposal', label: 'Proposal Defaults', icon: FileText },
+            ]} />
+            <div className="ml-auto flex gap-2">
+              <Button variant="outline" onClick={reset} className="h-9 gap-1.5"><RotateCcw className="h-4 w-4" />Reset</Button>
+              <Button onClick={save} disabled={saving} className="h-9 gap-1.5 bg-[#E8112D] text-white hover:bg-[#D10F28]">
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}Save All
+              </Button>
             </div>
+          </div>
 
-            <CollapsibleSection title="Business Details" defaultOpen>
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+            <div className="space-y-5">
+              {profileSection === 'identity' && (<>
+                <ProfileCard title="Logo">
               <div className="space-y-2">
                 <Label>Company Logo</Label>
                 <div className="flex items-start gap-4">
@@ -1568,47 +1586,38 @@ function SettingsPageContent() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label>Company Name <span className="text-destructive">*</span></Label>
-                  <Input placeholder="e.g. CDSC Industrial Supply" {...S('company_name')} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Legal Suffix</Label>
-                  <Input placeholder="e.g. Corporation, Inc., Co." {...S('legal_suffix')} />
-                </div>
-              </div>
+                </ProfileCard>
+                <ProfileCard title="Company name & type">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-1.5"><Label>Company Name <span className="text-destructive">*</span></Label><Input placeholder="e.g. CDSC Industrial Supply" {...S('company_name')} /></div>
+                    <div className="space-y-1.5"><Label>Short Name</Label><Input placeholder="e.g. CDSC" {...S('company_short_name')} /></div>
+                    <div className="space-y-1.5"><Label>Legal Suffix</Label><Input placeholder="e.g. Corporation, Inc., Co." {...S('legal_suffix')} /></div>
+                    <div className="space-y-1.5">
+                      <Label>Business Type</Label>
+                      <Select value={settings.business_type} onValueChange={v => set('business_type', v ?? 'Sole Proprietorship')}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>{BUSINESS_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5 sm:col-span-2"><Label>Tagline / Slogan</Label><Input placeholder="e.g. Supplying Solutions, Building Partnerships" {...S('tagline')} /></div>
+                  </div>
+                </ProfileCard>
+                <ProfileCard title="Positioning">
+                  <div className="space-y-1.5"><Label>Brand Positioning Statement</Label><Textarea rows={3} placeholder="How your company is positioned in the market…" {...S('brand_positioning')} /></div>
+                  <div className="space-y-1.5"><Label>Mission Statement</Label><Textarea rows={3} placeholder="Your company mission and purpose…" {...S('mission_statement')} /></div>
+                </ProfileCard>
+              </>)}
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label>Tagline / Slogan</Label>
-                  <Input placeholder="e.g. Supplying Solutions, Building Partnerships" {...S('tagline')} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Business Type</Label>
-                  <Select value={settings.business_type} onValueChange={v => set('business_type', v ?? 'Sole Proprietorship')}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {BUSINESS_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label>Brand Positioning Statement</Label>
-                <Textarea rows={3} placeholder="Describe how your company is positioned in the market…" {...S('brand_positioning')} />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label>Mission Statement</Label>
-                <Textarea rows={3} placeholder="Your company's mission and purpose…" {...S('mission_statement')} />
-              </div>
-              <Separator />
-
-            <div className="space-y-5">
-              <p className="text-xs font-bold uppercase tracking-widest text-blue-600">Registration &amp; Compliance</p>
-
+              {profileSection === 'registration' && (<>
+                <ProfileCard title="Registration">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-1.5"><Label>SEC / DTI Reg. No.</Label><Input placeholder="e.g. CS201812345" {...S('sec_reg_no')} /></div>
+                    <div className="space-y-1.5"><Label>TIN</Label><Input placeholder="000-000-000-000" {...S('tin')} /></div>
+                    <div className="space-y-1.5"><Label>Industry</Label><Input placeholder="e.g. Industrial Supply" {...S('industry')} /></div>
+                    <div className="space-y-1.5"><Label>Founded Year</Label><Input placeholder="e.g. 2015" {...S('founded_year')} /></div>
+                    <div className="space-y-1.5"><Label>No. of Employees</Label><Input placeholder="e.g. 50-100" {...S('employees_count')} /></div>
+                    <div className="space-y-1.5"><Label>Fiscal Year Start (MM-DD)</Label><Input placeholder="01-01" {...S('fiscal_year_start')} /></div>
+                  </div>
               <div className="space-y-2">
                 <Label>Registration Document (SEC/DTI/BIR)</Label>
                 <div className="flex items-start gap-4">
@@ -1631,63 +1640,29 @@ function SettingsPageContent() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label>SEC / DTI Reg. No.</Label>
-                  <Input placeholder="e.g. CS201812345" {...S('sec_reg_no')} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>TIN</Label>
-                  <Input placeholder="000-000-000-000" {...S('tin')} />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-1.5">
-                  <Label>Industry</Label>
-                  <Input placeholder="e.g. Industrial Supply" {...S('industry')} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Founded Year</Label>
-                  <Input placeholder="e.g. 2015" {...S('founded_year')} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>No. of Employees</Label>
-                  <Input placeholder="e.g. 50-100" {...S('employees_count')} />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label>VAT Registered</Label>
-                  <Select value={settings.vat_registered ? 'yes' : 'no'} onValueChange={v => set('vat_registered', v === 'yes')}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="yes">Yes — VAT Registered</SelectItem>
-                      <SelectItem value="no">No — Non-VAT</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Default VAT Rate (%)</Label>
-                  <Input type="number" min={0} max={100} value={settings.default_vat_rate}
-                    onChange={e => set('default_vat_rate', parseFloat(e.target.value) || 12)} />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label>EWT Default Rate (%)</Label>
-                  <Input type="number" min={0} max={100} value={settings.ewt_default_rate}
-                    onChange={e => set('ewt_default_rate', parseFloat(e.target.value) || 2)} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Fiscal Year Start (MM-DD)</Label>
-                  <Input placeholder="01-01" {...S('fiscal_year_start')} />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
+                </ProfileCard>
+                <ProfileCard title="VAT & withholding">
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <div className="space-y-1.5">
+                      <Label>VAT Registered</Label>
+                      <Select value={settings.vat_registered ? 'yes' : 'no'} onValueChange={v => set('vat_registered', v === 'yes')}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="yes">Yes — VAT Registered</SelectItem>
+                          <SelectItem value="no">No — Non-VAT</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Default VAT Rate (%)</Label>
+                      <Input type="number" min={0} max={100} value={settings.default_vat_rate} onChange={e => set('default_vat_rate', parseFloat(e.target.value) || 12)} />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>EWT Default Rate (%)</Label>
+                      <Input type="number" min={0} max={100} value={settings.ewt_default_rate} onChange={e => set('ewt_default_rate', parseFloat(e.target.value) || 2)} />
+                    </div>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label>Top Withholding Agent (TWA)</Label>
                   <Select
@@ -1718,81 +1693,35 @@ function SettingsPageContent() {
                     When Yes, BIR Compliance tracks 1601-C (monthly), 1604-C and 2316 (annual).
                   </p>
                 </div>
-              </div>
-            </div>
+                  </div>
+                </ProfileCard>
+              </>)}
 
-            <Separator className="my-6" />
+              {profileSection === 'contact' && (<>
+                <ProfileCard title="Address">
+                  <div className="space-y-1.5"><Label>Street Address</Label><Input placeholder="Building, street, barangay" {...S('address')} /></div>
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <div className="space-y-1.5"><Label>City / Municipality</Label><Input placeholder="e.g. Sto. Tomas" {...S('city')} /></div>
+                    <div className="space-y-1.5"><Label>Province / Region</Label><Input placeholder="e.g. Batangas" {...S('province')} /></div>
+                    <div className="space-y-1.5"><Label>ZIP Code</Label><Input placeholder="e.g. 4234" {...S('zip_code')} /></div>
+                  </div>
+                </ProfileCard>
+                <ProfileCard title="Contact">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-1.5"><Label>Landline / Phone</Label><Input placeholder="+63 2 8xxx xxxx" {...S('phone')} /></div>
+                    <div className="space-y-1.5"><Label>Mobile</Label><Input placeholder="+63 9xx xxx xxxx" {...S('mobile')} /></div>
+                    <div className="space-y-1.5"><Label>Email Address</Label><Input type="email" placeholder="company@email.com" {...S('email')} /></div>
+                    <div className="space-y-1.5"><Label>Website</Label><Input placeholder="www.company.com" {...S('website')} /></div>
+                  </div>
+                </ProfileCard>
+              </>)}
 
-            <div className="space-y-5">
-              <p className="text-xs font-bold uppercase tracking-widest text-blue-600">Contact &amp; Location</p>
-
-              <div className="space-y-1.5">
-                <Label>Street Address</Label>
-                <Input placeholder="Building, street, barangay" {...S('address')} />
-              </div>
-
-              <div className="grid grid-cols-3 gap-4">
-                <div className="space-y-1.5">
-                  <Label>City / Municipality</Label>
-                  <Input placeholder="e.g. Quezon City" {...S('city')} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Province / Region</Label>
-                  <Input placeholder="e.g. Metro Manila" {...S('province')} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>ZIP Code</Label>
-                  <Input placeholder="e.g. 1100" {...S('zip_code')} />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label>Landline / Phone</Label>
-                  <Input placeholder="+63 2 8xxx xxxx" {...S('phone')} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Mobile</Label>
-                  <Input placeholder="+63 9xx xxx xxxx" {...S('mobile')} />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-1.5">
-                  <Label>Email Address</Label>
-                  <Input type="email" placeholder="company@email.com" {...S('email')} />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Website</Label>
-                  <Input placeholder="www.company.com" {...S('website')} />
-                </div>
-              </div>
-
-            </div>
-            </CollapsibleSection>
-
-            <Separator className="my-6" />
-
-            <CollapsibleSection title="Business Profile">
-              <div className="space-y-1.5">
-                <Label className="font-semibold">About Company</Label>
-                <Textarea
-                  rows={5}
-                  placeholder="Describe your company — history, background, what you do, and what sets you apart…"
-                  {...S('about_company')}
-                />
-              </div>
-
-              <div className="space-y-1.5 max-w-xs">
-                <Label className="font-semibold">Years of Experience</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  placeholder="e.g. 10"
-                  {...S('years_of_experience')}
-                />
-              </div>
-
+              {profileSection === 'business' && (<>
+                <ProfileCard title="About">
+                  <div className="space-y-1.5"><Label>About Company</Label><Textarea rows={5} placeholder="History, background, what you do, and what sets you apart…" {...S('about_company')} /></div>
+                  <div className="max-w-xs space-y-1.5"><Label>Years of Experience</Label><Input type="number" min={0} placeholder="e.g. 10" {...S('years_of_experience')} /></div>
+                </ProfileCard>
+                <ProfileCard title="Core services">
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <Label className="font-semibold">Core Services</Label>
@@ -1837,28 +1766,15 @@ function SettingsPageContent() {
                 </div>
               </div>
 
-              <div className="space-y-1.5">
-                <Label className="font-semibold">Key Clients</Label>
-                <Textarea
-                  rows={3}
-                  placeholder="List notable clients, one per line or comma-separated…"
-                  {...S('key_clients')}
-                />
-              </div>
+                </ProfileCard>
+                <ProfileCard title="Clients & credentials">
+                  <div className="space-y-1.5"><Label>Key Clients</Label><Textarea rows={3} placeholder="Notable clients, one per line…" {...S('key_clients')} /></div>
+                  <div className="space-y-1.5"><Label>Certifications &amp; Accreditations</Label><Textarea rows={3} placeholder="e.g. PhilGEPS Registered, DTI Registered…" {...S('certifications')} /></div>
+                </ProfileCard>
+              </>)}
 
-              <div className="space-y-1.5">
-                <Label className="font-semibold">Certifications &amp; Accreditations</Label>
-                <Textarea
-                  rows={3}
-                  placeholder="e.g. ISO 9001:2015, PhilGEPS Registered, PCAB Licensed…"
-                  {...S('certifications')}
-                />
-              </div>
-            </CollapsibleSection>
-
-            <Separator className="my-6" />
-
-            <CollapsibleSection title="Business Proposal">
+              {profileSection === 'proposal' && (<>
+                <ProfileCard title="Print a saved proposal">
               <div className="space-y-1.5">
                 <Label className="font-semibold">Use with a Saved Proposal</Label>
                 <Select value={selectedProposalId || undefined} onValueChange={v => setSelectedProposalId(v ?? '')}>
@@ -1915,42 +1831,21 @@ function SettingsPageContent() {
                 </div>
               )}
 
-              <Separator />
+                </ProfileCard>
+                <ProfileCard title="Default proposal text">
+                  <div className="space-y-1.5"><Label>Proposal Introduction</Label><Textarea rows={4} placeholder="Opening paragraph…" {...S('proposal_introduction')} /></div>
+                  <div className="space-y-1.5"><Label>Executive Summary / Why Choose Us</Label><Textarea rows={5} placeholder="Overview, key benefits and value…" {...S('executive_summary')} /></div>
+                  <div className="space-y-1.5"><Label>Scope of Work</Label><Textarea rows={6} placeholder="What will be delivered, timelines, milestones…" {...S('scope_of_work')} /></div>
+                  <div className="space-y-1.5"><Label>Payment Schedule</Label><Textarea rows={3} placeholder="e.g. 50% upon signing, 50% upon completion…" {...S('payment_schedule')} /></div>
+                  <div className="space-y-1.5"><Label>Terms &amp; Conditions</Label><Textarea rows={5} placeholder="Warranties, liabilities and conditions…" {...S('terms_and_conditions')} /></div>
+                  <div className="max-w-xs space-y-1.5"><Label>Validity Period</Label><Input placeholder="e.g. 30 days" {...S('validity_period')} /></div>
+                </ProfileCard>
+              </>)}
+            </div>
 
-              <div className="space-y-1.5">
-                <Label className="font-semibold">Proposal Introduction</Label>
-                <Textarea rows={4} placeholder="Opening paragraph introducing your company and the purpose of this proposal…" {...S('proposal_introduction')} />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="font-semibold">Executive Summary / Why Choose Us</Label>
-                <Textarea rows={5} placeholder="Concise overview of your proposal, key benefits, and value proposition…" {...S('executive_summary')} />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="font-semibold">Scope of Work</Label>
-                <Textarea rows={6} placeholder="Detailed description of what will be delivered, timelines, milestones…" {...S('scope_of_work')} />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="font-semibold">Payment Schedule</Label>
-                <Textarea rows={3} placeholder="e.g. 50% upon signing, 50% upon completion…" {...S('payment_schedule')} />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="font-semibold">Terms &amp; Conditions</Label>
-                <Textarea rows={5} placeholder="Legal terms, warranties, liabilities, and conditions of the proposal…" {...S('terms_and_conditions')} />
-              </div>
-
-              <div className="space-y-1.5 max-w-xs">
-                <Label className="font-semibold">Validity Period</Label>
-                <Input placeholder="e.g. 30 days" {...S('validity_period')} />
-              </div>
-            </CollapsibleSection>
-          </div>
-
-          <div className="hidden lg:block">
-            <LivePreview s={settings} />
+            <div className="hidden xl:block xl:sticky xl:top-20 xl:self-start">
+              <LivePreview s={settings} />
+            </div>
           </div>
         </div>
       )}

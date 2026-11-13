@@ -9,7 +9,7 @@ const PUBLIC_PATHS = [
 
 // The staff system. Client / vendor portal accounts are sent to /portal instead.
 const STAFF_PREFIXES = [
-  '/dashboard', '/accounting', '/assets', '/bir', '/client-requests', '/clients', '/crm', '/csi-monitoring',
+  '/dashboard', '/201-file', '/accounting', '/assets', '/bir', '/client-requests', '/clients', '/crm', '/csi-monitoring',
   '/dr-logs', '/employee-requests', '/inventory', '/items', '/messages', '/pull-outs', '/purchase-orders',
   '/purchase-requests', '/quotation', '/receiving', '/reports', '/returns', '/sales-deliveries', '/sales-orders',
   '/settings', '/setup', '/users', '/warehouse',

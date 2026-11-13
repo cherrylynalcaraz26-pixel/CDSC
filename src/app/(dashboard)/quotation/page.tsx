@@ -94,7 +94,7 @@ export default function QuotationPage() {
   const [quotations, setQuotations] = useState<Quotation[]>([])
   const [clients, setClients] = useState<Client[]>([])
   const [items, setItems] = useState<ItemOption[]>([])
-  const letterhead = useLetterhead()
+  const letterhead = useLetterhead('quotation')
   const [companyInfo, setCompanyInfo] = useState<SystemSettings | null>(null)
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)

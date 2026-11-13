@@ -1,5 +1,7 @@
 'use client'
 
+import { PayeesSettings } from '@/components/settings/payees-settings'
+
 import React, { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
@@ -1921,126 +1923,7 @@ function ItemListTab({ configSelector }: { configSelector: React.ReactNode }) {
   )
 }
 
-/* ─── Payees ──────────────────────────────────────────── */
-interface Payee { id: string; name: string; created_at: string }
-type PayeeSortKey = 'name' | 'created_at'
-
-function PayeesTab({ configSelector }: { configSelector: React.ReactNode }) {
-  const supabase = createClient()
-  const [rows, setRows] = useState<Payee[]>([])
-  const [loading, setLoading] = useState(true)
-  const [open, setOpen] = useState(false)
-  const [editing, setEditing] = useState<Payee | null>(null)
-  const [name, setName] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [deleteId, setDeleteId] = useState<string | null>(null)
-
-  async function load() {
-    setLoading(true)
-    const { data } = await supabase.from('payees').select('*').order('name')
-    setRows(data ?? [])
-    setLoading(false)
-  }
-  useEffect(() => { load() }, [])
-
-  function openAdd() { setEditing(null); setName(''); setOpen(true) }
-  function openEdit(r: Payee) { setEditing(r); setName(r.name); setOpen(true) }
-
-  async function save() {
-    if (!name.trim()) { toast.error('Payee name required'); return }
-    setSaving(true)
-    const { error } = editing
-      ? await supabase.from('payees').update({ name: name.trim() }).eq('id', editing.id)
-      : await supabase.from('payees').insert({ name: name.trim() })
-    if (error) toast.error(getErrorMessage(error))
-    else { toast.success(editing ? 'Payee updated' : 'Payee added'); setOpen(false); load() }
-    setSaving(false)
-  }
-
-  async function del() {
-    if (!deleteId) return
-    const id = deleteId
-    setDeleteId(null)
-    await deleteWithUndo(supabase, { table: 'payees', id, label: 'payee', skipConfirm: true, onChange: load })
-  }
-
-  const { sorted: sortedRows, sortKey: payeeSortKey, sortDir: payeeSortDir, onSort: onSortPayees } = useTableSort<Payee, PayeeSortKey>(rows, (r, key) => {
-    switch (key) {
-      case 'name': return r.name
-      case 'created_at': return r.created_at
-    }
-  })
-
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-3">
-        {configSelector}
-        <Button onClick={openAdd} size="sm" className="bg-red-600 hover:bg-red-700 ml-auto">
-          <Plus className="h-4 w-4 mr-1" /> Add Payee
-        </Button>
-      </div>
-      <div className="rounded-lg border bg-card">
-        <Table containerClassName="overflow-x-clip">
-          <TableHeader className="sticky top-0 z-10 bg-background">
-            <TableRow>
-              <SortableTableHead label="Payee Name" sortKey="name" activeKey={payeeSortKey} direction={payeeSortDir} onSort={onSortPayees} />
-              <SortableTableHead label="Added" sortKey="created_at" activeKey={payeeSortKey} direction={payeeSortDir} onSort={onSortPayees} />
-              <TableHead className="w-24">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow><TableCell colSpan={3} className="text-center py-6 text-muted-foreground">Loading…</TableCell></TableRow>
-            ) : sortedRows.length === 0 ? (
-              <TableRow><TableCell colSpan={3} className="text-center py-6 text-muted-foreground">No payees yet</TableCell></TableRow>
-            ) : sortedRows.map(r => (
-              <TableRow key={r.id}>
-                <TableCell className="font-medium">{r.name}</TableCell>
-                <TableCell className="text-sm text-muted-foreground">{format(new Date(r.created_at), 'MMM d, yyyy')}</TableCell>
-                <TableCell>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger className="h-8 w-8 flex items-center justify-center rounded hover:bg-accent">
-                      <MoreHorizontal className="h-4 w-4" />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => openEdit(r)}><Pencil className="h-3.5 w-3.5 mr-2" />Edit</DropdownMenuItem>
-                      <DropdownMenuItem className="text-destructive" onClick={() => setDeleteId(r.id)}><Trash2 className="h-3.5 w-3.5 mr-2" />Delete</DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
-
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent size="landscape" className="sm:max-w-3xl">
-          <DialogHeader><DialogTitle>{editing ? 'Edit Payee' : 'Add Payee'}</DialogTitle></DialogHeader>
-          <div className="space-y-3 py-2">
-            <div className="space-y-1.5">
-              <Label>Payee Name <span className="text-destructive">*</span></Label>
-              <Input placeholder="e.g. Juan Dela Cruz" value={name} onChange={e => setName(e.target.value)} />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={save} disabled={saving} className="bg-red-600 hover:bg-red-700">{saving ? 'Saving…' : 'Save'}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={!!deleteId} onOpenChange={() => setDeleteId(null)}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Delete Payee?</DialogTitle></DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteId(null)}>Cancel</Button>
-            <Button variant="destructive" onClick={del}>Delete</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </div>
-  )
-}
+/* Payees live in components/settings/payees-settings.tsx (address, TIN, VAT, disbursement type). */
 
 /* ─── Page ────────────────────────────────────────────── */
 const CONFIG_TABS = [
@@ -2066,7 +1949,7 @@ export function MasterData({ tab }: { tab: MasterTab }) {
       {tab === 'uom'        && <UOMTab configSelector={null} />}
       {tab === 'brands'     && <BrandsTab configSelector={null} />}
       {tab === 'attributes' && <AttributesTab configSelector={null} />}
-      {tab === 'payees'     && <PayeesTab configSelector={null} />}
+      {tab === 'payees'     && <PayeesSettings />}
     </div>
   )
 }

@@ -627,7 +627,7 @@ function VendorPortalDashboard() {
                   </linearGradient>
                 </defs>
                 <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} tickFormatter={v => `₱${(v / 1000).toLocaleString()}k`} />
+                <YAxis tick={{ fontSize: 11, fill: '#9ca3af' }} axisLine={false} tickLine={false} width={96} tickFormatter={v => `₱${Math.round(v).toLocaleString('en-PH')}`} />
                 <Tooltip
                   contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e5e7eb' }}
                   formatter={(v) => [fmt(Number(v ?? 0)), 'Total Value']}

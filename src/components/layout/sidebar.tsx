@@ -24,7 +24,7 @@ interface NavItem {
   children?: NavItem[]
 }
 
-const navigation: NavItem[] = [
+const NAV_ITEMS: NavItem[] = [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'CRM / Inquiry', href: '/crm', icon: TrendingUp },
   {
@@ -76,15 +76,20 @@ const navigation: NavItem[] = [
       { label: 'Cash Flow Statement', href: '/accounting?tab=bookkeeping&sub=cf', icon: Wallet },
     ],
   },
-  // 201 File — the master records of the people CDSC deals with.
-  {
-    label: '201 File', icon: FolderOpen,
-    children: [
-      { label: 'Clients', href: '/clients', icon: Users },
-    ],
-  },
+  // 201 File — one page with Clients and CDSC Employees (no dropdown).
+  { label: '201 File', href: '/201-file', icon: FolderOpen },
   // Settings also holds Master Data and the Reports Center.
   { label: 'Settings', href: '/settings', icon: Settings },
+]
+
+// Sidebar order: Dashboard first, then everything A–Z (groups and the pages
+// inside each group), so new items land in the right place automatically.
+const byLabel = (a: NavItem, b: NavItem) => a.label.localeCompare(b.label, 'en', { numeric: true, sensitivity: 'base' })
+const navigation: NavItem[] = [
+  ...NAV_ITEMS.filter(n => n.href === '/dashboard'),
+  ...NAV_ITEMS.filter(n => n.href !== '/dashboard')
+    .map(n => (n.children ? { ...n, children: [...n.children].sort(byLabel) } : n))
+    .sort(byLabel),
 ]
 
 // Some sidebar links (Accounting's sub-tabs) share one route and are distinguished only
@@ -103,6 +108,15 @@ function checkActive(pathname: string, href: string, search: URLSearchParams) {
     if (current !== value) return false
   }
   return true
+}
+
+/** The sidebar link for the current page, with its icon (for the header). */
+export function getNavMatch(pathname: string, search: URLSearchParams): { label: string; icon: NavItem['icon']; group: string | null } | null {
+  for (const n of navigation) {
+    if (n.href && checkActive(pathname, n.href, search)) return { label: n.label, icon: n.icon, group: null }
+    for (const c of n.children ?? []) if (c.href && checkActive(pathname, c.href, search)) return { label: c.label, icon: c.icon, group: n.label }
+  }
+  return null
 }
 
 /** Sidebar group that holds the current page (for the header breadcrumb). */
