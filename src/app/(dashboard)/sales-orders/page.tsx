@@ -191,6 +191,8 @@ export default function SalesOrdersPage() {
       const seenDRs = new Set<string>()
       for (const d of (drData ?? [])) {
         if (!d.po_number) continue
+        // A cancelled DR is not a delivery; remember it so its mirror row is skipped too.
+        if (d.status === 'cancelled') { if (d.dr_number) seenDRs.add(d.dr_number); continue }
         if (!map[d.po_number]) map[d.po_number] = { total: 0, pending: 0, partial: 0, delivered: 0 }
         map[d.po_number].total++
         if (d.status === 'received' || d.status === 'delivered') map[d.po_number].delivered++
@@ -210,7 +212,7 @@ export default function SalesOrdersPage() {
 
       // Collected status per SO — invoiced (CSI) vs. posted collections against those SIs.
       const [{ data: csiData }, { data: colData }] = await Promise.all([
-        supabase.from('csi_records').select('po_number, si_number, amount').in('po_number', soNums),
+        supabase.from('csi_records').select('po_number, si_number, amount').in('po_number', soNums).or('collection_status.is.null,collection_status.neq.cancelled'),
         supabase.from('collections').select('si_number, amount').eq('status', 'posted').not('si_number', 'is', null),
       ])
       const invoicedBySo: Record<string, { total: number; siNumbers: Set<string> }> = {}
@@ -652,15 +654,17 @@ export default function SalesOrdersPage() {
         supabase.from('dr_logs')
           .select('dr_number,dr_date,status,supplier_name')
           .eq('supplier_name', so.client_name)
+          .neq('status', 'cancelled')
           .or('po_number.is.null,po_number.eq.')
           .order('dr_date', { ascending: false })
           .limit(50),
         supabase.from('csi_records')
           .select('si_number,si_date,item_name,unit,quantity,unit_price,amount')
           .eq('po_number', so.so_number)
+          .or('collection_status.is.null,collection_status.neq.cancelled')
           .order('si_date', { ascending: false }),
         supabase.from('csi_records')
-          .select('si_number,si_date,amount')
+          .select('si_number,si_date,amount,collection_status')
           .eq('client_name', so.client_name)
           .or('po_number.is.null,po_number.eq.')
           .order('si_date', { ascending: false })
@@ -681,7 +685,7 @@ export default function SalesOrdersPage() {
       const linkedSINums = new Set(Object.keys(csiMap))
       const linkableMap: Record<string, { si_number: string; si_date: string; total: number }> = {}
       for (const r of (linkableCSIData ?? [])) {
-        if (!linkedSINums.has(r.si_number) && !linkableMap[r.si_number]) {
+        if (r.collection_status !== 'cancelled' && !linkedSINums.has(r.si_number) && !linkableMap[r.si_number]) {
           linkableMap[r.si_number] = { si_number: r.si_number, si_date: r.si_date, total: Number(r.amount) }
         }
       }
@@ -690,6 +694,7 @@ export default function SalesOrdersPage() {
       const { data: linkableDRs } = await supabase.from('dr_logs')
         .select('dr_number,dr_date,status,supplier_name')
         .eq('supplier_name', so.client_name)
+        .neq('status', 'cancelled')
         .or('po_number.is.null,po_number.eq.')
         .order('dr_date', { ascending: false })
         .limit(50)

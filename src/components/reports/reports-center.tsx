@@ -173,7 +173,7 @@ export function ReportsCenter() {
         if (data) exportCSV('clients.csv', ['Code','Company','Contact','Email','Type','Credit Limit','Status'], data.map(r => [r.client_code, r.company_name, r.contact_person, r.email, r.client_type, r.credit_limit, r.status]))
         else toast.error('No data')
       } else if (key === 'csi') {
-        const data = await fetchAllRows((from, to) => supabase.from('csi_records').select('si_number, si_date, client_name, item_name, quantity, unit').order('si_date', { ascending: false }).order('id').range(from, to))
+        const data = await fetchAllRows((from, to) => supabase.from('csi_records').select('si_number, si_date, client_name, item_name, quantity, unit').or('collection_status.is.null,collection_status.neq.cancelled').order('si_date', { ascending: false }).order('id').range(from, to))
         if (data.length > 0) exportCSV('csi-records.csv', ['SI Number','Date','Client','Item','Qty','Unit'], data.map(r => [r.si_number, r.si_date, r.client_name, r.item_name, r.quantity, r.unit]))
         else toast.error('No data')
       } else if (key === 'bir_crj_sj') {

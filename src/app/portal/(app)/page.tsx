@@ -145,6 +145,7 @@ function ClientPortalDashboard() {
                 .select('si_number, amount, quantity, unit_price, collection_status')
                 .eq('client_name', clientRow.company_name)
                 .eq('show_in_portal', true)
+                .or('collection_status.is.null,collection_status.neq.cancelled')
                 .order('id')
                 .range(from, to)
             ),

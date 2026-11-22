@@ -401,7 +401,7 @@ export default function DRLogsPage() {
     const { data: sysData } = await supabase.from('system_settings').select('company_name, address, phone, email, tin').single()
     if (sysData) setCompanyInfo(sysData)
 
-    const { data: csiData } = await supabase.from('csi_records').select('si_number, dr_number').not('dr_number', 'is', null)
+    const { data: csiData } = await supabase.from('csi_records').select('si_number, dr_number').not('dr_number', 'is', null).or('collection_status.is.null,collection_status.neq.cancelled')
     const drMap: Record<string, Set<string>> = {}
     for (const rec of (csiData ?? []) as { si_number: string; dr_number: string | null }[]) {
       for (const dr of parseDrNumbers(rec.dr_number)) {
@@ -825,8 +825,11 @@ export default function DRLogsPage() {
       }
     }
 
-    // Mirror to sales_deliveries when linked to an SO
-    if (soNumber) {
+    // Mirror to sales_deliveries when linked to an SO. A cancelled DR is not a
+    // delivery, so its mirror is removed instead of counting as pending.
+    if (form.status === 'cancelled') {
+      await supabase.from('sales_deliveries').delete().eq('dr_number', drNumber)
+    } else if (soNumber) {
       await supabase.from('sales_deliveries').delete().eq('dr_number', drNumber)
       const { data: sdRow } = await supabase.from('sales_deliveries').insert({
         so_number: soNumber,
@@ -887,7 +890,7 @@ export default function DRLogsPage() {
   }
 
   const counts = {
-    total:    logs.length,
+    total:    logs.filter(l => l.status !== 'cancelled').length,
     received: logs.filter(l => l.status === 'received').length,
     partial:  logs.filter(l => l.status === 'partial').length,
     rejected: logs.filter(l => l.status === 'rejected').length,

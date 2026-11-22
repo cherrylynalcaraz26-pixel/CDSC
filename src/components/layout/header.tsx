@@ -3,12 +3,12 @@
 // Top bar of the staff system.
 //   Left   — menu (mobile), breadcrumb (sidebar group) and the page title.
 //   Middle — search: filters the current page's list, or jumps to a page (Ctrl+K).
-//   Right  — "New" quick-create menu, notifications, and the account menu.
+//   Right  — notifications and the account menu.
 
 import { useEffect, useRef, useState } from 'react'
 import {
-  BellRing, BellOff, Bell, Search, Menu, LogOut, Plus, ChevronRight, ChevronDown,
-  Settings, UserCog, Globe, Receipt, ShoppingCart, FileText, TrendingUp, CornerDownLeft, CalendarDays, LayoutGrid,
+  BellRing, BellOff, Bell, Search, Menu, LogOut,
+  Settings, UserCog, Globe, CornerDownLeft, CalendarDays, LayoutGrid,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -20,7 +20,6 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { getPageTitle } from '@/lib/page-titles'
 import { getNavGroupLabel, getNavMatch } from '@/components/layout/sidebar'
 import { notifyNew, deviceNotifySupported, deviceNotifyEnabled, enableDeviceNotify, disableDeviceNotify } from '@/lib/device-notify'
-import { NEW_EVENT } from '@/lib/use-open-on-new'
 import { toast } from 'sonner'
 import { useSearchContext } from '@/context/search-context'
 import { useCompany } from '@/context/company-context'
@@ -64,14 +63,6 @@ const SEARCH_ITEMS = [
   { label: 'Company Profile Deck',  href: '/settings?tab=deck',       section: 'Settings' },
   { label: 'User Management',       href: '/users',                   section: 'Users' },
   { label: 'Settings',              href: '/settings',                section: 'Settings' },
-]
-
-// Quick-create: each page opens its create form when visited with ?new=1.
-const QUICK_NEW = [
-  { label: 'Sales Order',    href: '/sales-orders',    icon: Receipt },
-  { label: 'Quotation',      href: '/quotation',       icon: FileText },
-  { label: 'Purchase Order', href: '/purchase-orders', icon: ShoppingCart },
-  { label: 'CRM Lead',       href: '/crm',             icon: TrendingUp },
 ]
 
 // Pages whose list the search box filters (elsewhere it searches pages).
@@ -191,7 +182,8 @@ export function Header({ onMenuClick }: HeaderProps) {
       if (!user) return
       setUserEmail(user.email ?? '')
       const { data: profile } = await supabase.from('profiles').select('full_name, role, avatar_url').eq('id', user.id).single()
-      setUserName(profile?.full_name ?? user.email?.split('@')[0] ?? 'User')
+      const full = (profile?.full_name ?? '').trim()
+      setUserName(full && !full.includes('@') ? full : 'User')
       setUserRole((profile as { role?: string } | null)?.role ?? '')
       setUserAvatarUrl((profile as { avatar_url?: string } | null)?.avatar_url ?? null)
       await loadNotifs()
@@ -239,11 +231,6 @@ export function Header({ onMenuClick }: HeaderProps) {
     setMobileSearch(false)
     inputRef.current?.blur()
     router.push(href)
-  }
-
-  function quickNew(href: string) {
-    if (pathname === href) window.dispatchEvent(new Event(NEW_EVENT))
-    else router.push(`${href}?new=1`)
   }
 
   const unreadCount = notifs.filter(n => !n.read).length
@@ -326,19 +313,6 @@ export function Header({ onMenuClick }: HeaderProps) {
             onClick={() => { setMobileSearch(true); setTimeout(() => inputRef.current?.focus(), 0) }}>
             <Search className="h-5 w-5" />
           </Button>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger className="hidden h-9 items-center gap-1.5 rounded-full bg-linear-to-r from-[#E8112D] to-[#F43F5E] pl-3 pr-2.5 text-sm font-semibold text-white shadow-md shadow-red-500/25 outline-none transition hover:brightness-110 sm:inline-flex">
-              <Plus className="h-4 w-4" />New<ChevronDown className="h-3.5 w-3.5 opacity-80" />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-52">
-              {QUICK_NEW.map(n => (
-                <DropdownMenuItem key={n.href} onClick={() => quickNew(n.href)}><n.icon className="mr-2 h-4 w-4" />New {n.label}</DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => router.push('/accounting?tab=collections')}><Receipt className="mr-2 h-4 w-4" />Record a Collection</DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
 
           {/* Notifications */}
           <div className="relative" ref={notifRef}>

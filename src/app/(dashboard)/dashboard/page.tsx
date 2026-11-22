@@ -1,7 +1,8 @@
 'use client'
 
 // Dashboard — charts with minimal detail. Four headline numbers, then four charts:
-// Sales vs Purchases, Cash In vs Cash Out, Top Clients, Orders by Status.
+// Sales vs Purchases, Cash In vs Cash Out, Top Clients, Orders by Status,
+// then Client Performance (CSI vs DR and Sales, filtered by year and client).
 // Palette validated with the dataviz checker (red #e5132a / blue #2a78d6 pass
 // lightness, chroma, CVD and contrast on the light surface). One y-axis per chart.
 
@@ -14,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Loader2, TrendingUp, Wallet, Banknote, ClipboardList } from 'lucide-react'
 import { KpiCard } from '@/components/ui/kpi-card'
 import { WelcomeBanner } from '@/components/layout/welcome-banner'
+import { ClientPerformance } from '@/components/dashboard/client-performance'
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, LabelList,
 } from 'recharts'
@@ -241,6 +243,8 @@ export default function DashboardPage() {
           </ResponsiveContainer>
         </ChartCard>
       </div>
+
+      <ClientPerformance sos={sos} />
     </div>
   )
 }

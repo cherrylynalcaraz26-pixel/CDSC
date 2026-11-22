@@ -371,6 +371,7 @@ export default function InventoryPage() {
         .from('csi_records')
         .select('client_name, item_name, unit, quantity, si_number, si_date, unit_price, show_in_portal')
         .not('client_name', 'is', null)
+        .or('collection_status.is.null,collection_status.neq.cancelled')
         .order('id')
         .range(from, from + PAGE - 1)
       if (!data || data.length === 0) break
@@ -1094,7 +1095,7 @@ export default function InventoryPage() {
     setDetailCsiRows([])
     const [{ data: drItems }, { data: csiData }] = await Promise.all([
       supabase.from('dr_log_items').select('dr_number, unit, quantity').eq('item_name', g.item_name),
-      supabase.from('csi_records').select('id, si_date, si_number, client_name, unit, quantity, unit_price, amount, collection_status').eq('item_name', g.item_name).order('si_date'),
+      supabase.from('csi_records').select('id, si_date, si_number, client_name, unit, quantity, unit_price, amount, collection_status').eq('item_name', g.item_name).or('collection_status.is.null,collection_status.neq.cancelled').order('si_date'),
     ])
     const drNums = Array.from(new Set((drItems ?? []).map(d => d.dr_number).filter(Boolean))) as string[]
     const logMap: Record<string, { dr_date: string | null; supplier_name: string | null }> = {}

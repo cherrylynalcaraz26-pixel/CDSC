@@ -295,7 +295,7 @@ export const homeHero = {
 
 export const inventorySystem = {
   description:
-    "We don't just deliver supplies — we give you tools to manage them. Our integrated system handles inventory monitoring, stock movement, and monthly reconciliation so you can focus on running your business, not counting boxes.",
+    "Every client gets access to the CDSC Client Portal. Quotations, orders, deliveries, invoices and the stock you hold from us are in one login, updated from the same system our team works in.",
   stockIn: [
     { label: 'Office Supplies', percent: 85 },
     { label: 'Safety Equipment', percent: 70 },
@@ -306,13 +306,14 @@ export const inventorySystem = {
     { label: 'IT Equipment', percent: 45 },
     { label: 'Cleaning Supplies', percent: 78 },
   ] as StockBar[],
+  // What a client actually sees in the CDSC Client Portal (src/app/portal).
   features: [
-    { title: 'Transaction Dashboard', description: 'Real-time visibility into every order — status, delivery tracking, and invoice records in one clean view.' },
-    { title: 'Live Inventory Monitoring', description: "Always know what's in stock. The system flags low-inventory items automatically before they become a problem." },
-    { title: 'Stock IN Recording', description: 'Every incoming delivery logged with timestamp, quantity, and supplier details — auditable, zero manual errors.' },
-    { title: 'Stock OUT Tracking', description: 'Each release recorded against your order. See exactly what went out, when, and to whom.' },
-    { title: 'Monthly Reconciliation', description: 'End-of-month inventory reports generated automatically. No manual tallying — clean numbers, ready for review.' },
-    { title: 'Order Scheduling', description: 'Plan recurring orders in advance. Keep your supply chain predictable and your team ahead of stock-outs.' },
+    { title: 'Portal Dashboard', description: 'Open orders, pending quotations, deliveries and stock levels on one screen the moment you log in.' },
+    { title: 'Quotations', description: 'Request a quote, review the prices we send back, and accept it online. The accepted quote becomes your order.' },
+    { title: 'My Orders & Deliveries', description: 'Follow every order through each delivery receipt (DR) and confirm receipt from the portal when it arrives.' },
+    { title: 'Browse Catalog', description: 'Search our product list by category and add items to a request without waiting for a call back.' },
+    { title: 'My Stock', description: 'Stock on hand updates from every DR. Issue items to departments with an issue slip and get low-stock alerts.' },
+    { title: 'Invoices & Messages', description: 'See your sales invoices and balance, and message our team directly from the portal.' },
   ],
 }
 

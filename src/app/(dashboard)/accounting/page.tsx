@@ -26,6 +26,7 @@ import {
 } from '@/components/accounting/ledger-reports'
 import { BalanceCheck } from '@/components/accounting/balance-check'
 import { logAudit } from '@/lib/audit-log'
+import { confirmAction } from '@/components/ui/confirm'
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
@@ -503,7 +504,7 @@ function CollectionsTab() {
       supabase.from('collections').select('*').order('created_at', { ascending: false }),
       supabase.from('clients').select('id, company_name, tin, address, city, province, industry').eq('status', 'active').order('company_name'),
       supabase.from('dr_logs').select('po_number, status').not('po_number', 'is', null).in('status', ['received', 'partial']),
-      fetchAllRows((from, to) => supabase.from('csi_records').select('po_number, si_number, amount, client_name').not('po_number', 'is', null).order('id').range(from, to)).then(data => ({ data })),
+      fetchAllRows((from, to) => supabase.from('csi_records').select('po_number, si_number, amount, client_name').not('po_number', 'is', null).or('collection_status.is.null,collection_status.neq.cancelled').order('id').range(from, to)).then(data => ({ data })),
     ])
     setRecords((colData ?? []) as Collection[])
     setClients(cliData ?? [])
@@ -602,7 +603,7 @@ function CollectionsTab() {
   async function loadCsiOptions(clientName: string, excludeCollectionId?: string) {
     if (!clientName) { setCsiOptions([]); return }
     const { data: csiData } = await fetchAllRows((from, to) =>
-      supabase.from('csi_records').select('si_number, si_date, amount, collection_status').eq('client_name', clientName).order('id').range(from, to)
+      supabase.from('csi_records').select('si_number, si_date, amount, collection_status').eq('client_name', clientName).or('collection_status.is.null,collection_status.neq.cancelled').order('id').range(from, to)
     ).then(data => ({ data }))
     const linkedSet = linkedSiNumbersFor(clientName, excludeCollectionId)
     const ownLinks = new Set(excludeCollectionId ? (csiLinksByCollection[excludeCollectionId] ?? []) : [])
@@ -646,7 +647,7 @@ function CollectionsTab() {
   async function loadBlankFormInvoices(clientName: string) {
     if (!clientName) { setBlankFormInvoices([]); return }
     const [{ data: csiData }, { data: linkedRows }] = await Promise.all([
-      fetchAllRows((from, to) => supabase.from('csi_records').select('si_number, si_date, amount, collection_status').eq('client_name', clientName).order('id').range(from, to)).then(data => ({ data })),
+      fetchAllRows((from, to) => supabase.from('csi_records').select('si_number, si_date, amount, collection_status').eq('client_name', clientName).or('collection_status.is.null,collection_status.neq.cancelled').order('id').range(from, to)).then(data => ({ data })),
       supabase.from('collections').select('si_number').eq('client_name', clientName).eq('status', 'posted').not('si_number', 'is', null),
     ])
     const linkedSet = new Set((linkedRows ?? []).map(r => r.si_number))
@@ -858,7 +859,7 @@ function CollectionsTab() {
       (async () => {
         if (!r.client_name) return
         const { data: csiData } = await fetchAllRows((from, to) =>
-          supabase.from('csi_records').select('si_number, si_date, amount, collection_status').eq('client_name', r.client_name!).order('id').range(from, to)
+          supabase.from('csi_records').select('si_number, si_date, amount, collection_status').eq('client_name', r.client_name!).or('collection_status.is.null,collection_status.neq.cancelled').order('id').range(from, to)
         ).then(data => ({ data }))
         const linkedSet = linkedSiNumbersFor(r.client_name, r.id)
         const map: Record<string, { si_number: string; si_date: string; total: number }> = {}
@@ -1954,7 +1955,7 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
   ]
   const [disbs, setDisbs] = useState<Disbursement[]>([])
   const [payees, setPayees] = useState<{ id: string; name: string }[]>([])
-  const [pendingPOs, setPendingPOs] = useState<{ po_number: string; po_date: string; supplier: string; net_payable: number }[]>([])
+  const [pendingPOs, setPendingPOs] = useState<{ id: string; po_number: string; po_date: string; supplier: string; net_payable: number; status: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -1966,16 +1967,18 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
     const [{ data }, { data: payeeData }, { data: poData }] = await Promise.all([
       supabase.from('disbursements').select('*').order('disb_date', { ascending: false }),
       supabase.from('payees').select('id, name').order('name'),
-      supabase.from('purchase_orders').select('po_number, po_date, net_payable, status, supplier:suppliers(company_name)').neq('status', 'cancelled'),
+      supabase.from('purchase_orders').select('id, po_number, po_date, net_payable, status, supplier:suppliers(company_name)').neq('status', 'cancelled'),
     ])
     setDisbs((data ?? []) as Disbursement[])
     setPayees(payeeData ?? [])
     const linkedPOs = new Set(((data ?? []) as Disbursement[]).map(d => d.po_number).filter(Boolean))
-    const poRows = (poData ?? []) as unknown as { po_number: string | null; po_date: string; net_payable: number | null; supplier: { company_name: string | null } | null }[]
+    const poRows = (poData ?? []) as unknown as { id: string; po_number: string | null; po_date: string; net_payable: number | null; status: string; supplier: { company_name: string | null } | null }[]
     setPendingPOs(
       poRows
         .filter(po => po.po_number && !linkedPOs.has(po.po_number))
         .map(po => ({
+          id: po.id,
+          status: po.status,
           po_number: po.po_number as string,
           po_date: po.po_date,
           supplier: po.supplier?.company_name ?? 'Unknown Supplier',
@@ -2003,6 +2006,26 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
       po_number: po.po_number,
     }))
     setOpen(true)
+  }
+
+  // Cancel = this PO will not be paid. Only a PO nothing has been received
+  // against can be cancelled here; a received PO is reversed from Purchase Orders.
+  async function cancelPendingPO(po: { id: string; po_number: string; status: string }) {
+    if (po.status !== 'open') {
+      toast.error(`PO ${po.po_number} already has deliveries received. Cancel it from Purchase Orders so stock is reversed too.`)
+      return
+    }
+    const ok = await confirmAction({
+      title: `Cancel PO ${po.po_number}?`,
+      description: 'It is removed from Pending Disbursements and marked Cancelled in Purchase Orders.',
+      confirmLabel: 'Cancel PO', cancelLabel: 'Keep',
+    })
+    if (!ok) return
+    const { error } = await supabase.from('purchase_orders').update({ status: 'cancelled' }).eq('id', po.id)
+    if (error) { toast.error(getErrorMessage(error)); return }
+    await logAudit(supabase, { action: 'update', table: 'purchase_orders', recordId: po.id, oldValues: { status: po.status }, newValues: { status: 'cancelled' } })
+    toast.success(`PO ${po.po_number} cancelled`)
+    load()
   }
 
   const filteredPayees = payees.filter(p => !form.payee || p.name.toLowerCase().includes(form.payee.toLowerCase()))
@@ -2062,7 +2085,7 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
     } catch (err) { toast.error(getErrorMessage(err, 'Disbursement saved, but its journal entry could not be posted')) }
     const payeeName = form.payee.trim()
     if (!payees.some(p => p.name.toLowerCase() === payeeName.toLowerCase())) {
-      await supabase.from('payees').insert({ name: payeeName })
+      await supabase.from('payees').upsert({ name: payeeName }, { onConflict: 'name', ignoreDuplicates: true })
     }
     toast.success('Disbursement recorded')
     setOpen(false); resetForm(); load()
@@ -2125,18 +2148,22 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
           <CardContent className="p-0">
             <Table containerClassName="overflow-x-clip">
               <TableHeader className="sticky top-0 z-10 bg-background"><TableRow>
-                <TableHead>PO Number</TableHead><TableHead>Date</TableHead><TableHead>Supplier</TableHead>
-                <TableHead className="text-right">Net Payable</TableHead><TableHead className="w-24" />
+                <TableHead className="w-12">No.</TableHead><TableHead>PO Number</TableHead><TableHead>Date</TableHead><TableHead>Supplier</TableHead>
+                <TableHead className="text-right">Net Payable</TableHead><TableHead className="w-44" />
               </TableRow></TableHeader>
               <TableBody>
-                {pendingPOs.map(po => (
+                {pendingPOs.map((po, i) => (
                   <TableRow key={po.po_number}>
+                    <TableCell className="text-xs text-muted-foreground tabular-nums">{i + 1}</TableCell>
                     <TableCell className="font-mono text-xs font-semibold text-red-600">{po.po_number}</TableCell>
                     <TableCell className="text-sm">{po.po_date ? format(new Date(po.po_date), 'MMM d, yyyy') : '—'}</TableCell>
                     <TableCell className="text-sm">{po.supplier}</TableCell>
                     <TableCell className="text-right font-semibold">{fmt(po.net_payable)}</TableCell>
                     <TableCell>
-                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => acceptPO(po)}>Accept</Button>
+                      <div className="flex justify-end gap-1.5">
+                        <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => acceptPO(po)}>Accept</Button>
+                        <Button size="sm" variant="outline" className="h-7 text-xs text-destructive hover:text-destructive" onClick={() => cancelPendingPO(po)}>Cancel</Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -2148,18 +2175,19 @@ function DisbursementsTab({ filterFrom, filterTo }: { filterFrom?: string; filte
       <Card className="overflow-visible"><CardContent className="p-0">
         <Table containerClassName="overflow-x-clip">
           <TableHeader className="sticky top-0 z-10 bg-background"><TableRow>
-            <TableHead>Date</TableHead><TableHead>CDJ #</TableHead><TableHead>Payee</TableHead>
+            <TableHead className="w-12">No.</TableHead><TableHead>Date</TableHead><TableHead>CDJ #</TableHead><TableHead>Payee</TableHead>
             <TableHead>Description</TableHead><TableHead>Expense Account</TableHead>
             <TableHead>Mode</TableHead><TableHead className="text-right">Amount</TableHead>
             <TableHead>Status</TableHead><TableHead className="w-10" />
           </TableRow></TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={9} className="text-center py-8"><Loader2 className="h-4 w-4 animate-spin mx-auto" /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={10} className="text-center py-8"><Loader2 className="h-4 w-4 animate-spin mx-auto" /></TableCell></TableRow>
             ) : filteredDisbs.length === 0 ? (
-              <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">No disbursements for the selected period.</TableCell></TableRow>
-            ) : filteredDisbs.map(d => (
+              <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">No disbursements for the selected period.</TableCell></TableRow>
+            ) : filteredDisbs.map((d, i) => (
               <TableRow key={d.id}>
+                <TableCell className="text-xs text-muted-foreground tabular-nums">{i + 1}</TableCell>
                 <TableCell className="text-sm whitespace-nowrap">{format(new Date(d.disb_date), 'MMM d, yyyy')}</TableCell>
                 <TableCell className="font-mono text-xs text-muted-foreground">{d.disb_number}</TableCell>
                 <TableCell className="font-medium text-sm">{d.payee}</TableCell>
@@ -2512,7 +2540,7 @@ function BookkeepingTab({ activeSub, onSubChange }: { activeSub: string; onSubCh
       supabase.from('disbursements').select('*').order('disb_date', { ascending: false }),
       supabase.from('chart_of_accounts').select('account_code,account_name,account_type,normal_balance,is_header').eq('is_active', true).order('account_code'),
       fetchLedgerLines(supabase).then(data => ({ data })),
-      fetchAllRows((from, to) => supabase.from('csi_records').select('id,si_number,si_date,client_name,item_name,unit,quantity,unit_price,amount').order('si_date').order('id').range(from, to)).then(data => ({ data })),
+      fetchAllRows((from, to) => supabase.from('csi_records').select('id,si_number,si_date,client_name,item_name,unit,quantity,unit_price,amount').or('collection_status.is.null,collection_status.neq.cancelled').order('si_date').order('id').range(from, to)).then(data => ({ data })),
     ])
     setCollections((colData ?? []) as Collection[])
     setDisbursements((disbData ?? []) as Disbursement[])
