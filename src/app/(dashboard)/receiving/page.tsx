@@ -200,7 +200,7 @@ export default function ReceivingPage() {
         .from('dr_logs')
         .select('id, dr_number, po_number, supplier_name, dr_date, status')
         .order('dr_date', { ascending: false }),
-      fetchAllRows((from, to) => supabase.from('csi_records').select('dr_number').not('dr_number', 'is', null).order('id').range(from, to)).then(data => ({ data })),
+      fetchAllRows((from, to) => supabase.from('csi_records').select('dr_number').not('dr_number', 'is', null).or('collection_status.is.null,collection_status.neq.cancelled').order('id').range(from, to)).then(data => ({ data })),
     ])
     const invoicedDrNumbers = new Set((csiData ?? []).map((r: { dr_number: string }) => r.dr_number))
     const mapped = (data ?? []).map((log: any) => ({

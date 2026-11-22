@@ -100,7 +100,7 @@ export default function PortalRequests() {
         const soNums = soList.map(o => o.so_number).filter(Boolean) as string[]
         if (soNums.length > 0) {
           const { data: drData } = await supabase
-            .from('dr_logs').select('dr_number,dr_date,status,po_number,client_accepted_at,client_accepted_by').in('po_number', soNums)
+            .from('dr_logs').select('dr_number,dr_date,status,po_number,client_accepted_at,client_accepted_by').in('po_number', soNums).neq('status', 'cancelled')
           const drNums = (drData ?? []).map((d: any) => d.dr_number).filter(Boolean)
           let drItems: any[] = []
           if (drNums.length > 0) {

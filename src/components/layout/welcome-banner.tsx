@@ -14,8 +14,12 @@ export function WelcomeBanner() {
     const supabase = createClient()
     supabase.auth.getUser().then(async ({ data: { user } }) => {
       if (!user) return
-      const { data } = await supabase.from('profiles').select('full_name').eq('id', user.id).single()
-      setName(((data?.full_name as string | undefined) ?? user.email?.split('@')[0] ?? '').split(' ')[0])
+      const { data } = await supabase.from('profiles').select('full_name, role').eq('id', user.id).single()
+      // Greet by first name. Never show an email address: when the profile has
+      // no real name (or an email was saved as the name), greet by role instead.
+      const full = ((data?.full_name as string | undefined) ?? '').trim()
+      const role = ((data as { role?: string } | null)?.role ?? '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+      setName(full && !full.includes('@') ? full.split(/\s+/)[0] : role)
     })
   }, [])
   const hour = now.getHours()

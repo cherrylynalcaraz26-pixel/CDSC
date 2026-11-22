@@ -176,6 +176,7 @@ function PortalStockPageContent() {
         .select('si_number,si_date,item_name,unit,quantity,unit_price,amount,dr_number')
         .eq('client_name', companyName)
         .eq('show_in_portal', true)
+        .or('collection_status.is.null,collection_status.neq.cancelled')
         .order('si_date', { ascending: false })
         .order('si_number')
         .order('id')

@@ -266,7 +266,7 @@ export default function CSIMonitoringPage() {
       supabase.from('clients').select('id, company_name, show_csi_in_portal, address, city, province, tin, industry, email').eq('status', 'active').order('company_name'),
       supabase.from('sales_orders').select('id, so_number').not('so_number', 'is', null).order('created_at', { ascending: false }),
       fetchAllRows((from, to) => supabase.from('dr_log_items').select('dr_number, item_name, quantity, unit').order('item_name').order('id').range(from, to)),
-      fetchAllRows((from, to) => supabase.from('dr_logs').select('id, dr_number, po_number, supplier_name').order('dr_date', { ascending: false }).order('id').range(from, to)),
+      fetchAllRows((from, to) => supabase.from('dr_logs').select('id, dr_number, po_number, supplier_name, status').order('dr_date', { ascending: false }).order('id').range(from, to)),
       supabase.from('uom_list').select('id, code, name').eq('is_active', true).order('code'),
       supabase.from('attributes').select('id, name, data_type, options').order('name'),
     ])
@@ -274,7 +274,8 @@ export default function CSIMonitoringPage() {
     setAttributeList((attrData ?? []) as AttributeOption[])
     // On DR logs the "supplier" field holds the delivered-to client.
     const drClientMap = new Map((drLogData as any[]).map(d => [d.dr_number, d.supplier_name ?? null]))
-    setDrItemsForCrossRef((drItemsData as any[]).map(d => ({ dr_number: d.dr_number, item_name: d.item_name, client_name: drClientMap.get(d.dr_number) ?? null, quantity: Number(d.quantity) || 0, unit: d.unit ?? null })))
+    const cancelledDrs = new Set((drLogData as { dr_number: string; status: string }[]).filter(d => d.status === 'cancelled').map(d => d.dr_number))
+    setDrItemsForCrossRef((drItemsData as any[]).filter(d => !cancelledDrs.has(d.dr_number) && (d.item_name ?? '').trim()).map(d => ({ dr_number: d.dr_number, item_name: d.item_name, client_name: drClientMap.get(d.dr_number) ?? null, quantity: Number(d.quantity) || 0, unit: d.unit ?? null })))
     setItemOptions((itemOptData ?? []) as ItemOption[])
     setClientOptions((clientData ?? []) as ClientOption[])
     setDrNumbers((drLogData as any[]).map(d => ({ id: d.id, dr_number: d.dr_number, po_number: d.po_number, client_name: d.supplier_name ?? null })))
@@ -761,8 +762,10 @@ export default function CSIMonitoringPage() {
     return matchSearch && matchClient && matchDate
   })
 
-  const totalAmount = filtered.reduce((s, r) => s + (Number(r.amount) || 0), 0)
-  const uniqueSIs = new Set(filtered.map(r => r.si_number)).size
+  // Cancelled SIs stay listed but never count toward any total, chart or cross-reference.
+  const counted = filtered.filter(r => r.collection_status !== 'cancelled')
+  const totalAmount = counted.reduce((s, r) => s + (Number(r.amount) || 0), 0)
+  const uniqueSIs = new Set(counted.map(r => r.si_number)).size
 
   const siGroups: { si_number: string; date: string; client: string; po: string | null; dr: string | null; items: CSIRecord[]; total: number; show_in_portal: boolean; attachment_url: string | null; collection_status: string | null }[] = []
   const siSeen = new Set<string>()
@@ -795,7 +798,7 @@ export default function CSIMonitoringPage() {
   // CSI vs DR cross-reference — hoisted out of the view render so the toolbar Print
   // button can print this same data when that view is active, instead of always
   // printing the by-SI invoice list regardless of which view is on screen.
-  const csiForCrossRef = clientFilter ? filtered.filter(r => r.client_name === clientFilter) : filtered
+  const csiForCrossRef = (clientFilter ? counted.filter(r => r.client_name === clientFilter) : counted).filter(r => r.item_name.trim())
   const drForCrossRef = clientFilter ? drItemsForCrossRef.filter(d => d.client_name === clientFilter) : drItemsForCrossRef
   const crossRefCsiItemSet = new Set(csiForCrossRef.map(r => r.item_name.trim().toLowerCase()))
   const crossRefDrItemSet = new Set(drForCrossRef.map(d => d.item_name.trim().toLowerCase()))
@@ -997,8 +1000,14 @@ export default function CSIMonitoringPage() {
   async function save() {
     if (!header.si_number.trim()) { toast.error('SI Number is required'); return }
     if (!header.si_date) { toast.error('Date is required'); return }
-    const validItems = items.filter(it => it.item_name.trim())
-    if (validItems.length === 0) { toast.error('At least one item is required'); return }
+    const isCancelled = header.collection_status === 'cancelled'
+    let validItems = items.filter(it => it.item_name.trim())
+    // A cancelled SI may be saved with no item description: it is kept only to
+    // account for the SI number, and every total skips cancelled SIs.
+    if (validItems.length === 0) {
+      if (!isCancelled) { toast.error('At least one item is required'); return }
+      validItems = [{ item_name: '', unit: '', quantity: '0', unit_price: '0' }]
+    }
     setSaving(true)
 
     // Delete existing records for this SI number if editing
@@ -1469,7 +1478,7 @@ export default function CSIMonitoringPage() {
           <div className="absolute inset-0 bg-gradient-to-br from-blue-50 to-transparent" />
           <CardContent className="relative pt-4 pb-3 flex items-start justify-between gap-3">
             <div>
-              <div className="text-2xl font-bold">{loading ? '—' : filtered.length}</div>
+              <div className="text-2xl font-bold">{loading ? '—' : counted.length}</div>
               <div className="text-xs text-muted-foreground mt-0.5">Line Items</div>
             </div>
             <div className="h-10 w-10 shrink-0 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-sm shadow-blue-500/30">
@@ -1496,7 +1505,7 @@ export default function CSIMonitoringPage() {
         const PALETTE = ['#dc2626','#2563eb','#16a34a','#d97706','#7c3aed','#0891b2','#be185d','#65a30d']
 
         const clientStats = clientOptions.map((c, i) => {
-          const clientRecs = filtered.filter(r => r.client_name === c.company_name)
+          const clientRecs = counted.filter(r => r.client_name === c.company_name)
           const siSet = new Set(clientRecs.map(r => r.si_number))
           return {
             name: c.company_name,
@@ -1514,7 +1523,7 @@ export default function CSIMonitoringPage() {
 
         // Monthly trend data
         const monthMap: Record<string, number> = {}
-        for (const r of filtered) {
+        for (const r of counted) {
           if (!r.si_date) continue
           const key = r.si_date.slice(0, 7) // "YYYY-MM"
           monthMap[key] = (monthMap[key] || 0) + (Number(r.amount) || 0)
@@ -2025,7 +2034,7 @@ export default function CSIMonitoringPage() {
                       </TableCell>
                       <TableCell className="font-mono text-sm font-semibold text-red-600">{rec.si_number}</TableCell>
                       <TableCell className="text-sm">{rec.client_name ?? '—'}</TableCell>
-                      <TableCell className="text-sm">{rec.item_name}</TableCell>
+                      <TableCell className="text-sm">{rec.item_name || <span className="text-muted-foreground">—</span>}</TableCell>
                       <TableCell className="text-right text-sm font-medium">{Number(rec.quantity)}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{rec.unit ?? '—'}</TableCell>
                       <TableCell className="text-right text-sm">{rec.unit_price ? formatPeso(Number(rec.unit_price)) : '—'}</TableCell>
@@ -2268,7 +2277,7 @@ export default function CSIMonitoringPage() {
             <DialogTitle>{crossRefDetail?.name}</DialogTitle>
           </DialogHeader>
           {crossRefDetail && (() => {
-            const csiForCrossRef = clientFilter ? filtered.filter(r => r.client_name === clientFilter) : filtered
+            const csiForCrossRef = (clientFilter ? counted.filter(r => r.client_name === clientFilter) : counted).filter(r => r.item_name.trim())
             const drForCrossRef = clientFilter ? drItemsForCrossRef.filter(d => d.client_name === clientFilter) : drItemsForCrossRef
             if (crossRefDetail.type === 'csi') {
               const rows = csiForCrossRef.filter(r => r.item_name === crossRefDetail.name)

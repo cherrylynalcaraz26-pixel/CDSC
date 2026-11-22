@@ -41,7 +41,7 @@ export function DeliveredVsCsi({ reloadKey, onCreate, onCreateAll }: {
     Promise.all([
       fetchAllRows<Dr>((f, t) => supabase.from('dr_logs').select('id, dr_number, supplier_name').in('status', ['received', 'partial']).not('supplier_name', 'is', null).order('id').range(f, t) as unknown as PromiseLike<{ data: Dr[] | null }>),
       fetchAllRows<DrItem>((f, t) => supabase.from('dr_log_items').select('id, dr_number, item_name, unit, quantity').order('id').range(f, t) as unknown as PromiseLike<{ data: DrItem[] | null }>),
-      fetchAllRows<Csi>((f, t) => supabase.from('csi_records').select('id, client_name, item_name, unit, quantity').not('client_name', 'is', null).order('id').range(f, t) as unknown as PromiseLike<{ data: Csi[] | null }>),
+      fetchAllRows<Csi>((f, t) => supabase.from('csi_records').select('id, client_name, item_name, unit, quantity').not('client_name', 'is', null).or('collection_status.is.null,collection_status.neq.cancelled').order('id').range(f, t) as unknown as PromiseLike<{ data: Csi[] | null }>),
       fetchAllRows<Po>((f, t) => supabase.from('pull_outs').select('id, location_name, status, source_type, items:pull_out_items(item_name, quantity)').eq('source_type', 'client').neq('status', 'cancelled').order('id').range(f, t) as unknown as PromiseLike<{ data: Po[] | null }>),
     ]).then(([drs, drItems, csi, pos]) => {
       if (!on) return
