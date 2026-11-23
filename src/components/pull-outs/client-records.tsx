@@ -159,7 +159,8 @@ export function summarize(r: ClientRecord) {
 // ── Formatting ─────────────────────────────────────────────────────────────
 
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!))
-export const php = (n: number) => 'PHP ' + n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+export const amt = (n: number) => n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+export const php = (n: number) => 'PHP ' + amt(n)
 const qtyFmt = (n: number) => n.toLocaleString('en-PH', { maximumFractionDigits: 3 })
 const d = (s: string, f: string) => (s ? format(new Date(s.slice(0, 10) + 'T00:00:00'), f) : '—')
 const shortDate = (s: string) => d(s, 'dd MMM yyyy')
@@ -188,7 +189,7 @@ export const STYLE = `
   tr.tot td{font-weight:700;border-top:2px solid #111;border-bottom:0}
   .ind td:first-child{padding-left:22px}
   .note{font-style:italic;color:#555;font-size:10px}
-  .sig{margin-top:26px}.sig .line{border-top:1px solid #111;width:240px;margin-top:36px;padding-top:3px}
+  .sig{margin-top:14px}.keep,.sig,.conf,tr,.to{page-break-inside:avoid;break-inside:avoid}h2{page-break-after:avoid;break-after:avoid}.sig .line{border-top:1px solid #111;width:240px;margin-top:36px;padding-top:3px}
   .conf{margin-top:24px;border:1.5px solid #111;padding:12px 14px;page-break-inside:avoid}
   .conf b.h{display:block;letter-spacing:1px;margin-bottom:6px}
   .conf .opt{margin:4px 0}.conf .blank{border-bottom:1px solid #111;height:18px;margin:4px 0}
@@ -200,7 +201,7 @@ export const STYLE = `
 export function masterListHtml(rs: ClientRecord[], o: LetterOptions, notes: Notes | null) {
   const rows = rs.map((r, n) => {
     const s = summarize(r)
-    return `<tr><td class="c">${n + 1}</td><td>${esc(r.name)}</td><td>${esc(refNo(o, n + 1))}</td><td class="c">${s.active}</td><td class="r">${php(s.activeAmt)}</td><td class="c">${s.open}</td><td class="r">${php(s.openAmt)}</td><td class="c">${s.drs}</td></tr>`
+    return `<tr><td class="c">${n + 1}</td><td>${esc(r.name)}</td><td>${esc(refNo(o, n + 1))}</td><td class="c">${s.active}</td><td class="r">${amt(s.activeAmt)}</td><td class="c">${s.open}</td><td class="r">${amt(s.openAmt)}</td><td class="c">${s.drs}</td></tr>`
   }).join('')
   const t = rs.map(summarize).reduce((a, s) => ({ c: a.c + s.active, amt: a.amt + s.activeAmt, o: a.o + s.open, oa: a.oa + s.openAmt, dr: a.dr + s.drs }), { c: 0, amt: 0, o: 0, oa: 0, dr: 0 })
   const periods = rs.map((r, n) => `<tr><td class="c">${n + 1}</td><td>${esc(r.name)}</td><td>${r.from ? `${longDate(r.from)} to ${longDate(r.to)}` : '—'}</td><td>${esc(refNo(o, n + 1))}</td></tr>`).join('')
@@ -219,8 +220,8 @@ export function masterListHtml(rs: ClientRecord[], o: LetterOptions, notes: Note
   return `<div class="page">
     <h1>CLIENT RECORDS MASTER LIST</h1>
     <div class="sub">Delivery Receipts and Charge Sales Invoices per client &nbsp;|&nbsp; As of ${esc(longDate(o.date))}</div>
-    <table><thead><tr><th class="c">#</th><th>Client</th><th>Ref. No.</th><th class="c">CSIs</th><th class="r">Total Invoiced</th><th class="c">Open</th><th class="r">Open Amount</th><th class="c">DRs</th></tr></thead>
-      <tbody>${rows}<tr class="tot"><td></td><td>Total</td><td></td><td class="c">${t.c}</td><td class="r">${php(t.amt)}</td><td class="c">${t.o}</td><td class="r">${php(t.oa)}</td><td class="c">${t.dr}</td></tr></tbody></table>
+    <table><thead><tr><th class="c">#</th><th>Client</th><th>Ref. No.</th><th class="c">CSIs</th><th class="r">Total Invoiced (PHP)</th><th class="c">Open</th><th class="r">Open Amount (PHP)</th><th class="c">DRs</th></tr></thead>
+      <tbody>${rows}<tr class="tot"><td></td><td>Total</td><td></td><td class="c">${t.c}</td><td class="r">${amt(t.amt)}</td><td class="c">${t.o}</td><td class="r">${amt(t.oa)}</td><td class="c">${t.dr}</td></tr></tbody></table>
     <h2>COVERAGE PERIOD PER CLIENT</h2>
     <table><thead><tr><th class="c">#</th><th>Client</th><th>Period Covered</th><th>Ref. No.</th></tr></thead><tbody>${periods}</tbody></table>
     ${ns.length ? `<h2>NOTES FOR REVIEW BEFORE SENDING</h2><ul>${ns.map(x => `<li>${x}</li>`).join('')}</ul>` : ''}
@@ -238,8 +239,8 @@ export function letterHtml(r: ClientRecord, ref: string, o: LetterOptions, heade
     : s.active
       ? '<p>Based on our records, all active invoices on this list have been collected. Thank you for your consistent and timely settlement.</p>'
       : '<p>There are no active invoices on record for this period.</p>'
-  const openRows = s.openList.map((i, n) => `<tr><td class="c">${n + 1}</td><td>${esc(i.si)}</td><td>${shortDate(i.date)}</td><td>${dash(i.po)}</td><td>${dash(i.dr)}</td><td class="r">${php(i.amount)}</td><td>For Collection</td></tr>`).join('')
-  const csiRows = r.invoices.map((i, n) => `<tr${i.status === 'cancelled' ? ' class="grey"' : ''}><td class="c">${n + 1}</td><td>${esc(i.si)}</td><td>${shortDate(i.date)}</td><td>${dash(i.po)}</td><td>${dash(i.dr)}</td><td class="c">${i.lines}</td><td class="r">${php(i.amount)}</td><td>${STATUS_LABEL[i.status]}</td></tr>`).join('')
+  const openRows = s.openList.map((i, n) => `<tr><td class="c">${n + 1}</td><td>${esc(i.si)}</td><td>${shortDate(i.date)}</td><td>${dash(i.po)}</td><td>${dash(i.dr)}</td><td class="r">${amt(i.amount)}</td><td>For Collection</td></tr>`).join('')
+  const csiRows = r.invoices.map((i, n) => `<tr${i.status === 'cancelled' ? ' class="grey"' : ''}><td class="c">${n + 1}</td><td>${esc(i.si)}</td><td>${shortDate(i.date)}</td><td>${dash(i.po)}</td><td>${dash(i.dr)}</td><td class="c">${i.lines}</td><td class="r">${amt(i.amount)}</td><td>${STATUS_LABEL[i.status]}</td></tr>`).join('')
   const drRows = r.deliveries.map((x, n) => `<tr${x.status === 'cancelled' ? ' class="grey"' : ''}><td class="c">${n + 1}</td><td>${esc(x.dr)}</td><td>${shortDate(x.date)}</td><td>${dash(x.po)}</td><td class="c">${x.lines}</td><td class="r">${qtyFmt(x.qty)}</td><td>${dash(x.accepted)}</td><td>${esc(DR_LABEL[x.status] ?? x.status)}</td></tr>`).join('')
   const sub = `<div class="sub" style="text-align:left">${esc(r.name)} &nbsp;|&nbsp; Ref. No. ${esc(ref)}</div>`
 
@@ -257,23 +258,22 @@ export function letterHtml(r: ClientRecord, ref: string, o: LetterOptions, heade
     <p>Kindly sign the conforme at the end of this letter and return a copy within ${esc(numberWords(o.days))} (${o.days}) days from receipt. If we do not receive a response within that period, we will treat the attached records as confirmed.</p>
 
     <h2>1. ACCOUNT SUMMARY</h2>
-    <table><thead><tr><th>Particulars</th><th class="c" style="width:70px">Count</th><th class="r" style="width:150px">Amount / Quantity</th></tr></thead><tbody>
-      <tr><td>Charge Sales Invoices issued (active)</td><td class="c">${s.active}</td><td class="r">${php(s.activeAmt)}</td></tr>
-      <tr class="ind"><td>Collected</td><td class="c">${s.collected}</td><td class="r">${php(s.collectedAmt)}</td></tr>
-      <tr class="ind"><td>Open for collection</td><td class="c">${s.open}</td><td class="r">${php(s.openAmt)}</td></tr>
-      <tr><td>Cancelled CSIs (excluded from totals)</td><td class="c">${s.cancelled}</td><td class="r">${php(s.cancelledAmt)}</td></tr>
+    <table><thead><tr><th>Particulars</th><th class="c" style="width:70px">Count</th><th class="r" style="width:150px">Amount (PHP) / Qty</th></tr></thead><tbody>
+      <tr><td>Charge Sales Invoices issued (active)</td><td class="c">${s.active}</td><td class="r">${amt(s.activeAmt)}</td></tr>
+      <tr class="ind"><td>Collected</td><td class="c">${s.collected}</td><td class="r">${amt(s.collectedAmt)}</td></tr>
+      <tr class="ind"><td>Open for collection</td><td class="c">${s.open}</td><td class="r">${amt(s.openAmt)}</td></tr>
+      <tr><td>Cancelled CSIs (excluded from totals)</td><td class="c">${s.cancelled}</td><td class="r">${amt(s.cancelledAmt)}</td></tr>
       <tr><td>Delivery Receipts on record (received)</td><td class="c">${s.drs}</td><td class="r">${qtyFmt(s.drQty)} units</td></tr>
       ${s.drOther ? `<tr><td>Rejected / returned DRs</td><td class="c">${s.drOther}</td><td class="r">—</td></tr>` : ''}
       <tr><td>Cancelled DRs</td><td class="c">${s.drCancelled}</td><td class="r">—</td></tr>
     </tbody></table>
 
     <h2>2. OPEN INVOICES FOR COLLECTION</h2>
-    ${s.open ? `<table><thead><tr><th class="c">#</th><th>CSI No.</th><th>CSI Date</th><th>PO No.</th><th>DR Ref.</th><th class="r">Amount</th><th>Status</th></tr></thead>
-      <tbody>${openRows}<tr class="tot"><td></td><td></td><td></td><td></td><td>Total</td><td class="r">${php(s.openAmt)}</td><td></td></tr></tbody></table>`
+    ${s.open ? `<table><thead><tr><th class="c">#</th><th>CSI No.</th><th>CSI Date</th><th>PO No.</th><th>DR Ref.</th><th class="r">Amount (PHP)</th><th>Status</th></tr></thead>
+      <tbody>${openRows}<tr class="tot"><td></td><td></td><td></td><td></td><td>Total</td><td class="r">${amt(s.openAmt)}</td><td></td></tr></tbody></table>`
       : '<p class="note">None. All active invoices are recorded as collected.</p>'}
 
-    <p style="margin-top:14px">Thank you for your continued partnership.</p>
-    <div class="sig">Respectfully yours,
+    <div class="sig keep"><p style="margin-top:14px">Thank you for your continued partnership.</p>Respectfully yours,
       <div class="line"><b>${esc(o.signatory || 'Authorized Representative')}</b><div>${esc(o.title || 'Authorized Representative')}</div><div>${esc(company)}</div></div>
     </div>
 
@@ -289,8 +289,8 @@ export function letterHtml(r: ClientRecord, ref: string, o: LetterOptions, heade
 
     <div class="brk"></div>
     <h2>ANNEX A. CHARGE SALES INVOICES (${r.invoices.length})</h2>${sub}
-    ${r.invoices.length ? `<table><thead><tr><th class="c">#</th><th>CSI No.</th><th>CSI Date</th><th>PO No.</th><th>DR Ref.</th><th class="c">Lines</th><th class="r">Amount</th><th>Status</th></tr></thead>
-      <tbody>${csiRows}<tr class="tot"><td></td><td></td><td></td><td></td><td>Active total</td><td></td><td class="r">${php(s.activeAmt)}</td><td></td></tr></tbody></table>
+    ${r.invoices.length ? `<table><thead><tr><th class="c">#</th><th>CSI No.</th><th>CSI Date</th><th>PO No.</th><th>DR Ref.</th><th class="c">Lines</th><th class="r">Amount (PHP)</th><th>Status</th></tr></thead>
+      <tbody>${csiRows}<tr class="tot"><td></td><td></td><td></td><td></td><td>Active total</td><td></td><td class="r">${amt(s.activeAmt)}</td><td></td></tr></tbody></table>
       <p class="note">Cancelled invoices are shown in grey and are excluded from the total.</p>`
       : '<p class="note">No Charge Sales Invoices are logged under this client in CSI Monitoring.</p>'}
 
@@ -439,9 +439,9 @@ export function ClientRecords() {
             <TableHead>Ref. No.</TableHead>
             <TableHead>Period Covered</TableHead>
             <TableHead className="text-center">CSIs</TableHead>
-            <TableHead className="text-right">Total Invoiced</TableHead>
+            <TableHead className="text-right">Total Invoiced (PHP)</TableHead>
             <TableHead className="text-center">Open</TableHead>
-            <TableHead className="text-right">Open Amount</TableHead>
+            <TableHead className="text-right">Open Amount (PHP)</TableHead>
             <TableHead className="text-center">DRs</TableHead>
             <TableHead className="w-40" />
           </TableRow>
@@ -465,9 +465,9 @@ export function ClientRecords() {
                 <TableCell className="whitespace-nowrap font-mono text-xs">{refOf.get(r.key)}</TableCell>
                 <TableCell className="whitespace-nowrap text-xs">{r.from ? `${shortDate(r.from)} – ${shortDate(r.to)}` : '—'}</TableCell>
                 <TableCell className="text-center tabular-nums">{s.active}{s.cancelled ? <span className="text-xs text-muted-foreground"> +{s.cancelled}✕</span> : null}</TableCell>
-                <TableCell className="text-right tabular-nums">{php(s.activeAmt)}</TableCell>
+                <TableCell className="text-right tabular-nums">{amt(s.activeAmt)}</TableCell>
                 <TableCell className={`text-center tabular-nums ${s.open ? 'font-semibold text-amber-700' : 'text-muted-foreground'}`}>{s.open}</TableCell>
-                <TableCell className={`text-right tabular-nums ${s.open ? 'font-semibold text-amber-700' : 'text-muted-foreground'}`}>{php(s.openAmt)}</TableCell>
+                <TableCell className={`text-right tabular-nums ${s.open ? 'font-semibold text-amber-700' : 'text-muted-foreground'}`}>{amt(s.openAmt)}</TableCell>
                 <TableCell className="text-center tabular-nums">{s.drs}</TableCell>
                 <TableCell>
                   <div className="flex gap-1">

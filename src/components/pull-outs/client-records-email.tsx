@@ -13,7 +13,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { sendEmail, htmlToPdfBase64 } from '@/lib/send-email'
+import { sendEmail } from '@/lib/send-email'
+import { pagedPdfBase64, sheetDoc, SHEET_W } from '@/lib/paged-pdf'
 import { getErrorMessage } from '@/lib/error-message'
 import { Eye, FileText, Loader2, Mail, Paperclip, Send } from 'lucide-react'
 import {
@@ -64,6 +65,17 @@ export function ClientRecordsEmailDialog({ record, refNo, opts, onClose }: {
   const [pdf, setPdf] = useState<{ html: string; base64: string; url: string } | null>(null)
   const [busy, setBusy] = useState<'pdf' | 'send' | null>(null)
   const urlRef = useRef<string | null>(null)
+  const boxRef = useRef<HTMLDivElement | null>(null)
+  const [zoom, setZoom] = useState(0.6)
+
+  // Scale the A4-width preview to the panel so it wraps exactly like the PDF.
+  useEffect(() => {
+    const el = boxRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => setZoom(Math.min(1, (el.clientWidth - 2) / SHEET_W)))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   useEffect(() => {
     let on = true
@@ -89,8 +101,8 @@ export function ClientRecordsEmailDialog({ record, refNo, opts, onClose }: {
 
   async function makePdf() {
     if (pdf && pdf.html === html) return pdf
-    // The letter is one long page in the browser; html2canvas slices it onto A4.
-    const base64 = await htmlToPdfBase64(`<style>${STYLE}</style><div style="font-family:Arial,Helvetica,sans-serif">${html}</div>`)
+    // Same document, same A4 width as the on-screen preview, paginated onto A4.
+    const base64 = await pagedPdfBase64(sheetDoc(html, STYLE, 'body{padding-top:0}'))
     const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0))
     if (urlRef.current) URL.revokeObjectURL(urlRef.current)
     const url = URL.createObjectURL(new Blob([bytes], { type: 'application/pdf' }))
@@ -187,14 +199,14 @@ export function ClientRecordsEmailDialog({ record, refNo, opts, onClose }: {
             {pdfStale && tab === 'pdf' && (
               <p className="rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-800">The letter changed since this PDF was built. Click Preview PDF to refresh it. Sending always attaches the latest version.</p>
             )}
-            <div className="h-[62vh] overflow-hidden rounded-xl border bg-white">
+            <div ref={boxRef} className="h-[62vh] overflow-hidden rounded-xl border bg-white">
               {!doc ? (
                 <div className="flex h-full items-center justify-center text-sm text-muted-foreground"><Loader2 className="mr-2 h-4 w-4 animate-spin" />Loading letterhead…</div>
               ) : tab === 'pdf' && pdf ? (
                 <iframe title="PDF attachment preview" src={pdf.url} className="h-full w-full" />
               ) : (
                 <iframe title="Letter preview" className="h-full w-full"
-                  srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8"/><style>${STYLE}body{padding:24px}.brk{border-top:1px dashed #ccc;margin:18px 0}</style></head><body>${html}</body></html>`} />
+                  srcDoc={sheetDoc(html, STYLE, `html{zoom:${zoom}}body{padding:44px 0}.brk{border-top:2px dashed #cbd5e1;margin:28px -52px}`)} />
               )}
             </div>
           </div>
