@@ -22,10 +22,11 @@ import { toast } from 'sonner'
 import { format } from 'date-fns'
 import {
   Plus, Trash2, Loader2, PackageOpen, CalendarClock, Truck, PackageCheck, MapPin, Phone, Pencil, Printer,
-  FileSignature, List, Boxes, Scale,
+  FileSignature, List, Boxes, Scale, FileText,
 } from 'lucide-react'
 import { PullOutLetterDialog } from '@/components/pull-outs/pull-out-letter'
 import { DeliveredVsCsi, type ClientBalance } from '@/components/pull-outs/delivered-vs-csi'
+import { ClientRecords } from '@/components/pull-outs/client-records'
 import { confirmRemoveLine } from '@/components/ui/confirm'
 import { deleteWithUndo } from '@/lib/delete-with-undo'
 
@@ -106,7 +107,7 @@ export default function PullOutsPage() {
   const [addr, setAddr] = useState<Address>(emptyAddress())
   const [lines, setLines] = useState<Line[]>([emptyLine()])
   const [letterFor, setLetterFor] = useState<PullOut | null>(null)
-  const [view, setView] = useState<'pullouts' | 'items' | 'balance'>('pullouts')
+  const [view, setView] = useState<'pullouts' | 'items' | 'balance' | 'records'>('pullouts')
   const [balanceKey, setBalanceKey] = useState(0)
   const [catalog, setCatalog] = useState<{ item_name: string; unit_of_measure: string | null }[]>([])
 
@@ -364,9 +365,9 @@ export default function PullOutsPage() {
       <Card className="overflow-visible">
         <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 pb-3">
           <div className="flex items-center gap-3">
-            <CardTitle className="text-base">{view === 'pullouts' ? 'Pull Out List' : view === 'items' ? 'List of Items' : 'Delivered vs CSI — by client'}</CardTitle>
+            <CardTitle className="text-base">{view === 'pullouts' ? 'Pull Out List' : view === 'items' ? 'List of Items' : view === 'balance' ? 'Delivered vs CSI — by client' : 'Client Records — DRs and CSIs per client'}</CardTitle>
             <div className="flex rounded-lg bg-muted p-0.5">
-              {([['pullouts', 'Pull Outs', List], ['items', 'Items', Boxes], ['balance', 'Delivered vs CSI', Scale]] as const).map(([v, label, Icon]) => (
+              {([['pullouts', 'Pull Outs', List], ['items', 'Items', Boxes], ['balance', 'Delivered vs CSI', Scale], ['records', 'Client Records', FileText]] as const).map(([v, label, Icon]) => (
                 <button key={v} type="button" onClick={() => setView(v)}
                   className={`flex items-center gap-1.5 rounded-md px-3 py-1 text-xs font-medium transition ${view === v ? 'bg-white text-[#E8112D] shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
                   <Icon className="h-3.5 w-3.5" />{label}
@@ -375,7 +376,7 @@ export default function PullOutsPage() {
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {view !== 'balance' && <Select value={statusFilter} onValueChange={v => setStatusFilter((v ?? 'open') as typeof statusFilter)}>
+            {view !== 'balance' && view !== 'records' && <Select value={statusFilter} onValueChange={v => setStatusFilter((v ?? 'open') as typeof statusFilter)}>
               <SelectTrigger className="h-9 w-[170px]">
                 <span className="text-sm">
                   {statusFilter === 'open' ? 'Open (not yet received)' : statusFilter === 'all' ? 'All' : STATUS[statusFilter].label}
@@ -393,7 +394,9 @@ export default function PullOutsPage() {
           </div>
         </CardHeader>
         <CardContent className="overflow-x-auto p-0">
-          {view === 'balance' ? (
+          {view === 'records' ? (
+            <ClientRecords />
+          ) : view === 'balance' ? (
             <DeliveredVsCsi reloadKey={balanceKey} onCreate={openFromBalance} onCreateAll={createAllFromBalance} />
           ) : view === 'items' ? (
           <Table>
