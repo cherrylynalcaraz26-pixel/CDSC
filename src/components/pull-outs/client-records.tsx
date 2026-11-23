@@ -23,14 +23,15 @@ import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { AlertTriangle, FileText, Loader2, Printer, RefreshCw } from 'lucide-react'
+import { AlertTriangle, FileText, Loader2, Mail, Printer, RefreshCw } from 'lucide-react'
+import { ClientRecordsEmailDialog } from '@/components/pull-outs/client-records-email'
 
 // ── Data ───────────────────────────────────────────────────────────────────
 
 type CsiRow = { id: number; si_number: string | null; si_date: string | null; po_number: string | null; dr_number: string | null; client_name: string | null; amount: number | null; collection_status: string | null }
 type DrRow = { id: string; dr_number: string; dr_date: string | null; po_number: string | null; supplier_name: string | null; status: string | null; received_by_name: string | null }
 type DrItemRow = { id: number; dr_number: string | null; quantity: number | null }
-type ClientRow = { id: string; company_name: string; contact_person: string | null; position: string | null; address: string | null; city: string | null; province: string | null; status: string | null }
+type ClientRow = { id: string; company_name: string; email: string | null; contact_person: string | null; position: string | null; address: string | null; city: string | null; province: string | null; status: string | null }
 
 type CsiStatus = 'collected' | 'open' | 'cancelled'
 export interface Invoice { si: string; date: string; po: string; dr: string; lines: number; amount: number; status: CsiStatus; raw: string | null }
@@ -39,6 +40,7 @@ export interface ClientRecord {
   key: string
   name: string
   inMaster: boolean
+  email: string
   contact: string
   position: string
   address: string
@@ -69,7 +71,7 @@ function build(csi: CsiRow[], drs: DrRow[], drItems: DrItemRow[], clients: Clien
       const c = master.get(k)
       if (!c) unmatched.add(rawName.trim())
       groups.set(k, {
-        key: k, name: c?.company_name ?? rawName.trim(), inMaster: !!c,
+        key: k, name: c?.company_name ?? rawName.trim(), inMaster: !!c, email: c?.email?.trim() ?? '',
         contact: c?.contact_person ?? '', position: c?.position ?? '',
         address: [c?.address, c?.city, c?.province].filter(Boolean).join(', '),
         invoices: [], deliveries: [], from: '', to: '',
@@ -157,11 +159,11 @@ export function summarize(r: ClientRecord) {
 // ── Formatting ─────────────────────────────────────────────────────────────
 
 const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]!))
-const php = (n: number) => 'PHP ' + n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+export const php = (n: number) => 'PHP ' + n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const qtyFmt = (n: number) => n.toLocaleString('en-PH', { maximumFractionDigits: 3 })
 const d = (s: string, f: string) => (s ? format(new Date(s.slice(0, 10) + 'T00:00:00'), f) : '—')
 const shortDate = (s: string) => d(s, 'dd MMM yyyy')
-const longDate = (s: string) => d(s, 'MMMM d, yyyy')
+export const longDate = (s: string) => d(s, 'MMMM d, yyyy')
 const dash = (s: string) => esc(s.trim() || '—')
 const STATUS_LABEL: Record<CsiStatus, string> = { collected: 'Collected', open: 'For Collection', cancelled: 'Cancelled' }
 const DR_LABEL: Record<string, string> = { received: 'Received', partial: 'Partial', rejected: 'Rejected', returned: 'Returned', cancelled: 'Cancelled' }
@@ -225,7 +227,7 @@ export function masterListHtml(rs: ClientRecord[], o: LetterOptions, notes: Note
   </div>`
 }
 
-export function letterHtml(r: ClientRecord, ref: string, o: LetterOptions, header: string, company: string) {
+export function letterHtml(r: ClientRecord, ref: string, o: LetterOptions, header: string, company: string, note = '') {
   const s = summarize(r)
   const period = r.from ? `${longDate(r.from)} to ${longDate(r.to)}` : 'the records on file'
   const addressee = r.contact
@@ -251,6 +253,7 @@ export function letterHtml(r: ClientRecord, ref: string, o: LetterOptions, heade
     <p>As part of our records review, we have pulled out all Delivery Receipts (DR) and Charge Sales Invoices (CSI) issued by ${esc(company)} to ${esc(r.name)} covering the period ${esc(period)}. The complete list is attached to this letter as Annex A (CSI) and Annex B (DR).</p>
     <p>We ask that your team check this list against your own receiving and payables records. If anything does not match, please let us know the specific document number and the difference so we can reconcile it on our side.</p>
     ${status}
+    ${note.trim() ? note.trim().split(/\n{2,}/).map(x => `<p>${esc(x).replace(/\n/g, '<br/>')}</p>`).join('') : ''}
     <p>Kindly sign the conforme at the end of this letter and return a copy within ${esc(numberWords(o.days))} (${o.days}) days from receipt. If we do not receive a response within that period, we will treat the attached records as confirmed.</p>
 
     <h2>1. ACCOUNT SUMMARY</h2>
@@ -307,6 +310,16 @@ function numberWords(n: number) {
   return String(n)
 }
 
+/** Letterhead block and company name used on every printed / emailed letter. */
+export async function loadDocHeader() {
+  const [lh, { data: co }] = await Promise.all([loadLetterhead(), createClient().from('system_settings').select('*').single()])
+  return {
+    header: letterheadHtml(lh, co as LetterheadCompany | null),
+    company: (co as LetterheadCompany | null)?.company_name || 'CDSC Industrial Supply',
+  }
+}
+
+
 // ── Component ──────────────────────────────────────────────────────────────
 
 export function ClientRecords() {
@@ -317,6 +330,7 @@ export function ClientRecords() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [untagged, setUntagged] = useState<'open' | 'collected'>('open')
   const [printing, setPrinting] = useState(false)
+  const [emailFor, setEmailFor] = useState<ClientRecord | null>(null)
   const [opts, setOpts] = useState<LetterOptions>(() => {
     const today = format(new Date(), 'yyyy-MM-dd')
     return { date: today, signatory: registration.proprietor, title: 'Proprietor', days: 15, refBase: `CDSC-CRS-${format(new Date(), 'yyyy-MM')}` }
@@ -328,7 +342,7 @@ export function ClientRecords() {
       fetchAllRows<CsiRow>((f, t) => supabase.from('csi_records').select('id, si_number, si_date, po_number, dr_number, client_name, amount, collection_status').order('id').range(f, t) as unknown as PromiseLike<{ data: CsiRow[] | null }>),
       fetchAllRows<DrRow>((f, t) => supabase.from('dr_logs').select('id, dr_number, dr_date, po_number, supplier_name, status, received_by_name').order('id').range(f, t) as unknown as PromiseLike<{ data: DrRow[] | null }>),
       fetchAllRows<DrItemRow>((f, t) => supabase.from('dr_log_items').select('id, dr_number, quantity').order('id').range(f, t) as unknown as PromiseLike<{ data: DrItemRow[] | null }>),
-      supabase.from('clients').select('id, company_name, contact_person, position, address, city, province, status').order('company_name'),
+      supabase.from('clients').select('id, company_name, email, contact_person, position, address, city, province, status').order('company_name'),
     ]).then(([csi, drs, drItems, cl]) => {
       if (on) setRaw({ csi, drs, drItems, clients: (cl.data ?? []) as ClientRow[] })
     })
@@ -350,10 +364,8 @@ export function ClientRecords() {
     const win = window.open('', '_blank', 'width=960,height=1000')
     if (!win) return
     setPrinting(true)
-    const [lh, { data: co }] = await Promise.all([loadLetterhead(), supabase.from('system_settings').select('*').single()])
+    const { header, company } = await loadDocHeader()
     setPrinting(false)
-    const company = (co as LetterheadCompany | null)?.company_name || 'CDSC Industrial Supply'
-    const header = letterheadHtml(lh, co as LetterheadCompany | null)
     // Reference numbers follow the full master list, so a reprint of one client keeps its number.
     const ordered = records.filter(r => list.some(x => x.key === r.key))
     const body = (withMaster ? masterListHtml(ordered, opts, ordered.length === records.length ? built!.notes : null) : '')
@@ -431,7 +443,7 @@ export function ClientRecords() {
             <TableHead className="text-center">Open</TableHead>
             <TableHead className="text-right">Open Amount</TableHead>
             <TableHead className="text-center">DRs</TableHead>
-            <TableHead className="w-24" />
+            <TableHead className="w-40" />
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -458,15 +470,24 @@ export function ClientRecords() {
                 <TableCell className={`text-right tabular-nums ${s.open ? 'font-semibold text-amber-700' : 'text-muted-foreground'}`}>{php(s.openAmt)}</TableCell>
                 <TableCell className="text-center tabular-nums">{s.drs}</TableCell>
                 <TableCell>
-                  <Button variant="ghost" size="sm" disabled={printing} onClick={() => print([r], false)} title="Print records letter">
-                    <Printer className="mr-1 h-3.5 w-3.5" />Letter
-                  </Button>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="sm" disabled={printing} onClick={() => print([r], false)} title="Print records letter">
+                      <Printer className="mr-1 h-3.5 w-3.5" />Letter
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setEmailFor(r)} title="Email the letter to the client">
+                      <Mail className="mr-1 h-3.5 w-3.5" />Email
+                    </Button>
+                  </div>
                 </TableCell>
               </TableRow>
             )
           })}
         </TableBody>
       </Table>
+
+      {emailFor && (
+        <ClientRecordsEmailDialog record={emailFor} refNo={refOf.get(emailFor.key)!} opts={opts} onClose={() => setEmailFor(null)} />
+      )}
     </div>
   )
 }
