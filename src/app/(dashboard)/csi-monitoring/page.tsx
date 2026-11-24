@@ -1001,9 +1001,13 @@ export default function CSIMonitoringPage() {
     if (validItems.length === 0) { toast.error('At least one item is required'); return }
     setSaving(true)
 
-    // Delete existing records for this SI number if editing
+    // When editing, remember the current lines; they are removed only after the
+    // new lines are saved, so a failed save can never leave the SI with no lines.
+    let oldIds: number[] = []
     if (editingSiNumber) {
-      await supabase.from('csi_records').delete().eq('si_number', editingSiNumber)
+      const { data: old, error: oldErr } = await supabase.from('csi_records').select('id').eq('si_number', editingSiNumber)
+      if (oldErr) { toast.error(getErrorMessage(oldErr)); setSaving(false); return }
+      oldIds = (old ?? []).map(r => r.id as number)
     }
 
     const rows = validItems.map(it => ({
@@ -1022,8 +1026,19 @@ export default function CSIMonitoringPage() {
       attachment_url: header.attachment_url,
     }))
 
-    const { error } = await supabase.from('csi_records').insert(rows)
+    const { data: inserted, error } = await supabase.from('csi_records').insert(rows).select('id')
     if (error) { toast.error(getErrorMessage(error)); setSaving(false); return }
+    if (oldIds.length) {
+      const { error: delErr } = await supabase.from('csi_records').delete().in('id', oldIds)
+      if (delErr) {
+        // Roll back the new lines so the SI is not doubled; the original lines stay as they were.
+        const newIds = (inserted ?? []).map(r => r.id as number)
+        if (newIds.length) await supabase.from('csi_records').delete().in('id', newIds)
+        toast.error(getErrorMessage(delErr, 'Could not update the record. No changes were saved.'))
+        setSaving(false)
+        return
+      }
+    }
     toast.success(editingSiNumber ? 'Record updated' : 'Record added')
     setOpen(false)
     load()

@@ -14,6 +14,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { sendEmail } from '@/lib/send-email'
+import { createClient } from '@/lib/supabase/client'
 import { pagedPdfBase64, sheetDoc, SHEET_W } from '@/lib/paged-pdf'
 import { getErrorMessage } from '@/lib/error-message'
 import { Eye, FileText, Loader2, Mail, Paperclip, Send } from 'lucide-react'
@@ -47,11 +48,13 @@ function defaultBody(r: ClientRecord, ref: string, o: LetterOptions, company: st
 
 const fileSafe = (s: string) => s.replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ').trim()
 
-export function ClientRecordsEmailDialog({ record, refNo, opts, onClose }: {
+export function ClientRecordsEmailDialog({ record, refNo, opts, onClose, onLogged }: {
   record: ClientRecord
   refNo: string
   opts: LetterOptions
   onClose: () => void
+  /** Called after the send (or failure) is written to the email history. */
+  onLogged?: () => void
 }) {
   const [doc, setDoc] = useState<{ header: string; company: string } | null>(null)
   const [to, setTo] = useState(record.email)
@@ -125,15 +128,56 @@ export function ClientRecordsEmailDialog({ record, refNo, opts, onClose }: {
     if (recipients.some(x => !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(x))) { toast.error('Check the email address format'); return }
     if (!subject.trim()) { toast.error('Enter a subject'); return }
     setBusy('send')
+    const sentHtml = html
+    let error: string | null = null
     try {
       const p = await makePdf()
       await sendEmail({ to: recipients.join(', '), subject: subject.trim(), body, attachments: [{ base64: p.base64, filename }] })
-      toast.success(`Letter ${refNo} emailed to ${recipients.join(', ')}`)
-      onClose()
     } catch (e) {
-      toast.error(getErrorMessage(e, 'Failed to send email'))
-    } finally {
-      setBusy(null)
+      error = getErrorMessage(e, 'Failed to send email')
+    }
+    const logged = await logEmail(recipients.join(', '), sentHtml, error)
+    setBusy(null)
+    if (error) { toast.error(error); return }
+    toast.success(`Letter ${refNo} emailed to ${recipients.join(', ')}`)
+    if (!logged) toast.warning('Email sent, but it could not be saved to the email history. Has migration 045 been applied?')
+    onClose()
+  }
+
+  // Writes the send (or failure) to the client's email history. Never throws.
+  async function logEmail(recipients: string, sentHtml: string, error: string | null) {
+    try {
+      const supabase = createClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      const { data: prof } = user ? await supabase.from('profiles').select('full_name, email').eq('id', user.id).single() : { data: null }
+      const s = summarize(record)
+      const { error: dbErr } = await supabase.from('client_record_emails').insert({
+        client_key: record.key,
+        client_name: record.name,
+        ref_no: refNo,
+        letter_date: opts.date || null,
+        period_from: record.from || null,
+        period_to: record.to || null,
+        recipients,
+        subject: subject.trim(),
+        body,
+        attachment_name: filename,
+        letter_html: sentHtml,
+        csi_count: s.active,
+        invoiced_amount: Math.round(s.activeAmt * 100) / 100,
+        open_count: s.open,
+        open_amount: Math.round(s.openAmt * 100) / 100,
+        dr_count: s.drs,
+        status: error ? 'failed' : 'sent',
+        error,
+        sent_by_name: prof?.full_name || prof?.email || user?.email || null,
+      })
+      if (dbErr) { console.warn('email history write failed', dbErr); return false }
+      onLogged?.()
+      return true
+    } catch (e) {
+      console.warn('email history write failed', e)
+      return false
     }
   }
 

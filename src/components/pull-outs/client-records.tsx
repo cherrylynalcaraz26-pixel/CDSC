@@ -12,6 +12,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { format } from 'date-fns'
+import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { fetchAllRows } from '@/lib/supabase/fetch-all'
 import { loadLetterhead, letterheadHtml, type LetterheadCompany } from '@/lib/letterhead'
@@ -23,7 +24,8 @@ import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { AlertTriangle, FileText, Loader2, Mail, Printer, RefreshCw } from 'lucide-react'
+import { AlertTriangle, FileText, History, Loader2, Mail, Printer, RefreshCw } from 'lucide-react'
+import { ClientRecordsHistory, summarizeLog, type EmailLogSummary } from '@/components/pull-outs/client-records-history'
 import { ClientRecordsEmailDialog } from '@/components/pull-outs/client-records-email'
 
 // ── Data ───────────────────────────────────────────────────────────────────
@@ -331,6 +333,18 @@ export function ClientRecords() {
   const [untagged, setUntagged] = useState<'open' | 'collected'>('open')
   const [printing, setPrinting] = useState(false)
   const [emailFor, setEmailFor] = useState<ClientRecord | null>(null)
+  const [historyFor, setHistoryFor] = useState<string | null>(null)   // client key, or 'all'
+  const [log, setLog] = useState<EmailLogSummary[]>([])
+  const [logReload, setLogReload] = useState(0)
+
+  useEffect(() => {
+    let on = true
+    // Missing table (migration 045 not applied) just leaves the column empty.
+    fetchAllRows<EmailLogSummary>((f, t) => supabase.from('client_record_emails').select('id, client_key, sent_at, status').order('id').range(f, t) as unknown as PromiseLike<{ data: EmailLogSummary[] | null }>)
+      .then(rows => { if (on) setLog(rows) })
+    return () => { on = false }
+  }, [logReload]) // eslint-disable-line react-hooks/exhaustive-deps
+  const logBy = useMemo(() => summarizeLog(log), [log])
   const [opts, setOpts] = useState<LetterOptions>(() => {
     const today = format(new Date(), 'yyyy-MM-dd')
     return { date: today, signatory: registration.proprietor, title: 'Proprietor', days: 15, refBase: `CDSC-CRS-${format(new Date(), 'yyyy-MM')}` }
@@ -420,7 +434,8 @@ export function ClientRecords() {
           {records.length} clients · {totals.c} CSIs · {php(totals.amt)} invoiced · <span className="font-medium text-amber-700">{totals.o} open · {php(totals.oa)}</span> · {totals.dr} DRs
         </p>
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" size="sm" onClick={() => setReload(k => k + 1)}><RefreshCw className="mr-1.5 h-3.5 w-3.5" />Refresh</Button>
+          <Button variant="outline" size="sm" onClick={() => { setReload(k => k + 1); setLogReload(k => k + 1) }}><RefreshCw className="mr-1.5 h-3.5 w-3.5" />Refresh</Button>
+          <Button variant="outline" size="sm" onClick={() => setHistoryFor('all')}><History className="mr-1.5 h-3.5 w-3.5" />Email History</Button>
           <Button variant="outline" size="sm" disabled={!sel.length || printing} onClick={() => print(sel, sel.length > 1)}>
             <Printer className="mr-1.5 h-3.5 w-3.5" />Print Selected ({sel.length})
           </Button>
@@ -443,12 +458,13 @@ export function ClientRecords() {
             <TableHead className="text-center">Open</TableHead>
             <TableHead className="text-right">Open Amount (PHP)</TableHead>
             <TableHead className="text-center">DRs</TableHead>
+            <TableHead>Last Emailed</TableHead>
             <TableHead className="w-40" />
           </TableRow>
         </TableHeader>
         <TableBody>
           {shown.length === 0 ? (
-            <TableRow><TableCell colSpan={11} className="py-10 text-center text-muted-foreground">No DRs or CSIs on record.</TableCell></TableRow>
+            <TableRow><TableCell colSpan={12} className="py-10 text-center text-muted-foreground">No DRs or CSIs on record.</TableCell></TableRow>
           ) : shown.map(r => {
             const s = summarize(r)
             return (
@@ -469,6 +485,19 @@ export function ClientRecords() {
                 <TableCell className={`text-center tabular-nums ${s.open ? 'font-semibold text-amber-700' : 'text-muted-foreground'}`}>{s.open}</TableCell>
                 <TableCell className={`text-right tabular-nums ${s.open ? 'font-semibold text-amber-700' : 'text-muted-foreground'}`}>{amt(s.openAmt)}</TableCell>
                 <TableCell className="text-center tabular-nums">{s.drs}</TableCell>
+                <TableCell className="whitespace-nowrap text-xs">
+                  {(() => {
+                    const l = logBy.get(r.key)
+                    if (!l) return <span className="text-muted-foreground">Not yet sent</span>
+                    return (
+                      <button type="button" onClick={() => setHistoryFor(r.key)} className="text-left hover:underline" title="View email history">
+                        {l.lastSent ? <span>{format(new Date(l.lastSent), 'dd MMM yyyy')}</span> : <span className="text-muted-foreground">Never sent</span>}
+                        {l.count > 0 && <span className="ml-1 text-muted-foreground">· {l.count}×</span>}
+                        {l.lastStatus === 'failed' && <span className="ml-1 font-medium text-red-700">· last failed</span>}
+                      </button>
+                    )
+                  })()}
+                </TableCell>
                 <TableCell>
                   <div className="flex gap-1">
                     <Button variant="ghost" size="sm" disabled={printing} onClick={() => print([r], false)} title="Print records letter">
@@ -486,7 +515,20 @@ export function ClientRecords() {
       </Table>
 
       {emailFor && (
-        <ClientRecordsEmailDialog record={emailFor} refNo={refOf.get(emailFor.key)!} opts={opts} onClose={() => setEmailFor(null)} />
+        <ClientRecordsEmailDialog record={emailFor} refNo={refOf.get(emailFor.key)!} opts={opts}
+          onClose={() => setEmailFor(null)} onLogged={() => setLogReload(k => k + 1)} />
+      )}
+
+      {historyFor && (
+        <ClientRecordsHistory
+          clientKey={historyFor === 'all' ? undefined : historyFor}
+          onClose={() => setHistoryFor(null)}
+          onResend={k => {
+            const rec = records.find(x => x.key === k)
+            if (!rec) { toast.error('This client is no longer on the Client Records list.'); return }
+            setHistoryFor(null); setEmailFor(rec)
+          }}
+        />
       )}
     </div>
   )
