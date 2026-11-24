@@ -10,7 +10,7 @@
 // punctuation and Inc./Corp. suffixes ignored). Names that do not match stay
 // as their own group and are flagged in the review notes so nothing is dropped.
 
-import { useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
 import { format } from 'date-fns'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
@@ -24,19 +24,20 @@ import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { AlertTriangle, FileText, History, Loader2, Mail, Printer, RefreshCw } from 'lucide-react'
+import { AlertTriangle, ChevronDown, ChevronRight, FileText, History, Loader2, Mail, Printer, RefreshCw } from 'lucide-react'
 import { ClientRecordsHistory, summarizeLog, type EmailLogSummary } from '@/components/pull-outs/client-records-history'
 import { ClientRecordsEmailDialog } from '@/components/pull-outs/client-records-email'
 
 // ── Data ───────────────────────────────────────────────────────────────────
 
-type CsiRow = { id: number; si_number: string | null; si_date: string | null; po_number: string | null; dr_number: string | null; client_name: string | null; amount: number | null; collection_status: string | null }
+type CsiRow = { id: number; si_number: string | null; si_date: string | null; po_number: string | null; dr_number: string | null; client_name: string | null; item_name: string | null; unit: string | null; quantity: number | null; unit_price: number | null; amount: number | null; collection_status: string | null }
 type DrRow = { id: string; dr_number: string; dr_date: string | null; po_number: string | null; supplier_name: string | null; status: string | null; received_by_name: string | null }
 type DrItemRow = { id: number; dr_number: string | null; quantity: number | null }
 type ClientRow = { id: string; company_name: string; email: string | null; contact_person: string | null; position: string | null; address: string | null; city: string | null; province: string | null; status: string | null }
 
 type CsiStatus = 'collected' | 'open' | 'cancelled'
-export interface Invoice { si: string; date: string; po: string; dr: string; lines: number; amount: number; status: CsiStatus; raw: string | null }
+export interface InvoiceItem { name: string; unit: string; qty: number; price: number; amount: number }
+export interface Invoice { si: string; date: string; po: string; dr: string; lines: number; amount: number; status: CsiStatus; raw: string | null; items?: InvoiceItem[] }
 export interface Delivery { dr: string; date: string; po: string; lines: number; qty: number; accepted: string; status: string }
 export interface ClientRecord {
   key: string
@@ -104,6 +105,7 @@ function build(csi: CsiRow[], drs: DrRow[], drItems: DrItemRow[], clients: Clien
       si: f.si_number?.trim() || '(no SI no.)', date: f.si_date ?? '', po: f.po_number ?? '', dr: f.dr_number ?? '',
       lines: rows.length, amount: rows.reduce((s, r) => s + (Number(r.amount) || 0), 0),
       status: csiStatus(f.collection_status, untagged), raw: f.collection_status,
+      items: [...rows].sort((a, b) => a.id - b.id).map(r => ({ name: (r.item_name ?? '').trim(), unit: r.unit ?? '', qty: Number(r.quantity) || 0, price: Number(r.unit_price) || 0, amount: Number(r.amount) || 0 })),
     })
   }
 
@@ -190,6 +192,10 @@ export const STYLE = `
   .c{text-align:center}.r{text-align:right;white-space:nowrap}.muted{color:#888}.grey td{color:#9ca3af}
   tr.tot td{font-weight:700;border-top:2px solid #111;border-bottom:0}
   .ind td:first-child{padding-left:22px}
+  tr.inv td{border-top:1px solid #d1d5db;border-bottom:0;background:#fafafa}
+  tr.itm td{font-size:9.5px;color:#444;border-bottom:0;padding-top:1px;padding-bottom:1px}
+  tr.itm td:nth-child(2){padding-left:18px}
+  tr.itm .q{float:right;color:#777;padding-left:10px}
   .note{font-style:italic;color:#555;font-size:10px}
   .sig{margin-top:14px}.keep,.sig,.conf,tr,.to{page-break-inside:avoid;break-inside:avoid}h2{page-break-after:avoid;break-after:avoid}.sig .line{border-top:1px solid #111;width:240px;margin-top:36px;padding-top:3px}
   .conf{margin-top:24px;border:1.5px solid #111;padding:12px 14px;page-break-inside:avoid}
@@ -241,7 +247,8 @@ export function letterHtml(r: ClientRecord, ref: string, o: LetterOptions, heade
     : s.active
       ? '<p>Based on our records, all active invoices on this list have been collected. Thank you for your consistent and timely settlement.</p>'
       : '<p>There are no active invoices on record for this period.</p>'
-  const openRows = s.openList.map((i, n) => `<tr><td class="c">${n + 1}</td><td>${esc(i.si)}</td><td>${shortDate(i.date)}</td><td>${dash(i.po)}</td><td>${dash(i.dr)}</td><td class="r">${amt(i.amount)}</td><td>For Collection</td></tr>`).join('')
+  const openRows = s.openList.map((i, n) => `<tr class="inv"><td class="c">${n + 1}</td><td><b>${esc(i.si)}</b></td><td>${shortDate(i.date)}</td><td>${dash(i.po)}</td><td>${dash(i.dr)}</td><td class="r"><b>${amt(i.amount)}</b></td><td>For Collection</td></tr>`
+    + (i.items ?? []).map(it => `<tr class="itm"><td></td><td colspan="4">${esc(it.name || '—')}<span class="q">${qtyFmt(it.qty)} ${esc(it.unit)} × ${amt(it.price)}</span></td><td class="r">${amt(it.amount)}</td><td></td></tr>`).join('')).join('')
   const csiRows = r.invoices.map((i, n) => `<tr${i.status === 'cancelled' ? ' class="grey"' : ''}><td class="c">${n + 1}</td><td>${esc(i.si)}</td><td>${shortDate(i.date)}</td><td>${dash(i.po)}</td><td>${dash(i.dr)}</td><td class="c">${i.lines}</td><td class="r">${amt(i.amount)}</td><td>${STATUS_LABEL[i.status]}</td></tr>`).join('')
   const drRows = r.deliveries.map((x, n) => `<tr${x.status === 'cancelled' ? ' class="grey"' : ''}><td class="c">${n + 1}</td><td>${esc(x.dr)}</td><td>${shortDate(x.date)}</td><td>${dash(x.po)}</td><td class="c">${x.lines}</td><td class="r">${qtyFmt(x.qty)}</td><td>${dash(x.accepted)}</td><td>${esc(DR_LABEL[x.status] ?? x.status)}</td></tr>`).join('')
   const sub = `<div class="sub" style="text-align:left">${esc(r.name)} &nbsp;|&nbsp; Ref. No. ${esc(ref)}</div>`
@@ -334,6 +341,8 @@ export function ClientRecords() {
   const [printing, setPrinting] = useState(false)
   const [emailFor, setEmailFor] = useState<ClientRecord | null>(null)
   const [historyFor, setHistoryFor] = useState<string | null>(null)   // client key, or 'all'
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())   // clients showing their items for collection
+  const toggleExpand = (k: string) => setExpanded(p => { const n = new Set(p); if (n.has(k)) n.delete(k); else n.add(k); return n })
   const [log, setLog] = useState<EmailLogSummary[]>([])
   const [logReload, setLogReload] = useState(0)
 
@@ -353,7 +362,7 @@ export function ClientRecords() {
   useEffect(() => {
     let on = true
     Promise.all([
-      fetchAllRows<CsiRow>((f, t) => supabase.from('csi_records').select('id, si_number, si_date, po_number, dr_number, client_name, amount, collection_status').order('id').range(f, t) as unknown as PromiseLike<{ data: CsiRow[] | null }>),
+      fetchAllRows<CsiRow>((f, t) => supabase.from('csi_records').select('id, si_number, si_date, po_number, dr_number, client_name, item_name, unit, quantity, unit_price, amount, collection_status').order('id').range(f, t) as unknown as PromiseLike<{ data: CsiRow[] | null }>),
       fetchAllRows<DrRow>((f, t) => supabase.from('dr_logs').select('id, dr_number, dr_date, po_number, supplier_name, status, received_by_name').order('id').range(f, t) as unknown as PromiseLike<{ data: DrRow[] | null }>),
       fetchAllRows<DrItemRow>((f, t) => supabase.from('dr_log_items').select('id, dr_number, quantity').order('id').range(f, t) as unknown as PromiseLike<{ data: DrItemRow[] | null }>),
       supabase.from('clients').select('id, company_name, email, contact_person, position, address, city, province, status').order('company_name'),
@@ -436,6 +445,12 @@ export function ClientRecords() {
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={() => { setReload(k => k + 1); setLogReload(k => k + 1) }}><RefreshCw className="mr-1.5 h-3.5 w-3.5" />Refresh</Button>
           <Button variant="outline" size="sm" onClick={() => setHistoryFor('all')}><History className="mr-1.5 h-3.5 w-3.5" />Email History</Button>
+          <Button variant="outline" size="sm" onClick={() => {
+            const withOpen = shown.filter(r => summarize(r).open > 0).map(r => r.key)
+            setExpanded(withOpen.length && withOpen.every(k => expanded.has(k)) ? new Set() : new Set(withOpen))
+          }}>
+            <ChevronDown className="mr-1.5 h-3.5 w-3.5" />{shown.some(r => expanded.has(r.key)) ? 'Hide' : 'Show'} Items for Collection
+          </Button>
           <Button variant="outline" size="sm" disabled={!sel.length || printing} onClick={() => print(sel, sel.length > 1)}>
             <Printer className="mr-1.5 h-3.5 w-3.5" />Print Selected ({sel.length})
           </Button>
@@ -467,8 +482,10 @@ export function ClientRecords() {
             <TableRow><TableCell colSpan={12} className="py-10 text-center text-muted-foreground">No DRs or CSIs on record.</TableCell></TableRow>
           ) : shown.map(r => {
             const s = summarize(r)
+            const isOpen = expanded.has(r.key)
             return (
-              <TableRow key={r.key}>
+              <Fragment key={r.key}>
+              <TableRow>
                 <TableCell><Checkbox checked={selected.has(r.key)} onCheckedChange={() => toggle(r.key)} /></TableCell>
                 <TableCell className="text-muted-foreground">{records.indexOf(r) + 1}</TableCell>
                 <TableCell>
@@ -482,7 +499,13 @@ export function ClientRecords() {
                 <TableCell className="whitespace-nowrap text-xs">{r.from ? `${shortDate(r.from)} – ${shortDate(r.to)}` : '—'}</TableCell>
                 <TableCell className="text-center tabular-nums">{s.active}{s.cancelled ? <span className="text-xs text-muted-foreground"> +{s.cancelled}✕</span> : null}</TableCell>
                 <TableCell className="text-right tabular-nums">{amt(s.activeAmt)}</TableCell>
-                <TableCell className={`text-center tabular-nums ${s.open ? 'font-semibold text-amber-700' : 'text-muted-foreground'}`}>{s.open}</TableCell>
+                <TableCell className={`text-center tabular-nums ${s.open ? 'font-semibold text-amber-700' : 'text-muted-foreground'}`}>
+                  {s.open ? (
+                    <button type="button" onClick={() => toggleExpand(r.key)} className="inline-flex items-center gap-0.5 hover:underline" title="Show the items for collection">
+                      {isOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}{s.open}
+                    </button>
+                  ) : 0}
+                </TableCell>
                 <TableCell className={`text-right tabular-nums ${s.open ? 'font-semibold text-amber-700' : 'text-muted-foreground'}`}>{amt(s.openAmt)}</TableCell>
                 <TableCell className="text-center tabular-nums">{s.drs}</TableCell>
                 <TableCell className="whitespace-nowrap text-xs">
@@ -509,6 +532,43 @@ export function ClientRecords() {
                   </div>
                 </TableCell>
               </TableRow>
+              {isOpen && s.open > 0 && (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell colSpan={12} className="bg-amber-50/40 px-6 py-3">
+                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-amber-800">Items for Collection · {s.open} invoice{s.open === 1 ? '' : 's'} · PHP {amt(s.openAmt)}</p>
+                    <div className="space-y-3">
+                      {s.openList.map(inv => (
+                        <div key={inv.si + inv.date} className="overflow-hidden rounded-lg border bg-white">
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 bg-muted/50 px-3 py-1.5 text-xs">
+                            <span className="font-semibold">SI {inv.si}</span>
+                            <span>{shortDate(inv.date)}</span>
+                            {inv.po && <span className="text-muted-foreground">PO {inv.po}</span>}
+                            {inv.dr && <span className="text-muted-foreground">DR {inv.dr}</span>}
+                            <span className="ml-auto font-semibold tabular-nums">{amt(inv.amount)}</span>
+                          </div>
+                          <table className="w-full text-xs">
+                            <thead className="text-muted-foreground">
+                              <tr><th className="px-3 py-1 text-left font-medium">Item</th><th className="px-3 py-1 text-right font-medium">Qty</th><th className="px-3 py-1 text-left font-medium">Unit</th><th className="px-3 py-1 text-right font-medium">Unit Price (PHP)</th><th className="px-3 py-1 text-right font-medium">Amount (PHP)</th></tr>
+                            </thead>
+                            <tbody>
+                              {(inv.items ?? []).map((it, n) => (
+                                <tr key={n} className="border-t">
+                                  <td className="px-3 py-1">{it.name || '—'}</td>
+                                  <td className="px-3 py-1 text-right tabular-nums">{qtyFmt(it.qty)}</td>
+                                  <td className="px-3 py-1">{it.unit}</td>
+                                  <td className="px-3 py-1 text-right tabular-nums">{amt(it.price)}</td>
+                                  <td className="px-3 py-1 text-right tabular-nums">{amt(it.amount)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ))}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              )}
+              </Fragment>
             )
           })}
         </TableBody>

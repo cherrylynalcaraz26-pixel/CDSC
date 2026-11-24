@@ -30,6 +30,28 @@ export function sheetDoc(inner: string, css: string, extraCss = '') {
     ${extraCss}</style></head><body><div class="sheet">${inner}</div></body></html>`
 }
 
+/**
+ * Replace off-site images (e.g. the Google Drive logo) with same-origin data
+ * URLs. Drive sends no CORS headers, so html2canvas would otherwise leave the
+ * image out of the PDF even though the browser displays it.
+ */
+async function inlineImages(d: Document) {
+  await Promise.all(Array.from(d.images).map(async img => {
+    const src = img.getAttribute('src') ?? ''
+    if (!/^https?:/i.test(src)) return
+    let url: URL
+    try { url = new URL(src, window.location.href) } catch { return }
+    const fetchUrl = url.origin === window.location.origin ? url.href : `/api/image-proxy?url=${encodeURIComponent(url.href)}`
+    try {
+      const blob = await fetch(fetchUrl).then(r => { if (!r.ok) throw new Error(String(r.status)); return r.blob() })
+      const dataUrl = await new Promise<string>((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result as string); fr.onerror = rej; fr.readAsDataURL(blob) })
+      await new Promise<void>(res => { img.onload = () => res(); img.onerror = () => res(); img.src = dataUrl })
+    } catch (e) {
+      console.warn('PDF: could not embed image', src, e)
+    }
+  }))
+}
+
 export async function pagedPdfBase64(doc: string): Promise<string> {
   const { default: html2canvas } = await import('html2canvas')
   const iframe = document.createElement('iframe')
@@ -38,6 +60,7 @@ export async function pagedPdfBase64(doc: string): Promise<string> {
   try {
     await new Promise<void>(res => { iframe.onload = () => res(); iframe.srcdoc = doc })
     const d = iframe.contentDocument!
+    await inlineImages(d)
     const imgs = Array.from(d.images)
     await Promise.race([
       Promise.all([
