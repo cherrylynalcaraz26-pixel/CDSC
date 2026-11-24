@@ -1496,6 +1496,9 @@ export default function DRLogsPage() {
             {/* Delivery Items — full width so all columns are visible */}
             <div className={`space-y-2 mt-6 ${drActiveTab === 'preview' ? 'hidden lg:block' : 'block'}`}>
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">Delivery Items</p>
+                  {form.status === 'cancelled' && (
+                    <p className="rounded-md bg-red-50 px-2 py-1 text-xs text-red-700">Cancelled DR: delivery items are optional. Leave them empty to save it with no items.</p>
+                  )}
                   <div className="border rounded-lg overflow-hidden [&_[data-slot=table-container]]:overflow-x-hidden">
                     <Table className="table-fixed w-full">
                       <TableHeader>

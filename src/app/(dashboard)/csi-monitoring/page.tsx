@@ -877,12 +877,14 @@ export default function CSIMonitoringPage() {
       show_in_portal: first.show_in_portal,
       attachment_url: first.attachment_url,
     })
-    setItems(siRecords.map(r => ({
+    // Hide the zero-value "CANCELLED" placeholder line of a cancelled SI with no items.
+    const realLines = siRecords.filter(r => !(r.item_name.trim().toUpperCase() === 'CANCELLED' && !Number(r.quantity) && !Number(r.amount)))
+    setItems(realLines.length ? realLines.map(r => ({
       item_name: r.item_name,
       unit: r.unit ?? '',
       quantity: String(r.quantity ?? ''),
       unit_price: String(r.unit_price ?? ''),
-    })))
+    })) : first.collection_status === 'cancelled' ? [] : [emptyItem()])
     setOpen(true)
   }
 
@@ -998,7 +1000,8 @@ export default function CSIMonitoringPage() {
     if (!header.si_number.trim()) { toast.error('SI Number is required'); return }
     if (!header.si_date) { toast.error('Date is required'); return }
     const validItems = items.filter(it => it.item_name.trim())
-    if (validItems.length === 0) { toast.error('At least one item is required'); return }
+    const isCancelled = header.collection_status === 'cancelled'
+    if (validItems.length === 0 && !isCancelled) { toast.error('At least one item is required (or set Status to Cancelled)'); return }
     setSaving(true)
 
     // When editing, remember the current lines; they are removed only after the
@@ -1010,7 +1013,10 @@ export default function CSIMonitoringPage() {
       oldIds = (old ?? []).map(r => r.id as number)
     }
 
-    const rows = validItems.map(it => ({
+    // A cancelled SI may have no line items. CSIs exist only as their lines, so
+    // keep one zero-value "CANCELLED" line, the same as earlier cancelled SIs.
+    const lineItems = validItems.length > 0 ? validItems : [{ item_name: 'CANCELLED', unit: '', quantity: '0', unit_price: '0' }]
+    const rows = lineItems.map(it => ({
       si_date: header.si_date,
       si_number: header.si_number.trim(),
       po_number: header.po_number || null,
@@ -1335,6 +1341,9 @@ export default function CSIMonitoringPage() {
             {/* Items — full width so all columns are visible */}
             <div className={`space-y-2 mt-6 ${activeTab === 'preview' ? 'hidden lg:block' : 'block'}`}>
               <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b pb-1">Line Items</p>
+              {header.collection_status === 'cancelled' && (
+                <p className="rounded-md bg-red-50 px-2 py-1 text-xs text-red-700">Cancelled SI: line items are optional. Leave them empty to save it as a cancelled SI with no items.</p>
+              )}
               <div className="border rounded-lg overflow-hidden">
                 <Table>
                   <TableHeader>
@@ -1438,7 +1447,7 @@ export default function CSIMonitoringPage() {
                           </TableCell>
                           <TableCell className="py-1.5">
                             <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
-                              onClick={async () => { if (await confirmRemoveLine(item)) setItems(prev => prev.filter((_, idx) => idx !== i)) }} disabled={items.length === 1}>
+                              onClick={async () => { if (await confirmRemoveLine(item)) setItems(prev => prev.filter((_, idx) => idx !== i)) }} disabled={items.length === 1 && header.collection_status !== 'cancelled'}>
                               <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                           </TableCell>
