@@ -138,6 +138,7 @@ export function ClientRecordsHistory({ clientKey, onClose, onResend }: {
                   <span className="text-muted-foreground">Status</span>
                   <span>{open.status === 'sent' ? <Badge className="bg-green-100 text-green-800">Sent</Badge> : <Badge className="bg-red-100 text-red-700">Failed</Badge>}{open.error ? <span className="ml-2 text-xs text-red-700">{open.error}</span> : null}</span>
                 </div>
+                <p className="pt-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Email message as sent</p>
                 <div className="max-h-[42vh] overflow-auto whitespace-pre-wrap rounded-lg bg-muted/50 p-3 text-sm">{open.body || '(no message)'}</div>
               </div>
               <div className="space-y-3">
@@ -195,7 +196,7 @@ export function ClientRecordsHistory({ clientKey, onClose, onResend }: {
                     {client === 'all' && <TableHead>Client</TableHead>}
                     <TableHead>Ref. No.</TableHead>
                     <TableHead>To</TableHead>
-                    <TableHead>Subject</TableHead>
+                    <TableHead>Subject / Message</TableHead>
                     <TableHead className="text-right">Open (PHP)</TableHead>
                     <TableHead>Sent By</TableHead>
                     <TableHead>Status</TableHead>
@@ -212,7 +213,10 @@ export function ClientRecordsHistory({ clientKey, onClose, onResend }: {
                       {client === 'all' && <TableCell className="font-medium">{r.client_name}</TableCell>}
                       <TableCell className="whitespace-nowrap font-mono text-xs">{r.ref_no ?? '—'}</TableCell>
                       <TableCell className="max-w-[180px] truncate text-xs" title={r.recipients}>{r.recipients}</TableCell>
-                      <TableCell className="max-w-[240px] truncate text-xs" title={r.subject}>{r.subject}</TableCell>
+                      <TableCell className="max-w-[280px] text-xs" title={r.body ?? ''}>
+                        <div className="truncate font-medium">{r.subject}</div>
+                        <div className="truncate text-muted-foreground">{(r.body ?? '').replace(/\s+/g, ' ').slice(0, 140) || '(no message)'}</div>
+                      </TableCell>
                       <TableCell className="text-right text-xs tabular-nums">{r.open_count ? `${r.open_count} · ${amt(Number(r.open_amount ?? 0))}` : '0'}</TableCell>
                       <TableCell className="text-xs">{r.sent_by_name ?? '—'}</TableCell>
                       <TableCell>{r.status === 'sent' ? <Badge className="bg-green-100 text-green-800">Sent</Badge> : <Badge className="bg-red-100 text-red-700" title={r.error ?? ''}>Failed</Badge>}</TableCell>
