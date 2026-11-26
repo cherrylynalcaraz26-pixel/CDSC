@@ -1,10 +1,12 @@
 'use client'
 
 // Email a client's records confirmation letter (Pull Outs → Client Records).
-// Everything is editable before sending: recipients, subject, message, and the
-// letter's addressee block plus an optional extra paragraph. The right side
-// shows a live preview of the letter; "Preview PDF" renders the exact file that
-// will be attached, so what the user approves is what the client receives.
+// Everything is editable before sending: recipients, subject and message; the
+// letter details (date, ref. series, signatory, reply period, how untagged CSIs
+// count); and the letter's wording (addressee, subject line, salutation, body,
+// closing). Wording follows the figures automatically until it is edited.
+// The right side shows a live preview; "Preview PDF" renders the exact file
+// that will be attached, so what the user approves is what the client receives.
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
@@ -17,10 +19,11 @@ import { sendEmail } from '@/lib/send-email'
 import { createClient } from '@/lib/supabase/client'
 import { pagedPdfBase64, sheetDoc, SHEET_W } from '@/lib/paged-pdf'
 import { getErrorMessage } from '@/lib/error-message'
-import { Eye, FileText, Loader2, Mail, Paperclip, Send } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
+import { Eye, FileText, Loader2, Mail, Paperclip, RotateCcw, Send } from 'lucide-react'
 import {
-  letterHtml, loadDocHeader, summarize, php, longDate, STYLE,
-  type ClientRecord, type LetterOptions,
+  letterHtml, loadDocHeader, summarize, php, longDate, defaultLetterContent, STYLE,
+  type ClientRecord, type LetterOptions, type LetterContent,
 } from '@/components/pull-outs/client-records'
 
 function defaultSubject(r: ClientRecord, ref: string) {
@@ -46,24 +49,41 @@ function defaultBody(r: ClientRecord, ref: string, o: LetterOptions, company: st
   ].filter(Boolean).join('\n\n')
 }
 
+function Section({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
+  return (
+    <div className="space-y-3 rounded-xl border p-3">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
+        {action}
+      </div>
+      {children}
+    </div>
+  )
+}
+
 const fileSafe = (s: string) => s.replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, ' ').trim()
 
-export function ClientRecordsEmailDialog({ record, refNo, opts, onClose, onLogged }: {
+export function ClientRecordsEmailDialog({ record, refNo, opts, onOptsChange, untagged, onUntaggedChange, onClose, onLogged }: {
   record: ClientRecord
   refNo: string
   opts: LetterOptions
+  onOptsChange: (o: LetterOptions) => void
+  untagged: 'open' | 'collected'
+  onUntaggedChange: (v: 'open' | 'collected') => void
   onClose: () => void
   /** Called after the send (or failure) is written to the email history. */
   onLogged?: () => void
 }) {
   const [doc, setDoc] = useState<{ header: string; company: string } | null>(null)
   const [to, setTo] = useState(record.email)
-  const [subject, setSubject] = useState(() => defaultSubject(record, refNo))
-  const [body, setBody] = useState('')
+  // null = follow the figures and settings automatically; a string = edited by the user.
+  const [subjectEdit, setSubject] = useState<string | null>(null)
+  const [bodyEdit, setBody] = useState<string | null>(null)
+  const [letterEdit, setLetterEdit] = useState<Partial<LetterContent>>({})
   const [contact, setContact] = useState(record.contact)
   const [position, setPosition] = useState(record.position)
   const [address, setAddress] = useState(record.address)
-  const [note, setNote] = useState('')
+  const setOpt = <K extends keyof LetterOptions>(k: K, v: LetterOptions[K]) => onOptsChange({ ...opts, [k]: v })
   const [tab, setTab] = useState<'letter' | 'pdf'>('letter')
   const [pdf, setPdf] = useState<{ html: string; base64: string; url: string } | null>(null)
   const [busy, setBusy] = useState<'pdf' | 'send' | null>(null)
@@ -82,13 +102,19 @@ export function ClientRecordsEmailDialog({ record, refNo, opts, onClose, onLogge
 
   useEffect(() => {
     let on = true
-    loadDocHeader().then(d => {
-      if (!on) return
-      setDoc(d)
-      setBody(defaultBody(record, refNo, opts, d.company))
-    })
+    loadDocHeader().then(d => { if (on) setDoc(d) })
     return () => { on = false }
-  }, [record, refNo, opts])
+  }, [])
+
+  const company = doc?.company ?? ''
+  const subject = subjectEdit ?? defaultSubject(record, refNo)
+  const body = bodyEdit ?? (doc ? defaultBody({ ...record, contact: contact.trim() }, refNo, opts, company) : '')
+  const letterDefaults = useMemo(() => defaultLetterContent({ ...record, contact: contact.trim() }, opts, company), [record, contact, opts, company])
+  const letter: LetterContent = { ...letterDefaults, ...letterEdit }
+  const setLetter = (k: keyof LetterContent) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setLetterEdit(p => ({ ...p, [k]: e.target.value }))
+  const edited = subjectEdit !== null || bodyEdit !== null || Object.keys(letterEdit).length > 0
+  const resetWording = () => { setSubject(null); setBody(null); setLetterEdit({}) }
 
   // Free the PDF blob URL when the dialog closes.
   useEffect(() => () => { if (urlRef.current) URL.revokeObjectURL(urlRef.current) }, [])
@@ -96,8 +122,8 @@ export function ClientRecordsEmailDialog({ record, refNo, opts, onClose, onLogge
   const html = useMemo(() => {
     if (!doc) return ''
     const r = { ...record, contact: contact.trim(), position: position.trim(), address: address.trim() }
-    return letterHtml(r, refNo, opts, doc.header, doc.company, note)
-  }, [doc, record, contact, position, address, note, refNo, opts])
+    return letterHtml(r, refNo, opts, doc.header, doc.company, '', letter)
+  }, [doc, record, contact, position, address, refNo, opts, letter.subject, letter.salutation, letter.body, letter.closing]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const pdfStale = !!pdf && pdf.html !== html
   const filename = `Client Records ${refNo} - ${fileSafe(record.name)}.pdf`
@@ -191,35 +217,63 @@ export function ClientRecordsEmailDialog({ record, refNo, opts, onClose, onLogge
         </DialogHeader>
 
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-          {/* LEFT: email + letter fields */}
-          <div className="space-y-3">
-            <div className="space-y-1.5">
-              <Label>To</Label>
-              <Input value={to} onChange={e => setTo(e.target.value)} placeholder="client@company.com, accounting@company.com" />
-              {!record.email && <p className="text-xs text-amber-700">No email on file for this client. Add it in Clients to prefill next time.</p>}
-            </div>
-            <div className="space-y-1.5"><Label>Subject</Label><Input value={subject} onChange={e => setSubject(e.target.value)} /></div>
-            <div className="space-y-1.5">
-              <Label>Message</Label>
-              <Textarea rows={11} value={body} onChange={e => setBody(e.target.value)} placeholder={doc ? '' : 'Loading…'} />
-            </div>
-            <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-              <Paperclip className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{filename}</span>
-            </div>
+          {/* LEFT: email, letter details, letter wording */}
+          <div className="max-h-[72vh] space-y-3 overflow-y-auto pr-1">
+            <Section title="Email">
+              <div className="space-y-1.5">
+                <Label>To</Label>
+                <Input value={to} onChange={e => setTo(e.target.value)} placeholder="client@company.com, accounting@company.com" />
+                {!record.email && <p className="text-xs text-amber-700">No email on file for this client. Add it in Clients to prefill next time.</p>}
+              </div>
+              <div className="space-y-1.5"><Label>Subject</Label><Input value={subject} onChange={e => setSubject(e.target.value)} /></div>
+              <div className="space-y-1.5">
+                <Label>Message</Label>
+                <Textarea rows={9} value={body} onChange={e => setBody(e.target.value)} placeholder={doc ? '' : 'Loading…'} />
+              </div>
+              <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                <Paperclip className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{filename}</span>
+              </div>
+            </Section>
 
-            <div className="border-t pt-3">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Letter content</p>
+            <Section title="Letter details">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5"><Label>Letter Date (as of)</Label><Input type="date" value={opts.date} onChange={e => setOpt('date', e.target.value)} /></div>
+                <div className="space-y-1.5"><Label>Ref. No. Series</Label><Input value={opts.refBase} onChange={e => setOpt('refBase', e.target.value)} /></div>
+                <div className="space-y-1.5"><Label>Signatory</Label><Input value={opts.signatory} onChange={e => setOpt('signatory', e.target.value)} /></div>
+                <div className="space-y-1.5"><Label>Position</Label><Input value={opts.title} onChange={e => setOpt('title', e.target.value)} /></div>
+                <div className="space-y-1.5"><Label>Reply Within (days)</Label><Input type="number" min={1} value={opts.days} onChange={e => setOpt('days', Math.max(1, Number(e.target.value) || 15))} /></div>
+                <div className="space-y-1.5">
+                  <Label>Untagged CSIs count as</Label>
+                  <Select value={untagged} onValueChange={v => onUntaggedChange((v ?? 'open') as 'open' | 'collected')}>
+                    <SelectTrigger className="w-full"><span className="text-sm">{untagged === 'open' ? 'Open for collection' : 'Collected'}</span></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="open">Open for collection</SelectItem>
+                      <SelectItem value="collected">Collected</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">Ref. No. for this client: <span className="font-mono">{refNo}</span>. These settings are remembered for printing too.</p>
+            </Section>
+
+            <Section title="Letter content" action={edited ? (
+              <Button type="button" variant="ghost" size="sm" className="h-7 text-xs" onClick={resetWording}><RotateCcw className="mr-1 h-3 w-3" />Reset wording</Button>
+            ) : null}>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5"><Label>Addressed To</Label><Input value={contact} onChange={e => setContact(e.target.value)} placeholder="Blank = Attention: Purchasing / AP" /></div>
                 <div className="space-y-1.5"><Label>Position</Label><Input value={position} onChange={e => setPosition(e.target.value)} /></div>
               </div>
-              <div className="mt-3 space-y-1.5"><Label>Address</Label><Input value={address} onChange={e => setAddress(e.target.value)} /></div>
-              <div className="mt-3 space-y-1.5">
-                <Label>Additional Paragraph (optional)</Label>
-                <Textarea rows={3} value={note} onChange={e => setNote(e.target.value)} placeholder="Printed in the letter after the collection status paragraph." />
+              <div className="space-y-1.5"><Label>Address</Label><Input value={address} onChange={e => setAddress(e.target.value)} /></div>
+              <div className="space-y-1.5"><Label>Subject Line</Label><Input value={letter.subject} onChange={setLetter('subject')} /></div>
+              <div className="space-y-1.5"><Label>Salutation</Label><Input value={letter.salutation} onChange={setLetter('salutation')} /></div>
+              <div className="space-y-1.5">
+                <Label>Body</Label>
+                <Textarea rows={12} value={letter.body} onChange={setLetter('body')} />
+                <p className="text-xs text-muted-foreground">Leave a blank line between paragraphs. Wrap words in **double asterisks** to print them in bold.</p>
               </div>
-              <p className="mt-2 text-xs text-muted-foreground">Letter date, signatory and reply period follow the settings on the Client Records tab.</p>
-            </div>
+              <div className="space-y-1.5"><Label>Closing Line</Label><Input value={letter.closing} onChange={setLetter('closing')} /></div>
+              <p className="text-xs text-muted-foreground">The tables (Account Summary, Items for Collection, Annexes) and the conforme always follow the records.</p>
+            </Section>
           </div>
 
           {/* RIGHT: preview */}

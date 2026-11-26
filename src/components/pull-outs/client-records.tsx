@@ -19,10 +19,7 @@ import { loadLetterhead, letterheadHtml, type LetterheadCompany } from '@/lib/le
 import { registration } from '@/lib/site-content'
 import { useSearchContext } from '@/context/search-context'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { AlertTriangle, ChevronDown, ChevronRight, FileText, History, Loader2, Mail, Printer, RefreshCw } from 'lucide-react'
 import { ClientRecordsHistory, summarizeLog, type EmailLogSummary } from '@/components/pull-outs/client-records-history'
@@ -192,10 +189,14 @@ export const STYLE = `
   .c{text-align:center}.r{text-align:right;white-space:nowrap}.muted{color:#888}.grey td{color:#9ca3af}
   tr.tot td{font-weight:700;border-top:2px solid #111;border-bottom:0}
   .ind td:first-child{padding-left:22px}
-  tr.inv td{border-top:1px solid #d1d5db;border-bottom:0;background:#fafafa}
-  tr.itm td{font-size:9.5px;color:#444;border-bottom:0;padding-top:1px;padding-bottom:1px}
-  tr.itm td:nth-child(2){padding-left:18px}
-  tr.itm .q{float:right;color:#777;padding-left:10px}
+  table.items{table-layout:fixed}
+  table.items td{word-wrap:break-word;overflow-wrap:anywhere}
+  tr.inv td{background:#f3f4f6;border-top:1.5px solid #9ca3af;border-bottom:1px solid #d1d5db;font-size:10.5px;color:#111}
+  tr.inv .meta{color:#4b5563;font-weight:normal}
+  tr.itm td{font-size:10.5px;color:#1f2937;border-bottom:1px solid #f0f0f0}
+  tr.itm td.desc{padding-left:16px}
+  tr.sub td{font-weight:700;border-top:1px solid #9ca3af;border-bottom:0;background:#fff}
+  tr.gt td{font-weight:700;font-size:11.5px;border-top:2px solid #111;border-bottom:2px solid #111;background:#fef2f2}
   .note{font-style:italic;color:#555;font-size:10px}
   .sig{margin-top:14px}.keep,.sig,.conf,tr,.to{page-break-inside:avoid;break-inside:avoid}h2{page-break-after:avoid;break-after:avoid}.sig .line{border-top:1px solid #111;width:240px;margin-top:36px;padding-top:3px}
   .conf{margin-top:24px;border:1.5px solid #111;padding:12px 14px;page-break-inside:avoid}
@@ -236,19 +237,49 @@ export function masterListHtml(rs: ClientRecord[], o: LetterOptions, notes: Note
   </div>`
 }
 
-export function letterHtml(r: ClientRecord, ref: string, o: LetterOptions, header: string, company: string, note = '') {
+/** Editable wording of the letter. Body paragraphs are separated by a blank line; **text** prints bold. */
+export interface LetterContent { subject: string; salutation: string; body: string; closing: string }
+
+export function defaultLetterContent(r: ClientRecord, o: LetterOptions, company: string): LetterContent {
   const s = summarize(r)
   const period = r.from ? `${longDate(r.from)} to ${longDate(r.to)}` : 'the records on file'
+  const status = s.open
+    ? `Our records show **${s.open} invoice${s.open === 1 ? '' : 's'}** still open for collection, amounting to **${php(s.openAmt)}**. ${s.open === 1 ? 'This is' : 'These are'} itemized in Section 2 below. We would appreciate settlement of ${s.open === 1 ? 'this invoice' : 'these invoices'}, or advice on ${s.open === 1 ? 'its' : 'their'} current processing status, at your earliest convenience.`
+    : s.active
+      ? 'Based on our records, all active invoices on this list have been collected. Thank you for your consistent and timely settlement.'
+      : 'There are no active invoices on record for this period.'
+  return {
+    subject: 'Summary of Delivery Receipts and Charge Sales Invoices on Record',
+    salutation: `Dear ${r.contact || 'Sir/Madam'},`,
+    body: [
+      `As part of our records review, we have pulled out all Delivery Receipts (DR) and Charge Sales Invoices (CSI) issued by ${company} to ${r.name} covering the period ${period}. The complete list is attached to this letter as Annex A (CSI) and Annex B (DR).`,
+      'We ask that your team check this list against your own receiving and payables records. If anything does not match, please let us know the specific document number and the difference so we can reconcile it on our side.',
+      status,
+      `Kindly sign the conforme at the end of this letter and return a copy within ${numberWords(o.days)} (${o.days}) days from receipt. If we do not receive a response within that period, we will treat the attached records as confirmed.`,
+    ].join('\n\n'),
+    closing: 'Thank you for your continued partnership.',
+  }
+}
+
+/** Plain text → paragraphs; a blank line starts a new paragraph, **x** is bold. */
+const richParas = (t: string) => t.trim().split(/\n\s*\n/).filter(x => x.trim())
+  .map(x => `<p>${esc(x.trim()).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br/>')}</p>`).join('')
+
+export function letterHtml(r: ClientRecord, ref: string, o: LetterOptions, header: string, company: string, note = '', content?: LetterContent) {
+  const c = content ?? defaultLetterContent(r, o, company)
+  const s = summarize(r)
   const addressee = r.contact
     ? `<b>${esc(r.contact)}</b>${r.position ? `<div>${esc(r.position)}</div>` : ''}<b>${esc(r.name)}</b>`
     : `<b>${esc(r.name)}</b><div><i>Attention: Purchasing / Accounts Payable</i></div>`
-  const status = s.open
-    ? `<p>Our records show <b>${s.open} invoice${s.open === 1 ? '' : 's'}</b> still open for collection, amounting to <b>${php(s.openAmt)}</b>. ${s.open === 1 ? 'This is' : 'These are'} itemized in Section 2 below. We would appreciate settlement of ${s.open === 1 ? 'this invoice' : 'these invoices'}, or advice on ${s.open === 1 ? 'its' : 'their'} current processing status, at your earliest convenience.</p>`
-    : s.active
-      ? '<p>Based on our records, all active invoices on this list have been collected. Thank you for your consistent and timely settlement.</p>'
-      : '<p>There are no active invoices on record for this period.</p>'
-  const openRows = s.openList.map((i, n) => `<tr class="inv"><td class="c">${n + 1}</td><td><b>${esc(i.si)}</b></td><td>${shortDate(i.date)}</td><td>${dash(i.po)}</td><td>${dash(i.dr)}</td><td class="r"><b>${amt(i.amount)}</b></td><td>For Collection</td></tr>`
-    + (i.items ?? []).map(it => `<tr class="itm"><td></td><td colspan="4">${esc(it.name || '—')}<span class="q">${qtyFmt(it.qty)} ${esc(it.unit)} × ${amt(it.price)}</span></td><td class="r">${amt(it.amount)}</td><td></td></tr>`).join('')).join('')
+  const openRows = s.openList.map((i, n) => {
+    const meta = [shortDate(i.date), i.po ? `PO ${esc(i.po)}` : '', i.dr ? `DR ${esc(i.dr)}` : ''].filter(Boolean).join(' &nbsp;·&nbsp; ')
+    const items = i.items ?? []
+    return `<tr class="inv"><td class="c"><b>${n + 1}</b></td><td colspan="4"><b>SI ${esc(i.si)}</b> &nbsp;<span class="meta">${meta} &nbsp;·&nbsp; For Collection</span></td><td></td></tr>`
+      + (items.length
+        ? items.map(it => `<tr class="itm"><td></td><td class="desc">${esc(it.name || '—')}</td><td class="r">${qtyFmt(it.qty)}</td><td>${esc(it.unit)}</td><td class="r">${amt(it.price)}</td><td class="r">${amt(it.amount)}</td></tr>`).join('')
+        : '<tr class="itm"><td></td><td class="desc muted" colspan="5">No line items recorded</td></tr>')
+      + `<tr class="sub"><td></td><td colspan="4" class="r">Total SI ${esc(i.si)}</td><td class="r">${amt(i.amount)}</td></tr>`
+  }).join('')
   const csiRows = r.invoices.map((i, n) => `<tr${i.status === 'cancelled' ? ' class="grey"' : ''}><td class="c">${n + 1}</td><td>${esc(i.si)}</td><td>${shortDate(i.date)}</td><td>${dash(i.po)}</td><td>${dash(i.dr)}</td><td class="c">${i.lines}</td><td class="r">${amt(i.amount)}</td><td>${STATUS_LABEL[i.status]}</td></tr>`).join('')
   const drRows = r.deliveries.map((x, n) => `<tr${x.status === 'cancelled' ? ' class="grey"' : ''}><td class="c">${n + 1}</td><td>${esc(x.dr)}</td><td>${shortDate(x.date)}</td><td>${dash(x.po)}</td><td class="c">${x.lines}</td><td class="r">${qtyFmt(x.qty)}</td><td>${dash(x.accepted)}</td><td>${esc(DR_LABEL[x.status] ?? x.status)}</td></tr>`).join('')
   const sub = `<div class="sub" style="text-align:left">${esc(r.name)} &nbsp;|&nbsp; Ref. No. ${esc(ref)}</div>`
@@ -258,13 +289,10 @@ export function letterHtml(r: ClientRecord, ref: string, o: LetterOptions, heade
     <p>${esc(longDate(o.date))}</p>
     <p>Ref. No.: <b>${esc(ref)}</b></p>
     <div class="to">${addressee}${r.address ? `<div>${esc(r.address)}</div>` : ''}</div>
-    <p><b>Subject: Summary of Delivery Receipts and Charge Sales Invoices on Record</b></p>
-    <p>Dear ${r.contact ? esc(r.contact) : 'Sir/Madam'},</p>
-    <p>As part of our records review, we have pulled out all Delivery Receipts (DR) and Charge Sales Invoices (CSI) issued by ${esc(company)} to ${esc(r.name)} covering the period ${esc(period)}. The complete list is attached to this letter as Annex A (CSI) and Annex B (DR).</p>
-    <p>We ask that your team check this list against your own receiving and payables records. If anything does not match, please let us know the specific document number and the difference so we can reconcile it on our side.</p>
-    ${status}
-    ${note.trim() ? note.trim().split(/\n{2,}/).map(x => `<p>${esc(x).replace(/\n/g, '<br/>')}</p>`).join('') : ''}
-    <p>Kindly sign the conforme at the end of this letter and return a copy within ${esc(numberWords(o.days))} (${o.days}) days from receipt. If we do not receive a response within that period, we will treat the attached records as confirmed.</p>
+    ${c.subject.trim() ? `<p><b>Subject: ${esc(c.subject.trim())}</b></p>` : ''}
+    ${c.salutation.trim() ? `<p>${esc(c.salutation.trim())}</p>` : ''}
+    ${richParas(c.body)}
+    ${note.trim() ? richParas(note) : ''}
 
     <h2>1. ACCOUNT SUMMARY</h2>
     <table><thead><tr><th>Particulars</th><th class="c" style="width:70px">Count</th><th class="r" style="width:150px">Amount (PHP) / Qty</th></tr></thead><tbody>
@@ -278,11 +306,12 @@ export function letterHtml(r: ClientRecord, ref: string, o: LetterOptions, heade
     </tbody></table>
 
     <h2>2. OPEN INVOICES FOR COLLECTION</h2>
-    ${s.open ? `<table><thead><tr><th class="c">#</th><th>CSI No.</th><th>CSI Date</th><th>PO No.</th><th>DR Ref.</th><th class="r">Amount (PHP)</th><th>Status</th></tr></thead>
-      <tbody>${openRows}<tr class="tot"><td></td><td></td><td></td><td></td><td>Total</td><td class="r">${amt(s.openAmt)}</td><td></td></tr></tbody></table>`
+    ${s.open ? `<table class="items"><colgroup><col style="width:30px"/><col/><col style="width:62px"/><col style="width:64px"/><col style="width:84px"/><col style="width:96px"/></colgroup>
+      <thead><tr><th class="c">#</th><th>Invoice / Item Description</th><th class="r">Qty</th><th>Unit</th><th class="r">Unit Price</th><th class="r">Amount (PHP)</th></tr></thead>
+      <tbody>${openRows}<tr class="gt"><td></td><td colspan="4" class="r">TOTAL FOR COLLECTION (${s.open} invoice${s.open === 1 ? '' : 's'})</td><td class="r">${amt(s.openAmt)}</td></tr></tbody></table>`
       : '<p class="note">None. All active invoices are recorded as collected.</p>'}
 
-    <div class="sig keep"><p style="margin-top:14px">Thank you for your continued partnership.</p>Respectfully yours,
+    <div class="sig keep">${c.closing.trim() ? `<p style="margin-top:14px">${esc(c.closing.trim())}</p>` : ''}Respectfully yours,
       <div class="line"><b>${esc(o.signatory || 'Authorized Representative')}</b><div>${esc(o.title || 'Authorized Representative')}</div><div>${esc(company)}</div></div>
     </div>
 
@@ -329,6 +358,9 @@ export async function loadDocHeader() {
 }
 
 
+const readSaved = (k: string) => { try { return typeof window === 'undefined' ? null : window.localStorage.getItem(k) } catch { return null } }
+const writeSaved = (k: string, v: string) => { try { window.localStorage.setItem(k, v) } catch { /* ignore */ } }
+
 // ── Component ──────────────────────────────────────────────────────────────
 
 export function ClientRecords() {
@@ -337,9 +369,12 @@ export function ClientRecords() {
   const [raw, setRaw] = useState<{ csi: CsiRow[]; drs: DrRow[]; drItems: DrItemRow[]; clients: ClientRow[] } | null>(null)
   const [reload, setReload] = useState(0)
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [untagged, setUntagged] = useState<'open' | 'collected'>('open')
+  // Letter settings are edited in the Email window and remembered on this device.
+  const [untagged, setUntaggedState] = useState<'open' | 'collected'>(() => (readSaved('crs.untagged') === 'collected' ? 'collected' : 'open'))
+  const setUntagged = (v: 'open' | 'collected') => { setUntaggedState(v); writeSaved('crs.untagged', v) }
   const [printing, setPrinting] = useState(false)
-  const [emailFor, setEmailFor] = useState<ClientRecord | null>(null)
+  const [emailKey, setEmailKey] = useState<string | null>(null)
+  const setEmailFor = (r: ClientRecord | null) => setEmailKey(r ? r.key : null)
   const [historyFor, setHistoryFor] = useState<string | null>(null)   // client key, or 'all'
   const [expanded, setExpanded] = useState<Set<string>>(new Set())   // clients showing their items for collection
   const toggleExpand = (k: string) => setExpanded(p => { const n = new Set(p); if (n.has(k)) n.delete(k); else n.add(k); return n })
@@ -354,10 +389,18 @@ export function ClientRecords() {
     return () => { on = false }
   }, [logReload]) // eslint-disable-line react-hooks/exhaustive-deps
   const logBy = useMemo(() => summarizeLog(log), [log])
-  const [opts, setOpts] = useState<LetterOptions>(() => {
+  const [opts, setOptsState] = useState<LetterOptions>(() => {
     const today = format(new Date(), 'yyyy-MM-dd')
-    return { date: today, signatory: registration.proprietor, title: 'Proprietor', days: 15, refBase: `CDSC-CRS-${format(new Date(), 'yyyy-MM')}` }
+    const base: LetterOptions = { date: today, signatory: registration.proprietor, title: 'Proprietor', days: 15, refBase: `CDSC-CRS-${format(new Date(), 'yyyy-MM')}` }
+    try {
+      const saved = JSON.parse(readSaved('crs.opts') ?? 'null') as Partial<LetterOptions> | null
+      // Signatory, position and reply period carry over; date and ref series start fresh each month.
+      if (saved) return { ...base, signatory: saved.signatory ?? base.signatory, title: saved.title ?? base.title, days: saved.days ?? base.days,
+        refBase: saved.refBase?.startsWith(base.refBase) ? saved.refBase : base.refBase }
+    } catch { /* ignore */ }
+    return base
   })
+  const setOpts = (next: LetterOptions) => { setOptsState(next); writeSaved('crs.opts', JSON.stringify(next)) }
 
   useEffect(() => {
     let on = true
@@ -375,10 +418,10 @@ export function ClientRecords() {
   const built = useMemo(() => raw ? build(raw.csi, raw.drs, raw.drItems, raw.clients, untagged) : null, [raw, untagged])
   const records = useMemo(() => built?.records ?? [], [built])
   const q = query.trim().toLowerCase()
+  const emailFor = emailKey ? records.find(r => r.key === emailKey) ?? null : null
   const shown = q ? records.filter(r => r.name.toLowerCase().includes(q)) : records
   const refOf = useMemo(() => new Map(records.map((r, n) => [r.key, refNo(opts, n + 1)])), [records, opts])
 
-  const set = <K extends keyof LetterOptions>(k: K, v: LetterOptions[K]) => setOpts(p => ({ ...p, [k]: v }))
   const toggle = (k: string) => setSelected(p => { const n = new Set(p); if (n.has(k)) n.delete(k); else n.add(k); return n })
   const allShown = shown.length > 0 && shown.every(r => selected.has(r.key))
 
@@ -413,24 +456,6 @@ export function ClientRecords() {
 
   return (
     <div className="space-y-4 p-4">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <div className="space-y-1.5"><Label>Letter Date (as of)</Label><Input type="date" value={opts.date} onChange={e => set('date', e.target.value)} /></div>
-        <div className="space-y-1.5"><Label>Ref. No. Series</Label><Input value={opts.refBase} onChange={e => set('refBase', e.target.value)} /></div>
-        <div className="space-y-1.5"><Label>Signatory</Label><Input value={opts.signatory} onChange={e => set('signatory', e.target.value)} /></div>
-        <div className="space-y-1.5"><Label>Position</Label><Input value={opts.title} onChange={e => set('title', e.target.value)} /></div>
-        <div className="space-y-1.5"><Label>Reply Within (days)</Label><Input type="number" min={1} value={opts.days} onChange={e => set('days', Math.max(1, Number(e.target.value) || 15))} /></div>
-        <div className="space-y-1.5">
-          <Label>Untagged CSIs count as</Label>
-          <Select value={untagged} onValueChange={v => setUntagged((v ?? 'open') as 'open' | 'collected')}>
-            <SelectTrigger className="w-full"><span className="text-sm">{untagged === 'open' ? 'Open for collection' : 'Collected'}</span></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="open">Open for collection</SelectItem>
-              <SelectItem value="collected">Collected</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-      </div>
-
       {flags.length > 0 && (
         <div className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -560,10 +585,18 @@ export function ClientRecords() {
                                   <td className="px-3 py-1 text-right tabular-nums">{amt(it.amount)}</td>
                                 </tr>
                               ))}
+                              <tr className="border-t-2 border-foreground/30 bg-muted/40 font-semibold">
+                                <td className="px-3 py-1" colSpan={4}>Total SI {inv.si}</td>
+                                <td className="px-3 py-1 text-right tabular-nums">{amt(inv.amount)}</td>
+                              </tr>
                             </tbody>
                           </table>
                         </div>
                       ))}
+                      <div className="flex items-center justify-between rounded-lg border-2 border-amber-300 bg-amber-50 px-3 py-2 text-sm font-bold text-amber-900">
+                        <span>Total for Collection · {s.open} invoice{s.open === 1 ? '' : 's'}</span>
+                        <span className="tabular-nums">PHP {amt(s.openAmt)}</span>
+                      </div>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -575,7 +608,8 @@ export function ClientRecords() {
       </Table>
 
       {emailFor && (
-        <ClientRecordsEmailDialog record={emailFor} refNo={refOf.get(emailFor.key)!} opts={opts}
+        <ClientRecordsEmailDialog record={emailFor} refNo={refOf.get(emailFor.key)!}
+          opts={opts} onOptsChange={setOpts} untagged={untagged} onUntaggedChange={setUntagged}
           onClose={() => setEmailFor(null)} onLogged={() => setLogReload(k => k + 1)} />
       )}
 
